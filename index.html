@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>SOČTEST</title>
+    <style>
+        *{
+            box-sizing: border-box;
+        }
+        body {
+            margin: 0;
+            width: 100vw;
+        }
+        body > div{
+            background-color: black;
+            display: grid;
+            place-items: center;
+            width: 100vw;
+            height: 100vh;
+        }
+    </style>
+</head>
+
+<body>
+    <input type="number" min="1" max="4" id="snapCoefficient">
+    <div>
+        <div id="container"></div>
+    </div>
+    <script src="https://unpkg.com/konva@9/konva.min.js"></script>
+    <script src="/index.js"></script>
+</body>
+
+</html>
