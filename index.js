@@ -4,7 +4,14 @@ var canvasHeight = 751;
 var tween = null;
 var blockSnapSize = 30;
 
-let snapCoefficient = document.querySelector("#snapCoefficient").value;
+//Width/height of one square in grid
+const gridSize = 30
+
+//Array of all objects and its hitboxes
+const objects = [];
+//[ {rect: rectangleRef, points: [ [0, 0], [2, 0], [2, 1], [0, 1] ] } ]
+
+let snapCoefficient = document.querySelector("#snapCoefficient").value || 1;
 
 const gridWidth = 15;
 const gridHeight = 20;
@@ -22,21 +29,40 @@ const stage = new Konva.Stage({
 
 stage.container().style.backgroundColor = "#383838";
 
+const square = createRect(0,0,5,4,layer,true,"hi");
+
 function clamp(val, min, max) {
   return Math.min(Math.max(val, min), max);
 }
+//Multiplies number by gridSize
+function toGridUnits(n){
+  return n * gridSize;
+};
 
-const shadowRectangle = new Konva.Rect({
-  x: 0,
-  y: 0,
-  width: blockSnapSize,
-  height: blockSnapSize,
-  fill: "#FF7B17",
-  opacity: 0.6,
-  stroke: "#CF6412",
-  strokeWidth: 3,
-  dash: [16, 2],
-});
+function snapVal(){
+  return gridSize / snapCoefficient;
+};
+
+function createRect(x, y, width, height, draggable, name, opacity, fill, stroke, strokeWidth, dash){
+  const rectangle = new Konva.Rect({
+    x: toGridUnits(x),
+    y: toGridUnits(y),
+    draggable,
+    width: toGridUnits(width),
+    height: toGridUnits(height),
+    stroke,
+    strokeWidth,
+    opacity,
+    fill,
+    name,
+    dash
+  });
+  return rectangle;
+};
+
+const shadowRectangle = createRect(0,0,0,0, false, "placePreview", 0.6, "#FF7B17", "#CF6412", 3, [16, 2]);
+
+//Stopped here
 
 function newRectangle(x, y, width, height, layer, stage) {
   const rectangle = new Konva.Rect({
