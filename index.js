@@ -41,13 +41,20 @@ let lastRotation = 0;
 
 stage.container().style.backgroundColor = "#383838";
 
-const square = createRect(0,0,5,4,objectLayer,true,"hi", "#fff");
-const square2 = createRect(6,7,1,5,objectLayer,true,"hi", "#fff");
+const square = createRect(0,0,5,4,true,"table", 1, "#fff");
+const square3 = createRect(8,0,5,4,true,"table", 1, "#fff");
+const square2 = createRect(6,7,1,5,true,"hi", 1, "#fff");
 const previewRectangle = createRect(0,0,0,0, false, "placePreview", 0.6, "#FF7B17", "#CF6412", 3, [16, 2], true);
 
 previewLayer.add(previewRectangle);
 objectLayer.add(square);
+objectLayer.add(square3);
 objectLayer.add(square2);
+
+for(let i =0; i < 0; i++){
+  let s = createRect(Math.floor(Math.random()*30)+1,Math.floor(Math.random()*30)+1,Math.floor(Math.random()*30),Math.floor(Math.random()*30),true,"hi", 1, "#fff");
+  objectLayer.add(s);
+}
 
 //Functions;
 
@@ -74,7 +81,7 @@ function createRect(x, y, width, height, draggable, name, opacity, fill, stroke,
     strokeWidth,
     opacity,
     fill,
-    name: "rect",
+    name: `transformable ${name}`,
     dash
   });
 
@@ -220,10 +227,6 @@ function dragEnd(e){
     y: Math.round(previewRectangle.y() / snapVal()) * snapVal(),
   });
   drawCorners(rect, rect.rotation());
-  //Reset the fill for every object
-  objectLayer.children.forEach((rectangle) => {
-    if(rectangle !== tr) rectangle.fill('white');
-  });
   setPreviewRect(rect, false);
   stage.batchDraw();
 }
@@ -435,7 +438,7 @@ stage.on('click tap', function (e) {
   }
 
   // do nothing if clicked NOT on our rectangles
-  if (!e.target.hasName('rect')) return;
+  if (!e.target.hasName('transformable')) return;
 
   // do we pressed shift or ctrl?
   const metaPressed = e.evt.shiftKey || e.evt.ctrlKey || e.evt.metaKey;
