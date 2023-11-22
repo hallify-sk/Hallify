@@ -42,8 +42,8 @@ let lastRotation = 0;
 stage.container().style.backgroundColor = "#383838";
 
 const square = createRect(0,0,5,4,true,"table", 1, "#fff");
-const square3 = createRect(8,0,5,4,true,"table", 1, "#fff");
-const square2 = createRect(6,7,1,5,true,"hi", 1, "#fff");
+const square2 = createRect(6,7,1,5,true,"table", 1, "#fff");
+const square3 = createRect(9,2,4,2,true,"table", 1, "#fff");
 const previewRectangle = createRect(0,0,0,0, false, "placePreview", 0.6, "#FF7B17", "#CF6412", 3, [16, 2], true);
 
 previewLayer.add(previewRectangle);
@@ -252,7 +252,7 @@ function dragMove(e){
   snapCoefficient = parseInt(document.querySelector("#snapCoefficient").value) || 1;
   setPreviewRect(rect, true);
   //Check collisions for every object
-  const minDistance = Math.max(e.target.height(), e.target.width()) / 2 + 1; //+1 to create intersect
+  const minDistance = Math.max(e.target.height(), e.target.width());
   const collisions = [];
   for(let i = 0; i < objects.length; i++){
     let next = i+1;
@@ -266,6 +266,7 @@ function dragMove(e){
   };
   let isColliding = collisions.some(i => i == true);
   console.log(isColliding);
+  console.log(objects);
   //console.log(PolyColliding(square, square2));
   //console.log(getDistance(square, square2));
   //shadowRectPos = [Math.round(rect.x() / blockSnapSize) * blockSnapSize, Math.round(rect.y() / blockSnapSize) * blockSnapSize];
@@ -493,67 +494,37 @@ stage.on('click tap', function (e) {
     tr.nodes(nodes);
   }
 });
-/*
-function drawCorners(rect, angle){
 
-  var rectPos = rect.position();
-  
-  var x = 0, y = 0;
-  for (var i = 0; i < 4; i = i + 1){
+let dataWidth = 0;
+let dataHeight = 0;
 
-  switch (i){
-    
-    case 0: 
-      x = rectPos.x; y = rectPos.y;
-      break;
+document
+        .getElementById('sidebar')
+        .addEventListener('dragstart', function (e) {
+          dataWidth = e.target.getAttribute("data-width");
+          dataHeight = e.target.getAttribute("data-height");
+        });
 
-    case 1: 
-      x = rectPos.x + rect.width(); y = rectPos.y;
-      break;
+stage.container().addEventListener('dragover', function (e) {
+  e.preventDefault(); // !important
+});
 
-    case 2: 
-      x = rectPos.x + rect.width(); y = rectPos.y + rect.height();
-      break;
+stage.container().addEventListener('drop', function (e) {
+  e.preventDefault();
+  // now we need to find pointer position
+  // we can't use stage.getPointerPosition() here, because that event
+  // is not registered by Konva.Stage
+  // we can register it manually:
+  stage.setPointersPositions(e);
 
-    case 3: 
-      x = rectPos.x; y = rectPos.y + rect.height();
-      break;
-     }
+  const rect = createRect(0, 0, dataWidth, dataHeight, true, "table", 1, "#fff");
+  rect.position(stage.getPointerPosition());
+  objectLayer.add(rect);
+  /*
+  Konva.Image.fromURL(itemURL, function (image) {
+    layer.add(image);
 
-    var pt = rotatePoint({x: x, y: y}, {x: rectPos.x, y: rectPos.y}, angle)
-
-    circles[i].position(pt)
-    console.log(x, y);
-
-  }
- }
-
- function rotatePoint(pt, o, a){
-
-  var angle = a * (Math.PI/180); // Convert to radians
-
-  var rotatedX = Math.cos(angle) * (pt.x - o.x) - Math.sin(angle) * (pt.y - o.y) + o.x;
-
-  var rotatedY = Math.sin(angle) * (pt.x - o.x) + Math.cos(angle) * (pt.y - o.y) + o.y;  
-
-  return {x: rotatedX, y: rotatedY};
-
-}
-/*
-circles = [];
-newPos = {x: 80, y: 100};
-let circle = new Konva.Circle({x: newPos.x, y: newPos.y, radius: 10, fill: 'magenta'}) 
-circles[0] = circle.clone();
-circles[0].fill('lime')
-collisionLayer.add(circles[0]);
-circles[1] = circle.clone();
-circles[1].fill('gold')
-collisionLayer.add(circles[1]);
-circles[2] = circle.clone();
-circles[2].fill('blue')
-collisionLayer.add(circles[2]);
-circles[3] = circle.clone();
-circles[3].fill('darkviolet')
-
-collisionLayer.add(circles[3]);
-*/
+    image.position(stage.getPointerPosition());
+    image.draggable(true);
+  });*/
+});

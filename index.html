@@ -20,11 +20,29 @@
             width: 100vw;
             height: 100vh;
         }
+        #sidebar{
+            position: fixed;
+            top: 25px;
+            left: 0;
+            height: calc(100vh - 25px);
+            width: 200px;
+            background: #555;
+            display: flex;
+            flex-flow: column nowrap;
+            padding: 2rem;
+        }
+        #sidebar > div{
+            background: white;
+            display: block;
+        }
     </style>
 </head>
 
 <body>
     <input type="number" min="1" max="4" id="snapCoefficient">
+    <div id="sidebar">
+        <div style="width: 120px; height: 60px;" draggable="true" data-width="4" data-height="2"></div>
+    </div>
     <div>
         <div id="container"></div>
     </div>
