@@ -57,6 +57,22 @@ for(let i =0; i < 0; i++){
 }
 
 //Functions;
+//Finds the closest distance between two objects' corners
+function getDistance(rect1, rect2){
+  const cornersOne = objects.find(i => i.rect == rect1).corners;
+  const cornersTwo = objects.find(i => i.rect == rect2).corners;
+  let distances = [];
+  for(const point1 of cornersOne){
+    for(const point2 of cornersTwo){
+      //Get absolute difference between positions
+      const xDif = point1.x() - point2.x();
+      const yDif = point1.y() - point2.y();
+      const absHypotenuseDif = Math.sqrt(xDif*xDif + yDif*yDif);
+      distances.push(absHypotenuseDif);
+    }
+  };
+  return Math.min(...distances);
+}
 
 function clamp(val, min, max) {
   return Math.min(Math.max(val, min), max);
@@ -235,7 +251,23 @@ function dragMove(e){
   const rect = e.target;
   snapCoefficient = parseInt(document.querySelector("#snapCoefficient").value) || 1;
   setPreviewRect(rect, true);
-  console.log(PolyColliding(square, square2));
+  //Check collisions for every object
+  const minDistance = Math.max(e.target.height(), e.target.width()) / 2 + 1; //+1 to create intersect
+  const collisions = [];
+  for(let i = 0; i < objects.length; i++){
+    let next = i+1;
+    if(next == objects.length){
+      next = 0;
+    };
+    //Don't check for collision on items that are too far away from our object! (Use a less computing expensive function to check)
+    if(getDistance(objects[i].rect, objects[next].rect) < minDistance){
+      collisions.push(PolyColliding(objects[i].rect, objects[next].rect));
+    };
+  };
+  let isColliding = collisions.some(i => i == true);
+  console.log(isColliding);
+  //console.log(PolyColliding(square, square2));
+  //console.log(getDistance(square, square2));
   //shadowRectPos = [Math.round(rect.x() / blockSnapSize) * blockSnapSize, Math.round(rect.y() / blockSnapSize) * blockSnapSize];
   drawCorners(rect, rect.rotation());
   stage.batchDraw();
