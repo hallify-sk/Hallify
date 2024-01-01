@@ -1,19 +1,41 @@
 <script lang="ts">
-	export let grid: { width: number; height: number; squareSize: number, snapSize: number } = {
+	export let grid: {
+		width: number;
+		height: number;
+		squareSize: number;
+		snapSize: number;
+		color: string;
+		borderThickness: number;
+	} = {
 		width: 20,
 		height: 20,
 		squareSize: 30,
-		snapSize: 1
+		snapSize: 1,
+		color: '#fff',
+		borderThickness: 100
 	};
 
 	import { onMount } from 'svelte';
-	import { Stage, Layer, Line, Rect, Group, Transformer } from 'svelte-konva';
-	import { clamp, pointsToObjectArray, pointsToRealPosition, rotatePoints } from './lib';
+	import { Stage, Layer, Line, Group, Transformer, Rect } from 'svelte-konva';
+	import {
+		checkPolygonCollision,
+		clamp,
+		getClosestViablePosition,
+		getMovablePolygons,
+		pointsToObjectArray,
+		pointsToRealPosition,
+		rotatePoints
+	} from './lib';
+	import Konva from 'konva';
 
 	let gridLayer: any;
 	let objectLayer: any;
 	let tr: any;
 	let stage: any;
+	let borderOne: any;
+	let borderTwo: any;
+	let borderThree: any;
+	let borderFour: any;
 	$: if (gridLayer) gridLayer.cache();
 	$: if (grid && (grid.width || grid.height) && gridLayer) setTimeout(() => gridLayer.cache());
 
@@ -72,43 +94,208 @@
 			}
 		});
 	});
-	function transform(e: any){
+	let previewShape: any;
+	function dragStart(e: any) {
+		let shape = e.detail.currentTarget;
+		// Create a clone of the shape
+		previewShape = shape.clone();
+
+		previewShape.draggable(false);
+
+		// Make the clone semi-transparent
+		previewShape.opacity(0.5);
+
+		// Add the clone to the layer
+		objectLayer.add(previewShape);
+	}
+	let isColliding = false;
+
+	function dragMove(e: any) {
+		let shape = e.detail.currentTarget;
+
+		// Calculate the new position based on the grid size
+		let newX =
+			Math.round((shape.x() + grid.squareSize * grid.snapSize) / grid.squareSize / grid.snapSize) *
+			grid.squareSize *
+			grid.snapSize;
+		let newY =
+			Math.round((shape.y() + grid.squareSize * grid.snapSize) / grid.squareSize / grid.snapSize) *
+			grid.squareSize *
+			grid.snapSize;
+
+		const objects = getMovablePolygons(objectLayer);
+
+		objects.forEach((group: any) => {
+			let object = group.findOne((node: Line) => node instanceof Konva.Line);
+			let shapePolygon = shape.findOne((node: Line) => node instanceof Konva.Line);
+
+			if (object && shapePolygon && object !== shapePolygon && object !== previewShape) {
+				if (
+					checkPolygonCollision(
+						rotatePoints(
+							pointsToObjectArray(
+								pointsToRealPosition(shapePolygon.points(), shapePolygon.position())
+							),
+							{ x: shapePolygon.x(), y: shapePolygon.y() },
+							shapePolygon.rotation()
+						),
+						rotatePoints(
+							pointsToObjectArray(pointsToRealPosition(object.points(), object.position())),
+							{ x: object.x(), y: object.y() },
+							object.rotation()
+						)
+					)
+				) {
+					isColliding = true;
+				} else {
+					// Get the closest viable position
+					let position = getClosestViablePosition(
+						newX,
+						newY,
+						previewShape,
+						getMovablePolygons(objectLayer).filter((i: any) => i !== shape),
+						grid
+					);
+
+					// Update the preview shape's position
+					previewShape.x(position?.x);
+					previewShape.y(position?.y);
+				}
+			}
+		});
+	}
+
+	function transform(e: any) {
 		const rect = e.detail.currentTarget;
-		console.log(rotatePoints(pointsToObjectArray(pointsToRealPosition(rect.points(), rect.position())), {x: rect.x(), y: rect.y()}, rect.rotation()));
+		const objects = getMovablePolygons(stage);
+		//Loop over objects and check every object for collision
+		objects.forEach((object: any) => {
+			if (object !== rect) {
+				if (
+					checkPolygonCollision(
+						rotatePoints(
+							pointsToObjectArray(pointsToRealPosition(rect.points(), rect.position())),
+							{ x: rect.x(), y: rect.y() },
+							rect.rotation()
+						),
+						rotatePoints(
+							pointsToObjectArray(pointsToRealPosition(object.points(), object.position())),
+							{ x: object.x(), y: object.y() },
+							object.rotation()
+						)
+					)
+				) {
+				}
+			}
+		});
 	}
 	function dragEnd(e: any) {
-		const rect = e.detail.currentTarget;
-		rect.position({
-			x: Math.round(rect.x() / grid.squareSize / grid.snapSize) * grid.squareSize * grid.snapSize,
-			y: Math.round(rect.y() / grid.squareSize / grid.snapSize) * grid.squareSize * grid.snapSize
-		});
-		console.log(rect.points());
-		console.log(pointsToRealPosition(rect.points(), rect.position()));
+		let shape = e.detail.currentTarget;
+		shape.x(previewShape.x());
+		shape.y(previewShape.y());
+
+		isColliding = false;
+		previewShape.destroy();
+		// Redraw the layer
+		objectLayer.batchDraw();
+		objectLayer.draw();
 	}
+	let n = 4;
 </script>
 
 {#if typeof window !== 'undefined'}
-	<Stage bind:handle={stage} config={{ width: 800, height: 800, draggable: true }}>
+	<Stage
+		bind:handle={stage}
+		config={{
+			width: 800,
+			height: 800,
+			draggable: true,
+			dragBoundFunc: function (pos) {
+				let scale = stage.scaleX(); // assuming stage is scaled uniformly in x and y directions
+				let newX = Math.min(pos.x, grid.borderThickness * grid.squareSize * scale);
+				let newY = Math.min(pos.y, grid.borderThickness * grid.squareSize * scale);
+				newX = Math.max(
+					newX,
+					-grid.width * grid.squareSize * scale +
+						stage.width() -
+						grid.borderThickness * grid.squareSize * scale
+				);
+				newY = Math.max(
+					newY,
+					-grid.height * grid.squareSize * scale +
+						stage.height() -
+						grid.borderThickness * grid.squareSize * scale
+				);
+				return {
+					x: newX,
+					y: newY
+				};
+			}
+		}}
+	>
 		<Layer>
 			<Group bind:handle={gridLayer}>
 				{#each Array(grid.height + 1) as _, y}
-					{#each Array(grid.width + 1) as _, x}
-						<Rect
-							config={{
-								x: x * grid.squareSize,
-								y: y * grid.squareSize,
-								width: grid.squareSize,
-								height: grid.squareSize,
-								stroke: '#ddd',
-								strokeWidth: 1,
-								fill: 'black'
-							}}
-						/>
-					{/each}
+					<Line
+						config={{
+							points: [0, y * grid.squareSize, grid.width * grid.squareSize, y * grid.squareSize],
+							stroke: grid.color,
+							strokeWidth: 1
+						}}
+					/>
+				{/each}
+				{#each Array(grid.width + 1) as _, x}
+					<Line
+						config={{
+							points: [x * grid.squareSize, 0, x * grid.squareSize, grid.height * grid.squareSize],
+							stroke: grid.color,
+							strokeWidth: 1
+						}}
+					/>
 				{/each}
 			</Group>
 		</Layer>
 		<Layer bind:handle={objectLayer}>
+			<!--BORDERS-->
+			<Rect
+				bind:handle={borderOne}
+				config={{
+					x: -grid.borderThickness * grid.squareSize,
+					y: -grid.borderThickness * grid.squareSize,
+					width: 2 * grid.borderThickness * grid.squareSize + grid.width * grid.squareSize,
+					height: grid.borderThickness * grid.squareSize,
+					fill: 'black'
+				}}
+			/>
+			<Rect
+				config={{
+					x: -grid.borderThickness * grid.squareSize,
+					y: grid.height * grid.squareSize,
+					width: 2 * grid.borderThickness * grid.squareSize + grid.width * grid.squareSize,
+					height: grid.borderThickness * grid.squareSize,
+					fill: 'black'
+				}}
+			/>
+			<Rect
+				config={{
+					x: -grid.borderThickness * grid.squareSize,
+					y: -grid.borderThickness * grid.squareSize,
+					width: grid.borderThickness * grid.squareSize,
+					height: grid.height * grid.squareSize + 2 * grid.borderThickness * grid.squareSize,
+					fill: 'black'
+				}}
+			/>
+			<Rect
+				config={{
+					x: grid.width * grid.squareSize,
+					y: -grid.borderThickness * grid.squareSize,
+					width: grid.borderThickness * grid.squareSize,
+					height: grid.height * grid.squareSize + 2 * grid.borderThickness * grid.squareSize,
+					fill: 'black'
+				}}
+			/>
+
+			<!--END BORDERS-->
 			<Transformer
 				bind:handle={tr}
 				config={{
@@ -117,26 +304,45 @@
 					rotationSnapTolerance: 30
 				}}
 			/>
-			<Line
-				config={{
-					points: [
-						0,
-						0,
-						2 * grid.squareSize,
-						0,
-						2 * grid.squareSize,
-						4 * grid.squareSize,
-						0,
-						4 * grid.squareSize
-					],
-					fill: 'white',
-					closed: true,
-					draggable: true
-				}}
-				on:dragmove={transform}
+			<Group
+				config={{ draggable: true }}
+				on:dragstart={dragStart}
+				on:dragmove={dragMove}
 				on:dragend={dragEnd}
 				on:transform={transform}
-			/>
+			>
+				<Line
+					config={{
+						points: [
+							1 * grid.squareSize,
+							0,
+							2 * grid.squareSize,
+							0,
+							2 * grid.squareSize,
+							4 * grid.squareSize,
+							1 * grid.squareSize,
+							4 * grid.squareSize
+						],
+						fill: 'white',
+						closed: true
+					}}
+				/>
+				{#each Array(n) as _, i (i)}
+					<Rect
+						config={{
+							x: (i < n / 2 ? 0 : 2) * grid.squareSize,
+							y:
+								2 * grid.squareSize +
+								(i < n / 2 ? -1 : 1) *
+									(0.5 * grid.squareSize +
+										(i % Math.ceil(n / 2)) * ((4 * grid.squareSize) / (Math.ceil(n / 2) + 1))),
+							width: grid.squareSize / 1.5,
+							height: grid.squareSize / 1.5,
+							fill: 'blue'
+						}}
+					/>
+				{/each}
+			</Group>
 		</Layer>
 	</Stage>
 {/if}
