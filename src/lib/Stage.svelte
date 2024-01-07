@@ -15,9 +15,10 @@
 		borderThickness: 100
 	};
 
-	import { onMount } from 'svelte';
+	import { onDestroy, onMount } from 'svelte';
 	import { Stage, Layer, Line, Group, Transformer, Rect } from 'svelte-konva';
 	import {
+		addChairHitbox,
 		checkPolygonCollision,
 		clamp,
 		getClosestViablePosition,
@@ -27,18 +28,19 @@
 		rotatePoints
 	} from './lib';
 	import Konva from 'konva';
+	import { selectedName, stageData, tableList } from './stores/stage';
 
 	let gridLayer: any;
 	let objectLayer: any;
 	let tr: any;
 	let stage: any;
+	let groups: Array<Konva.Group> = [];
 	let borderOne: any;
 	let borderTwo: any;
 	let borderThree: any;
 	let borderFour: any;
 	$: if (gridLayer) gridLayer.cache();
 	$: if (grid && (grid.width || grid.height) && gridLayer) setTimeout(() => gridLayer.cache());
-
 	const scaleBy = 1.2;
 	onMount(() => {
 		stage.on('wheel', (e: any) => {
@@ -59,16 +61,39 @@
 			var newScale = direction > 0 ? oldScale * scaleBy : oldScale / scaleBy;
 			newScale = clamp(newScale, 0.75, 3);
 			stage.scale({ x: newScale, y: newScale });
-			var newPos = {
+
+			var pos = {
 				x: pointer.x - mousePointTo.x * newScale,
 				y: pointer.y - mousePointTo.y * newScale
 			};
-			stage.position(newPos);
+
+			let newX = Math.min(pos.x, grid.borderThickness * grid.squareSize * newScale);
+				let newY = Math.min(pos.y, grid.borderThickness * grid.squareSize * newScale);
+				newX = Math.max(
+					newX,
+					-grid.width * grid.squareSize * newScale +
+						stage.width() -
+						grid.borderThickness * grid.squareSize * newScale
+				);
+				newY = Math.max(
+					newY,
+					-grid.height * grid.squareSize * newScale +
+						stage.height() -
+						grid.borderThickness * grid.squareSize * newScale
+				);
+			stage.position({ x: newX, y: newY });
+			stageData.set({
+				...$stageData,
+				scale: newScale,
+				x: newX, 
+				y: newY,
+			});
 		});
 		stage.on('click tap', function (e: any) {
 			// if click on empty area - remove all selections
 			if (e.target === stage) {
 				tr.nodes([]);
+				selectedName.set(null);
 				return;
 			}
 			// do nothing if clicked NOT on our rectangles
@@ -76,10 +101,17 @@
 			// do we pressed shift or ctrl?
 			const metaPressed = e.evt.shiftKey || e.evt.ctrlKey || e.evt.metaKey;
 			const isSelected = tr.nodes().indexOf(e.target) >= 0;
+
 			if (!metaPressed && !isSelected) {
 				// if no key pressed and the node is not selected
 				// select just one
-				tr.nodes([e.target]);
+				if (e.target.parent.draggable()) {
+					tr.nodes([e.target.parent]);
+					selectedName.set(e.target.parent.name());
+				} else {
+					tr.nodes([e.target]);
+					selectedName.set(e.target.name());
+				}
 			} else if (metaPressed && isSelected) {
 				// if we pressed keys and node was selected
 				// we need to remove it from selection:
@@ -94,6 +126,9 @@
 			}
 		});
 	});
+	$: if (tr) {
+		groups = getMovablePolygons(objectLayer);
+	}
 	let previewShape: any;
 	function dragStart(e: any) {
 		let shape = e.detail.currentTarget;
@@ -111,15 +146,24 @@
 	let isColliding = false;
 
 	function dragMove(e: any) {
-		let shape = e.detail.currentTarget;
+		//Group is used to calculate the position of the shape
+		let group = e.detail.currentTarget;
+		//Shape is used to determine collision
+		let shape = e.detail.currentTarget.getChildren((node: Line) => node instanceof Konva.Line)[0];
+		group.moveToTop();
+		if (isColliding) {
+			shape.fill('red');
+		} else {
+			shape.fill('white');
+		}
 
 		// Calculate the new position based on the grid size
 		let newX =
-			Math.round((shape.x() + grid.squareSize * grid.snapSize) / grid.squareSize / grid.snapSize) *
+			Math.round((group.x() + grid.squareSize * grid.snapSize) / grid.squareSize / grid.snapSize) *
 			grid.squareSize *
 			grid.snapSize;
 		let newY =
-			Math.round((shape.y() + grid.squareSize * grid.snapSize) / grid.squareSize / grid.snapSize) *
+			Math.round((group.y() + grid.squareSize * grid.snapSize) / grid.squareSize / grid.snapSize) *
 			grid.squareSize *
 			grid.snapSize;
 
@@ -127,37 +171,49 @@
 
 		objects.forEach((group: any) => {
 			let object = group.findOne((node: Line) => node instanceof Konva.Line);
-			let shapePolygon = shape.findOne((node: Line) => node instanceof Konva.Line);
 
-			if (object && shapePolygon && object !== shapePolygon && object !== previewShape) {
+			if (object && shape && object !== shape && object !== previewShape) {
 				if (
 					checkPolygonCollision(
 						rotatePoints(
-							pointsToObjectArray(
-								pointsToRealPosition(shapePolygon.points(), shapePolygon.position())
+							addChairHitbox(
+								pointsToObjectArray(pointsToRealPosition(shape.points(), {x: shape.parent.x() - shape.parent.offsetX(), y: shape.parent.y() - shape.parent.offsetY()})),
+								grid.squareSize,
+								1
 							),
-							{ x: shapePolygon.x(), y: shapePolygon.y() },
-							shapePolygon.rotation()
+							{ x: shape.parent.x(), y: shape.parent.y() },
+							shape.parent.rotation()
 						),
 						rotatePoints(
-							pointsToObjectArray(pointsToRealPosition(object.points(), object.position())),
-							{ x: object.x(), y: object.y() },
-							object.rotation()
+							addChairHitbox(
+								pointsToObjectArray(
+									pointsToRealPosition(object.points(), {x: object.parent.x() - object.parent.offsetX(), y: object.parent.y() - object.parent.offsetY()})
+								),
+								grid.squareSize,
+								1
+							),
+							{ x: object.parent.x(), y: object.parent.y() },
+							object.parent.rotation()
 						)
 					)
 				) {
 					isColliding = true;
 				} else {
+					isColliding = false;
 					// Get the closest viable position
+
 					let position = getClosestViablePosition(
 						newX,
 						newY,
 						previewShape,
-						getMovablePolygons(objectLayer).filter((i: any) => i !== shape),
+						getMovablePolygons(objectLayer)
+							.filter((i: any) => i !== shape)
+							.map((i: any) => i.findOne((node: Line) => node instanceof Konva.Line)),
 						grid
 					);
 
 					// Update the preview shape's position
+
 					previewShape.x(position?.x);
 					previewShape.y(position?.y);
 				}
@@ -165,34 +221,43 @@
 		});
 	}
 
-	function transform(e: any) {
-		const rect = e.detail.currentTarget;
-		const objects = getMovablePolygons(stage);
-		//Loop over objects and check every object for collision
-		objects.forEach((object: any) => {
-			if (object !== rect) {
-				if (
-					checkPolygonCollision(
-						rotatePoints(
-							pointsToObjectArray(pointsToRealPosition(rect.points(), rect.position())),
-							{ x: rect.x(), y: rect.y() },
-							rect.rotation()
-						),
-						rotatePoints(
-							pointsToObjectArray(pointsToRealPosition(object.points(), object.position())),
-							{ x: object.x(), y: object.y() },
-							object.rotation()
-						)
-					)
-				) {
+	function transformEnd(e: any) {
+		let group = e.detail.currentTarget;
+		console.log(group.position());
+		//Doesnt work without timeout fsr
+			tableList.set($tableList.map((e) => {
+			if(e.name == group.name()){
+				return {
+					...e,
+					rotation: group.rotation()
 				}
+			} else {
+				return e;
 			}
-		});
+		}));
 	}
+
 	function dragEnd(e: any) {
-		let shape = e.detail.currentTarget;
-		shape.x(previewShape.x());
-		shape.y(previewShape.y());
+		e.preventDefault();
+		let group = e.detail.currentTarget;
+		//Doesnt work without timeout fsr
+		setTimeout(() => {
+			group.position(previewShape.position());
+			let shape = e.detail.currentTarget.getChildren((node: Line) => node instanceof Konva.Line)[0];
+			shape.fill('white');
+			tableList.set($tableList.map((e) => {
+			if(e.name == group.name()){
+				return {
+					...e,
+					x: group.x() / grid.squareSize,
+					y: group.y() / grid.squareSize,
+					rotation: group.rotation()
+				}
+			} else {
+				return e;
+			}
+		}));
+		}, 0);
 
 		isColliding = false;
 		previewShape.destroy();
@@ -200,7 +265,6 @@
 		objectLayer.batchDraw();
 		objectLayer.draw();
 	}
-	let n = 4;
 </script>
 
 {#if typeof window !== 'undefined'}
@@ -210,6 +274,10 @@
 			width: 800,
 			height: 800,
 			draggable: true,
+			scaleX: $stageData?.scale ? $stageData.scale : 1,
+			scaleY: $stageData?.scale ? $stageData.scale : 1,
+			x: $stageData?.x ? $stageData.x : 0,
+			y: $stageData?.y ? $stageData.y : 0,
 			dragBoundFunc: function (pos) {
 				let scale = stage.scaleX(); // assuming stage is scaled uniformly in x and y directions
 				let newX = Math.min(pos.x, grid.borderThickness * grid.squareSize * scale);
@@ -226,6 +294,12 @@
 						stage.height() -
 						grid.borderThickness * grid.squareSize * scale
 				);
+				stageData.set({
+					...$stageData,
+					scale: scale,
+					x: newX, 
+					y: newY
+				});
 				return {
 					x: newX,
 					y: newY
@@ -254,6 +328,11 @@
 					/>
 				{/each}
 			</Group>
+		</Layer>
+		<Layer>
+			{#each stageData.uniqueObjects as object}
+			
+			{/each}
 		</Layer>
 		<Layer bind:handle={objectLayer}>
 			<!--BORDERS-->
@@ -304,45 +383,67 @@
 					rotationSnapTolerance: 30
 				}}
 			/>
-			<Group
-				config={{ draggable: true }}
-				on:dragstart={dragStart}
-				on:dragmove={dragMove}
-				on:dragend={dragEnd}
-				on:transform={transform}
-			>
-				<Line
+			{#each $tableList as table}
+				<Group
 					config={{
-						points: [
-							1 * grid.squareSize,
-							0,
-							2 * grid.squareSize,
-							0,
-							2 * grid.squareSize,
-							4 * grid.squareSize,
-							1 * grid.squareSize,
-							4 * grid.squareSize
-						],
-						fill: 'white',
-						closed: true
+						draggable: true,
+						name: table.name,
+						x: (table.x || 0) * grid.squareSize,
+						y: (table.y || 0) * grid.squareSize,
+						rotation: table.rotation || 0,
+						offsetX: (table.table.width * grid.squareSize) / 2,
+						offsetY: (table.table.height * grid.squareSize) / 2
 					}}
-				/>
-				{#each Array(n) as _, i (i)}
-					<Rect
+					on:dragstart={dragStart}
+					on:dragmove={dragMove}
+					on:dragend={dragEnd}
+					on:transformend={transformEnd}
+				>
+					<Line
 						config={{
-							x: (i < n / 2 ? 0 : 2) * grid.squareSize,
-							y:
-								2 * grid.squareSize +
-								(i < n / 2 ? -1 : 1) *
-									(0.5 * grid.squareSize +
-										(i % Math.ceil(n / 2)) * ((4 * grid.squareSize) / (Math.ceil(n / 2) + 1))),
-							width: grid.squareSize / 1.5,
-							height: grid.squareSize / 1.5,
-							fill: 'blue'
+							points: [
+								0 * grid.squareSize,
+								0,
+								table.table.width * grid.squareSize,
+								0,
+								table.table.width * grid.squareSize,
+								table.table.height * grid.squareSize,
+								0 * grid.squareSize,
+								table.table.height * grid.squareSize
+							],
+							fill: 'white',
+							closed: true
 						}}
 					/>
-				{/each}
-			</Group>
+					
+					{#each Array(table.chairs.count) as _, i}
+						<Rect
+							config={{
+								x: -1 * grid.squareSize + 0.1 * grid.squareSize,
+								y:
+									((table.table.height * grid.squareSize) / table.chairs.count) * i +
+									(table.table.height * grid.squareSize) / (2 * table.chairs.count) -
+									0.5 * grid.squareSize * 0.8,
+								width: 0.8 * grid.squareSize,
+								height: 0.8 * grid.squareSize,
+								fill: 'gray'
+							}}
+						/>
+						<Rect
+							config={{
+								x: table.table.width * grid.squareSize + 0.1 * grid.squareSize,
+								y:
+									((table.table.height * grid.squareSize) / table.chairs.count) * i +
+									(table.table.height * grid.squareSize) / (2 * table.chairs.count) -
+									0.5 * grid.squareSize * 0.8,
+								width: 0.8 * grid.squareSize,
+								height: 0.8 * grid.squareSize,
+								fill: 'gray'
+							}}
+						/>
+					{/each}
+				</Group>
+			{/each}
 		</Layer>
 	</Stage>
 {/if}

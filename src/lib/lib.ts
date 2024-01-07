@@ -6,7 +6,7 @@ export function clamp(val: number, min: number, max: number): number {
 }
 export function pointsToRealPosition(points: Array<number>, position: {x: number, y: number}){
     return points.map((v, i) => {
-        return i % 2 == 0 ? v + position.x : v + position.y;
+        return Math.round(i % 2 == 0 ? v + position.x : v + position.y);
     });
 };
 export function pointsToObjectArray(points: Array<number>){
@@ -16,6 +16,18 @@ export function pointsToObjectArray(points: Array<number>){
         if(!(i % 2) && typeof a[i+1] !== "undefined") return true;
     });
 };
+
+export function addChairHitbox(points: Array<{x: number, y: number}>, squareSize: number, chairSize: number){
+  //We take the points and add a buffer of 1 grid.squareSize to each side of the X axis
+  //Indices 0, 3 are to the left, 1, 2 are to the right
+  return points.map((v, i) => {
+    if(i == 1 || i == 2){
+      return {x: v.x + chairSize * squareSize, y: v.y}
+    }else{
+      return {x: v.x - chairSize * squareSize, y: v.y}
+    }
+  })
+}
 
 export function rotatePoints(points: Array<{x: number, y: number}>, originObject: {x: number, y: number}, angle: number){
     const a = angle * (Math.PI/180); // Convert to radians
@@ -73,7 +85,7 @@ export function checkPolygonCollision(polygon1: Array<{x: number, y: number}>, p
   
         // if there is no overlap between the projects, the edge we are looking at separates the two
         // polygons, and we know there is no overlap
-        if (maxA < minB || maxB < minA) {
+        if ((maxA && minB && maxB && minA) && (maxA < minB || maxB < minA)) {
           return false;
         }
       }
