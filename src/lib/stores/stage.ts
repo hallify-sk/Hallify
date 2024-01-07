@@ -29,5 +29,11 @@ export const stageData: Writable<{
             fill: string;
             stroke: number;
         }
+    ],
+    collisionObjects: [
+        {
+            name: string;
+            points: number[];
+        }
     ]
 }> = writable();

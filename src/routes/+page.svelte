@@ -6,7 +6,7 @@
     let snapSize = 0.5;
     let borderThickness = 10;
     let color = "#fff";
-    import { selectedName, tableList } from "$lib/stores/stage";
+    import { selectedName, stageData, tableList } from "$lib/stores/stage";
 	import { onDestroy } from "svelte";
 
     const unsub = selectedName.subscribe((e) => {
@@ -49,6 +49,18 @@
 			}
 		}
 	]);
+
+    stageData.set({
+        ...$stageData,
+        uniqueObjects: [
+            {
+                name: "stage",
+                points: [16 * squareSize, 4 * squareSize, 20 * squareSize, 3 * squareSize, 20 * squareSize, 8 * squareSize, 15 * squareSize, 8 * squareSize],
+                fill: "cyan",
+                stroke: 5,
+            }
+        ]
+    });
     let chairs = 0;
     function findChairsAndReplace(){
         //Find chair count by using selectedName store value and tableList, replace value in tableList with new value

@@ -330,8 +330,13 @@
 			</Group>
 		</Layer>
 		<Layer>
-			{#each stageData.uniqueObjects as object}
-			
+			{#each $stageData.uniqueObjects as object}
+				<Line config={{
+					points: object.points,
+					fill: object.fill,
+					closed: true,
+					opacity: 0.2
+				}}/>
 			{/each}
 		</Layer>
 		<Layer bind:handle={objectLayer}>
