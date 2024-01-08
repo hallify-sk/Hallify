@@ -47,6 +47,21 @@
 				width: 1,
 				height: 4
 			}
+		},
+        {
+			name: 'id3',
+			x: 12,
+			y: 3,
+            rotation: 0,
+			chairs: {
+				count: 3,
+				left: true,
+				right: true
+			},
+			table: {
+				width: 1,
+				height: 4
+			}
 		}
 	]);
 
@@ -70,7 +85,7 @@
                 e.chairs.count = chairs;
             }
         });
-    }
+    };
 
     selectedName.subscribe((e) => {
         $tableList.find((e) => {

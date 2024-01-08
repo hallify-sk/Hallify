@@ -15,13 +15,14 @@
 		borderThickness: 100
 	};
 
-	import { onDestroy, onMount } from 'svelte';
+	import { onMount } from 'svelte';
 	import { Stage, Layer, Line, Group, Transformer, Rect } from 'svelte-konva';
 	import {
 		addChairHitbox,
 		checkPolygonCollision,
 		clamp,
 		getClosestViablePosition,
+		getCollisionPolygons,
 		getMovablePolygons,
 		pointsToObjectArray,
 		pointsToRealPosition,
@@ -35,10 +36,6 @@
 	let tr: any;
 	let stage: any;
 	let groups: Array<Konva.Group> = [];
-	let borderOne: any;
-	let borderTwo: any;
-	let borderThree: any;
-	let borderFour: any;
 	$: if (gridLayer) gridLayer.cache();
 	$: if (grid && (grid.width || grid.height) && gridLayer) setTimeout(() => gridLayer.cache());
 	const scaleBy = 1.2;
@@ -134,7 +131,7 @@
 		let shape = e.detail.currentTarget;
 		// Create a clone of the shape
 		previewShape = shape.clone();
-
+		previewShape.name("preview");
 		previewShape.draggable(false);
 
 		// Make the clone semi-transparent
@@ -168,7 +165,8 @@
 			grid.snapSize;
 
 		const objects = getMovablePolygons(objectLayer);
-
+		objects.push(...getCollisionPolygons(objectLayer));
+		console.log(objects);
 		objects.forEach((group: any) => {
 			let object = group.findOne((node: Line) => node instanceof Konva.Line);
 
@@ -341,16 +339,7 @@
 		</Layer>
 		<Layer bind:handle={objectLayer}>
 			<!--BORDERS-->
-			<Rect
-				bind:handle={borderOne}
-				config={{
-					x: -grid.borderThickness * grid.squareSize,
-					y: -grid.borderThickness * grid.squareSize,
-					width: 2 * grid.borderThickness * grid.squareSize + grid.width * grid.squareSize,
-					height: grid.borderThickness * grid.squareSize,
-					fill: 'black'
-				}}
-			/>
+			
 			<Rect
 				config={{
 					x: -grid.borderThickness * grid.squareSize,

@@ -95,6 +95,9 @@ export function checkPolygonCollision(polygon1: Array<{x: number, y: number}>, p
   export function getMovablePolygons(layer: Layer) {
     return layer.getChildren((node: Group) => node instanceof Konva.Group && node.draggable());
   }
+  export function getCollisionPolygons(layer: Layer) {
+    return layer.getChildren((node: Group) => node instanceof Konva.Group && !node.draggable() && !(node instanceof Konva.Transformer) && node.name() !== "preview");
+  }
   export function getClosestViablePosition(x: number, y: number, shape: Line, objects: Line[], grid: {
     width: number;
     height: number;
