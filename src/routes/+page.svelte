@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { applyAction, enhance } from "$app/forms";
 	import Stage from "$lib/Stage.svelte";
     let width = 20;
     let height = 20;
@@ -7,15 +8,6 @@
     let borderThickness = 10;
     let color = "#fff";
     import { selectedName, stageData, tableList } from "$lib/stores/stage";
-	import { onDestroy } from "svelte";
-
-    const unsub = selectedName.subscribe((e) => {
-        console.log(e);
-    });
-
-    onDestroy(() => {
-        unsub();
-    });
 
     tableList.set([
 		{
@@ -72,7 +64,18 @@
                 name: "stage",
                 points: [16 * squareSize, 4 * squareSize, 20 * squareSize, 3 * squareSize, 20 * squareSize, 8 * squareSize, 15 * squareSize, 8 * squareSize],
                 fill: "cyan",
-                stroke: 5,
+                stroke: "blue",
+                strokeWidth: 4,
+                opacity: 0.4
+            }
+        ],
+        collisionObjects: [
+            {
+                x: 3 * squareSize,
+                y: 3 * squareSize,
+                name: "wall",
+                points: [0,0,60,0,60,60,0,60, -10, 30],
+                fill: "blue"
             }
         ]
     });
@@ -80,7 +83,6 @@
     function findChairsAndReplace(){
         //Find chair count by using selectedName store value and tableList, replace value in tableList with new value
         $tableList.find((e) => {
-            console.log($tableList);
             if(e.name == $selectedName){
                 e.chairs.count = chairs;
             }
@@ -89,7 +91,6 @@
 
     selectedName.subscribe((e) => {
         $tableList.find((e) => {
-            console.log($tableList);
             if(e.name == $selectedName){
                 chairs = e.chairs.count;
             }
@@ -113,6 +114,15 @@
     <label>Object properties</label>
     <input bind:value={chairs} on:change={findChairsAndReplace} type="number"  placeholder="Chairs">
     <button on:click={rerenderStage}>Rerender</button>
+    <form use:enhance={async ({formData}) => {
+            formData.set("stage", JSON.stringify($stageData));
+            formData.set("tables", JSON.stringify($tableList));
+        return async ({result}) => {
+            await applyAction(result);
+        }
+    }} method="POST">
+        <button type="submit" class="text-white">Save</button>
+    </form>
 </div>
 <div class="grid place-items-center w-screen h-screen bg-slate-950">
     {#key rerender}

@@ -24,6 +24,7 @@
 		getClosestViablePosition,
 		getCollisionPolygons,
 		getMovablePolygons,
+		objectArrayToPoints,
 		pointsToObjectArray,
 		pointsToRealPosition,
 		rotatePoints
@@ -65,30 +66,35 @@
 			};
 
 			let newX = Math.min(pos.x, grid.borderThickness * grid.squareSize * newScale);
-				let newY = Math.min(pos.y, grid.borderThickness * grid.squareSize * newScale);
-				newX = Math.max(
-					newX,
-					-grid.width * grid.squareSize * newScale +
-						stage.width() -
-						grid.borderThickness * grid.squareSize * newScale
-				);
-				newY = Math.max(
-					newY,
-					-grid.height * grid.squareSize * newScale +
-						stage.height() -
-						grid.borderThickness * grid.squareSize * newScale
-				);
+			let newY = Math.min(pos.y, grid.borderThickness * grid.squareSize * newScale);
+			newX = Math.max(
+				newX,
+				-grid.width * grid.squareSize * newScale +
+					stage.width() -
+					grid.borderThickness * grid.squareSize * newScale
+			);
+			newY = Math.max(
+				newY,
+				-grid.height * grid.squareSize * newScale +
+					stage.height() -
+					grid.borderThickness * grid.squareSize * newScale
+			);
 			stage.position({ x: newX, y: newY });
 			stageData.set({
 				...$stageData,
 				scale: newScale,
-				x: newX, 
-				y: newY,
+				x: newX,
+				y: newY
 			});
 		});
 		stage.on('click tap', function (e: any) {
 			// if click on empty area - remove all selections
 			if (e.target === stage) {
+				tr.nodes([]);
+				selectedName.set(null);
+				return;
+			}
+			if (e.target.parent.name().split(' ').includes('wall')) {
 				tr.nodes([]);
 				selectedName.set(null);
 				return;
@@ -116,10 +122,6 @@
 				// remove node from array
 				nodes.splice(nodes.indexOf(e.target), 1);
 				tr.nodes(nodes);
-			} else if (metaPressed && !isSelected) {
-				// add the node into selection
-				const nodes = tr.nodes().concat([e.target]);
-				tr.nodes(nodes);
 			}
 		});
 	});
@@ -131,7 +133,7 @@
 		let shape = e.detail.currentTarget;
 		// Create a clone of the shape
 		previewShape = shape.clone();
-		previewShape.name("preview");
+		previewShape.name('preview');
 		previewShape.draggable(false);
 
 		// Make the clone semi-transparent
@@ -140,99 +142,152 @@
 		// Add the clone to the layer
 		objectLayer.add(previewShape);
 	}
-	let isColliding = false;
 
 	function dragMove(e: any) {
 		//Group is used to calculate the position of the shape
-		let group = e.detail.currentTarget;
+		let g = e.detail.currentTarget;
 		//Shape is used to determine collision
 		let shape = e.detail.currentTarget.getChildren((node: Line) => node instanceof Konva.Line)[0];
-		group.moveToTop();
-		if (isColliding) {
-			shape.fill('red');
-		} else {
-			shape.fill('white');
-		}
-
+		g.moveToTop();
 		// Calculate the new position based on the grid size
 		let newX =
-			Math.round((group.x() + grid.squareSize * grid.snapSize) / grid.squareSize / grid.snapSize) *
+			Math.round((g.x() + grid.squareSize * grid.snapSize) / grid.squareSize / grid.snapSize) *
 			grid.squareSize *
 			grid.snapSize;
 		let newY =
-			Math.round((group.y() + grid.squareSize * grid.snapSize) / grid.squareSize / grid.snapSize) *
+			Math.round((g.y() + grid.squareSize * grid.snapSize) / grid.squareSize / grid.snapSize) *
 			grid.squareSize *
 			grid.snapSize;
 
 		const objects = getMovablePolygons(objectLayer);
 		objects.push(...getCollisionPolygons(objectLayer));
 		console.log(objects);
-		objects.forEach((group: any) => {
+		//Detect if there is collision anywhere
+		let isColliding = objects.find((group: any) => {
 			let object = group.findOne((node: Line) => node instanceof Konva.Line);
 
 			if (object && shape && object !== shape && object !== previewShape) {
+				let shapeRef = $tableList.find((i) => i.name == g.name());
+				let shapeHitbox;
+				if (shapeRef?.chairs.count && shapeRef.chairs.count > 0) {
+					shapeHitbox = addChairHitbox(
+						pointsToObjectArray(
+							pointsToRealPosition(shape.points(), {
+								x: g.x() - (g.draggable() ? g.offsetX() : 0),
+								y: g.y() - (g.draggable() ? g.offsetY() : 0)
+							})
+						),
+						grid.squareSize,
+						1
+					);
+				} else {
+					shapeHitbox = pointsToObjectArray(
+						pointsToRealPosition(shape.points(), {
+							x: g.x() - (g.draggable() ? g.offsetX() : 0),
+							y: g.y() - (g.draggable() ? g.offsetY() : 0)
+						})
+					);
+				}
+				let objectRef = $tableList.find((i) => i.name == group.name());
+				let objectHitbox;
+				if (objectRef?.chairs.count && objectRef.chairs.count > 0) {
+					objectHitbox = addChairHitbox(
+						pointsToObjectArray(
+							pointsToRealPosition(object.points(), {
+								x: object.parent.x() - (object.parent.draggable() ? object.parent.offsetX() : 0),
+								y: object.parent.y() - (object.parent.draggable() ? object.parent.offsetY() : 0)
+							})
+						),
+						grid.squareSize,
+						1
+					);
+				} else {
+					if (!objectRef) {
+						objectHitbox = pointsToObjectArray(
+							pointsToRealPosition(object.points(), { x: group.x(), y: group.y() })
+						);
+						console.log(
+							rotatePoints(
+								shapeHitbox,
+								{ x: shape.parent.x(), y: shape.parent.y() },
+								shape.parent.rotation()
+							)
+						);
+						console.log(
+							rotatePoints(
+								objectHitbox,
+								{ x: object.parent.x(), y: object.parent.y() },
+								object.parent.rotation()
+							)
+						);
+					} else {
+						objectHitbox = pointsToObjectArray(
+							pointsToRealPosition(object.points(), {
+								x: object.parent.x() - object.parent.offsetX(),
+								y: object.parent.y() - object.parent.offsetY()
+							})
+						);
+					}
+				}
 				if (
 					checkPolygonCollision(
 						rotatePoints(
-							addChairHitbox(
-								pointsToObjectArray(pointsToRealPosition(shape.points(), {x: shape.parent.x() - shape.parent.offsetX(), y: shape.parent.y() - shape.parent.offsetY()})),
-								grid.squareSize,
-								1
-							),
+							shapeHitbox,
 							{ x: shape.parent.x(), y: shape.parent.y() },
 							shape.parent.rotation()
 						),
 						rotatePoints(
-							addChairHitbox(
-								pointsToObjectArray(
-									pointsToRealPosition(object.points(), {x: object.parent.x() - object.parent.offsetX(), y: object.parent.y() - object.parent.offsetY()})
-								),
-								grid.squareSize,
-								1
-							),
+							objectHitbox,
 							{ x: object.parent.x(), y: object.parent.y() },
 							object.parent.rotation()
 						)
 					)
 				) {
-					isColliding = true;
+					return true;
 				} else {
-					isColliding = false;
-					// Get the closest viable position
-
-					let position = getClosestViablePosition(
-						newX,
-						newY,
-						previewShape,
-						getMovablePolygons(objectLayer)
-							.filter((i: any) => i !== shape)
-							.map((i: any) => i.findOne((node: Line) => node instanceof Konva.Line)),
-						grid
-					);
-
-					// Update the preview shape's position
-
-					previewShape.x(position?.x);
-					previewShape.y(position?.y);
+					return false;
 				}
 			}
 		});
+		console.log(isColliding);
+		//If there was no collision, continue in calculating new viable position
+		if (!isColliding) {
+			let position = getClosestViablePosition(
+				newX,
+				newY,
+				previewShape,
+				getMovablePolygons(objectLayer)
+					.filter((i: any) => i !== shape && i !== previewShape)
+					.map((i: any) => i.findOne((node: Line) => node instanceof Konva.Line)),
+				grid
+			);
+
+			// Update the preview shape's position
+
+			previewShape.x(position?.x);
+			previewShape.y(position?.y);
+			shape.fill('white');
+		} else {
+			shape.fill('red');
+		}
 	}
 
 	function transformEnd(e: any) {
 		let group = e.detail.currentTarget;
 		console.log(group.position());
 		//Doesnt work without timeout fsr
-			tableList.set($tableList.map((e) => {
-			if(e.name == group.name()){
-				return {
-					...e,
-					rotation: group.rotation()
+		tableList.set(
+			$tableList.map((e) => {
+				if (e.name == group.name()) {
+					return {
+						...e,
+						rotation: group.rotation()
+					};
+				} else {
+					return e;
 				}
-			} else {
-				return e;
-			}
-		}));
+			})
+		);
 	}
 
 	function dragEnd(e: any) {
@@ -243,21 +298,21 @@
 			group.position(previewShape.position());
 			let shape = e.detail.currentTarget.getChildren((node: Line) => node instanceof Konva.Line)[0];
 			shape.fill('white');
-			tableList.set($tableList.map((e) => {
-			if(e.name == group.name()){
-				return {
-					...e,
-					x: group.x() / grid.squareSize,
-					y: group.y() / grid.squareSize,
-					rotation: group.rotation()
-				}
-			} else {
-				return e;
-			}
-		}));
+			tableList.set(
+				$tableList.map((e) => {
+					if (e.name == group.name()) {
+						return {
+							...e,
+							x: group.x() / grid.squareSize,
+							y: group.y() / grid.squareSize,
+							rotation: group.rotation()
+						};
+					} else {
+						return e;
+					}
+				})
+			);
 		}, 0);
-
-		isColliding = false;
 		previewShape.destroy();
 		// Redraw the layer
 		objectLayer.batchDraw();
@@ -295,7 +350,7 @@
 				stageData.set({
 					...$stageData,
 					scale: scale,
-					x: newX, 
+					x: newX,
 					y: newY
 				});
 				return {
@@ -329,46 +384,160 @@
 		</Layer>
 		<Layer>
 			{#each $stageData.uniqueObjects as object}
-				<Line config={{
-					points: object.points,
-					fill: object.fill,
-					closed: true,
-					opacity: 0.2
-				}}/>
+				<Line
+					config={{
+						points: object.points,
+						fill: object.fill,
+						closed: true,
+						opacity: object.opacity || 1,
+						stroke: object.stroke || '',
+						strokeWidth: object.strokeWidth || 0,
+						dash: object.dash || [0]
+					}}
+				/>
 			{/each}
 		</Layer>
 		<Layer bind:handle={objectLayer}>
 			<!--BORDERS-->
-			
-			<Rect
+			<Group
+				config={{
+					x: -grid.borderThickness * grid.squareSize,
+					y: -grid.borderThickness * grid.squareSize,
+					name: 'wall top'
+				}}
+			>
+				<Line
+					config={{
+						points: objectArrayToPoints(
+							{ x: 0, y: 0 },
+							{
+								x: 2 * grid.borderThickness * grid.squareSize + grid.width * grid.squareSize,
+								y: 0
+							},
+							{
+								x: 2 * grid.borderThickness * grid.squareSize + grid.width * grid.squareSize,
+								y: grid.borderThickness * grid.squareSize
+							},
+							{ x: 0, y: grid.borderThickness * grid.squareSize }
+						),
+						closed: true,
+						x: 0,
+						y: 0,
+						fill: 'black'
+					}}
+				/>
+			</Group>
+			<Group
 				config={{
 					x: -grid.borderThickness * grid.squareSize,
 					y: grid.height * grid.squareSize,
-					width: 2 * grid.borderThickness * grid.squareSize + grid.width * grid.squareSize,
-					height: grid.borderThickness * grid.squareSize,
-					fill: 'black'
+					name: 'wall bottom'
 				}}
-			/>
-			<Rect
+			>
+				<Line
+					config={{
+						points: objectArrayToPoints(
+							{ x: 0, y: 0 },
+							{
+								x: 2 * grid.borderThickness * grid.squareSize + grid.width * grid.squareSize,
+								y: 0
+							},
+							{
+								x: 2 * grid.borderThickness * grid.squareSize + grid.width * grid.squareSize,
+								y: grid.borderThickness * grid.squareSize
+							},
+							{ x: 0, y: grid.borderThickness * grid.squareSize }
+						),
+						closed: true,
+						x: 0,
+						y: 0,
+						fill: 'black'
+					}}
+				/>
+			</Group>
+			<Group
 				config={{
 					x: -grid.borderThickness * grid.squareSize,
 					y: -grid.borderThickness * grid.squareSize,
-					width: grid.borderThickness * grid.squareSize,
-					height: grid.height * grid.squareSize + 2 * grid.borderThickness * grid.squareSize,
-					fill: 'black'
+					name: 'wall left'
 				}}
-			/>
-			<Rect
+			>
+				<Line
+					config={{
+						points: objectArrayToPoints(
+							{ x: 0, y: 0 },
+							{ x: grid.borderThickness * grid.squareSize, y: 0 },
+							{
+								x: grid.borderThickness * grid.squareSize,
+								y: grid.height * grid.squareSize + 2 * grid.borderThickness * grid.squareSize
+							},
+							{
+								x: 0,
+								y: grid.height * grid.squareSize + 2 * grid.borderThickness * grid.squareSize
+							}
+						),
+						closed: true,
+						x: 0,
+						y: 0,
+						fill: 'black'
+					}}
+				/>
+			</Group>
+			<Group
 				config={{
 					x: grid.width * grid.squareSize,
 					y: -grid.borderThickness * grid.squareSize,
-					width: grid.borderThickness * grid.squareSize,
-					height: grid.height * grid.squareSize + 2 * grid.borderThickness * grid.squareSize,
-					fill: 'black'
+					name: 'wall right'
 				}}
-			/>
+			>
+				<Line
+					config={{
+						points: objectArrayToPoints(
+							{ x: 0, y: 0 },
+							{ x: grid.borderThickness * grid.squareSize, y: 0 },
+							{
+								x: grid.borderThickness * grid.squareSize,
+								y: grid.height * grid.squareSize + 2 * grid.borderThickness * grid.squareSize
+							},
+							{
+								x: 0,
+								y: grid.height * grid.squareSize + 2 * grid.borderThickness * grid.squareSize
+							}
+						),
+						closed: true,
+						x: 0,
+						y: 0,
+						fill: 'black'
+					}}
+				/>
+			</Group>
 
 			<!--END BORDERS-->
+
+			<!--START COLLISION OBJECTS-->
+			{#if $stageData.collisionObjects?.length}
+				{#each $stageData.collisionObjects as object}
+					<Group
+						config={{
+							x: object.x,
+							y: object.y,
+							name: object.name
+						}}
+					>
+						<Line
+							config={{
+								points: object.points,
+								fill: object.fill || 'black',
+								stroke: object.stroke,
+								strokeWidth: object.strokeWidth || 0,
+								dash: object.dash,
+								closed: true
+							}}
+						/>
+					</Group>
+				{/each}
+			{/if}
+			<!--END COLLISION OBJECTS-->
 			<Transformer
 				bind:handle={tr}
 				config={{
@@ -409,7 +578,7 @@
 							closed: true
 						}}
 					/>
-					
+
 					{#each Array(table.chairs.count) as _, i}
 						<Rect
 							config={{
