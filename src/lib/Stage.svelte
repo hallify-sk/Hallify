@@ -34,20 +34,23 @@
 
 	let gridLayer: any;
 	let objectLayer: any;
+	let zoneLayer: Konva.Layer;
 	let tr: any;
-	let stage: any;
+	let stage: Konva.Stage;
 	let groups: Array<Konva.Group> = [];
 	$: if (gridLayer) gridLayer.cache();
 	$: if (grid && (grid.width || grid.height) && gridLayer) setTimeout(() => gridLayer.cache());
 	const scaleBy = 1.2;
+	let points: any[] = [];
+	let circles: any[] = [];
 	onMount(() => {
 		stage.on('wheel', (e: any) => {
 			e.evt.preventDefault();
 			const oldScale = stage.scaleX();
 			var pointer = stage.getPointerPosition();
 			var mousePointTo = {
-				x: (pointer.x - stage.x()) / oldScale,
-				y: (pointer.y - stage.y()) / oldScale
+				x: ((pointer?.x || 0) - stage.x()) / oldScale,
+				y: ((pointer?.y || 0) - stage.y()) / oldScale
 			};
 			// how to scale? Zoom in? Or zoom out?
 			let direction = e.evt.deltaY > 0 ? -1 : 1;
@@ -61,8 +64,8 @@
 			stage.scale({ x: newScale, y: newScale });
 
 			var pos = {
-				x: pointer.x - mousePointTo.x * newScale,
-				y: pointer.y - mousePointTo.y * newScale
+				x: (pointer?.x || 0) - mousePointTo.x * newScale,
+				y: (pointer?.y || 0) - mousePointTo.y * newScale
 			};
 
 			let newX = Math.min(pos.x, grid.borderThickness * grid.squareSize * newScale);
@@ -87,14 +90,33 @@
 				y: newY
 			});
 		});
-		stage.on('click tap', function (e: any) {
+		stage.on('click tap', function (e) {
+			if (e.evt.shiftKey) {
+				const { offsetX, offsetY } = e.evt;
+				const stageX = stage.x();
+				const stageY = stage.y();
+				console.log(offsetX, offsetY);
+				const point = { x: Math.round((offsetX - stageX) / (grid.squareSize * grid.snapSize)) * grid.squareSize * grid.snapSize, y: Math.round((offsetY - stageY) / (grid.squareSize * grid.snapSize)) * grid.squareSize * grid.snapSize };
+				points.push(point);
+
+				// Create a new circle at the point and add it to the stage
+				const circle = new Konva.Circle({
+					x: point.x,
+					y: point.y,
+					radius: 5,
+					fill: 'red'
+				});
+				objectLayer.add(circle);
+				objectLayer.draw();
+				circles.push(circle);
+			}
 			// if click on empty area - remove all selections
 			if (e.target === stage) {
 				tr.nodes([]);
 				selectedName.set(null);
 				return;
 			}
-			if (e.target.parent.name().split(' ').includes('wall')) {
+			if (e.target.parent?.name().split(' ').includes('wall') || e.target.parent?.getLayer() == zoneLayer) {
 				tr.nodes([]);
 				selectedName.set(null);
 				return;
@@ -108,7 +130,7 @@
 			if (!metaPressed && !isSelected) {
 				// if no key pressed and the node is not selected
 				// select just one
-				if (e.target.parent.draggable()) {
+				if (e.target.parent?.draggable()) {
 					tr.nodes([e.target.parent]);
 					selectedName.set(e.target.parent.name());
 				} else {
@@ -318,9 +340,63 @@
 		objectLayer.batchDraw();
 		objectLayer.draw();
 	}
+	export async function downloadStage(): Promise<Blob> {
+		const gridWidth = grid.width * grid.squareSize;
+		const gridHeight = grid.height * grid.squareSize;
+
+		// Save the current position
+		const oldX = stage.x();
+		const oldY = stage.y();
+
+		// Set the position to 0,0
+		stage.x(0);
+		stage.y(0);
+
+		const url = await stage.toBlob({
+			x: 0,
+			y: 0,
+			width: gridWidth,
+			height: gridHeight
+		});
+
+		// Rest of the code...
+
+		// Restore the old position
+		stage.x(oldX);
+		stage.y(oldY);
+
+		return url as Blob;
+	}
+
+	function createPolygon() {
+		if (points.length > 1) {
+			const line = new Konva.Line({
+				points: points.flatMap((point) => [point.x, point.y]),
+				fill: 'blue',
+				stroke: 'black',
+				closed: true
+			});
+			zoneLayer.add(line);
+			zoneLayer.batchDraw();
+			$stageData.uniqueObjects.push({
+				name: crypto.randomUUID(),
+				points: points.flatMap((point) => [point.x, point.y]),
+				fill: "blue",
+				stroke: 'black',
+				opacity: 0.5
+			});
+		}
+		points = [];
+		// Remove all circles from the stage and clear the array
+		for (const circle of circles) {
+			circle.remove();
+		}
+		circles = [];
+	}
 </script>
 
 {#if typeof window !== 'undefined'}
+	<button class="text-white" on:click={createPolygon}>Create</button>
 	<Stage
 		bind:handle={stage}
 		config={{
@@ -382,7 +458,7 @@
 				{/each}
 			</Group>
 		</Layer>
-		<Layer>
+		<Layer bind:handle={zoneLayer}>
 			{#each $stageData.uniqueObjects as object}
 				<Line
 					config={{
@@ -589,7 +665,8 @@
 									0.5 * grid.squareSize * 0.8,
 								width: 0.8 * grid.squareSize,
 								height: 0.8 * grid.squareSize,
-								fill: 'gray'
+								fill: 'gray',
+								cornerRadius: 4
 							}}
 						/>
 						<Rect
@@ -601,7 +678,8 @@
 									0.5 * grid.squareSize * 0.8,
 								width: 0.8 * grid.squareSize,
 								height: 0.8 * grid.squareSize,
-								fill: 'gray'
+								fill: 'gray',
+								cornerRadius: 4
 							}}
 						/>
 					{/each}
