@@ -31,10 +31,12 @@
 	} from './lib';
 	import Konva from 'konva';
 	import { selectedName, stageData, tableList } from './stores/stage';
+	import { theme } from './stores/theme';
 
 	let gridLayer: any;
 	let objectLayer: any;
 	let zoneLayer: Konva.Layer;
+	let background: Konva.Rect;
 	let tr: any;
 	let stage: Konva.Stage;
 	let groups: Array<Konva.Group> = [];
@@ -116,7 +118,7 @@
 				selectedName.set(null);
 				return;
 			}
-			if (e.target.parent?.name().split(' ').includes('wall') || e.target.parent?.getLayer() == zoneLayer) {
+			if (e.target.parent?.name().split(' ').includes('wall') || e.target.parent?.getLayer() == zoneLayer || e.target == background ) {
 				tr.nodes([]);
 				selectedName.set(null);
 				return;
@@ -169,7 +171,7 @@
 		//Group is used to calculate the position of the shape
 		let g = e.detail.currentTarget;
 		//Shape is used to determine collision
-		let shape = e.detail.currentTarget.getChildren((node: Line) => node instanceof Konva.Line)[0];
+		let shape: Konva.Line = e.detail.currentTarget.getChildren((node: Line) => node instanceof Konva.Line)[0];
 		g.moveToTop();
 		// Calculate the new position based on the grid size
 		let newX =
@@ -231,8 +233,8 @@
 						console.log(
 							rotatePoints(
 								shapeHitbox,
-								{ x: shape.parent.x(), y: shape.parent.y() },
-								shape.parent.rotation()
+								{ x: shape.parent?.x() || 0, y: shape.parent?.y() || 0 },
+								shape.parent?.rotation() || 0
 							)
 						);
 						console.log(
@@ -255,8 +257,8 @@
 					checkPolygonCollision(
 						rotatePoints(
 							shapeHitbox,
-							{ x: shape.parent.x(), y: shape.parent.y() },
-							shape.parent.rotation()
+							{ x: shape.parent?.x() || 0, y: shape.parent?.y() || 0 },
+							shape.parent?.rotation() || 0
 						),
 						rotatePoints(
 							objectHitbox,
@@ -288,9 +290,15 @@
 
 			previewShape.x(position?.x);
 			previewShape.y(position?.y);
-			shape.fill('white');
+			shape.fill(themes?.[$theme]?.primary?.[500]);
+			shape.parent?.getChildren(child => child instanceof Konva.Rect).forEach(child => {
+				(child as Konva.Rect | Konva.Line).fill(themes?.[$theme]?.primary?.[400]);
+			});
 		} else {
-			shape.fill('red');
+			shape.fill("#9f6060");
+			shape.parent?.getChildren(child => child instanceof Konva.Rect).forEach(child => {
+				(child as Konva.Rect | Konva.Line).fill("#b38080");
+			});
 		}
 	}
 
@@ -348,6 +356,14 @@
 		const oldX = stage.x();
 		const oldY = stage.y();
 
+		const oldScaleX = stage.scaleX();
+		const oldScaleY = stage.scaleY();
+
+		stage.scaleX(1);
+		stage.scaleY(1);
+
+
+
 		// Set the position to 0,0
 		stage.x(0);
 		stage.y(0);
@@ -359,7 +375,8 @@
 			height: gridHeight
 		});
 
-		// Rest of the code...
+		stage.scaleX(oldScaleX);
+		stage.scaleY(oldScaleY);
 
 		// Restore the old position
 		stage.x(oldX);
@@ -393,6 +410,8 @@
 		}
 		circles = [];
 	}
+
+	import themes from "$lib/themes.json";
 </script>
 
 {#if typeof window !== 'undefined'}
@@ -438,11 +457,12 @@
 	>
 		<Layer>
 			<Group bind:handle={gridLayer}>
+				<Rect bind:handle={background} config={{x: 0, y: 0, width: grid.width * grid.squareSize, height: grid.height * grid.squareSize, fill: themes?.[$theme]?.background?.[200]}}/>
 				{#each Array(grid.height + 1) as _, y}
 					<Line
 						config={{
 							points: [0, y * grid.squareSize, grid.width * grid.squareSize, y * grid.squareSize],
-							stroke: grid.color,
+							stroke: themes?.[$theme]?.background?.[300],
 							strokeWidth: 1
 						}}
 					/>
@@ -451,7 +471,7 @@
 					<Line
 						config={{
 							points: [x * grid.squareSize, 0, x * grid.squareSize, grid.height * grid.squareSize],
-							stroke: grid.color,
+							stroke: themes?.[$theme]?.background?.[300],
 							strokeWidth: 1
 						}}
 					/>
@@ -499,7 +519,7 @@
 						closed: true,
 						x: 0,
 						y: 0,
-						fill: 'black'
+						fill: themes?.[$theme]?.background?.[200]
 					}}
 				/>
 			</Group>
@@ -527,7 +547,7 @@
 						closed: true,
 						x: 0,
 						y: 0,
-						fill: 'black'
+						fill: themes?.[$theme]?.background?.[200]
 					}}
 				/>
 			</Group>
@@ -555,7 +575,7 @@
 						closed: true,
 						x: 0,
 						y: 0,
-						fill: 'black'
+						fill: themes?.[$theme]?.background?.[200]
 					}}
 				/>
 			</Group>
@@ -583,7 +603,7 @@
 						closed: true,
 						x: 0,
 						y: 0,
-						fill: 'black'
+						fill: themes?.[$theme]?.background?.[200]
 					}}
 				/>
 			</Group>
@@ -650,7 +670,7 @@
 								0 * grid.squareSize,
 								table.table.height * grid.squareSize
 							],
-							fill: 'white',
+							fill: themes?.[$theme]?.primary?.[500],
 							closed: true
 						}}
 					/>
@@ -665,7 +685,7 @@
 									0.5 * grid.squareSize * 0.8,
 								width: 0.8 * grid.squareSize,
 								height: 0.8 * grid.squareSize,
-								fill: 'gray',
+								fill: themes?.[$theme]?.primary?.[400],
 								cornerRadius: 4
 							}}
 						/>
@@ -678,7 +698,7 @@
 									0.5 * grid.squareSize * 0.8,
 								width: 0.8 * grid.squareSize,
 								height: 0.8 * grid.squareSize,
-								fill: 'gray',
+								fill: themes?.[$theme]?.primary?.[400],
 								cornerRadius: 4
 							}}
 						/>

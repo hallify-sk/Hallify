@@ -8,6 +8,7 @@
     let borderThickness = 10;
     let color = "#fff";
     import { selectedName, stageData, tableList } from "$lib/stores/stage";
+	import { theme } from "$lib/stores/theme";
 
     tableList.set([
 		{
@@ -59,6 +60,8 @@
 
     stageData.set({
         ...$stageData,
+        width: width * squareSize,
+        height: height * squareSize,
         uniqueObjects: [
             {
                 name: "stage",
@@ -104,7 +107,7 @@
     }
 
     let downloadStage: () => Promise<Blob>;
-
+    theme.set("dark");
 </script>
 <div class="fixed top-0 left-0 flex flex-col">
     <input bind:value={width} type="number" placeholder="Width">
@@ -127,7 +130,7 @@
         <button type="submit" class="text-white">Save</button>
     </form>
 </div>
-<div class="grid place-items-center w-screen h-screen">
+<div class="grid place-items-center w-screen h-screen bg-background-200">
     {#key rerender}
     <Stage bind:downloadStage={downloadStage} grid={{width, height, squareSize, snapSize, color, borderThickness}}/>
     {/key}

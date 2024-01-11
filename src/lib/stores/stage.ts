@@ -22,6 +22,8 @@ export const stageData: Writable<{
     scale: number;
     x: number;
     y: number;
+    width: number;
+    height: number;
     uniqueObjects: [
         {
             name: string;
