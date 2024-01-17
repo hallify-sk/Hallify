@@ -1,5 +1,4 @@
 import Konva from "konva";
-import type { Group, Layer, Line } from "svelte-konva";
 
 export function clamp(val: number, min: number, max: number): number {
     return Math.min(Math.max(val, min), max);
@@ -87,13 +86,13 @@ export function checkPolygonCollision(polygon1: Array<{x: number, y: number}>, p
   }
   return true;
 };
-  export function getMovablePolygons(layer: Layer) {
-    return layer.getChildren((node: Group) => node instanceof Konva.Group && node.draggable());
+  export function getMovablePolygons(layer: Konva.Layer) {
+    return layer.getChildren((node) => node instanceof Konva.Group && node.draggable()) as Konva.Group[];
   }
-  export function getCollisionPolygons(layer: Layer) {
-    return layer.getChildren((node: Group) => node instanceof Konva.Group && !node.draggable() && !(node instanceof Konva.Transformer) && node.name() !== "preview");
+  export function getCollisionPolygons(layer: Konva.Layer) {
+    return layer.getChildren((node) => node instanceof Konva.Group && !node.draggable() && !(node instanceof Konva.Transformer) && node.name() !== "preview") as Konva.Group[];
   }
-  export function getClosestViablePosition(x: number, y: number, shape: Line, objects: Line[], grid: {
+  export function getClosestViablePosition(x: number, y: number, shape: Konva.Line, objects: Konva.Line[], grid: {
     width: number;
     height: number;
     squareSize: number;
@@ -101,10 +100,11 @@ export function checkPolygonCollision(polygon1: Array<{x: number, y: number}>, p
     color: string;
 }) {
     // Create an empty map for the grid cells
-    const gridCells: Map<string, Line[]> = new Map();
+    const gridCells: Map<string, Konva.Line[]> = new Map();
 
     // Add each object to the grid cells
     for (const object of objects) {
+      console.log(object);
         const cellX = Math.floor(object.x() / grid.squareSize);
         const cellY = Math.floor(object.y() / grid.squareSize);
         const key = `${cellX},${cellY}`;
@@ -141,7 +141,7 @@ export function checkPolygonCollision(polygon1: Array<{x: number, y: number}>, p
                 const cellObjects = gridCells.get(key) || [];
 
                 // Check for collisions
-                const collision = cellObjects.some((object: Line) => object !== shape && checkPolygonCollision(rotatePoints(pointsToObjectArray(pointsToRealPosition(shape.points(), shape.position())), {x: shape.x(), y: shape.y()}, shape.rotation()), rotatePoints(pointsToObjectArray(pointsToRealPosition(object.points(), object.position())), {x: object.x(), y: object.y()}, object.rotation())));
+                const collision = cellObjects.some((object: Konva.Line) => object !== shape && checkPolygonCollision(rotatePoints(pointsToObjectArray(pointsToRealPosition(shape.points(), shape.position())), {x: shape.x(), y: shape.y()}, shape.rotation()), rotatePoints(pointsToObjectArray(pointsToRealPosition(object.points(), object.position())), {x: object.x(), y: object.y()}, object.rotation())));
 
                 if (!collision) {
                     // If there's no collision, return the position as the closest viable position

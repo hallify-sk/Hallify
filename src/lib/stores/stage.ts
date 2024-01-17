@@ -2,6 +2,10 @@ import { writable, type Writable } from "svelte/store";
 
 export const selectedName: Writable<string | null> = writable(null);
 
+export const rerender: Writable<boolean> = writable(false);
+
+export const modifyZones: Writable<boolean> = writable(false);
+
 export const tableList: Writable<{
     name: string;
     rotation: number;
@@ -24,8 +28,7 @@ export const stageData: Writable<{
     y: number;
     width: number;
     height: number;
-    uniqueObjects: [
-        {
+    zones: Array<{
             name: string;
             points: number[];
             fill: string;
@@ -33,9 +36,8 @@ export const stageData: Writable<{
             opacity?: number;
             strokeWidth?: number;
             dash?: Array<number>;
-        }
-    ],
-    collisionObjects: [
+        }>,
+    collisionObjects: Array<
         {
             x: number;
             y: number;
@@ -47,5 +49,7 @@ export const stageData: Writable<{
             strokeWidth?: number;
             dash?: Array<number>
         }
-    ]
+    >
 }> = writable();
+
+export const brush: Writable<{type: string, color?: string, opacity?: number, stroke?: string, strokeWidth?: number}> = writable();

@@ -1,13 +1,15 @@
 <script lang="ts">
 	import { applyAction, enhance } from "$app/forms";
+	import Brushes from "$lib/Brushes.svelte";
 	import Stage from "$lib/Stage.svelte";
+	import Toolbar from "$lib/Toolbar.svelte";
     let width = 20;
     let height = 20;
     let squareSize = 30;
     let snapSize = 0.5;
     let borderThickness = 10;
     let color = "#fff";
-    import { selectedName, stageData, tableList } from "$lib/stores/stage";
+    import { brush, modifyZones, rerender, selectedName, stageData, tableList } from "$lib/stores/stage";
 	import { theme } from "$lib/stores/theme";
 
     tableList.set([
@@ -62,14 +64,14 @@
         ...$stageData,
         width: width * squareSize,
         height: height * squareSize,
-        uniqueObjects: [
+        zones: [
             {
                 name: "stage",
                 points: [16 * squareSize, 4 * squareSize, 20 * squareSize, 3 * squareSize, 20 * squareSize, 8 * squareSize, 15 * squareSize, 8 * squareSize],
                 fill: "cyan",
                 stroke: "blue",
                 strokeWidth: 4,
-                opacity: 0.4
+                opacity: 0.2
             }
         ],
         collisionObjects: [
@@ -99,17 +101,21 @@
             }
         });
     });
-    
-    let rerender = false;
-
-    function rerenderStage(){
-        rerender = !rerender;
-    }
 
     let downloadStage: () => Promise<Blob>;
-    theme.set("dark");
+    theme.set("light");
+
+    let zoneEditing: boolean = false;
+    $: if(zoneEditing){
+        modifyZones.set(zoneEditing);
+    }else{
+        modifyZones.set(zoneEditing);
+    }
+    brush.set({type: "grab"});
 </script>
-<div class="fixed top-0 left-0 flex flex-col">
+<Toolbar/>
+<Brushes/>
+<!--<div class="fixed top-12 left-12 flex flex-col">
     <input bind:value={width} type="number" placeholder="Width">
     <input bind:value={height} type="number" placeholder="Height">
     <input bind:value={squareSize} type="number" placeholder="Square size">
@@ -118,7 +124,6 @@
     <input bind:value={color} type="color">
     <label>Object properties</label>
     <input bind:value={chairs} on:change={findChairsAndReplace} type="number"  placeholder="Chairs">
-    <button on:click={rerenderStage}>Rerender</button>
     <form use:enhance={async ({formData}) => {
             formData.set("stage", JSON.stringify($stageData));
             formData.set("tables", JSON.stringify($tableList));
@@ -129,9 +134,11 @@
     }} method="POST">
         <button type="submit" class="text-white">Save</button>
     </form>
-</div>
+    <input type="checkbox" bind:checked={zoneEditing}>
+    <p class="text-text-900">Brush settings:</p>
+</div>-->
 <div class="grid place-items-center w-screen h-screen bg-background-200">
-    {#key rerender}
+    {#key $rerender}
     <Stage bind:downloadStage={downloadStage} grid={{width, height, squareSize, snapSize, color, borderThickness}}/>
     {/key}
 </div>

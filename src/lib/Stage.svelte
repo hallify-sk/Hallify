@@ -14,8 +14,8 @@
 		color: '#fff',
 		borderThickness: 100
 	};
-
-	import { onMount } from 'svelte';
+	import { v4 as uuidv4 } from 'uuid';
+	import { onDestroy, onMount } from 'svelte';
 	import { Stage, Layer, Line, Group, Transformer, Rect } from 'svelte-konva';
 	import {
 		addChairHitbox,
@@ -30,21 +30,21 @@
 		rotatePoints
 	} from './lib';
 	import Konva from 'konva';
-	import { selectedName, stageData, tableList } from './stores/stage';
+	import { brush, modifyZones, selectedName, stageData, tableList } from './stores/stage';
 	import { theme } from './stores/theme';
 
-	let gridLayer: any;
-	let objectLayer: any;
+	let gridLayer: Konva.Layer;
+	let objectLayer: Konva.Layer;
 	let zoneLayer: Konva.Layer;
 	let background: Konva.Rect;
-	let tr: any;
+	let tr: Konva.Transformer;
 	let stage: Konva.Stage;
 	let groups: Array<Konva.Group> = [];
 	$: if (gridLayer) gridLayer.cache();
 	$: if (grid && (grid.width || grid.height) && gridLayer) setTimeout(() => gridLayer.cache());
 	const scaleBy = 1.2;
 	let points: any[] = [];
-	let circles: any[] = [];
+	let circles: Konva.Circle[] = [];
 	onMount(() => {
 		stage.on('wheel', (e: any) => {
 			e.evt.preventDefault();
@@ -92,13 +92,72 @@
 				y: newY
 			});
 		});
+		window.addEventListener('keydown', (e) => {
+			if (e.code == 'Delete') {
+				tr.nodes().forEach((e) => {
+					stageData.set({
+						...$stageData,
+						zones: $stageData.zones.filter((i) => i.name !== e.name())
+					});
+					e.remove();
+				});
+				tr.nodes([]);
+			}
+		});
 		stage.on('click tap', function (e) {
+			switch ($brush.type) {
+				case 'grab':
+					{ //Default brush behaviour
+						if (e.target === stage) {
+							tr.nodes([]);
+							selectedName.set(null);
+							return;
+						}
+						if (
+							e.target.parent?.name().split(' ').includes('wall') ||
+							e.target.parent?.name().split(' ').includes('no-select') ||
+							(e.target.parent?.getLayer() == zoneLayer && !$modifyZones) ||
+							e.target == background
+						) {
+							tr.nodes([]);
+							selectedName.set(null);
+							return;
+						}
+
+						const isSelected = tr.nodes().indexOf(e.target) >= 0;
+
+						if (!isSelected) {
+							if (e.target.parent?.draggable()) {
+								tr.nodes([e.target.parent]);
+								selectedName.set(e.target.parent.name());
+							} else {
+								tr.nodes([e.target]);
+								selectedName.set(e.target.name());
+							}
+						} else if (isSelected) {
+							const nodes = tr.nodes().slice();
+							nodes.splice(nodes.indexOf(e.target), 1);
+							tr.nodes(nodes);
+						}
+					}
+					break;
+			}
+			/*
 			if (e.evt.shiftKey) {
 				const { offsetX, offsetY } = e.evt;
 				const stageX = stage.x();
 				const stageY = stage.y();
 				console.log(offsetX, offsetY);
-				const point = { x: Math.round((offsetX - stageX) / (grid.squareSize * grid.snapSize)) * grid.squareSize * grid.snapSize, y: Math.round((offsetY - stageY) / (grid.squareSize * grid.snapSize)) * grid.squareSize * grid.snapSize };
+				const point = {
+					x:
+						Math.round((offsetX - stageX) / (grid.squareSize * grid.snapSize)) *
+						grid.squareSize *
+						grid.snapSize,
+					y:
+						Math.round((offsetY - stageY) / (grid.squareSize * grid.snapSize)) *
+						grid.squareSize *
+						grid.snapSize
+				};
 				points.push(point);
 
 				// Create a new circle at the point and add it to the stage
@@ -106,55 +165,63 @@
 					x: point.x,
 					y: point.y,
 					radius: 5,
-					fill: 'red'
+					fill: themes[$theme].accent[400]
 				});
+				circle.name('no-select');
 				objectLayer.add(circle);
 				objectLayer.draw();
 				circles.push(circle);
-			}
-			// if click on empty area - remove all selections
-			if (e.target === stage) {
-				tr.nodes([]);
-				selectedName.set(null);
-				return;
-			}
-			if (e.target.parent?.name().split(' ').includes('wall') || e.target.parent?.getLayer() == zoneLayer || e.target == background ) {
-				tr.nodes([]);
-				selectedName.set(null);
-				return;
-			}
-			// do nothing if clicked NOT on our rectangles
-			//if (!e.target.hasName('transformable')) return;
-			// do we pressed shift or ctrl?
-			const metaPressed = e.evt.shiftKey || e.evt.ctrlKey || e.evt.metaKey;
-			const isSelected = tr.nodes().indexOf(e.target) >= 0;
-
-			if (!metaPressed && !isSelected) {
-				// if no key pressed and the node is not selected
-				// select just one
-				if (e.target.parent?.draggable()) {
-					tr.nodes([e.target.parent]);
-					selectedName.set(e.target.parent.name());
-				} else {
-					tr.nodes([e.target]);
-					selectedName.set(e.target.name());
-				}
-			} else if (metaPressed && isSelected) {
-				// if we pressed keys and node was selected
-				// we need to remove it from selection:
-				const nodes = tr.nodes().slice(); // use slice to have new copy of array
-				// remove node from array
-				nodes.splice(nodes.indexOf(e.target), 1);
-				tr.nodes(nodes);
-			}
+			} else if (e.evt.ctrlKey) {
+				const { offsetX, offsetY } = e.evt;
+				const stageX = stage.x();
+				const stageY = stage.y();
+				console.log(offsetX, offsetY);
+				const point = {
+					x:
+						Math.round((offsetX - stageX) / (grid.squareSize * grid.snapSize)) *
+						grid.squareSize *
+						grid.snapSize,
+					y:
+						Math.round((offsetY - stageY) / (grid.squareSize * grid.snapSize)) *
+						grid.squareSize *
+						grid.snapSize
+				};
+				console.log(point, points);
+				points = points.filter((i) => i.x != point.x && i.y != point.y);
+				circles.find((i) => i.x() == point.x && i.y() == point.y)?.remove();
+				objectLayer.draw();
+			}*/
 		});
 	});
+	onDestroy(()=>{
+		unsubscribeBrush();
+	})
 	$: if (tr) {
 		groups = getMovablePolygons(objectLayer);
 	}
+
+	const unsubscribeBrush = brush.subscribe(()=>{
+		switch($brush.type){
+			case "grab": {
+				console.log("hi");
+				if(!objectLayer) return;
+				objectLayer.children.filter(i => !i.hasName("wall")).forEach(child => {
+					child.draggable(true);
+				});
+			}; break;
+			default: {
+				if(!objectLayer) return;
+				objectLayer.children.forEach(child => {
+					child.draggable(false);
+				});
+			}; break;
+		}
+	});
+
 	let previewShape: any;
 	function dragStart(e: any) {
 		let shape = e.detail.currentTarget;
+		if($brush.type != "grab") return;
 		// Create a clone of the shape
 		previewShape = shape.clone();
 		previewShape.name('preview');
@@ -170,8 +237,11 @@
 	function dragMove(e: any) {
 		//Group is used to calculate the position of the shape
 		let g = e.detail.currentTarget;
+		if($brush.type != "grab") return;
 		//Shape is used to determine collision
-		let shape: Konva.Line = e.detail.currentTarget.getChildren((node: Line) => node instanceof Konva.Line)[0];
+		let shape: Konva.Line = e.detail.currentTarget.getChildren(
+			(node: Line) => node instanceof Konva.Line
+		)[0];
 		g.moveToTop();
 		// Calculate the new position based on the grid size
 		let newX =
@@ -183,8 +253,9 @@
 			grid.squareSize *
 			grid.snapSize;
 
-		const objects = getMovablePolygons(objectLayer);
+		let objects = getMovablePolygons(objectLayer);
 		objects.push(...getCollisionPolygons(objectLayer));
+		objects = objects.filter(i=> i !== undefined);
 		console.log(objects);
 		//Detect if there is collision anywhere
 		let isColliding = objects.find((group: any) => {
@@ -273,7 +344,6 @@
 				}
 			}
 		});
-		console.log(isColliding);
 		//If there was no collision, continue in calculating new viable position
 		if (!isColliding) {
 			let position = getClosestViablePosition(
@@ -282,7 +352,8 @@
 				previewShape,
 				getMovablePolygons(objectLayer)
 					.filter((i: any) => i !== shape && i !== previewShape)
-					.map((i: any) => i.findOne((node: Line) => node instanceof Konva.Line)),
+					.map((i: any) => i.findOne((node: Line) => node instanceof Konva.Line))
+					.filter(i => i),
 				grid
 			);
 
@@ -291,14 +362,18 @@
 			previewShape.x(position?.x);
 			previewShape.y(position?.y);
 			shape.fill(themes?.[$theme]?.primary?.[500]);
-			shape.parent?.getChildren(child => child instanceof Konva.Rect).forEach(child => {
-				(child as Konva.Rect | Konva.Line).fill(themes?.[$theme]?.primary?.[400]);
-			});
+			shape.parent
+				?.getChildren((child) => child instanceof Konva.Rect)
+				.forEach((child) => {
+					(child as Konva.Rect | Konva.Line).fill(themes?.[$theme]?.primary?.[400]);
+				});
 		} else {
-			shape.fill("#9f6060");
-			shape.parent?.getChildren(child => child instanceof Konva.Rect).forEach(child => {
-				(child as Konva.Rect | Konva.Line).fill("#b38080");
-			});
+			shape.fill('#9f6060');
+			shape.parent
+				?.getChildren((child) => child instanceof Konva.Rect)
+				.forEach((child) => {
+					(child as Konva.Rect | Konva.Line).fill('#b38080');
+				});
 		}
 	}
 
@@ -320,8 +395,56 @@
 		);
 	}
 
+	function nonCollisionDragMove(e: any) {
+		//Shape is used to determine collision and position
+		let shape: Konva.Line = e.detail.currentTarget;
+		// Calculate the new position based on the grid size
+		let newX =
+			Math.round((shape.x() + grid.squareSize * grid.snapSize) / grid.squareSize / grid.snapSize) *
+			grid.squareSize *
+			grid.snapSize;
+		let newY =
+			Math.round((shape.y() + grid.squareSize * grid.snapSize) / grid.squareSize / grid.snapSize) *
+			grid.squareSize *
+			grid.snapSize;
+		//If there was no collision, continue in calculating new viable position
+		let position = getClosestViablePosition(
+			newX,
+			newY,
+			previewShape,
+			getMovablePolygons(objectLayer)
+				.filter((i: any) => i !== shape && i !== previewShape)
+				.map((i: any) => i.findOne((node: Line) => node instanceof Konva.Line)),
+			grid
+		);
+
+		// Update the preview shape's position
+
+		previewShape.x(position?.x);
+		previewShape.y(position?.y);
+		shape.fill(themes?.[$theme]?.primary?.[500]);
+		shape.parent
+			?.getChildren((child) => child instanceof Konva.Rect)
+			.forEach((child) => {
+				(child as Konva.Rect | Konva.Line).fill(themes?.[$theme]?.primary?.[400]);
+			});
+	}
+
+	function nonCollisionDragEnd(e: any) {
+		let shape = e.detail.currentTarget;
+		e.preventDefault();
+		setTimeout(() => {
+			shape.position(previewShape.position());
+			previewShape.destroy();
+		}, 0);
+		console.log(shape);
+		objectLayer.batchDraw();
+		objectLayer.draw();
+	}
+
 	function dragEnd(e: any) {
 		e.preventDefault();
+		if($brush.type != "grab") return;
 		let group = e.detail.currentTarget;
 		//Doesnt work without timeout fsr
 		setTimeout(() => {
@@ -347,7 +470,7 @@
 		// Redraw the layer
 		objectLayer.batchDraw();
 		objectLayer.draw();
-	}
+	};
 	export async function downloadStage(): Promise<Blob> {
 		const gridWidth = grid.width * grid.squareSize;
 		const gridHeight = grid.height * grid.squareSize;
@@ -361,8 +484,6 @@
 
 		stage.scaleX(1);
 		stage.scaleY(1);
-
-
 
 		// Set the position to 0,0
 		stage.x(0);
@@ -393,12 +514,13 @@
 				stroke: 'black',
 				closed: true
 			});
+			line.draggable(true);
 			zoneLayer.add(line);
 			zoneLayer.batchDraw();
-			$stageData.uniqueObjects.push({
-				name: crypto.randomUUID(),
+			$stageData.zones.push({
+				name: 'zone '.concat(uuidv4()),
 				points: points.flatMap((point) => [point.x, point.y]),
-				fill: "blue",
+				fill: 'blue',
 				stroke: 'black',
 				opacity: 0.5
 			});
@@ -411,7 +533,7 @@
 		circles = [];
 	}
 
-	import themes from "$lib/themes.json";
+	import themes from '$lib/themes.json';
 </script>
 
 {#if typeof window !== 'undefined'}
@@ -457,7 +579,16 @@
 	>
 		<Layer>
 			<Group bind:handle={gridLayer}>
-				<Rect bind:handle={background} config={{x: 0, y: 0, width: grid.width * grid.squareSize, height: grid.height * grid.squareSize, fill: themes?.[$theme]?.background?.[200]}}/>
+				<Rect
+					bind:handle={background}
+					config={{
+						x: 0,
+						y: 0,
+						width: grid.width * grid.squareSize,
+						height: grid.height * grid.squareSize,
+						fill: themes?.[$theme]?.background?.[200]
+					}}
+				/>
 				{#each Array(grid.height + 1) as _, y}
 					<Line
 						config={{
@@ -479,9 +610,13 @@
 			</Group>
 		</Layer>
 		<Layer bind:handle={zoneLayer}>
-			{#each $stageData.uniqueObjects as object}
+			{#each $stageData.zones as object}
 				<Line
+					on:dragstart={dragStart}
+					on:dragmove={nonCollisionDragMove}
+					on:dragend={nonCollisionDragEnd}
 					config={{
+						name: 'zone '.concat(object.name),
 						points: object.points,
 						fill: object.fill,
 						closed: true,
@@ -519,7 +654,7 @@
 						closed: true,
 						x: 0,
 						y: 0,
-						fill: themes?.[$theme]?.background?.[200]
+						fill: themes?.[$theme]?.background?.[100]
 					}}
 				/>
 			</Group>
@@ -547,7 +682,7 @@
 						closed: true,
 						x: 0,
 						y: 0,
-						fill: themes?.[$theme]?.background?.[200]
+						fill: themes?.[$theme]?.background?.[100]
 					}}
 				/>
 			</Group>
@@ -575,7 +710,7 @@
 						closed: true,
 						x: 0,
 						y: 0,
-						fill: themes?.[$theme]?.background?.[200]
+						fill: themes?.[$theme]?.background?.[100]
 					}}
 				/>
 			</Group>
@@ -603,7 +738,7 @@
 						closed: true,
 						x: 0,
 						y: 0,
-						fill: themes?.[$theme]?.background?.[200]
+						fill: themes?.[$theme]?.background?.[100]
 					}}
 				/>
 			</Group>
