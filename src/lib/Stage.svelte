@@ -30,7 +30,7 @@
 		rotatePoints
 	} from './lib';
 	import Konva from 'konva';
-	import { brush, modifyZones, selectedName, stageData, tableList } from './stores/stage';
+	import { brush, modifyZones, rerender, selectedName, stageData, tableList } from './stores/stage';
 	import { theme } from './stores/theme';
 
 	let gridLayer: Konva.Layer;
@@ -141,6 +141,35 @@
 						}
 					}
 					break;
+				case "zone": {
+					const { offsetX, offsetY } = e.evt;
+				const stageX = stage.x();
+				const stageY = stage.y();
+				const point = {
+					x:
+						Math.round((offsetX - stageX) / (grid.squareSize * grid.snapSize)) *
+						grid.squareSize *
+						grid.snapSize,
+					y:
+						Math.round((offsetY - stageY) / (grid.squareSize * grid.snapSize)) *
+						grid.squareSize *
+						grid.snapSize
+				};
+				points.push(point);
+
+				// Create a new circle at the point and add it to the stage
+				const circle = new Konva.Circle({
+					x: point.x,
+					y: point.y,
+					radius: 5,
+					fill: themes[$theme].accent[400]
+				});
+				circle.name('no-select');
+				objectLayer.add(circle);
+				objectLayer.draw();
+				circles.push(circle);
+					}
+					break;
 			}
 			/*
 			if (e.evt.shiftKey) {
@@ -203,7 +232,6 @@
 	const unsubscribeBrush = brush.subscribe(()=>{
 		switch($brush.type){
 			case "grab": {
-				console.log("hi");
 				if(!objectLayer) return;
 				objectLayer.children.filter(i => !i.hasName("wall")).forEach(child => {
 					child.draggable(true);
@@ -256,7 +284,6 @@
 		let objects = getMovablePolygons(objectLayer);
 		objects.push(...getCollisionPolygons(objectLayer));
 		objects = objects.filter(i=> i !== undefined);
-		console.log(objects);
 		//Detect if there is collision anywhere
 		let isColliding = objects.find((group: any) => {
 			let object = group.findOne((node: Line) => node instanceof Konva.Line);
@@ -264,7 +291,7 @@
 			if (object && shape && object !== shape && object !== previewShape) {
 				let shapeRef = $tableList.find((i) => i.name == g.name());
 				let shapeHitbox;
-				if (shapeRef?.chairs.count && shapeRef.chairs.count > 0) {
+				if ((shapeRef?.chairs.left && shapeRef.chairs.left > 0) || shapeRef?.chairs.right && shapeRef.chairs.right > 0) {
 					shapeHitbox = addChairHitbox(
 						pointsToObjectArray(
 							pointsToRealPosition(shape.points(), {
@@ -273,7 +300,9 @@
 							})
 						),
 						grid.squareSize,
-						1
+						0.9,
+						shapeRef.chairs.left != 0,
+						shapeRef.chairs.right != 0
 					);
 				} else {
 					shapeHitbox = pointsToObjectArray(
@@ -285,7 +314,7 @@
 				}
 				let objectRef = $tableList.find((i) => i.name == group.name());
 				let objectHitbox;
-				if (objectRef?.chairs.count && objectRef.chairs.count > 0) {
+				if ((objectRef?.chairs.left && objectRef.chairs.left > 0) || (objectRef?.chairs.right && objectRef.chairs.right > 0)) {
 					objectHitbox = addChairHitbox(
 						pointsToObjectArray(
 							pointsToRealPosition(object.points(), {
@@ -294,26 +323,14 @@
 							})
 						),
 						grid.squareSize,
-						1
+						1,
+						objectRef.chairs.left != 0,
+						objectRef.chairs.right != 0
 					);
 				} else {
 					if (!objectRef) {
 						objectHitbox = pointsToObjectArray(
 							pointsToRealPosition(object.points(), { x: group.x(), y: group.y() })
-						);
-						console.log(
-							rotatePoints(
-								shapeHitbox,
-								{ x: shape.parent?.x() || 0, y: shape.parent?.y() || 0 },
-								shape.parent?.rotation() || 0
-							)
-						);
-						console.log(
-							rotatePoints(
-								objectHitbox,
-								{ x: object.parent.x(), y: object.parent.y() },
-								object.parent.rotation()
-							)
 						);
 					} else {
 						objectHitbox = pointsToObjectArray(
@@ -379,7 +396,6 @@
 
 	function transformEnd(e: any) {
 		let group = e.detail.currentTarget;
-		console.log(group.position());
 		//Doesnt work without timeout fsr
 		tableList.set(
 			$tableList.map((e) => {
@@ -437,7 +453,6 @@
 			shape.position(previewShape.position());
 			previewShape.destroy();
 		}, 0);
-		console.log(shape);
 		objectLayer.batchDraw();
 		objectLayer.draw();
 	}
@@ -514,9 +529,9 @@
 				stroke: 'black',
 				closed: true
 			});
-			line.draggable(true);
-			zoneLayer.add(line);
-			zoneLayer.batchDraw();
+			//line.draggable(true);
+			//zoneLayer.add(line);
+			//zoneLayer.batchDraw();
 			$stageData.zones.push({
 				name: 'zone '.concat(uuidv4()),
 				points: points.flatMap((point) => [point.x, point.y]),
@@ -531,6 +546,11 @@
 			circle.remove();
 		}
 		circles = [];
+		rerenderStage();
+	}
+
+	function rerenderStage() {
+		$rerender = !$rerender;
 	}
 
 	import themes from '$lib/themes.json';
@@ -810,13 +830,13 @@
 						}}
 					/>
 
-					{#each Array(table.chairs.count) as _, i}
+					{#each Array(table.chairs.left) as _, i}
 						<Rect
 							config={{
 								x: -1 * grid.squareSize + 0.1 * grid.squareSize,
 								y:
-									((table.table.height * grid.squareSize) / table.chairs.count) * i +
-									(table.table.height * grid.squareSize) / (2 * table.chairs.count) -
+									((table.table.height * grid.squareSize) / table.chairs.left) * i +
+									(table.table.height * grid.squareSize) / (2 * table.chairs.left) -
 									0.5 * grid.squareSize * 0.8,
 								width: 0.8 * grid.squareSize,
 								height: 0.8 * grid.squareSize,
@@ -824,12 +844,14 @@
 								cornerRadius: 4
 							}}
 						/>
-						<Rect
+					{/each}
+					{#each Array(table.chairs.right) as _, i}
+					<Rect
 							config={{
 								x: table.table.width * grid.squareSize + 0.1 * grid.squareSize,
 								y:
-									((table.table.height * grid.squareSize) / table.chairs.count) * i +
-									(table.table.height * grid.squareSize) / (2 * table.chairs.count) -
+									((table.table.height * grid.squareSize) / table.chairs.right) * i +
+									(table.table.height * grid.squareSize) / (2 * table.chairs.right) -
 									0.5 * grid.squareSize * 0.8,
 								width: 0.8 * grid.squareSize,
 								height: 0.8 * grid.squareSize,

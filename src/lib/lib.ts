@@ -16,14 +16,16 @@ export function pointsToObjectArray(points: Array<number>){
     });
 };
 
-export function addChairHitbox(points: Array<{x: number, y: number}>, squareSize: number, chairSize: number){
+export function addChairHitbox(points: Array<{x: number, y: number}>, squareSize: number, chairSize: number, left: boolean | undefined, right: boolean | undefined){
   //We take the points and add a buffer of 1 grid.squareSize to each side of the X axis
   //Indices 0, 3 are to the left, 1, 2 are to the right
   return points.map((v, i) => {
     if(i == 1 || i == 2){
-      return {x: v.x + chairSize * squareSize, y: v.y}
+      if(right) return {x: v.x + chairSize * squareSize, y: v.y}
+      else return {x: v.x, y: v.y}
     }else{
-      return {x: v.x - chairSize * squareSize, y: v.y}
+      if(left) return {x: v.x - chairSize * squareSize, y: v.y}
+      else return {x: v.x, y: v.y}
     }
   })
 }
@@ -104,7 +106,6 @@ export function checkPolygonCollision(polygon1: Array<{x: number, y: number}>, p
 
     // Add each object to the grid cells
     for (const object of objects) {
-      console.log(object);
         const cellX = Math.floor(object.x() / grid.squareSize);
         const cellY = Math.floor(object.y() / grid.squareSize);
         const key = `${cellX},${cellY}`;

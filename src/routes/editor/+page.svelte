@@ -19,9 +19,8 @@
 			y: 4,
             rotation: 0,
 			chairs: {
-				count: 2,
-				left: true,
-				right: true
+				left: 3,
+				right: 3
 			},
 			table: {
 				width: 2,
@@ -34,9 +33,8 @@
 			y: 3,
             rotation: 0,
 			chairs: {
-				count: 3,
-				left: true,
-				right: true
+				left: 0,
+				right: 2
 			},
 			table: {
 				width: 1,
@@ -49,9 +47,8 @@
 			y: 3,
             rotation: 0,
 			chairs: {
-				count: 3,
-				left: true,
-				right: true
+				left: 2,
+				right: 2
 			},
 			table: {
 				width: 1,
@@ -89,7 +86,7 @@
         //Find chair count by using selectedName store value and tableList, replace value in tableList with new value
         $tableList.find((e) => {
             if(e.name == $selectedName){
-                e.chairs.count = chairs;
+                //e.chairs. = chairs;
             }
         });
     };
@@ -97,7 +94,7 @@
     selectedName.subscribe((e) => {
         $tableList.find((e) => {
             if(e.name == $selectedName){
-                chairs = e.chairs.count;
+                //chairs = e.chairs.count;
             }
         });
     });

@@ -12,9 +12,8 @@ export const tableList: Writable<{
     x?: number;
     y?: number;
     chairs: {
-        count: number,
-        left?: boolean,
-        right?: boolean
+        left: number,
+        right: number
     },
     table: {
         width: number,

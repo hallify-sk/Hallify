@@ -2,34 +2,37 @@
 	import { onDestroy } from 'svelte';
 	import { brush, selectedName, tableList, rerender } from './stores/stage';
 
-	let chairs: number;
+	let chairsLeft: number;
+	let chairsRight: number;
 	let maxChairs: number;
 
 	const unsubscribe = selectedName.subscribe((e) => {
 		$tableList.find((e) => {
 			if (e.name == $selectedName) {
-				chairs = e.chairs.count;
+				chairsLeft = e.chairs.left;
+				chairsRight = e.chairs.right;
 				maxChairs = e.table.height;
 			}
 		});
 	});
-	function findChairsAndReplace() {
-		console.log('FIRED!');
+	function recountChairs() {
 		//Find chair count by using selectedName store value and tableList, replace value in tableList with new value
 		$tableList.find((e) => {
 			if (e.name == $selectedName) {
-				chairs = Math.max(Math.min(chairs, maxChairs), 0) ?? 0;
-                e.chairs.count = chairs;
-                setTimeout(()=>{
-                    rerenderStage();
-                });
+				chairsLeft = Math.max(Math.min(chairsLeft, maxChairs), 0) ?? 0;
+				e.chairs.left = chairsLeft;
+				chairsRight = Math.max(Math.min(chairsRight, maxChairs), 0) ?? 0;
+				e.chairs.right = chairsRight;
+				setTimeout(() => {
+					rerenderStage();
+				});
 			}
 		});
 	}
 
-    onDestroy(()=>{
-        unsubscribe?.();
-    })
+	onDestroy(() => {
+		unsubscribe?.();
+	});
 
 	function rerenderStage() {
 		$rerender = !$rerender;
@@ -56,30 +59,55 @@
 			<path d="M6 19v2" />
 			<path d="M18 19v2" />
 		</svg>
-        <p class="text-primary-400 pointer-events-none mr-2 font-semibold mb-0.5">0</p>
+		<p class="text-primary-400 pointer-events-none mr-2 font-semibold mb-0.5">L : 0</p>
 		<input
-			bind:value={chairs}
+			bind:value={chairsLeft}
 			class="w-32 bg-transparent appearance-none cursor-pointer mr-2"
 			type="range"
 			min="0"
 			max={maxChairs}
-			on:change={findChairsAndReplace}
+			on:change={recountChairs}
 		/>
-        <p class="text-primary-400 pointer-events-none mr-2 font-semibold mb-0.5">{maxChairs}</p>
+		<p class="text-primary-400 pointer-events-none mr-2 font-semibold mb-0.5">{maxChairs}</p>
 		<input
-				min="0"
-				max={maxChairs}
-				type="number"
-				class="w-10 appearance-none bg-background-200 text-text-700 pl-4 rounded-md py-0.5"
-				on:blur={findChairsAndReplace}
-                on:keydown={(e) => {
-                    if(e.code == "Enter"){
-                        e.preventDefault();
-                        findChairsAndReplace();
-                        e.currentTarget.blur();
-                    };
-                }}
-				bind:value={chairs}
+			min="0"
+			max={maxChairs}
+			type="number"
+			class="w-10 appearance-none bg-background-200 text-text-700 pl-4 rounded-md py-0.5"
+			on:blur={recountChairs}
+			on:keydown={(e) => {
+				if (e.code == 'Enter') {
+					e.preventDefault();
+					recountChairs();
+					e.currentTarget.blur();
+				}
+			}}
+			bind:value={chairsLeft}
+		/>
+		<p class="text-primary-400 pointer-events-none ml-4 mr-2 font-semibold mb-0.5">P : 0</p>
+		<input
+			bind:value={chairsRight}
+			class="w-32 bg-transparent appearance-none cursor-pointer mr-2"
+			type="range"
+			min="0"
+			max={maxChairs}
+			on:change={recountChairs}
+		/>
+		<p class="text-primary-400 pointer-events-none mr-2 font-semibold mb-0.5">{maxChairs}</p>
+		<input
+			min="0"
+			max={maxChairs}
+			type="number"
+			class="w-10 appearance-none bg-background-200 text-text-700 pl-4 rounded-md py-0.5"
+			on:blur={recountChairs}
+			on:keydown={(e) => {
+				if (e.code == 'Enter') {
+					e.preventDefault();
+					recountChairs();
+					e.currentTarget.blur();
+				}
+			}}
+			bind:value={chairsRight}
 		/>
 	{/if}
 </div>
