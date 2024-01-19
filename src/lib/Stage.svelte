@@ -147,13 +147,13 @@
 				const stageY = stage.y();
 				const point = {
 					x:
-						Math.round((offsetX - stageX) / (grid.squareSize * grid.snapSize)) *
+						Math.round((offsetX - stageX) / (grid.squareSize * $brush.snapCoefficient)) *
 						grid.squareSize *
-						grid.snapSize,
+						$brush.snapCoefficient,
 					y:
-						Math.round((offsetY - stageY) / (grid.squareSize * grid.snapSize)) *
+						Math.round((offsetY - stageY) / (grid.squareSize * $brush.snapCoefficient)) *
 						grid.squareSize *
-						grid.snapSize
+						$brush.snapCoefficient
 				};
 				points.push(point);
 
@@ -179,13 +179,13 @@
 				console.log(offsetX, offsetY);
 				const point = {
 					x:
-						Math.round((offsetX - stageX) / (grid.squareSize * grid.snapSize)) *
+						Math.round((offsetX - stageX) / (grid.squareSize * $brush.snapCoefficient)) *
 						grid.squareSize *
-						grid.snapSize,
+						$brush.snapCoefficient,
 					y:
-						Math.round((offsetY - stageY) / (grid.squareSize * grid.snapSize)) *
+						Math.round((offsetY - stageY) / (grid.squareSize * $brush.snapCoefficient)) *
 						grid.squareSize *
-						grid.snapSize
+						$brush.snapCoefficient
 				};
 				points.push(point);
 
@@ -207,13 +207,13 @@
 				console.log(offsetX, offsetY);
 				const point = {
 					x:
-						Math.round((offsetX - stageX) / (grid.squareSize * grid.snapSize)) *
+						Math.round((offsetX - stageX) / (grid.squareSize * $brush.snapCoefficient)) *
 						grid.squareSize *
-						grid.snapSize,
+						$brush.snapCoefficient,
 					y:
-						Math.round((offsetY - stageY) / (grid.squareSize * grid.snapSize)) *
+						Math.round((offsetY - stageY) / (grid.squareSize * $brush.snapCoefficient)) *
 						grid.squareSize *
-						grid.snapSize
+						$brush.snapCoefficient
 				};
 				console.log(point, points);
 				points = points.filter((i) => i.x != point.x && i.y != point.y);
@@ -246,7 +246,7 @@
 		}
 	});
 
-	let previewShape: any;
+	let previewShape: Konva.Group;
 	function dragStart(e: any) {
 		let shape = e.detail.currentTarget;
 		if($brush.type != "grab") return;
@@ -273,13 +273,13 @@
 		g.moveToTop();
 		// Calculate the new position based on the grid size
 		let newX =
-			Math.round((g.x() + grid.squareSize * grid.snapSize) / grid.squareSize / grid.snapSize) *
+			Math.round((g.x() + grid.squareSize * $brush.snapCoefficient) / grid.squareSize / $brush.snapCoefficient) *
 			grid.squareSize *
-			grid.snapSize;
+			$brush.snapCoefficient;
 		let newY =
-			Math.round((g.y() + grid.squareSize * grid.snapSize) / grid.squareSize / grid.snapSize) *
+			Math.round((g.y() + grid.squareSize * $brush.snapCoefficient) / grid.squareSize / $brush.snapCoefficient) *
 			grid.squareSize *
-			grid.snapSize;
+			$brush.snapCoefficient;
 
 		let objects = getMovablePolygons(objectLayer);
 		objects.push(...getCollisionPolygons(objectLayer));
@@ -416,13 +416,13 @@
 		let shape: Konva.Line = e.detail.currentTarget;
 		// Calculate the new position based on the grid size
 		let newX =
-			Math.round((shape.x() + grid.squareSize * grid.snapSize) / grid.squareSize / grid.snapSize) *
+			Math.round((shape.x() + grid.squareSize * $brush.snapCoefficient) / grid.squareSize / $brush.snapCoefficient) *
 			grid.squareSize *
-			grid.snapSize;
+			$brush.snapCoefficient;
 		let newY =
-			Math.round((shape.y() + grid.squareSize * grid.snapSize) / grid.squareSize / grid.snapSize) *
+			Math.round((shape.y() + grid.squareSize * $brush.snapCoefficient) / grid.squareSize / $brush.snapCoefficient) *
 			grid.squareSize *
-			grid.snapSize;
+			$brush.snapCoefficient;
 		//If there was no collision, continue in calculating new viable position
 		let position = getClosestViablePosition(
 			newX,
@@ -554,6 +554,7 @@
 	}
 
 	import themes from '$lib/themes.json';
+	console.log($tableList);
 </script>
 
 {#if typeof window !== 'undefined'}

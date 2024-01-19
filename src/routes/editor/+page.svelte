@@ -108,7 +108,7 @@
     }else{
         modifyZones.set(zoneEditing);
     }
-    brush.set({type: "grab"});
+    brush.set({type: "grab", snapCoefficient: 0.5});
 </script>
 <Toolbar/>
 <Brushes/>

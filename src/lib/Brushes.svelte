@@ -3,7 +3,7 @@
 	import { brush } from './stores/stage';
 
 	function setBrush(brushStr: string) {
-		brush.set({ type: brushStr });
+		brush.set({ type: brushStr, snapCoefficient: $brush.snapCoefficient });
 	}
 	onMount(() => {
 		window.addEventListener('keydown', (e) => {
