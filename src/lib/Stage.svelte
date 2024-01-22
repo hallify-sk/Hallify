@@ -376,8 +376,8 @@
 
 			// Update the preview shape's position
 
-			previewShape.x(position?.x);
-			previewShape.y(position?.y);
+			previewShape.x(position?.x || 0);
+			previewShape.y(position?.y || 0);
 			shape.fill(themes?.[$theme]?.primary?.[500]);
 			shape.parent
 				?.getChildren((child) => child instanceof Konva.Rect)
@@ -436,8 +436,8 @@
 
 		// Update the preview shape's position
 
-		previewShape.x(position?.x);
-		previewShape.y(position?.y);
+		previewShape.x(position?.x || 0);
+		previewShape.y(position?.y || 0);
 		shape.fill(themes?.[$theme]?.primary?.[500]);
 		shape.parent
 			?.getChildren((child) => child instanceof Konva.Rect)

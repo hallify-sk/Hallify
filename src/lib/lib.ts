@@ -94,7 +94,7 @@ export function checkPolygonCollision(polygon1: Array<{x: number, y: number}>, p
   export function getCollisionPolygons(layer: Konva.Layer) {
     return layer.getChildren((node) => node instanceof Konva.Group && !node.draggable() && !(node instanceof Konva.Transformer) && node.name() !== "preview") as Konva.Group[];
   }
-  export function getClosestViablePosition(x: number, y: number, shape: Konva.Line, objects: Konva.Line[], grid: {
+  export function getClosestViablePosition(x: number, y: number, shape: Konva.Group, objects: Konva.Line[], grid: {
     width: number;
     height: number;
     squareSize: number;

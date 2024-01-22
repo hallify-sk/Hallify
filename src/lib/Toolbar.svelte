@@ -46,7 +46,7 @@
 		<path d="M4 8l5 0" />
 		<path d="M15 8l4 0" />
 	</svg>
-	<p class="text-primary-400 pointer-events-none mr-2 font-semibold mb-0.5">L : 0</p>
+	<p class="text-primary-400 pointer-events-none mr-2 font-semibold mb-0.5">0</p>
 		<input
 			bind:value={$brush.snapCoefficient}
 			class="w-32 bg-transparent appearance-none cursor-pointer mr-2"
