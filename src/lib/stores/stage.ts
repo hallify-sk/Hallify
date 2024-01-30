@@ -15,6 +15,7 @@ export const tableList: Writable<
 		chairs: {
 			left: number;
 			right: number;
+			max: number;
 		};
 		table: {
 			width: number;
@@ -27,6 +28,7 @@ export const stageData: Writable<{
 	scale: number;
 	x: number;
 	y: number;
+	squareSize: number;
 	width: number;
 	height: number;
 	zones: Array<{

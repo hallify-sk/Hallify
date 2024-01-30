@@ -45,6 +45,7 @@
 	const scaleBy = 1.2;
 	let points: any[] = [];
 	let circles: Konva.Circle[] = [];
+	let drawPreviewShape: Konva.Line;
 	onMount(() => {
 		stage.on('wheel', (e: any) => {
 			e.evt.preventDefault();
@@ -107,7 +108,8 @@
 		stage.on('click tap', function (e) {
 			switch ($brush.type) {
 				case 'grab':
-					{ //Default brush behaviour
+					{
+						//Default brush behaviour
 						if (e.target === stage) {
 							tr.nodes([]);
 							selectedName.set(null);
@@ -141,33 +143,68 @@
 						}
 					}
 					break;
-				case "zone": {
-					const { offsetX, offsetY } = e.evt;
-				const stageX = stage.x();
-				const stageY = stage.y();
-				const point = {
-					x:
-						Math.round((offsetX - stageX) / (grid.squareSize * $brush.snapCoefficient)) *
-						grid.squareSize *
-						$brush.snapCoefficient,
-					y:
-						Math.round((offsetY - stageY) / (grid.squareSize * $brush.snapCoefficient)) *
-						grid.squareSize *
-						$brush.snapCoefficient
-				};
-				points.push(point);
+				case 'zone':
+					{
+						const { offsetX, offsetY } = e.evt;
+						const zoomLevel = stage.scaleX();
+						const stageX = stage.x();
+						const stageY = stage.y();
+						const point = {
+							x:
+								Math.round((offsetX / zoomLevel - stageX) / (grid.squareSize * $brush.snapCoefficient)) *
+								grid.squareSize *
+								$brush.snapCoefficient,
+							y:
+								Math.round((offsetY / zoomLevel - stageY) / (grid.squareSize * $brush.snapCoefficient)) *
+								grid.squareSize *
+								$brush.snapCoefficient
+						};
 
-				// Create a new circle at the point and add it to the stage
-				const circle = new Konva.Circle({
-					x: point.x,
-					y: point.y,
-					radius: 5,
-					fill: themes[$theme].accent[400]
-				});
-				circle.name('no-select');
-				objectLayer.add(circle);
-				objectLayer.draw();
-				circles.push(circle);
+						if (
+							point.x >= 0 &&
+							point.x <= grid.width * grid.squareSize &&
+							point.y >= 0 &&
+							point.y <= grid.height * grid.squareSize
+						) {
+							drawPreviewShape?.destroy();
+							points.push(point);
+						// Create a new circle at the point and add it to the stage
+						const circle = new Konva.Circle({
+							x: point.x,
+							y: point.y,
+							radius: 5,
+							fill: points.length == 1 ? themes[$theme].accent[600] : themes[$theme].accent[400]
+						});
+						circle.name('no-select');
+						if (points.length == 1) {
+							circle.on('mouseenter', () => {
+								stage.container().style.cursor = 'pointer';
+							});
+							circle.on('mouseleave', () => {
+								stage.container().style.cursor = 'default';
+							});
+							circle.addEventListener('click', () => {
+								createPolygon();
+							});
+						}
+						objectLayer.add(circle);
+						circles.push(circle);
+						const previewZone = new Konva.Line({
+							points: points.flatMap((point) => [point.x, point.y]),
+							fill: $brush.color || "blue",
+							stroke: $brush.stroke || "black",
+							strokeWidth: $brush.strokeWidth || 0,
+							opacity: 0.2,
+							closed: true
+						});
+						objectLayer.add(previewZone);
+						drawPreviewShape = previewZone;
+						circles.forEach((circle) => {
+							circle.moveToTop();
+						});
+						objectLayer.draw();
+						}
+						
 					}
 					break;
 			}
@@ -222,34 +259,40 @@
 			}*/
 		});
 	});
-	onDestroy(()=>{
+	onDestroy(() => {
 		unsubscribeBrush();
-	})
+	});
 	$: if (tr) {
 		groups = getMovablePolygons(objectLayer);
 	}
 
-	const unsubscribeBrush = brush.subscribe(()=>{
-		switch($brush.type){
-			case "grab": {
-				if(!objectLayer) return;
-				objectLayer.children.filter(i => !i.hasName("wall")).forEach(child => {
-					child.draggable(true);
-				});
-			}; break;
-			default: {
-				if(!objectLayer) return;
-				objectLayer.children.forEach(child => {
-					child.draggable(false);
-				});
-			}; break;
+	const unsubscribeBrush = brush.subscribe(() => {
+		switch ($brush.type) {
+			case 'grab':
+				{
+					if (!objectLayer) return;
+					objectLayer.children
+						.filter((i) => !i.hasName('wall'))
+						.forEach((child) => {
+							child.draggable(true);
+						});
+				}
+				break;
+			default:
+				{
+					if (!objectLayer) return;
+					objectLayer.children.forEach((child) => {
+						child.draggable(false);
+					});
+				}
+				break;
 		}
 	});
 
 	let previewShape: Konva.Group;
 	function dragStart(e: any) {
 		let shape = e.detail.currentTarget;
-		if($brush.type != "grab") return;
+		if ($brush.type != 'grab') return;
 		// Create a clone of the shape
 		previewShape = shape.clone();
 		previewShape.name('preview');
@@ -265,7 +308,7 @@
 	function dragMove(e: any) {
 		//Group is used to calculate the position of the shape
 		let g = e.detail.currentTarget;
-		if($brush.type != "grab") return;
+		if ($brush.type != 'grab') return;
 		//Shape is used to determine collision
 		let shape: Konva.Line = e.detail.currentTarget.getChildren(
 			(node: Line) => node instanceof Konva.Line
@@ -273,17 +316,25 @@
 		g.moveToTop();
 		// Calculate the new position based on the grid size
 		let newX =
-			Math.round((g.x() + grid.squareSize * $brush.snapCoefficient) / grid.squareSize / $brush.snapCoefficient) *
+			Math.round(
+				(g.x() + grid.squareSize * $brush.snapCoefficient) /
+					grid.squareSize /
+					$brush.snapCoefficient
+			) *
 			grid.squareSize *
 			$brush.snapCoefficient;
 		let newY =
-			Math.round((g.y() + grid.squareSize * $brush.snapCoefficient) / grid.squareSize / $brush.snapCoefficient) *
+			Math.round(
+				(g.y() + grid.squareSize * $brush.snapCoefficient) /
+					grid.squareSize /
+					$brush.snapCoefficient
+			) *
 			grid.squareSize *
 			$brush.snapCoefficient;
 
 		let objects = getMovablePolygons(objectLayer);
 		objects.push(...getCollisionPolygons(objectLayer));
-		objects = objects.filter(i=> i !== undefined);
+		objects = objects.filter((i) => i !== undefined);
 		//Detect if there is collision anywhere
 		let isColliding = objects.find((group: any) => {
 			let object = group.findOne((node: Line) => node instanceof Konva.Line);
@@ -291,7 +342,10 @@
 			if (object && shape && object !== shape && object !== previewShape) {
 				let shapeRef = $tableList.find((i) => i.name == g.name());
 				let shapeHitbox;
-				if ((shapeRef?.chairs.left && shapeRef.chairs.left > 0) || shapeRef?.chairs.right && shapeRef.chairs.right > 0) {
+				if (
+					(shapeRef?.chairs.left && shapeRef.chairs.left > 0) ||
+					(shapeRef?.chairs.right && shapeRef.chairs.right > 0)
+				) {
 					shapeHitbox = addChairHitbox(
 						pointsToObjectArray(
 							pointsToRealPosition(shape.points(), {
@@ -314,7 +368,10 @@
 				}
 				let objectRef = $tableList.find((i) => i.name == group.name());
 				let objectHitbox;
-				if ((objectRef?.chairs.left && objectRef.chairs.left > 0) || (objectRef?.chairs.right && objectRef.chairs.right > 0)) {
+				if (
+					(objectRef?.chairs.left && objectRef.chairs.left > 0) ||
+					(objectRef?.chairs.right && objectRef.chairs.right > 0)
+				) {
 					objectHitbox = addChairHitbox(
 						pointsToObjectArray(
 							pointsToRealPosition(object.points(), {
@@ -370,7 +427,7 @@
 				getMovablePolygons(objectLayer)
 					.filter((i: any) => i !== shape && i !== previewShape)
 					.map((i: any) => i.findOne((node: Line) => node instanceof Konva.Line))
-					.filter(i => i),
+					.filter((i) => i),
 				grid
 			);
 
@@ -416,11 +473,19 @@
 		let shape: Konva.Line = e.detail.currentTarget;
 		// Calculate the new position based on the grid size
 		let newX =
-			Math.round((shape.x() + grid.squareSize * $brush.snapCoefficient) / grid.squareSize / $brush.snapCoefficient) *
+			Math.round(
+				(shape.x() + grid.squareSize * $brush.snapCoefficient) /
+					grid.squareSize /
+					$brush.snapCoefficient
+			) *
 			grid.squareSize *
 			$brush.snapCoefficient;
 		let newY =
-			Math.round((shape.y() + grid.squareSize * $brush.snapCoefficient) / grid.squareSize / $brush.snapCoefficient) *
+			Math.round(
+				(shape.y() + grid.squareSize * $brush.snapCoefficient) /
+					grid.squareSize /
+					$brush.snapCoefficient
+			) *
 			grid.squareSize *
 			$brush.snapCoefficient;
 		//If there was no collision, continue in calculating new viable position
@@ -459,7 +524,7 @@
 
 	function dragEnd(e: any) {
 		e.preventDefault();
-		if($brush.type != "grab") return;
+		if ($brush.type != 'grab') return;
 		let group = e.detail.currentTarget;
 		//Doesnt work without timeout fsr
 		setTimeout(() => {
@@ -485,7 +550,7 @@
 		// Redraw the layer
 		objectLayer.batchDraw();
 		objectLayer.draw();
-	};
+	}
 	export async function downloadStage(): Promise<Blob> {
 		const gridWidth = grid.width * grid.squareSize;
 		const gridHeight = grid.height * grid.squareSize;
@@ -522,21 +587,14 @@
 	}
 
 	function createPolygon() {
+		drawPreviewShape?.destroy();
 		if (points.length > 1) {
-			const line = new Konva.Line({
-				points: points.flatMap((point) => [point.x, point.y]),
-				fill: 'blue',
-				stroke: 'black',
-				closed: true
-			});
-			//line.draggable(true);
-			//zoneLayer.add(line);
-			//zoneLayer.batchDraw();
 			$stageData.zones.push({
 				name: 'zone '.concat(uuidv4()),
 				points: points.flatMap((point) => [point.x, point.y]),
-				fill: 'blue',
-				stroke: 'black',
+				fill: $brush.color || "blue",
+				stroke: $brush.stroke || "black",
+				strokeWidth: $brush.strokeWidth || 0,
 				opacity: 0.5
 			});
 		}
@@ -558,7 +616,6 @@
 </script>
 
 {#if typeof window !== 'undefined'}
-	<button class="text-white" on:click={createPolygon}>Create</button>
 	<Stage
 		bind:handle={stage}
 		config={{
@@ -847,7 +904,7 @@
 						/>
 					{/each}
 					{#each Array(table.chairs.right) as _, i}
-					<Rect
+						<Rect
 							config={{
 								x: table.table.width * grid.squareSize + 0.1 * grid.squareSize,
 								y:

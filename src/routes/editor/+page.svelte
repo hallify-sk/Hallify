@@ -2,17 +2,17 @@
 	import { applyAction, enhance } from "$app/forms";
 	import Brushes from "$lib/Brushes.svelte";
 	import Stage from "$lib/Stage.svelte";
+	import TableList from "$lib/TableList.svelte";
 	import Toolbar from "$lib/Toolbar.svelte";
-    let width = 20;
-    let height = 20;
+    let width = 30;
+    let height = 30;
     let squareSize = 30;
     let snapSize = 0.5;
     let borderThickness = 10;
     let color = "#fff";
     import { brush, modifyZones, rerender, selectedName, stageData, tableList } from "$lib/stores/stage";
 	import { theme } from "$lib/stores/theme";
-
-    tableList.set([
+    tableList.set([/*
 		{
 			name: 'id',
 			x: 8,
@@ -54,31 +54,32 @@
 				width: 1,
 				height: 4
 			}
-		}
+		}*/
 	]);
 
     stageData.set({
         ...$stageData,
         width: width * squareSize,
         height: height * squareSize,
+        squareSize,
         zones: [
-            {
+            /*{
                 name: "stage",
                 points: [16 * squareSize, 4 * squareSize, 20 * squareSize, 3 * squareSize, 20 * squareSize, 8 * squareSize, 15 * squareSize, 8 * squareSize],
                 fill: "cyan",
                 stroke: "blue",
                 strokeWidth: 4,
                 opacity: 0.2
-            }
+            }*/
         ],
         collisionObjects: [
-            {
+            /*{
                 x: 3 * squareSize,
                 y: 3 * squareSize,
                 name: "wall",
                 points: [0,0,60,0,60,60,0,60, -10, 30],
                 fill: "blue"
-            }
+            }*/
         ]
     });
     let chairs = 0;
@@ -100,7 +101,7 @@
     });
 
     let downloadStage: () => Promise<Blob>;
-    theme.set("light");
+    theme.set("dark");
 
     let zoneEditing: boolean = false;
     $: if(zoneEditing){
@@ -110,6 +111,7 @@
     }
     brush.set({type: "grab", snapCoefficient: 0.5});
 </script>
+<TableList/>
 <Toolbar/>
 <Brushes/>
 <!--<div class="fixed top-12 left-12 flex flex-col">
