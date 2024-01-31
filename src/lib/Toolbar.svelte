@@ -1,6 +1,10 @@
 <script lang="ts">
 	import { onDestroy } from 'svelte';
-	import { brush, selectedName, tableList, rerender } from './stores/stage';
+	import { brush, selectedName, tableList, rerender, stageData } from './stores/stage';
+	import { applyAction, enhance } from '$app/forms';
+	import { dataURItoBlob } from './lib';
+
+	export let downloadStage: () => Promise<string>;
 
 	let chairsLeft: number;
 	let chairsRight: number;
@@ -167,6 +171,17 @@
 			bind:value={$brush.strokeWidth}
 		/>
 	{/if}
+	<form use:enhance={async ({formData}) => {
+		formData.set("stage", JSON.stringify($stageData));
+		formData.set("tables", JSON.stringify($tableList));
+		formData.set("image", dataURItoBlob(await downloadStage()));
+		console.log(await downloadStage());
+	return async ({result}) => {
+		await applyAction(result);
+	}
+}} method="POST">
+	<button type="submit" class="text-white">Save</button>
+	</form>
 </div>
 
 <style lang="postcss">

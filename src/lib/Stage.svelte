@@ -16,11 +16,12 @@
 	};
 	import { v4 as uuidv4 } from 'uuid';
 	import { onDestroy, onMount } from 'svelte';
-	import { Stage, Layer, Line, Group, Transformer, Rect } from 'svelte-konva';
+	import { Stage, Layer, Line, Group, Transformer, Rect, Label, Tag, Text } from 'svelte-konva';
 	import {
 		addChairHitbox,
 		checkPolygonCollision,
 		clamp,
+		dataURItoBlob,
 		getClosestViablePosition,
 		getCollisionPolygons,
 		getMovablePolygons,
@@ -33,6 +34,7 @@
 	import { brush, modifyZones, rerender, selectedName, stageData, tableList } from './stores/stage';
 	import { theme } from './stores/theme';
 
+	let uiLayer: Konva.Layer;
 	let gridLayer: Konva.Layer;
 	let objectLayer: Konva.Layer;
 	let zoneLayer: Konva.Layer;
@@ -45,6 +47,8 @@
 	const scaleBy = 1.2;
 	let points: any[] = [];
 	let circles: Konva.Circle[] = [];
+	let pointsHistory: Array<any[]> = [];
+	let circlesHistory: Array<Konva.Circle[]> = [];
 	let drawPreviewShape: Konva.Line;
 	onMount(() => {
 		stage.on('wheel', (e: any) => {
@@ -103,6 +107,54 @@
 					e.remove();
 				});
 				tr.nodes([]);
+			} else if (e.code == 'KeyZ' && e.ctrlKey) {
+				if (pointsHistory.length > 0 && circlesHistory.length > 0) {
+					points = pointsHistory.pop() as any[];
+					circles = circlesHistory.pop() as any[];
+
+					// Remove all circles from the stage
+					uiLayer.removeChildren();
+
+					// Re-render the circles
+					console.log(circles);
+					circles.forEach((circle, i) => {
+						const newCircle = new Konva.Circle({
+							x: circle.x(),
+							y: circle.y(),
+							radius: circle.radius(),
+							fill: circle.fill(),
+							stroke: circle.stroke(),
+							strokeWidth: circle.strokeWidth()
+						});
+
+						uiLayer.add(newCircle);
+						if (i == 0) {
+							newCircle.on('mouseenter', () => {
+								stage.container().style.cursor = 'pointer';
+							});
+							newCircle.on('mouseleave', () => {
+								stage.container().style.cursor = 'default';
+							});
+							newCircle.addEventListener('click', () => {
+								createZone();
+							});
+						}
+					});
+
+					const previewZone = new Konva.Line({
+						points: points.flatMap((point) => [point.x, point.y]),
+						fill: $brush.color || 'blue',
+						stroke: $brush.stroke || 'black',
+						strokeWidth: $brush.strokeWidth || 0,
+						opacity: 0.2,
+						closed: true
+					});
+					uiLayer.add(previewZone);
+					drawPreviewShape = previewZone;
+
+					// Draw the layer
+					uiLayer.draw();
+				}
 			}
 		});
 		stage.on('click tap', function (e) {
@@ -151,11 +203,15 @@
 						const stageY = stage.y();
 						const point = {
 							x:
-								Math.round((offsetX / zoomLevel - stageX) / (grid.squareSize * $brush.snapCoefficient)) *
+								Math.round(
+									(offsetX - stageX) / zoomLevel / (grid.squareSize * $brush.snapCoefficient)
+								) *
 								grid.squareSize *
 								$brush.snapCoefficient,
 							y:
-								Math.round((offsetY / zoomLevel - stageY) / (grid.squareSize * $brush.snapCoefficient)) *
+								Math.round(
+									(offsetY - stageY) / zoomLevel / (grid.squareSize * $brush.snapCoefficient)
+								) *
 								grid.squareSize *
 								$brush.snapCoefficient
 						};
@@ -167,44 +223,116 @@
 							point.y <= grid.height * grid.squareSize
 						) {
 							drawPreviewShape?.destroy();
+							pointsHistory.push([...points]);
+							circlesHistory.push([...circles]);
+							console.log(circlesHistory);
 							points.push(point);
-						// Create a new circle at the point and add it to the stage
-						const circle = new Konva.Circle({
-							x: point.x,
-							y: point.y,
-							radius: 5,
-							fill: points.length == 1 ? themes[$theme].accent[600] : themes[$theme].accent[400]
-						});
-						circle.name('no-select');
-						if (points.length == 1) {
-							circle.on('mouseenter', () => {
-								stage.container().style.cursor = 'pointer';
+							// Create a new circle at the point and add it to the stage
+							const circle = new Konva.Circle({
+								name: 'no-select ' + uuidv4(),
+								x: point.x,
+								y: point.y,
+								radius: 5,
+								fill: points.length == 1 ? themes[$theme].accent[600] : themes[$theme].accent[400]
 							});
-							circle.on('mouseleave', () => {
-								stage.container().style.cursor = 'default';
+							if (points.length == 1) {
+								circle.on('mouseenter', () => {
+									stage.container().style.cursor = 'pointer';
+								});
+								circle.on('mouseleave', () => {
+									stage.container().style.cursor = 'default';
+								});
+								circle.addEventListener('click', () => {
+									createZone();
+								});
+							}
+							uiLayer.add(circle);
+							circles.push(circle);
+							const previewZone = new Konva.Line({
+								points: points.flatMap((point) => [point.x, point.y]),
+								fill: $brush.color || 'blue',
+								stroke: $brush.stroke || 'black',
+								strokeWidth: $brush.strokeWidth || 0,
+								opacity: 0.2,
+								closed: true
 							});
-							circle.addEventListener('click', () => {
-								createPolygon();
+							uiLayer.add(previewZone);
+							drawPreviewShape = previewZone;
+							circles.forEach((circle) => {
+								circle.moveToTop();
 							});
+							uiLayer.draw();
 						}
-						objectLayer.add(circle);
-						circles.push(circle);
-						const previewZone = new Konva.Line({
-							points: points.flatMap((point) => [point.x, point.y]),
-							fill: $brush.color || "blue",
-							stroke: $brush.stroke || "black",
-							strokeWidth: $brush.strokeWidth || 0,
-							opacity: 0.2,
-							closed: true
-						});
-						objectLayer.add(previewZone);
-						drawPreviewShape = previewZone;
-						circles.forEach((circle) => {
-							circle.moveToTop();
-						});
-						objectLayer.draw();
+					}
+					break;
+				case 'wall':
+					{
+						const { offsetX, offsetY } = e.evt;
+						const zoomLevel = stage.scaleX();
+						const stageX = stage.x();
+						const stageY = stage.y();
+						const point = {
+							x:
+								Math.round(
+									(offsetX - stageX) / zoomLevel / (grid.squareSize * $brush.snapCoefficient)
+								) *
+								grid.squareSize *
+								$brush.snapCoefficient,
+							y:
+								Math.round(
+									(offsetY - stageY) / zoomLevel / (grid.squareSize * $brush.snapCoefficient)
+								) *
+								grid.squareSize *
+								$brush.snapCoefficient
+						};
+
+						if (
+							point.x >= 0 &&
+							point.x <= grid.width * grid.squareSize &&
+							point.y >= 0 &&
+							point.y <= grid.height * grid.squareSize
+						) {
+							drawPreviewShape?.destroy();
+							pointsHistory.push([...points]);
+							circlesHistory.push([...circles]);
+							console.log(circlesHistory);
+							points.push(point);
+							// Create a new circle at the point and add it to the stage
+							const circle = new Konva.Circle({
+								name: 'no-select ' + uuidv4(),
+								x: point.x,
+								y: point.y,
+								radius: 5,
+								fill: points.length == 1 ? themes[$theme].accent[600] : themes[$theme].accent[400]
+							});
+							if (points.length == 1) {
+								circle.on('mouseenter', () => {
+									stage.container().style.cursor = 'pointer';
+								});
+								circle.on('mouseleave', () => {
+									stage.container().style.cursor = 'default';
+								});
+								circle.addEventListener('click', () => {
+									createWall();
+								});
+							}
+							uiLayer.add(circle);
+							circles.push(circle);
+							const previewZone = new Konva.Line({
+								points: points.flatMap((point) => [point.x, point.y]),
+								fill: $brush.color || 'blue',
+								stroke: $brush.stroke || 'black',
+								strokeWidth: $brush.strokeWidth || 0,
+								opacity: 0.2,
+								closed: true
+							});
+							uiLayer.add(previewZone);
+							drawPreviewShape = previewZone;
+							circles.forEach((circle) => {
+								circle.moveToTop();
+							});
+							uiLayer.draw();
 						}
-						
 					}
 					break;
 			}
@@ -551,49 +679,67 @@
 		objectLayer.batchDraw();
 		objectLayer.draw();
 	}
-	export async function downloadStage(): Promise<Blob> {
+	export async function downloadStage(): Promise<string> {
 		const gridWidth = grid.width * grid.squareSize;
 		const gridHeight = grid.height * grid.squareSize;
 
-		// Save the current position
+		// Save the current position and scale
 		const oldX = stage.x();
 		const oldY = stage.y();
-
 		const oldScaleX = stage.scaleX();
 		const oldScaleY = stage.scaleY();
 
+		// Calculate the scale such that the entire stage fits into the view
 		stage.scaleX(1);
 		stage.scaleY(1);
 
 		// Set the position to 0,0
 		stage.x(0);
 		stage.y(0);
-
-		const url = await stage.toBlob({
+		const url = stage.toDataURL({
 			x: 0,
 			y: 0,
 			width: gridWidth,
 			height: gridHeight
 		});
 
+		// Restore the old scale and position
 		stage.scaleX(oldScaleX);
 		stage.scaleY(oldScaleY);
-
-		// Restore the old position
 		stage.x(oldX);
 		stage.y(oldY);
-
-		return url as Blob;
+		return url;
 	}
 
-	function createPolygon() {
+	function createZone() {
 		drawPreviewShape?.destroy();
 		if (points.length > 1) {
 			$stageData.zones.push({
 				name: 'zone '.concat(uuidv4()),
 				points: points.flatMap((point) => [point.x, point.y]),
-				fill: $brush.color || "blue",
-				stroke: $brush.stroke || "black",
+				fill: $brush.color || 'blue',
+				stroke: $brush.stroke || 'black',
+				strokeWidth: $brush.strokeWidth || 0,
+				opacity: 0.5
+			});
+		}
+		points = [];
+		// Remove all circles from the stage and clear the array
+		for (const circle of circles) {
+			circle.remove();
+		}
+		circles = [];
+		rerenderStage();
+	}
+
+	function createWall() {
+		drawPreviewShape?.destroy();
+		if (points.length > 1) {
+			$stageData.collisionObjects.push({
+				name: 'wall no-select '.concat(uuidv4()),
+				points: points.flatMap((point) => [point.x, point.y]),
+				fill: $brush.color || themes?.[$theme]?.background?.[100],
+				stroke: $brush.stroke || 'none',
 				strokeWidth: $brush.strokeWidth || 0,
 				opacity: 0.5
 			});
@@ -612,6 +758,7 @@
 	}
 
 	import themes from '$lib/themes.json';
+	import { redirect } from '@sveltejs/kit';
 	console.log($tableList);
 </script>
 
@@ -828,8 +975,8 @@
 				{#each $stageData.collisionObjects as object}
 					<Group
 						config={{
-							x: object.x,
-							y: object.y,
+							//x: object.x,
+							//y: object.y,
 							name: object.name
 						}}
 					>
@@ -920,6 +1067,13 @@
 					{/each}
 				</Group>
 			{/each}
+		</Layer>
+		<Layer bind:handle={uiLayer} />
+		<Layer>
+			<Label config={{x: 100, y: 100, opacity: 0.8}}>
+				<Tag config={{fill: "black", pointerDirection: "down", pointerWidth: 10, pointerHeight: 10, lineJoin: "round" }} />
+				<Text config={{ text: "some label text", fontSize: 18, padding: 10, fill: "white" }} />
+				</Label>
 		</Layer>
 	</Stage>
 {/if}
