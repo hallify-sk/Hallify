@@ -69,7 +69,7 @@ export const stageData: Writable<{
       "fill": "#3fbe01",
       "stroke": "black",
       "strokeWidth": 0,
-      "opacity": 0.5
+      "opacity": 0.2
     },
     {
       "name": "zone 29299379-47aa-490c-9d5c-40956f2a56c4",
@@ -86,7 +86,7 @@ export const stageData: Writable<{
       "fill": "#3fbe01",
       "stroke": "black",
       "strokeWidth": 0,
-      "opacity": 0.5
+      "opacity": 0.2
     },
     {
       "name": "zone aef1b37f-6bf1-41ca-9a03-c622d23de9cc",
@@ -103,7 +103,7 @@ export const stageData: Writable<{
       "fill": "#b1700e",
       "stroke": "black",
       "strokeWidth": 0,
-      "opacity": 0.5
+      "opacity": 0.2
     },
     {
       "name": "zone c6c50264-e7bc-4ad2-a9eb-a0c65577989e",
@@ -120,7 +120,7 @@ export const stageData: Writable<{
       "fill": "#be017c",
       "stroke": "black",
       "strokeWidth": 0,
-      "opacity": 0.5
+      "opacity": 0.8
     },
     {
       "name": "zone 47599fd2-931e-4630-9b90-cc1c3c171650",
@@ -153,7 +153,7 @@ export const stageData: Writable<{
       "fill": "#b50b0b",
       "stroke": "black",
       "strokeWidth": 0,
-      "opacity": 0.5
+      "opacity": 0.8
     }
   ],
   "collisionObjects": [
@@ -177,10 +177,10 @@ export const stageData: Writable<{
         0,
         90
       ],
-      "fill": "#14141f",
+      "fill": "TBD",
       "stroke": "none",
       "strokeWidth": 0,
-      "opacity": 0.5
+      "opacity": 0.2
     },
     {
       "name": "wall no-select beb329c9-2e26-4f08-8b23-824ff7d19af8",
@@ -202,10 +202,10 @@ export const stageData: Writable<{
         750,
         0
       ],
-      "fill": "#14141f",
+      "fill": "TBD",
       "stroke": "none",
       "strokeWidth": 0,
-      "opacity": 0.5
+      "opacity": 0.2
     },
     {
       "name": "wall no-select 7ea163e7-2bc2-4fdc-bad6-1ffd005c330a",
@@ -219,10 +219,10 @@ export const stageData: Writable<{
         60,
         300
       ],
-      "fill": "#14141f",
+      "fill": "TBD",
       "stroke": "none",
       "strokeWidth": 0,
-      "opacity": 0.5
+      "opacity": 0.2
     },
     {
       "name": "wall no-select 9cdb0374-8678-40a5-bb66-6eb192a3a660",
@@ -236,10 +236,10 @@ export const stageData: Writable<{
         60,
         480
       ],
-      "fill": "#14141f",
+      "fill": "TBD",
       "stroke": "none",
       "strokeWidth": 0,
-      "opacity": 0.5
+      "opacity": 0.2
     },
     {
       "name": "wall no-select 366b1880-c453-4ef0-a18f-d57eede0dee1",
@@ -253,10 +253,10 @@ export const stageData: Writable<{
         60,
         660
       ],
-      "fill": "#14141f",
+      "fill": "TBD",
       "stroke": "none",
       "strokeWidth": 0,
-      "opacity": 0.5
+      "opacity": 0.2
     },
     {
       "name": "wall no-select d0b977d1-9f3a-4df7-a757-411239b2d134",
@@ -270,10 +270,10 @@ export const stageData: Writable<{
         60,
         840
       ],
-      "fill": "#14141f",
+      "fill": "TBD",
       "stroke": "none",
       "strokeWidth": 0,
-      "opacity": 0.5
+      "opacity": 0.2
     },
     {
       "name": "wall no-select 935ea68e-1836-4447-a499-6c3b06ae2278",
@@ -295,10 +295,10 @@ export const stageData: Writable<{
         0,
         1110
       ],
-      "fill": "#14141f",
+      "fill": "TBD",
       "stroke": "none",
       "strokeWidth": 0,
-      "opacity": 0.5
+      "opacity": 0.2
     },
     {
       "name": "wall no-select cc44a2f0-806d-466d-8af1-c05b7d0e71c7",
@@ -320,10 +320,10 @@ export const stageData: Writable<{
         750,
         990
       ],
-      "fill": "#14141f",
+      "fill": "TBD",
       "stroke": "none",
       "strokeWidth": 0,
-      "opacity": 0.5
+      "opacity": 0.2
     },
     {
       "name": "wall no-select a8e09d64-a486-4bda-bcf1-6991a7b7d19c",
@@ -337,10 +337,10 @@ export const stageData: Writable<{
         630,
         780
       ],
-      "fill": "#14141f",
+      "fill": "TBD",
       "stroke": "none",
       "strokeWidth": 0,
-      "opacity": 0.5
+      "opacity": 0.2
     },
     {
       "name": "wall no-select 8cc1874d-c1bd-4a0c-9bc5-39ac1720b623",
@@ -354,10 +354,10 @@ export const stageData: Writable<{
         630,
         600
       ],
-      "fill": "#14141f",
+      "fill": "TBD",
       "stroke": "none",
       "strokeWidth": 0,
-      "opacity": 0.5
+      "opacity": 0.2
     },
     {
       "name": "wall no-select 7320235d-4370-4b40-8b16-2035f68ab63d",
@@ -371,10 +371,10 @@ export const stageData: Writable<{
         630,
         420
       ],
-      "fill": "#14141f",
+      "fill": "TBD",
       "stroke": "none",
       "strokeWidth": 0,
-      "opacity": 0.5
+      "opacity": 0.2
     },
     {
       "name": "wall no-select 4fb25606-2f8a-4edb-a533-814961224c0b",
@@ -388,10 +388,10 @@ export const stageData: Writable<{
         630,
         240
       ],
-      "fill": "#14141f",
+      "fill": "TBD",
       "stroke": "none",
       "strokeWidth": 0,
-      "opacity": 0.5
+      "opacity": 0.2
     }
   ],
   "scale": 0.75,

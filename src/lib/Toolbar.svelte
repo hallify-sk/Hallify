@@ -11,6 +11,7 @@
 	let maxChairs: number;
 	console.log($brush);
 	const unsubscribe = selectedName.subscribe((e) => {
+		if(!$tableList) return;
 		$tableList.find((e) => {
 			if (e.name == $selectedName) {
 				chairsLeft = e.chairs.left;

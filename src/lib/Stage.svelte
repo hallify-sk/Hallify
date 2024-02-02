@@ -136,7 +136,11 @@
 								stage.container().style.cursor = 'default';
 							});
 							newCircle.addEventListener('click', () => {
-								createZone();
+								if ($brush.type == 'zone') {
+									createZone();
+								} else if ($brush.type == 'wall') {
+									createWall();
+								}
 							});
 						}
 					});
@@ -738,7 +742,7 @@
 			$stageData.collisionObjects.push({
 				name: 'wall no-select '.concat(uuidv4()),
 				points: points.flatMap((point) => [point.x, point.y]),
-				fill: $brush.color || themes?.[$theme]?.background?.[100],
+				fill: "TBD",
 				stroke: $brush.stroke || 'none',
 				strokeWidth: $brush.strokeWidth || 0,
 				opacity: 0.5
@@ -983,7 +987,7 @@
 						<Line
 							config={{
 								points: object.points,
-								fill: object.fill || 'black',
+								fill: object.fill?.replace("TBD", $theme == "dark" ? themes[$theme].background[50] : themes[$theme].background[700]) || 'black',
 								stroke: object.stroke,
 								strokeWidth: object.strokeWidth || 0,
 								dash: object.dash,
@@ -1002,6 +1006,7 @@
 					rotationSnapTolerance: 30
 				}}
 			/>
+			{#if $tableList}
 			{#each $tableList as table}
 				<Group
 					config={{
@@ -1067,13 +1072,8 @@
 					{/each}
 				</Group>
 			{/each}
+			{/if}
 		</Layer>
 		<Layer bind:handle={uiLayer} />
-		<Layer>
-			<Label config={{x: 100, y: 100, opacity: 0.8}}>
-				<Tag config={{fill: "black", pointerDirection: "down", pointerWidth: 10, pointerHeight: 10, lineJoin: "round" }} />
-				<Text config={{ text: "some label text", fontSize: 18, padding: 10, fill: "white" }} />
-				</Label>
-		</Layer>
 	</Stage>
 {/if}
