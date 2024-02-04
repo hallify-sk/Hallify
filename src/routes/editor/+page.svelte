@@ -27,13 +27,13 @@
     }
     brush.set({type: "grab", snapCoefficient: 0.5});
 </script>
-<div class="grid place-items-center w-screen h-screen bg-background-200">
+<div class="grid place-items-center h-screen bg-background-200 ml-12" style="width: calc(100vw - 18rem)">
     {#key $rerender}
     <Stage bind:downloadStage={downloadStage} grid={{width, height, squareSize, snapSize, color, borderThickness}}/>
     {/key}
 </div>
 <TableList bind:tables={tablesDB}/>
-<Toolbar downloadStage={downloadStage}/>
+<Toolbar downloadStage={downloadStage} bind:stageCategories={data.stageCategories}/>
 <Brushes/>
 
 <style lang="postcss">
