@@ -29,7 +29,7 @@
 		pointsToObjectArray,
 		pointsToRealPosition,
 		rotatePoints
-	} from './lib';
+	} from './editor/lib';
 	import Konva from 'konva';
 	import { brush, modifyZones, rerender, selectedName, stageData, tableList } from './stores/stage';
 	import { theme } from './stores/theme';
@@ -116,7 +116,6 @@
 					uiLayer.removeChildren();
 
 					// Re-render the circles
-					console.log(circles);
 					circles.forEach((circle, i) => {
 						const newCircle = new Konva.Circle({
 							x: circle.x(),
@@ -229,7 +228,6 @@
 							drawPreviewShape?.destroy();
 							pointsHistory.push([...points]);
 							circlesHistory.push([...circles]);
-							console.log(circlesHistory);
 							points.push(point);
 							// Create a new circle at the point and add it to the stage
 							const circle = new Konva.Circle({
@@ -299,7 +297,6 @@
 							drawPreviewShape?.destroy();
 							pointsHistory.push([...points]);
 							circlesHistory.push([...circles]);
-							console.log(circlesHistory);
 							points.push(point);
 							// Create a new circle at the point and add it to the stage
 							const circle = new Konva.Circle({
@@ -340,55 +337,6 @@
 					}
 					break;
 			}
-			/*
-			if (e.evt.shiftKey) {
-				const { offsetX, offsetY } = e.evt;
-				const stageX = stage.x();
-				const stageY = stage.y();
-				console.log(offsetX, offsetY);
-				const point = {
-					x:
-						Math.round((offsetX - stageX) / (grid.squareSize * $brush.snapCoefficient)) *
-						grid.squareSize *
-						$brush.snapCoefficient,
-					y:
-						Math.round((offsetY - stageY) / (grid.squareSize * $brush.snapCoefficient)) *
-						grid.squareSize *
-						$brush.snapCoefficient
-				};
-				points.push(point);
-
-				// Create a new circle at the point and add it to the stage
-				const circle = new Konva.Circle({
-					x: point.x,
-					y: point.y,
-					radius: 5,
-					fill: themes[$theme].accent[400]
-				});
-				circle.name('no-select');
-				objectLayer.add(circle);
-				objectLayer.draw();
-				circles.push(circle);
-			} else if (e.evt.ctrlKey) {
-				const { offsetX, offsetY } = e.evt;
-				const stageX = stage.x();
-				const stageY = stage.y();
-				console.log(offsetX, offsetY);
-				const point = {
-					x:
-						Math.round((offsetX - stageX) / (grid.squareSize * $brush.snapCoefficient)) *
-						grid.squareSize *
-						$brush.snapCoefficient,
-					y:
-						Math.round((offsetY - stageY) / (grid.squareSize * $brush.snapCoefficient)) *
-						grid.squareSize *
-						$brush.snapCoefficient
-				};
-				console.log(point, points);
-				points = points.filter((i) => i.x != point.x && i.y != point.y);
-				circles.find((i) => i.x() == point.x && i.y() == point.y)?.remove();
-				objectLayer.draw();
-			}*/
 		});
 	});
 	onDestroy(() => {
@@ -762,8 +710,6 @@
 	}
 
 	import themes from '$lib/themes.json';
-	import { redirect } from '@sveltejs/kit';
-	console.log($tableList);
 </script>
 
 {#if typeof window !== 'undefined'}

@@ -8,7 +8,6 @@ export const actions = {
       const stage = formData.get("stage")?.toString();
       const tables = formData.get("tables")?.toString();
       const image = formData.get("image") as Blob;
-      console.log(image);
       const data = new FormData();
       if(stage){
         data.append("stage", stage);
@@ -29,7 +28,6 @@ export const actions = {
   /** @type {import('./$types').PageServerLoad} */
 export async function load({params}) {
   const stage = await pb.collection("stages").getOne(params.slug) || false;
-  console.log(stage);
 	return {
 		stage
 	};

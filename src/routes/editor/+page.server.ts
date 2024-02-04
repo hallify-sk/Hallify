@@ -1,6 +1,7 @@
+import { LOCAL_POCKETBASE_URL } from '$env/static/private';
 import PocketBase from 'pocketbase';
 
-const pb = new PocketBase('http://127.0.0.1:8090');
+const pb = new PocketBase(LOCAL_POCKETBASE_URL);
 
 /** @type {import('./$types').PageServerLoad} */
 export async function load() {
@@ -21,6 +22,7 @@ export const actions = {
       formData.forEach((v, k) => {
         if(!["name", "stage", "tables", "image"].includes(k)) categories.push(k);
       });
+      console.log(JSON.stringify(categories));
       const data = new FormData();
       if(stage){
         data.append("stage", stage);
@@ -35,9 +37,12 @@ export const actions = {
         data.append("name", name);
       }
       if(categories.length){
-        console.log(JSON.stringify(categories);
-        data.append("categories", categories);
+        for(const category of categories){
+          //Append the categories to the form data
+          data.append("categories", category);
+        }
       }
+      console.log(data);
       pb.collection("stages").create(data);
       
       // Process the form data and perform actions

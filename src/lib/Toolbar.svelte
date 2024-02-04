@@ -2,7 +2,7 @@
 	import { onDestroy } from 'svelte';
 	import { brush, selectedName, tableList, rerender, stageData } from './stores/stage';
 	import { applyAction, enhance } from '$app/forms';
-	import { dataURItoBlob } from './lib';
+	import { dataURItoBlob } from './editor/lib';
 	import Popup from './Popup.svelte';
 
 	export let downloadStage: () => Promise<string>;
@@ -178,54 +178,45 @@
 		/>
 	{/if}
 
+	<button
+		on:click={openPopup}
+		type="submit"
+		class="ml-auto mr-2 px-4 py-1 rounded-md flex flex-row gap-2 hover:bg-background-200"
+	>
+		<svg
+			xmlns="http://www.w3.org/2000/svg"
+			class="icon icon-tabler icon-tabler-device-floppy stroke-primary-400 ml-auto w-7 h-7"
+			width="24"
+			height="24"
+			viewBox="0 0 24 24"
+			stroke-width="2"
+			stroke="currentColor"
+			fill="none"
+			stroke-linecap="round"
+			stroke-linejoin="round"
+			><path stroke="none" d="M0 0h24v24H0z" fill="none" /><path
+				d="M6 4h10l4 4v10a2 2 0 0 1 -2 2h-12a2 2 0 0 1 -2 -2v-12a2 2 0 0 1 2 -2"
+			/><path d="M12 14m-2 0a2 2 0 1 0 4 0a2 2 0 1 0 -4 0" /><path d="M14 4l0 4l-6 0l0 -4" /></svg
+		>
+		<p class="text-primary-700">Save</p>
+	</button>
+</div>
+
+<Popup bind:openPopup bind:closePopup>
+	<h2 class="text-text-700 text-xl mb-4">Uložiť rozloženie</h2>
 	<form
-		class="grid items-center ml-auto mr-4"
+		action="/editor"
+		class="flex flex-col"
 		use:enhance={async ({ formData }) => {
 			formData.set('stage', JSON.stringify($stageData));
 			formData.set('tables', JSON.stringify($tableList));
 			formData.set('image', dataURItoBlob(await downloadStage()));
-			console.log(await downloadStage());
 			return async ({ result }) => {
 				await applyAction(result);
 			};
 		}}
 		method="POST"
 	>
-		<button
-			on:click={openPopup}
-			type="submit"
-			class="px-4 py-1 rounded-md flex flex-row gap-2 hover:bg-background-200"
-		>
-			<svg
-				xmlns="http://www.w3.org/2000/svg"
-				class="icon icon-tabler icon-tabler-device-floppy stroke-primary-400 ml-auto w-7 h-7"
-				width="24"
-				height="24"
-				viewBox="0 0 24 24"
-				stroke-width="2"
-				stroke="currentColor"
-				fill="none"
-				stroke-linecap="round"
-				stroke-linejoin="round"
-				><path stroke="none" d="M0 0h24v24H0z" fill="none" /><path
-					d="M6 4h10l4 4v10a2 2 0 0 1 -2 2h-12a2 2 0 0 1 -2 -2v-12a2 2 0 0 1 2 -2"
-				/><path d="M12 14m-2 0a2 2 0 1 0 4 0a2 2 0 1 0 -4 0" /><path d="M14 4l0 4l-6 0l0 -4" /></svg
-			>
-			<p class="text-primary-700">Save</p>
-		</button>
-	</form>
-</div>
-
-<Popup bind:openPopup bind:closePopup>
-	<h2 class="text-text-700 text-xl mb-4">Uložiť rozloženie</h2>
-	<form action="/editor" class="flex flex-col" use:enhance={async ({ formData }) => {
-		formData.set('stage', JSON.stringify($stageData));
-		formData.set('tables', JSON.stringify($tableList));
-		formData.set('image', dataURItoBlob(await downloadStage()));
-		return async ({ result }) => {
-			await applyAction(result);
-		};
-	}} method="POST">
 		<fieldset class="relative text-input">
 			<input
 				placeholder=""
@@ -243,15 +234,28 @@
 		</fieldset>
 		<fieldset class="mt-3 flex flex-row max-w-xs gap-1 flex-wrap">
 			{#each stageCategories as category}
-			<fieldset>
-				<input class="hidden peer" type="checkbox" id={category.id} name={category.id}>
-				<label class="px-4 py-2 bg-background-100 hover:bg-background-200 peer-checked:bg-primary-500 peer-checked:hover:bg-primary-600 peer-checked:text-text-50 text-700 rounded-md cursor-pointer block" for={category.id}>{category.name}</label>
-			</fieldset>
+				<fieldset>
+					<input class="hidden peer" type="checkbox" id={category.id} name={category.id} />
+					<label
+						class="px-4 py-2 bg-background-100 hover:bg-background-200 peer-checked:bg-primary-500 peer-checked:hover:bg-primary-600 peer-checked:text-text-50 text-700 rounded-md cursor-pointer block"
+						for={category.id}>{category.name}</label
+					>
+				</fieldset>
 			{/each}
 		</fieldset>
 		<div class="ml-auto">
-			<button type="reset" on:click={closePopup} class="px-4 py-2 bg-background-100 hover:bg-background-200 rounded-md text-text-900 mt-3">Zrušiť</button>
-			<button class="px-4 py-2 bg-background-700 hover:bg-primary-600 rounded-md text-text-50 mt-3">Uložiť</button>
+			<button
+				type="reset"
+				on:click={closePopup}
+				class="px-4 py-2 bg-background-100 hover:bg-background-200 rounded-md text-text-900 mt-3"
+				>Zrušiť</button
+			>
+			<button
+				type="submit"
+				on:click={closePopup}
+			class="px-4 py-2 bg-background-700 hover:bg-primary-600 rounded-md text-text-50 mt-3"
+				>Uložiť</button
+			>
 		</div>
 	</form>
 </Popup>

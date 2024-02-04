@@ -11,7 +11,6 @@
     let borderThickness = 10;
     let color = "#fff";
     let tablesDB = data.tables as any;
-    console.log(tablesDB);
 	import { theme } from "$lib/stores/theme";
     theme.set("light");
 

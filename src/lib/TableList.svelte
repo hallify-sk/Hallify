@@ -29,7 +29,6 @@
 						}
 					]
 		);
-		console.log($stageData.width / 2, $stageData.height / 2);
 		rerenderStage();
 		return;
 	}

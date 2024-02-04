@@ -35,11 +35,15 @@
 	"type": "module",
 	"dependencies": {
 		"@ampproject/remapping": "^2.2.1",
+		"@dicebear/collection": "^7.0.4",
+		"@dicebear/core": "^7.0.4",
+		"@dicebear/initials": "^7.0.4",
 		"@sveltejs/adapter-node": "^2.0.2",
 		"canvas": "^2.11.2",
 		"konva": "^9.2.3",
 		"pocketbase": "^0.20.1",
 		"svelte-konva": "^0.3.1",
+		"svelte-turnstile": "^0.5.0",
 		"uuid": "^9.0.1"
 	}
 }

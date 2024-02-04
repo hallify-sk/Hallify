@@ -1,6 +1,5 @@
 <script lang="ts">
     export let data;
-    console.log(data);
 	import { applyAction, enhance } from "$app/forms";
 	import Stage from "$lib/Stage.svelte";
     let width = 20;

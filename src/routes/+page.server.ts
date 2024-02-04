@@ -1,10 +1,16 @@
-import PocketBase from 'pocketbase';
-
-const pb = new PocketBase('http://127.0.0.1:8090');
+export const actions = {
+	login: async ({ request, getClientAddress, locals }) => {
+		const formData = await request.formData();
+		const email = formData.get('email')?.toString();
+		const password = formData.get('password')?.toString();
+		const user = await locals.pb.collection("users").authWithPassword(email || "", password || "");
+		return { user };
+	}
+};
 
 /** @type {import('./$types').PageServerLoad} */
-export async function load() {
+export async function load({locals}) {
 	return {
-		stages: await pb.collection("stages").getFullList({sort: "created"})
+		stages: await locals.pb.collection('stages').getFullList({ sort: 'created' })
 	};
 }
