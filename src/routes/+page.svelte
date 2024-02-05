@@ -1,9 +1,7 @@
 <script lang="ts">
 	import Navbar from "$lib/Navbar.svelte";
-	import Popup from "$lib/Popup.svelte";
 	export let data;
-
-
+	console.log(data);
 </script>
 
 <Navbar />

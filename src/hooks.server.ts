@@ -1,5 +1,5 @@
-import { LOCAL_POCKETBASE_URL } from '$env/static/private';
 import { PUBLIC_DEV } from '$env/static/public';
+import { LOCAL_POCKETBASE_URL } from '$env/static/private';
 import PocketBase from 'pocketbase';
 
 export const handle = async ({event, resolve}) => {
