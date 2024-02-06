@@ -1,6 +1,4 @@
 <script lang="ts">
-	import { enhance } from "$app/forms";
-
 	export let popupVisible = false;
 
 	export function openPopup() {

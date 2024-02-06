@@ -1,6 +1,6 @@
 import { SECRET_TURNSTILE_TOKEN } from '$env/static/private';
 import { PUBLIC_DEV, PUBLIC_TURNSTILE_URL } from '$env/static/public';
-import { fail, redirect,  } from '@sveltejs/kit';
+import { fail } from '@sveltejs/kit';
 
 export const actions = {
 	login: async ({ request, getClientAddress, locals }) => {
@@ -9,13 +9,17 @@ export const actions = {
 		const password = data.get('password')?.toString();
 		const turnstile = data.get("cf-turnstile-response")?.toString();
 		if(!email || email.trim() == ""){
-			return fail(400);
+			return fail(400, {incorrect: true, message: "Vyžaduje sa e-mail", type: "email"});
+		}
+		//validate email with simple regex
+		if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){
+			return fail(400, {incorrect: true, message: "E-mail nie je platný", type: "email"});
 		}
 		if(!password || password.trim() == ""){
-			return fail(400);
+			return fail(400, {incorrect: true, message: "Vyžaduje sa heslo", type: "password"});
 		}
 		const formData = new FormData();
-		if(PUBLIC_DEV == "true") {
+		if(PUBLIC_DEV != "true") {
             formData.append("secret", SECRET_TURNSTILE_TOKEN)
             formData.append("response", turnstile as string)
             formData.append('remoteip', getClientAddress());
@@ -24,15 +28,70 @@ export const actions = {
                 method: 'POST',
             });
             const outcome = await result.json();
-            if(!outcome.success) return fail(400, { turnstileData: { incorrect: true, message: "CAPTCHA failed! Please refresh this page."} });
+            if(!outcome.success) return fail(400, { incorrect: true, message: "CAPTCHA verifikácia zlyhala.", type: "auth"});
         }
 		try{
 			await locals.pb.collection("users").authWithPassword(email, password);
 			return {success: true};
 		}catch(e){
-			return fail(400, {authData: { incorrect: true, message: "E-mail doesn't exist or password was incorrect."}});
+			return fail(404, {incorrect: true, message: "E-Mail neexistuje alebo heslo je neplatné", type: "auth"});
 		};
-	}
+	},
+	register: async ({ request, getClientAddress, locals }) => {
+		const data = await request.formData();
+		const name = data.get('name')?.toString();
+		const email = data.get('email')?.toString();
+		const password = data.get('password')?.toString();
+		const turnstile = data.get("cf-turnstile-response")?.toString();
+
+		if(!name || name.trim() == ""){
+			return fail(400, {incorrect: true, message: "Vyžaduje sa meno", type: "name"});
+		}
+		if(!email || email.trim() == ""){
+			return fail(400, {incorrect: true, message: "Vyžaduje sa e-mail", type: "email"});
+		}
+		//validate email with simple regex
+		if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){
+			return fail(400, {incorrect: true, message: "E-mail nie je platný", type: "email"});
+		}
+		if(!password || password.trim() == ""){
+			return fail(400, {incorrect: true, message: "Vyžaduje sa heslo", type: "password"});
+		}
+		
+		//Validate password with simple regex step by step.
+		if(password.length < 8){
+			return fail(400, {incorrect: true, message: "Heslo musí mať aspoň 8 znakov", type: "password"});
+		}
+		if(!/[a-z]/.test(password)){
+			return fail(400, {incorrect: true, message: "Heslo musí obsahovať aspoň jedno malé písmeno", type: "password"});
+		}
+		if(!/[A-Z]/.test(password)){
+			return fail(400, {incorrect: true, message: "Heslo musí obsahovať aspoň jedno veľké písmeno", type: "password"});
+		}
+		if(!/[0-9]/.test(password)){
+			return fail(400, {incorrect: true, message: "Heslo musí obsahovať aspoň jedno číslo", type: "password"});
+		}
+
+		const formData = new FormData();
+		if(PUBLIC_DEV != "true") {
+            formData.append("secret", SECRET_TURNSTILE_TOKEN)
+            formData.append("response", turnstile as string)
+            formData.append('remoteip', getClientAddress());
+            const result: Response = await fetch(PUBLIC_TURNSTILE_URL, {
+                body: formData,
+                method: 'POST',
+            });
+            const outcome = await result.json();
+            if(!outcome.success) return fail(400, { incorrect: true, message: "CAPTCHA verifikácia zlyhala.", type: "auth"});
+        }
+		try{
+			
+			await locals.pb.collection("users").authWithPassword(email, password);
+			return {success: true};
+		}catch(e){
+			return fail(404, {incorrect: true, message: "E-Mail neexistuje alebo heslo je neplatné", type: "auth"});
+		};
+	},
 };
 
 /** @type {import('./$types').PageServerLoad} */
