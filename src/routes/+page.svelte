@@ -1,12 +1,13 @@
 <script lang="ts">
-	import Navbar from "$lib/Navbar.svelte";
+	import Calendar from "$lib/Calendar.svelte";
+import Navbar from "$lib/Navbar.svelte";
 	export let data;
 	console.log(data);
 </script>
 
-<Navbar />
+<Navbar user={data.user}/>
 
-
+<Calendar/>
 
 <!--
 {#each data.stages as stage, i}

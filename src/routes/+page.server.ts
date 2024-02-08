@@ -1,8 +1,14 @@
 import { SECRET_TURNSTILE_TOKEN } from '$env/static/private';
 import { PUBLIC_DEV, PUBLIC_TURNSTILE_URL } from '$env/static/public';
 import { fail } from '@sveltejs/kit';
+import PocketBase from 'pocketbase';
 
 export const actions = {
+	logout: async ({locals}) => {
+        if(!locals.user) return fail(400);
+		locals.pb.authStore.clear();
+        return {success: true};
+    },
 	login: async ({ request, getClientAddress, locals }) => {
 		const data = await request.formData();
 		const email = data.get('email')?.toString();
@@ -34,7 +40,7 @@ export const actions = {
 			await locals.pb.collection("users").authWithPassword(email, password);
 			return {success: true};
 		}catch(e){
-			return fail(404, {incorrect: true, message: "E-Mail neexistuje alebo heslo je neplatné", type: "auth"});
+			return fail(400, {incorrect: true, message: "Nesprávna kombinácia e-mailu a hesla.", type: "auth"});
 		};
 	},
 	register: async ({ request, getClientAddress, locals }) => {
@@ -84,13 +90,20 @@ export const actions = {
             const outcome = await result.json();
             if(!outcome.success) return fail(400, { incorrect: true, message: "CAPTCHA verifikácia zlyhala.", type: "auth"});
         }
-		try{
-			
+		try {
+			const createData = new FormData();
+			createData.append("name", name);
+			createData.append("email", email);
+			createData.append("password", password);
+			createData.append("passwordConfirm", password);
+			await (locals.pb as PocketBase).collection("users").create(createData);
 			await locals.pb.collection("users").authWithPassword(email, password);
-			return {success: true};
-		}catch(e){
-			return fail(404, {incorrect: true, message: "E-Mail neexistuje alebo heslo je neplatné", type: "auth"});
-		};
+			return { success: true };
+		} catch (e) {
+			// eslint-disable-next-line @typescript-eslint/no-explicit-any
+			console.log((e as any).data.data);
+			return fail(404, { incorrect: true, message: "E-Mail neexistuje alebo heslo je neplatné", type: "auth" });
+		}
 	},
 };
 

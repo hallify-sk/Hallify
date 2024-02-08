@@ -39,10 +39,12 @@
 		"@dicebear/collection": "^7.0.4",
 		"@dicebear/core": "^7.0.4",
 		"@dicebear/initials": "^7.0.4",
+		"@resvg/resvg-js": "^2.0.0",
 		"@sveltejs/adapter-node": "^2.0.2",
 		"canvas": "^2.11.2",
 		"konva": "^9.2.3",
 		"pocketbase": "^0.20.1",
+		"sharp": "^0.30.4",
 		"svelte-konva": "^0.3.1",
 		"uuid": "^9.0.1"
 	}
