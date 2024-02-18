@@ -7,7 +7,9 @@
 
 <Navbar user={data.user} />
 
-<Calendar />
+<div class="w-80">
+	<Calendar />
+</div>
 
 <!--
 {#each data.stages as stage, i}
