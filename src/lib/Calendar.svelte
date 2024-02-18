@@ -6,6 +6,7 @@
 	import { crossfade, fly } from 'svelte/transition';
 	import { sineIn, sineInOut, sineOut } from 'svelte/easing';
 	import { zoom } from './animations/zoom';
+	import Popup from './Popup.svelte';
 	const month = writable(new Date().getMonth() + 1);
 	const year = writable(new Date().getFullYear());
 	const action: Writable<number> = writable();
@@ -70,11 +71,13 @@
 		duration: 300,
 		easing: sineInOut
 	});
+
+	let openPopup: () => void;
 </script>
 
 <div class="flex flex-col pt-20 overflow-hidden">
 	<div class="p-2 bg-background-100 grid">
-		<div class="flex flex-row flex-nowrap gap-1 bg-background-100 z-50">
+		<div class="flex flex-row flex-nowrap gap-1 bg-background-100 z-20">
 			{#if $view == 'd'}
 				<button
 					in:fly={{ delay: 200, duration: 200, y: 30, opacity: 0, easing: sineOut }}
@@ -95,7 +98,7 @@
 				>
 					{$year}
 				</p>
-			{:else}{/if}
+			{/if}
 			<button
 				on:click={() => {
 					if ($view == 'd') {
@@ -121,26 +124,26 @@
 				+
 			</button>
 		</div>
-		<div class="w-full grid grid-cols-7 bg-background-100 rotate-0 z-50">
-			{#each ["Pon", "Uto", "Str", "Štv", "Pia", "Sob", "Ned"] as weekDay}
-			<p class="aspect-square grid place-items-center text-center text-text-700">{weekDay}</p>
-			{/each}
-		</div>
 		{#if $view == 'd'}
+			<div
+				class="w-full grid grid-cols-7 bg-background-100 rotate-0 z-20"
+				in:zoom={{ delay: 200, duration: 200, scale: 0.8 }}
+				out:zoom={{ duration: 200, scale: 0.8 }}
+			>
+				{#each ['Pon', 'Uto', 'Str', 'Štv', 'Pia', 'Sob', 'Ned'] as weekDay}
+					<p class="aspect-square grid place-items-center text-center text-text-700">{weekDay}</p>
+				{/each}
+			</div>
 			<div
 				class="grid item"
 				in:zoom={{ delay: 200, duration: 200, scale: 0.8 }}
 				out:zoom={{ duration: 200, scale: 0.8 }}
 			>
 				{#key $month}
-				<!--
-					in:send={{ key: 'calendar' }}
-					out:receive={{ key: 'calendar' }}
-				-->
 					<div
 						class="grid grid-cols-7 grid-rows-6 gap-1 item"
-						in:fly={{duration: 300, y: $action * 50, opacity: 0}}
-						out:fly={{duration: 300, y: $action * -50, opacity: 0}}
+						in:fly={{ duration: 300, y: $action * 50, opacity: 0 }}
+						out:fly={{ duration: 300, y: $action * -50, opacity: 0 }}
 					>
 						<!--Last Month-->
 						{#each Array([...monthData][0].weekdayIndex) as _, i}
@@ -156,14 +159,19 @@
 						{/each}
 						<!--Month-->
 						{#each [...monthData] as day}
-							<p
+							<button
+								on:click={() => {
+									openPopup();
+								}}
 								class="
-								{isToday(day.JSDate) ? 'text-accent-500 bg-secondary-200 hover:bg-secondary-200' : 'text-text-600 hover:bg-background-200'}
+								{isToday(day.JSDate)
+									? 'text-accent-500 bg-secondary-200 hover:bg-secondary-300'
+									: 'text-text-600 hover:bg-background-200'}
 								col-start-{day.weekdayIndex + 1}
 								text-center grid place-items-center text-lg aspect-square rounded-full"
 							>
 								{day.day}
-							</p>
+								</button>
 						{/each}
 						<!--Next Month-->
 						{#each Array(42 - Array([...monthData][0].weekdayIndex).length - [...monthData].length) as _, i}
@@ -186,7 +194,7 @@
 			</div>
 		{:else if $view == 'm'}
 			<div
-				class="grid grid-cols-4 bg-blue-50 grid-rows-3 gap-1 item"
+				class="grid grid-cols-4 grid-rows-3 gap-1 item"
 				in:zoom={{ delay: 200, duration: 200, scale: 0.8 }}
 				out:zoom={{ duration: 200, scale: 0.8 }}
 			>
@@ -198,7 +206,10 @@
 						}}
 						class="
                 col-start-{(i + 1) % 4}
-                bg-blue-100 hover:bg-blue-200 text-center grid place-items-center text-lg aspect-square
+				{i+1 == $month ? 'text-accent-500 bg-secondary-200 hover:bg-secondary-300'
+				: 'text-text-600 hover:bg-background-200'}
+				hover:bg-background-200
+				text-center grid place-items-center text-lg aspect-square rounded-full
                 ">{getMonthNameFromIndex(i, 'short')}</button
 					>
 				{/each}
@@ -207,12 +218,20 @@
 	</div>
 </div>
 
+<Popup bind:openPopup={openPopup}>
+	<!--Create a vertical timeline from 0 to 24 hrs-->
+	<div class="grid grid-cols-1 grid-rows-24 gap-1 overflow-auto h-80">
+		{#each Array(24) as _, i}
+			<p class="grid place-items-center py-4 px-4 border-t border-b border-slate-400/20 text-text-600 w-80">{i}:00</p>
+		{/each}
+	</div>
+</Popup>
 
 <style>
-    .item {
-        grid-column-start: 1;
-        grid-column-end: 2;
-        grid-row-start: 1;
-        grid-row-end: 2;
-    }
+	.item {
+		grid-column-start: 1;
+		grid-column-end: 2;
+		grid-row-start: 3;
+		grid-row-end: 4;
+	}
 </style>

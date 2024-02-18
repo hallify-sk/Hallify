@@ -337,7 +337,9 @@
 			<div class="ml-auto mt-3 items-center flex flex-row flex-nowrap gap-2">
 				<button
 					type="reset"
-					on:click={closeRegisterPopup}
+					on:click={()=>{
+						closeRegisterPopup();
+					}}
 					class="px-4 py-2 bg-background-100 hover:bg-background-200 rounded-md text-text-900"
 					>Zrušiť</button
 				>
