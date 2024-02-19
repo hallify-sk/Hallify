@@ -11,3 +11,5 @@ vite.config.ts.timestamp-*
 pb/pocketbase
 pb/pocketbase.exe
 pb/pb_data
+pb/pb_data/logs.db
+*.db
