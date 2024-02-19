@@ -4,7 +4,7 @@ export const serializeNonPOJOs = (obj: unknown) => {
 
 export function isToday(date: Date) {
     const today = new Date();
-      
+
     if (today.toDateString() === date.toDateString()) {
       return true;
     }
@@ -28,4 +28,14 @@ export function getMonthNameFromIndex(idx: number, format: 'long' | 'short'){
 
 export function getNumberOfDaysInMonth(y: number, m: number){
   return new Date(y, m, 0).getDate();
+}
+
+export function dateToInputString(date: Date){
+
+  const year = date.getFullYear();
+  const month = (date.getMonth() + 1).toString().padStart(2, "0");
+  const day = date.getDate().toString().padStart(2, "0");
+
+  const formattedDate = `${year}-${month}-${day}`;
+  return formattedDate;
 }

@@ -8,13 +8,13 @@
 	import { Turnstile } from 'svelte-turnstile';
 	import { invalidateAll } from '$app/navigation';
 
-	let openLoginPopup: () => void;
+	export let openLoginPopup: () => void = () => {};
 	let loadingLogin: boolean = false;
-	let closeLoginPopup: () => void;
+	export let closeLoginPopup: () => void = () => {};
 
-	let openRegisterPopup: () => void;
+	export let openRegisterPopup: () => void = () => {};
 	let loadingRegister: boolean = false;
-	let closeRegisterPopup: () => void;
+	export let closeRegisterPopup: () => void = () => {};
 
 	//Validation variables
 	let emailLoginError: boolean = false;
@@ -37,6 +37,9 @@
 	$: profilePic = createAvatar(initials, {
 		seed: user?.name
 	}).toDataUriSync();
+
+	export let onAuth: () => void = () => {};
+
 </script>
 
 <header class="fixed top-0 left-0 w-screen bg-background-100 py-1 px-2">
@@ -132,6 +135,7 @@
 					}
 					if (result.type == 'success') {
 						closeLoginPopup();
+						onAuth?.();
 						await invalidateAll();
 					}
 					await applyAction(result);
@@ -256,6 +260,7 @@
 					}
 					if (result.type == 'success') {
 						closeRegisterPopup();
+						onAuth?.();
 						await invalidateAll();
 					}
 					await applyAction(result);

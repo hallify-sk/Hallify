@@ -1,12 +1,11 @@
 <script lang="ts">
 	import { Calendar } from 'headless-calendar';
-	import { getMonthName, getMonthNameFromIndex, getNumberOfDaysInMonth, isToday } from './lib';
+	import { dateToInputString, getMonthName, getMonthNameFromIndex, getNumberOfDaysInMonth, isToday } from './lib';
 	import { writable, type Writable } from 'svelte/store';
 	import { onDestroy } from 'svelte';
 	import { crossfade, fly } from 'svelte/transition';
 	import { sineIn, sineInOut, sineOut } from 'svelte/easing';
 	import { zoom } from './animations/zoom';
-	import Popup from './Popup.svelte';
 	const month = writable(new Date().getMonth() + 1);
 	const year = writable(new Date().getFullYear());
 	const action: Writable<number> = writable();
@@ -67,16 +66,12 @@
 		'col-start-7'
 	];
 
-	const [send, receive] = crossfade({
-		duration: 300,
-		easing: sineInOut
-	});
-
-	let openPopup: () => void;
+	export let selectedDateString: string | null = null;
+	export let selectedDate: Date | null = null;
 </script>
 
-<div class="flex flex-col pt-20 overflow-hidden">
-	<div class="p-2 bg-background-100 grid">
+<div class="flex flex-col overflow-hidden">
+	<div class="p-2 bg-background-100 grid rounded-md">
 		<div class="flex flex-row flex-nowrap gap-1 bg-background-100 z-20">
 			{#if $view == 'd'}
 				<button
@@ -160,15 +155,18 @@
 						<!--Month-->
 						{#each [...monthData] as day}
 							<button
+								data-selected={dateToInputString(day.JSDate) == selectedDateString}
+								disabled={ (new Date().getTime() + 1000 * 60 * 60 * 24 * 6) - day.JSDate.getTime() > 0}
 								on:click={() => {
-									openPopup();
+									selectedDate = day.JSDate;
+									selectedDateString = dateToInputString(day.JSDate);
 								}}
-								class="
+								class='
 								{isToday(day.JSDate)
 									? 'text-accent-500 bg-secondary-200 hover:bg-secondary-300'
-									: 'text-text-600 hover:bg-background-200'}
+									: 'text-text-600 hover:bg-background-200 disabled:text-text-400'}
 								col-start-{day.weekdayIndex + 1}
-								text-center grid place-items-center text-lg aspect-square rounded-full"
+								text-center grid place-items-center text-lg aspect-square rounded-full data-[selected="true"]:bg-primary-500 data-[selected="true"]:text-text-100'
 							>
 								{day.day}
 								</button>
@@ -217,15 +215,6 @@
 		{:else}{/if}
 	</div>
 </div>
-
-<Popup bind:openPopup={openPopup}>
-	<!--Create a vertical timeline from 0 to 24 hrs-->
-	<div class="grid grid-cols-1 grid-rows-24 gap-1 overflow-auto h-80">
-		{#each Array(24) as _, i}
-			<p class="grid place-items-center py-4 px-4 border-t border-b border-slate-400/20 text-text-600 w-80">{i}:00</p>
-		{/each}
-	</div>
-</Popup>
 
 <style>
 	.item {
