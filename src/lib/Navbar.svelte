@@ -7,7 +7,6 @@
 	import { initials } from '@dicebear/collection';
 	import { Turnstile } from 'svelte-turnstile';
 	import { invalidateAll } from '$app/navigation';
-
 	export let openLoginPopup: () => void = () => {};
 	let loadingLogin: boolean = false;
 	export let closeLoginPopup: () => void = () => {};
@@ -27,7 +26,7 @@
 	let errorRegisterMessage: string = '';
 
 	function turnstileLoginError() {
-		errorLoginMessage = 'Hello';
+		errorLoginMessage = 'Skúste obnoviť stránku (zlyhala CAPTCHA)';
 	}
 
 	export let user: AuthModel;
@@ -59,6 +58,7 @@
 			<div class="flex flex-row flex-nowrap gap-2 items-center">
 				{#if !user}
 					<button
+						type="button"
 						on:click={openLoginPopup}
 						class="px-4 py-2 bg-background-700 hover:bg-primary-600 rounded-md text-text-50"
 						>Prihlásenie</button
@@ -66,6 +66,7 @@
 				{:else}
 					<div class="relative group">
 						<button
+							type="button"
 							class="pl-1 pr-4 py-1 hover:bg-background-50 rounded-md text-text-600 flex flex-row gap-2 items-center"
 						>
 							{#if profilePic}
@@ -90,6 +91,7 @@
 								}}
 							>
 								<button 
+									type="submit"
 									class="px-4 py-2 bg-background-700 hover:bg-primary-600 rounded-md text-text-50 w-full"
 								>
 								Odhlásiť sa

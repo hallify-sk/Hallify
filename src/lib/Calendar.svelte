@@ -6,6 +6,7 @@
 	import { crossfade, fly } from 'svelte/transition';
 	import { sineIn, sineInOut, sineOut } from 'svelte/easing';
 	import { zoom } from './animations/zoom';
+	import type { RecordModel } from 'pocketbase';
 	const month = writable(new Date().getMonth() + 1);
 	const year = writable(new Date().getFullYear());
 	const action: Writable<number> = writable();
@@ -13,6 +14,8 @@
 	const view: Writable<'y' | 'm' | 'd'> = writable('d');
 
 	let monthData: Calendar;
+
+	export let blockedDays: RecordModel[] = [];
 
 	const unsubscribeMonth = month.subscribe(() => {
 		monthData = Calendar.ofMonth($year, $month, { startWeekdayIndex: 1 });
@@ -75,6 +78,7 @@
 		<div class="flex flex-row flex-nowrap gap-1 bg-background-100 z-20">
 			{#if $view == 'd'}
 				<button
+					type="button"
 					in:fly={{ delay: 200, duration: 200, y: 30, opacity: 0, easing: sineOut }}
 					out:fly={{ duration: 200, y: -30, opacity: 0, easing: sineIn }}
 					class="w-full col-span-4 text-left px-2 hover:bg-background-50 rounded text-text-900 dark:hover:bg-background-200 whitespace-nowrap"
@@ -94,7 +98,7 @@
 					{$year}
 				</p>
 			{/if}
-			<button
+			<button type="button"
 				on:click={() => {
 					if ($view == 'd') {
 						subtractMonthHandleYear();
@@ -106,7 +110,7 @@
 			>
 				-
 			</button>
-			<button
+			<button type="button"
 				on:click={() => {
 					if ($view == 'd') {
 						addMonthHandleYear();
@@ -154,9 +158,9 @@
 						{/each}
 						<!--Month-->
 						{#each [...monthData] as day}
-							<button
+							<button type="button"
 								data-selected={dateToInputString(day.JSDate) == selectedDateString}
-								disabled={ (new Date().getTime() + 1000 * 60 * 60 * 24 * 6) - day.JSDate.getTime() > 0}
+								disabled={ (new Date().getTime() + 1000 * 60 * 60 * 24 * 6) - day.JSDate.getTime() > 0 || blockedDays.some(i => new Date(i.date).getTime() === day.JSDate.getTime())}
 								on:click={() => {
 									selectedDate = day.JSDate;
 									selectedDateString = dateToInputString(day.JSDate);
@@ -166,9 +170,12 @@
 									? 'text-accent-500 bg-secondary-200 hover:bg-secondary-300'
 									: 'text-text-600 hover:bg-background-200 disabled:text-text-400'}
 								col-start-{day.weekdayIndex + 1}
-								text-center grid place-items-center text-lg aspect-square rounded-full data-[selected="true"]:bg-primary-500 data-[selected="true"]:text-text-100'
+								text-center grid place-items-center text-lg aspect-square rounded-full data-[selected="true"]:bg-primary-500 data-[selected="true"]:text-text-100 relative'
 							>
 								{day.day}
+								{#if blockedDays.some(i => new Date(i.date).getTime() === day.JSDate.getTime())}
+									<div class="absolute block top-1 right-1 bg-red-500 rounded-full w-1.5 h-1.5"></div>
+								{/if}
 								</button>
 						{/each}
 						<!--Next Month-->
@@ -198,6 +205,7 @@
 			>
 				{#each Array(12) as _, i}
 					<button
+						type="button"
 						on:click={() => {
 							setMonth(i + 1);
 							setView('d');

@@ -1,5 +1,5 @@
 import { SECRET_TURNSTILE_TOKEN } from '$env/static/private';
-import { PUBLIC_DEV, PUBLIC_TURNSTILE_URL } from '$env/static/public';
+import { PUBLIC_DEV, PUBLIC_TURNSTILE_URL, PUBLIC_CALENDAR_EXPIRE } from '$env/static/public';
 import { fail } from '@sveltejs/kit';
 import PocketBase from 'pocketbase';
 
@@ -105,11 +105,48 @@ export const actions = {
 			return fail(404, { incorrect: true, message: "E-Mail neexistuje alebo heslo je neplatné", type: "auth" });
 		}
 	},
+	reserveDate: async ({ request, getClientAddress, locals }) => {
+		const data = await request.formData();
+		const date = data.get('date')?.toString();
+		const turnstile = data.get("cf-turnstile-response")?.toString();
+
+		if(!locals.user){
+			return fail(401, {incorrect: true, message: "Pre vybratie dátumu musíte byť prihlásený.", type: "auth"});
+		}
+		const formData = new FormData();
+		if(PUBLIC_DEV != "true") {
+            formData.append("secret", SECRET_TURNSTILE_TOKEN)
+            formData.append("response", turnstile as string)
+            formData.append('remoteip', getClientAddress());
+            const result: Response = await fetch(PUBLIC_TURNSTILE_URL, {
+                body: formData,
+                method: 'POST',
+            });
+            const outcome = await result.json();
+            if(!outcome.success) return fail(400, { incorrect: true, message: "CAPTCHA verifikácia zlyhala.", type: "auth"});
+        }
+
+		if(!date || date.trim() == ""){
+			return fail(400, {incorrect: true, message: "Pre udalosť sa vyžaduje dátum.", type: "date"});
+		};
+
+		try{
+			//Remove any previous reservations;
+			const reservation = await (locals.pb as PocketBase).collection("reservations").getFirstListItem(`user="${locals.user.id}"`);
+			await (locals.pb as PocketBase).collection("reservations").delete(reservation.id);
+			const expires = new Date(new Date().getTime() + parseInt(PUBLIC_CALENDAR_EXPIRE)*60000);
+			await (locals.pb as PocketBase).collection("reservations").create({user: locals.user.id, date, expires});
+			return {success: true};
+		}catch(e){
+			return fail (400);
+		}
+	}
 };
 
 /** @type {import('./$types').PageServerLoad} */
 export async function load({locals}) {
 	return {
-		stages: await locals.pb.collection('stages').getFullList({ sort: 'created' })
+		reservations: await (locals.pb as PocketBase).collection("reservations").getFullList({ sort: 'created'}),
+		stages: await (locals.pb as PocketBase).collection('stages').getFullList({ sort: 'created' })
 	};
 }

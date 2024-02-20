@@ -2,6 +2,11 @@ import { PUBLIC_DEV } from '$env/static/public';
 import { LOCAL_POCKETBASE_URL } from '$env/static/private';
 import PocketBase from 'pocketbase';
 
+import schedule from "node-schedule"
+const job = schedule.scheduleJob('*/1 * * * *', function () {
+console.log('This runs every minute')
+})
+
 export const handle = async ({event, resolve}) => {
     event.locals.authExpired = false;
     event.locals.pb = new PocketBase(LOCAL_POCKETBASE_URL);

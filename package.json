@@ -44,6 +44,7 @@
 		"canvas": "^2.11.2",
 		"headless-calendar": "^3.0.0",
 		"konva": "^9.2.3",
+		"node-schedule": "^2.1.1",
 		"pocketbase": "^0.20.1",
 		"sharp": "^0.30.4",
 		"svelte-konva": "^0.3.1",
