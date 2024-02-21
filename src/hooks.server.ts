@@ -2,10 +2,14 @@ import { PUBLIC_DEV } from '$env/static/public';
 import { LOCAL_POCKETBASE_URL } from '$env/static/private';
 import PocketBase from 'pocketbase';
 
+const pocketbase = new PocketBase(LOCAL_POCKETBASE_URL);
+
 import schedule from "node-schedule"
-const job = schedule.scheduleJob('*/1 * * * *', function () {
-console.log('This runs every minute')
-})
+schedule.scheduleJob('*/1 * * * *', async function () {
+    (await pocketbase.collection("reservations").getFullList()).forEach((v) => {
+        console.log(new Date(v.expires).getTime() < new Date().getTime());
+    })
+});
 
 export const handle = async ({event, resolve}) => {
     event.locals.authExpired = false;
