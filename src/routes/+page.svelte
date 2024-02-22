@@ -108,7 +108,7 @@
 			{#if errorCalendarMessage}
 				<p class="text-red-500 mb-2 max-w-xs">{errorCalendarMessage}</p>
 			{/if}
-			<Calendar bind:selectedDate bind:selectedDateString blockedDays={data.reservations} user={data.user?-.id || ""} />
+			<Calendar bind:selectedDate bind:selectedDateString blockedDays={data.reservations} user={data.user?.id || ""} />
 			<p class="text-text-700 my-2">
 				Vybraný deň:
 				{#if selectedDate}
