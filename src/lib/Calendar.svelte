@@ -16,6 +16,7 @@
 	let monthData: Calendar;
 
 	export let blockedDays: RecordModel[] = [];
+	export let user: string = "";
 
 	const unsubscribeMonth = month.subscribe(() => {
 		monthData = Calendar.ofMonth($year, $month, { startWeekdayIndex: 1 });
@@ -160,7 +161,7 @@
 						{#each [...monthData] as day}
 							<button type="button"
 								data-selected={dateToInputString(day.JSDate) == selectedDateString}
-								disabled={ (new Date().getTime() + 1000 * 60 * 60 * 24 * 6) - day.JSDate.getTime() > 0 || blockedDays.some(i => new Date(i.date).getTime() === day.JSDate.getTime())}
+								disabled={ (new Date().getTime() + 1000 * 60 * 60 * 24 * 6) - day.JSDate.getTime() > 0}
 								on:click={() => {
 									selectedDate = day.JSDate;
 									selectedDateString = dateToInputString(day.JSDate);

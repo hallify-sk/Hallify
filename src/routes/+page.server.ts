@@ -129,15 +129,19 @@ export const actions = {
 		if(!date || date.trim() == ""){
 			return fail(400, {incorrect: true, message: "Pre udalosť sa vyžaduje dátum.", type: "date"});
 		};
-
 		try{
 			//Remove any previous reservations;
 			const reservation = await (locals.pb as PocketBase).collection("reservations").getFirstListItem(`user="${locals.user.id}"`);
 			await (locals.pb as PocketBase).collection("reservations").delete(reservation.id);
+		}catch(e){
+			//No need to do anything.
+		}
+		try{
 			const expires = new Date(new Date().getTime() + parseInt(PUBLIC_CALENDAR_EXPIRE)*60000);
 			await (locals.pb as PocketBase).collection("reservations").create({user: locals.user.id, date, expires});
 			return {success: true};
 		}catch(e){
+			console.log(e);
 			return fail (400);
 		}
 	}

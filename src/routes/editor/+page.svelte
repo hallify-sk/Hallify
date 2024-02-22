@@ -11,7 +11,7 @@
     let borderThickness = 10;
     let color = "#fff";
     let tablesDB = data.tables as any;
-	import { theme } from "$lib/stores/theme";
+	import { theme } from "$lib/stores/theme.js";
     theme.set("light");
 
     import { brush, modifyZones, rerender } from "$lib/stores/stage";

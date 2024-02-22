@@ -1,13 +1,24 @@
 import { PUBLIC_DEV } from '$env/static/public';
-import { LOCAL_POCKETBASE_URL } from '$env/static/private';
+import { LOCAL_POCKETBASE_URL, PB_ADMIN_LOGIN, PB_ADMIN_PASSWORD } from '$env/static/private';
 import PocketBase from 'pocketbase';
 
 const pocketbase = new PocketBase(LOCAL_POCKETBASE_URL);
+
+//Give backend full access to work with DB (will investigate this later to find a more secure solution)
+await pocketbase.admins.authWithPassword(PB_ADMIN_LOGIN, PB_ADMIN_PASSWORD);
 
 import schedule from "node-schedule"
 schedule.scheduleJob('*/1 * * * *', async function () {
     (await pocketbase.collection("reservations").getFullList()).forEach((v) => {
         console.log(new Date(v.expires).getTime() < new Date().getTime());
+        if(new Date(v.expires).getTime() < new Date().getTime()){
+            //Delete the record, it expired.
+            try{
+                pocketbase.collection("reservations").delete(v.id);
+            }catch(e){
+                console.error(e);
+            }
+        }
     })
 });
 

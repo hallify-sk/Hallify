@@ -5,9 +5,11 @@
 	import Calendar from '$lib/Calendar.svelte';
 	import Navbar from '$lib/Navbar.svelte';
 	import Popup from '$lib/Popup.svelte';
+	import { invalidateAll } from '$app/navigation';
+	import {onMount, onDestroy} from "svelte";
 	export let data;
 	console.log(data);
-
+	
 	let openCalendarPopup: () => void;
 	let closeCalendarPopup: () => void;
 
@@ -32,6 +34,19 @@
 	function turnstileLoginError() {
 		errorCalendarMessage = 'Skúste obnoviť stránku (zlyhala CAPTCHA)';
 	}
+
+	let pollingInterval: NodeJS.Timeout;
+	
+	onMount(async ()=>{
+		pollingInterval = setInterval(()=>{
+			invalidateAll();
+		}, 5000);
+	});
+
+	onDestroy(()=>{
+		clearInterval(pollingInterval);
+	});
+
 </script>
 
 <Navbar
@@ -74,6 +89,8 @@
 				console.log(result);
 				if(result.type == "success"){
 					applyAction(result);
+					closeCalendarPopup();
+					openHallPopup();
 				}else if(result.type == "failure"){
 					errorCalendarMessage = result.data?.message;
 				}
@@ -91,14 +108,14 @@
 			{#if errorCalendarMessage}
 				<p class="text-red-500 mb-2 max-w-xs">{errorCalendarMessage}</p>
 			{/if}
-			<Calendar bind:selectedDate bind:selectedDateString blockedDays={data.reservations} />
+			<Calendar bind:selectedDate bind:selectedDateString blockedDays={data.reservations} user={data.user?-.id || ""} />
 			<p class="text-text-700 my-2">
 				Vybraný deň:
 				{#if selectedDate}
 					<span class="text-text-600">{selectedDate?.toLocaleDateString('sk')}</span>
 				{/if}
 			</p>
-			<input type="date" name="date" id="date" bind:value={selectedDateString} />
+			<input type="date" class="hidden" name="date" id="date" bind:value={selectedDateString} />
 		</div>
 		<div class="ml-auto mt-3 items-center flex flex-row flex-nowrap gap-2">
 			<button
