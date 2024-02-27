@@ -159,9 +159,10 @@
 						{/each}
 						<!--Month-->
 						{#each [...monthData] as day}
+						<!--|| blockedDays.filter(i => i.user != user).some(i => new Date(i.date).getTime() == day.JSDate.getTime())-->
 							<button type="button"
 								data-selected={dateToInputString(day.JSDate) == selectedDateString}
-								disabled={ (new Date().getTime() + 1000 * 60 * 60 * 24 * 6) - day.JSDate.getTime() > 0}
+								disabled={ (new Date().getTime() + 1000 * 60 * 60 * 24 * 6) - day.JSDate.getTime() > 0 || blockedDays.filter(i => i.user != user).some(i => new Date(i.date).getTime() == day.JSDate.getTime())}
 								on:click={() => {
 									selectedDate = day.JSDate;
 									selectedDateString = dateToInputString(day.JSDate);

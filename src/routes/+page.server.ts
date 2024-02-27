@@ -140,9 +140,13 @@ export const actions = {
 			const expires = new Date(new Date().getTime() + parseInt(PUBLIC_CALENDAR_EXPIRE)*60000);
 			await (locals.pb as PocketBase).collection("reservations").create({user: locals.user.id, date, expires});
 			return {success: true};
-		}catch(e){
-			console.log(e);
-			return fail (400);
+		}catch(e: any){
+			console.log(e.data.data);
+			if(e?.data?.data?.date){
+				return fail (400, {incorrect: true, message: "Dátum už bol zarezervovaný."});
+			}else{
+				return fail (500, {incorrect: true, message: "Nastala serverová chyba. Skúste to prosím neskôr."});
+			}
 		}
 	}
 };
@@ -151,6 +155,9 @@ export const actions = {
 export async function load({locals}) {
 	return {
 		reservations: await (locals.pb as PocketBase).collection("reservations").getFullList({ sort: 'created'}),
-		stages: await (locals.pb as PocketBase).collection('stages').getFullList({ sort: 'created' })
+		stages: await (locals.pb as PocketBase).collection('stages').getFullList({ sort: 'created' }),
+		categories: (await (locals.pb as PocketBase).collection('stage_categories').getFullList({ sort: 'created' })).map(i => {
+			return {id: i.id, name: i.name};
+		})
 	};
 }

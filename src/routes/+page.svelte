@@ -3,6 +3,7 @@
 	import { PUBLIC_TURNSTILE_TOKEN } from '$env/static/public';
 	import { Turnstile } from 'svelte-turnstile';
 	import Calendar from '$lib/Calendar.svelte';
+	import Select from '$lib/Select.svelte';
 	import Navbar from '$lib/Navbar.svelte';
 	import Popup from '$lib/Popup.svelte';
 	import { invalidateAll } from '$app/navigation';
@@ -46,7 +47,10 @@
 	onDestroy(()=>{
 		clearInterval(pollingInterval);
 	});
+	let category: string;
+	let validateCategory: boolean = true;
 
+	let nameRegisterError = false;
 </script>
 
 <Navbar
@@ -77,7 +81,7 @@
 	>
 </div>
 
-<Popup bind:openPopup={openCalendarPopup} bind:closePopup={closeCalendarPopup}>
+<Popup bind:openPopup={openCalendarPopup} bind:closePopup={closeCalendarPopup} onClose={()=>{selectedDate = null; selectedDateString = null; errorCalendarMessage = "";}}>
 	<form
 		class="flex flex-col"
 		method="post"
@@ -120,11 +124,7 @@
 		<div class="ml-auto mt-3 items-center flex flex-row flex-nowrap gap-2">
 			<button
 				type="reset"
-				on:click={() => {
-					closeCalendarPopup();
-					selectedDate = null;
-					selectedDateString = null;
-				}}
+				on:click={closeCalendarPopup}
 				class="px-4 py-2 bg-background-100 hover:bg-background-200 rounded-md text-text-900"
 				>Zrušiť</button
 			>
@@ -157,21 +157,40 @@
 		<div class="w-80">
 			<h2 class="text-text-700 text-xl mb-2">Vytvorenie události</h2>
 			<h3 class="text-text-500 mb-4">Špecifikácia sály</h3>
+			<Select bind:value={category} bind:invalid={validateCategory} options={data.categories} defaultText="Category"/>
+			<fieldset class="relative text-input">
+				<input
+					on:change={() => (nameRegisterError = false)}
+					placeholder=""
+					type="text"
+					required={true}
+					id="name"
+					name="name"
+					class="w-80 appearance-none bg-background-100 text-text-600 text-left rounded-md pb-0.5 pt-5 px-2 peer border {nameRegisterError
+						? 'border-red-500'
+						: ''}"
+				/>
+				<label
+					for="name"
+					class="absolute top-0.5 left-1 {nameRegisterError
+						? 'text-red-500'
+						: 'text-text-400'} text-sm peer-focus:top-0.5 peer-focus:left-1 peer-focus:text-text-400 peer-focus:text-sm peer-placeholder-shown:top-3 peer-placeholder-shown:left-1 peer-placeholder-shown:text-text-500 peer-placeholder-shown:text-base pointer-events-none ml-1 duration-75"
+					>Celé meno</label
+				>
+			</fieldset>
 		</div>
 		<button
 			type="reset"
 			on:click={() => {
-				closeCalendarPopup();
-				selectedDate = null;
-				selectedDateString = null;
+				closeHallPopup();
+				openCalendarPopup();
 			}}
 			class="px-4 py-2 bg-background-100 hover:bg-background-200 rounded-md text-text-900"
 			>Zrušiť</button
 		>
 		<button
 			on:click={() => {
-				closeCalendarPopup();
-				openLoginPopup();
+				closeHallPopup();
 			}}
 			type="button"
 			class="px-4 py-2 bg-background-700 hover:bg-primary-600 rounded-md text-text-50 w-[120px]"

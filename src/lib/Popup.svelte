@@ -2,11 +2,15 @@
 	export let popupVisible = false;
 
 	export function openPopup() {
+		onOpen();
 		popupVisible = !popupVisible;
 	}
 	export function closePopup() {
+		onClose();
 		popupVisible = false;
 	}
+	export let onClose: () => void = () => {};
+	export let onOpen: () => void = () => {};
 </script>
 
 {#if popupVisible}
