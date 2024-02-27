@@ -7,10 +7,10 @@
 	import Navbar from '$lib/Navbar.svelte';
 	import Popup from '$lib/Popup.svelte';
 	import { invalidateAll } from '$app/navigation';
-	import {onMount, onDestroy} from "svelte";
+	import { onMount, onDestroy } from 'svelte';
 	export let data;
 	console.log(data);
-	
+
 	let openCalendarPopup: () => void;
 	let closeCalendarPopup: () => void;
 
@@ -37,20 +37,21 @@
 	}
 
 	let pollingInterval: NodeJS.Timeout;
-	
-	onMount(async ()=>{
-		pollingInterval = setInterval(()=>{
+
+	onMount(async () => {
+		pollingInterval = setInterval(() => {
 			invalidateAll();
 		}, 5000);
 	});
 
-	onDestroy(()=>{
+	onDestroy(() => {
 		clearInterval(pollingInterval);
 	});
 	let category: string;
 	let validateCategory: boolean = true;
 
 	let nameRegisterError = false;
+	let personCountError = false;
 </script>
 
 <Navbar
@@ -81,7 +82,15 @@
 	>
 </div>
 
-<Popup bind:openPopup={openCalendarPopup} bind:closePopup={closeCalendarPopup} onClose={()=>{selectedDate = null; selectedDateString = null; errorCalendarMessage = "";}}>
+<Popup
+	bind:openPopup={openCalendarPopup}
+	bind:closePopup={closeCalendarPopup}
+	onClose={() => {
+		selectedDate = null;
+		selectedDateString = null;
+		errorCalendarMessage = '';
+	}}
+>
 	<form
 		class="flex flex-col"
 		method="post"
@@ -91,11 +100,11 @@
 			return ({ result }) => {
 				isLoadingCalendar = false;
 				console.log(result);
-				if(result.type == "success"){
+				if (result.type == 'success') {
 					applyAction(result);
 					closeCalendarPopup();
 					openHallPopup();
-				}else if(result.type == "failure"){
+				} else if (result.type == 'failure') {
 					errorCalendarMessage = result.data?.message;
 				}
 			};
@@ -112,7 +121,12 @@
 			{#if errorCalendarMessage}
 				<p class="text-red-500 mb-2 max-w-xs">{errorCalendarMessage}</p>
 			{/if}
-			<Calendar bind:selectedDate bind:selectedDateString blockedDays={data.reservations} user={data.user?.id || ""} />
+			<Calendar
+				bind:selectedDate
+				bind:selectedDateString
+				blockedDays={data.reservations}
+				user={data.user?.id || ''}
+			/>
 			<p class="text-text-700 my-2">
 				Vybraný deň:
 				{#if selectedDate}
@@ -152,51 +166,58 @@
 	</form>
 </Popup>
 
-<Popup bind:openPopup={openHallPopup} bind:closePopup={closeHallPopup}>
+<Popup bind:openPopup={openHallPopup} bind:closePopup={closeHallPopup} popupVisible={true}>
 	<form action="/?" method="POST">
 		<div class="w-80">
 			<h2 class="text-text-700 text-xl mb-2">Vytvorenie události</h2>
 			<h3 class="text-text-500 mb-4">Špecifikácia sály</h3>
-			<Select bind:value={category} bind:invalid={validateCategory} options={data.categories} defaultText="Category"/>
-			<fieldset class="relative text-input">
+			<Select
+				bind:value={category}
+				bind:invalid={validateCategory}
+				options={data.categories}
+				defaultText="Typ události"
+			/>
+			<fieldset class="relative text-input mt-1">
 				<input
 					on:change={() => (nameRegisterError = false)}
 					placeholder=""
-					type="text"
+					type="number"
 					required={true}
 					id="name"
 					name="name"
-					class="w-80 appearance-none bg-background-100 text-text-600 text-left rounded-md pb-0.5 pt-5 px-2 peer border {nameRegisterError
+					class="w-80 appearance-none bg-background-100 text-text-600 text-left rounded-md pb-0.5 pt-5 px-2 peer border mt-0.5 {personCountError
 						? 'border-red-500'
 						: ''}"
 				/>
 				<label
 					for="name"
-					class="absolute top-0.5 left-1 {nameRegisterError
+					class="absolute top-0.5 left-1 {personCountError
 						? 'text-red-500'
 						: 'text-text-400'} text-sm peer-focus:top-0.5 peer-focus:left-1 peer-focus:text-text-400 peer-focus:text-sm peer-placeholder-shown:top-3 peer-placeholder-shown:left-1 peer-placeholder-shown:text-text-500 peer-placeholder-shown:text-base pointer-events-none ml-1 duration-75"
-					>Celé meno</label
+					>Počet osôb</label
 				>
 			</fieldset>
 		</div>
-		<button
-			type="reset"
-			on:click={() => {
-				closeHallPopup();
-				openCalendarPopup();
-			}}
-			class="px-4 py-2 bg-background-100 hover:bg-background-200 rounded-md text-text-900"
-			>Zrušiť</button
-		>
-		<button
-			on:click={() => {
-				closeHallPopup();
-			}}
-			type="button"
-			class="px-4 py-2 bg-background-700 hover:bg-primary-600 rounded-md text-text-50 w-[120px]"
-		>
-			Prihlásiť sa
-		</button>
+		<div class="ml-auto mt-3 items-center flex flex-row flex-nowrap gap-2">
+			<button
+				type="reset"
+				on:click={() => {
+					closeHallPopup();
+					openCalendarPopup();
+				}}
+				class="px-4 py-2 bg-background-100 hover:bg-background-200 rounded-md text-text-900"
+				>Zrušiť</button
+			>
+			<button
+				on:click={() => {
+					closeHallPopup();
+				}}
+				type="button"
+				class="px-4 py-2 bg-background-700 hover:bg-primary-600 rounded-md text-text-50 w-[120px]"
+			>
+				Prihlásiť sa
+			</button>
+		</div>
 	</form>
 </Popup>
 
@@ -205,3 +226,15 @@
     <a href="/editor/{stage.id}">Stage #{i+1}</a>
 {/each}
 -->
+
+<style lang="postcss">
+	input[type='number'] {
+		-moz-appearance: textfield;
+		appearance: textfield;
+		@apply m-0;
+	}
+	input[type='number']::-webkit-inner-spin-button,
+	input[type='number']::-webkit-outer-spin-button {
+		@apply appearance-none m-0;
+	}
+</style>
