@@ -8,6 +8,7 @@
 	import Popup from '$lib/Popup.svelte';
 	import { invalidateAll } from '$app/navigation';
 	import { onMount, onDestroy } from 'svelte';
+	import Checkbox from '$lib/Checkbox.svelte';
 	export let data;
 	console.log(data);
 
@@ -52,6 +53,9 @@
 
 	let nameRegisterError = false;
 	let personCountError = false;
+
+	let pocetLudi: number;
+	let isLoadingHall: boolean = false;
 </script>
 
 <Navbar
@@ -124,7 +128,7 @@
 			<Calendar
 				bind:selectedDate
 				bind:selectedDateString
-				blockedDays={data.reservations}
+				blockedDays={data.tempReservations}
 				user={data.user?.id || ''}
 			/>
 			<p class="text-text-700 my-2">
@@ -167,7 +171,21 @@
 </Popup>
 
 <Popup bind:openPopup={openHallPopup} bind:closePopup={closeHallPopup} popupVisible={true}>
-	<form action="/?" method="POST">
+	<form action="/?/saveReservation" method="POST"
+	use:enhance={() => {
+		isLoadingHall = true;
+		return ({ result }) => {
+			isLoadingHall = false;
+			console.log(result);
+			if (result.type == 'success') {
+				applyAction(result);
+				closeCalendarPopup();
+				openHallPopup();
+			} else if (result.type == 'failure') {
+				errorCalendarMessage = result.data?.message;
+			}
+		};
+	}}>
 		<div class="w-80">
 			<h2 class="text-text-700 text-xl mb-2">Vytvorenie události</h2>
 			<h3 class="text-text-500 mb-4">Špecifikácia sály</h3>
@@ -179,12 +197,18 @@
 			/>
 			<fieldset class="relative text-input mt-1">
 				<input
-					on:change={() => (nameRegisterError = false)}
+					on:change={() => (personCountError = false)}
+					on:blur={()=>{
+						if (!pocetLudi) {
+							personCountError = true;
+						}
+					}}
+					bind:value={pocetLudi}
 					placeholder=""
 					type="number"
 					required={true}
-					id="name"
-					name="name"
+					id="pocetLudi"
+					name="pocetLudi"
 					class="w-80 appearance-none bg-background-100 text-text-600 text-left rounded-md pb-0.5 pt-5 px-2 peer border mt-0.5 {personCountError
 						? 'border-red-500'
 						: ''}"
@@ -196,6 +220,18 @@
 						: 'text-text-400'} text-sm peer-focus:top-0.5 peer-focus:left-1 peer-focus:text-text-400 peer-focus:text-sm peer-placeholder-shown:top-3 peer-placeholder-shown:left-1 peer-placeholder-shown:text-text-500 peer-placeholder-shown:text-base pointer-events-none ml-1 duration-75"
 					>Počet osôb</label
 				>
+			</fieldset>
+			<fieldset class="mt-1 flex flex-row items-center gap-2">
+				<Checkbox name="stolypodium"/>
+				<label class="text-text-600" for="stolypodium">Stoly na pódiu</label>
+			</fieldset>
+			<fieldset class="mt-1 flex flex-row items-center gap-2">
+				<Checkbox name="catering"/>
+				<label class="text-text-600" for="catering">Catering</label>
+			</fieldset>
+			<fieldset class="mt-1 flex flex-row items-center gap-2">
+				<Checkbox name="candy"/>
+				<label class="text-text-600" for="candy">Candy bar</label>
 			</fieldset>
 		</div>
 		<div class="ml-auto mt-3 items-center flex flex-row flex-nowrap gap-2">
@@ -209,13 +245,10 @@
 				>Zrušiť</button
 			>
 			<button
-				on:click={() => {
-					closeHallPopup();
-				}}
-				type="button"
+				type="submit"
 				class="px-4 py-2 bg-background-700 hover:bg-primary-600 rounded-md text-text-50 w-[120px]"
 			>
-				Prihlásiť sa
+				Potvrdiť
 			</button>
 		</div>
 	</form>

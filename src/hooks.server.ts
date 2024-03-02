@@ -9,8 +9,7 @@ await pocketbase.admins.authWithPassword(PB_ADMIN_LOGIN, PB_ADMIN_PASSWORD);
 
 import schedule from "node-schedule"
 schedule.scheduleJob('*/1 * * * *', async function () {
-    (await pocketbase.collection("reservations").getFullList()).forEach((v) => {
-        console.log(new Date(v.expires).getTime() < new Date().getTime());
+    (await pocketbase.collection("temp_reservations").getFullList()).forEach((v) => {
         if(new Date(v.expires).getTime() < new Date().getTime()){
             //Delete the record, it expired.
             try{

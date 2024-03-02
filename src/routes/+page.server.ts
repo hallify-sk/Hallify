@@ -154,7 +154,7 @@ export const actions = {
 /** @type {import('./$types').PageServerLoad} */
 export async function load({locals}) {
 	return {
-		reservations: await (locals.pb as PocketBase).collection("reservations").getFullList({ sort: 'created'}),
+		tempReservations: await (locals.pb as PocketBase).collection("temp_reservations").getFullList({ sort: 'created'}),
 		stages: await (locals.pb as PocketBase).collection('stages').getFullList({ sort: 'created' }),
 		categories: (await (locals.pb as PocketBase).collection('stage_categories').getFullList({ sort: 'created' })).map(i => {
 			return {id: i.id, name: i.name};
