@@ -48,7 +48,6 @@
 	onDestroy(() => {
 		clearInterval(pollingInterval);
 	});
-	let category: string;
 	let validateCategory: boolean = true;
 
 	let nameRegisterError = false;
@@ -56,6 +55,10 @@
 
 	let pocetLudi: number;
 	let isLoadingHall: boolean = false;
+
+	setInterval(()=>{
+		console.log(selectedDateString);
+	},1000);
 </script>
 
 <Navbar
@@ -91,14 +94,14 @@
 	bind:closePopup={closeCalendarPopup}
 	onClose={() => {
 		selectedDate = null;
-		selectedDateString = null;
+		//selectedDateString = null;
 		errorCalendarMessage = '';
 	}}
 >
 	<form
 		class="flex flex-col"
 		method="post"
-		action="/?/reserveDate"
+		action="/?/reserveDateTemp"
 		use:enhance={() => {
 			isLoadingCalendar = true;
 			return ({ result }) => {
@@ -171,8 +174,10 @@
 </Popup>
 
 <Popup bind:openPopup={openHallPopup} bind:closePopup={closeHallPopup} popupVisible={true}>
-	<form action="/?/saveReservation" method="POST"
-	use:enhance={() => {
+	<form action="/?/reserveDate" method="POST"
+	use:enhance={({ formData }) => {
+		console.log(selectedDateString);
+		if(selectedDateString) formData.append("date", selectedDateString);
 		isLoadingHall = true;
 		return ({ result }) => {
 			isLoadingHall = false;
@@ -190,7 +195,7 @@
 			<h2 class="text-text-700 text-xl mb-2">Vytvorenie události</h2>
 			<h3 class="text-text-500 mb-4">Špecifikácia sály</h3>
 			<Select
-				bind:value={category}
+				name="type"
 				bind:invalid={validateCategory}
 				options={data.categories}
 				defaultText="Typ události"
@@ -202,11 +207,16 @@
 						if (!pocetLudi) {
 							personCountError = true;
 						}
+						if(pocetLudi < 0 || pocetLudi > 120){
+							personCountError = true;
+						}
 					}}
 					bind:value={pocetLudi}
 					placeholder=""
 					type="number"
 					required={true}
+					min=0
+					max=120
 					id="pocetLudi"
 					name="pocetLudi"
 					class="w-80 appearance-none bg-background-100 text-text-600 text-left rounded-md pb-0.5 pt-5 px-2 peer border mt-0.5 {personCountError
@@ -221,18 +231,12 @@
 					>Počet osôb</label
 				>
 			</fieldset>
-			<fieldset class="mt-1 flex flex-row items-center gap-2">
-				<Checkbox name="stolypodium"/>
-				<label class="text-text-600" for="stolypodium">Stoly na pódiu</label>
-			</fieldset>
-			<fieldset class="mt-1 flex flex-row items-center gap-2">
-				<Checkbox name="catering"/>
-				<label class="text-text-600" for="catering">Catering</label>
-			</fieldset>
-			<fieldset class="mt-1 flex flex-row items-center gap-2">
-				<Checkbox name="candy"/>
-				<label class="text-text-600" for="candy">Candy bar</label>
-			</fieldset>
+			{#each data.addons as addon}
+				<fieldset class="mt-1 flex flex-row items-center gap-2">
+					<Checkbox name={addon.id}/>
+					<label class="text-text-600" for={addon.id}>{addon.name} <span class="text-secondary-500 text-sm">{addon.price ? `${addon.price}€${addon.hourly ? "/hod." : ""}` : ``}</span></label>
+				</fieldset>
+			{/each}
 		</div>
 		<div class="ml-auto mt-3 items-center flex flex-row flex-nowrap gap-2">
 			<button

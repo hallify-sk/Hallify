@@ -74,7 +74,7 @@
 							{/if}
 							<p>{user.name}</p>
 						</button>
-						<div class="hidden group-focus-within:flex focus-within:flex focus:flex flex-col absolute top-10 rounded-b-md bg-background-100 border border-background-200 w-52 px-2 py-2 gap-1">
+						<div class="hidden group-focus-within:flex focus-within:flex focus:flex flex-col absolute top-10 rounded-b-md bg-background-100 w-52 px-2 py-2 gap-1">
 							<a href="/"
 									class="px-4 py-2 hover:bg-background-50 rounded-md text-text-600 w-full text-center"
 								>

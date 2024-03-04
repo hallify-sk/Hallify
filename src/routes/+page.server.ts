@@ -105,7 +105,7 @@ export const actions = {
 			return fail(404, { incorrect: true, message: "E-Mail neexistuje alebo heslo je neplatné", type: "auth" });
 		}
 	},
-	reserveDate: async ({ request, getClientAddress, locals }) => {
+	reserveDateTemp: async ({ request, getClientAddress, locals }) => {
 		const data = await request.formData();
 		const date = data.get('date')?.toString();
 		const turnstile = data.get("cf-turnstile-response")?.toString();
@@ -131,14 +131,66 @@ export const actions = {
 		};
 		try{
 			//Remove any previous reservations;
-			const reservation = await (locals.pb as PocketBase).collection("reservations").getFirstListItem(`user="${locals.user.id}"`);
-			await (locals.pb as PocketBase).collection("reservations").delete(reservation.id);
+			const reservation = await (locals.pb as PocketBase).collection("temp_reservations").getFirstListItem(`user="${locals.user.id}"`);
+			await (locals.pb as PocketBase).collection("temp_reservations").delete(reservation.id);
 		}catch(e){
 			//No need to do anything.
 		}
 		try{
 			const expires = new Date(new Date().getTime() + parseInt(PUBLIC_CALENDAR_EXPIRE)*60000);
-			await (locals.pb as PocketBase).collection("reservations").create({user: locals.user.id, date, expires});
+			await (locals.pb as PocketBase).collection("temp_reservations").create({user: locals.user.id, date, expires});
+			return {success: true};
+		}catch(e: any){
+			console.log(e.data.data);
+			if(e?.data?.data?.date){
+				return fail (400, {incorrect: true, message: "Dátum už bol zarezervovaný."});
+			}else{
+				return fail (500, {incorrect: true, message: "Nastala serverová chyba. Skúste to prosím neskôr."});
+			}
+		}
+	},
+	reserveDate: async ({ request, getClientAddress, locals }) => {
+		const data = await request.formData();
+		const date = data.get('date')?.toString();
+		console.log(data);
+		console.log(date);
+		const selectedAddons = [];
+		for (const pair of data.keys()){
+			console.log(pair);
+			if(!["type", "date", "pocetLudi"].includes(pair)) selectedAddons.push(pair);
+		}
+		console.log(selectedAddons);
+		const turnstile = data.get("cf-turnstile-response")?.toString();
+
+		if(!locals.user){
+			return fail(401, {incorrect: true, message: "Pre vybratie dátumu musíte byť prihlásený.", type: "auth"});
+		}
+		const formData = new FormData();
+		if(PUBLIC_DEV != "true") {
+            formData.append("secret", SECRET_TURNSTILE_TOKEN)
+            formData.append("response", turnstile as string)
+            formData.append('remoteip', getClientAddress());
+            const result: Response = await fetch(PUBLIC_TURNSTILE_URL, {
+                body: formData,
+                method: 'POST',
+            });
+            const outcome = await result.json();
+            if(!outcome.success) return fail(400, { incorrect: true, message: "CAPTCHA verifikácia zlyhala.", type: "auth"});
+        }
+
+		if(!date || date.trim() == ""){
+			return fail(400, {incorrect: true, message: "Pre udalosť sa vyžaduje dátum.", type: "date"});
+		};
+		try{
+			//Remove any previous reservations;
+			const reservation = await (locals.pb as PocketBase).collection("temp_reservations").getFirstListItem(`user="${locals.user.id}"`);
+			await (locals.pb as PocketBase).collection("temp_reservations").delete(reservation.id);
+		}catch(e){
+			//No need to do anything.
+		}
+		try{
+			const expires = new Date(new Date().getTime() + parseInt(PUBLIC_CALENDAR_EXPIRE)*60000);
+			await (locals.pb as PocketBase).collection("temp_reservations").create({user: locals.user.id, date, expires});
 			return {success: true};
 		}catch(e: any){
 			console.log(e.data.data);
@@ -155,6 +207,7 @@ export const actions = {
 export async function load({locals}) {
 	return {
 		tempReservations: await (locals.pb as PocketBase).collection("temp_reservations").getFullList({ sort: 'created'}),
+		addons: await (locals.pb as PocketBase).collection("addons").getFullList(),
 		stages: await (locals.pb as PocketBase).collection('stages').getFullList({ sort: 'created' }),
 		categories: (await (locals.pb as PocketBase).collection('stage_categories').getFullList({ sort: 'created' })).map(i => {
 			return {id: i.id, name: i.name};

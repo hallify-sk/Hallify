@@ -2,6 +2,7 @@
 	import { onMount } from "svelte";
 
     export let selected: string | null | undefined = "";
+    export let name: string;
     export let defaultText: string;
     export let options: Array<{id: string, name: string}>
     export let value: string | null | undefined = null;
@@ -28,6 +29,7 @@
 </script>
 
 <div bind:this={select} class="flex flex-col flex-nowrap w-full relative {additionalStyle}">
+    <input type="text" id={name} name={name} bind:value={value} class="hidden">
     <button type="button" on:click={toggleSelect} class="pb-0.5 px-2 pt-5 relative text-left cursor-pointer bg-background-100 w-full rounded-md text-text-600 peer group h-12">
         <p class="absolute {selected ? "top-0.5 left-1 text-sm text-text-400" : open ? "top-0.5 left-1 text-sm text-text-400" : "left-1 top-3 text-text-500"} pointer-events-none duration-100 bg rounded px-1 font-thin">{defaultText}</p>
         <p class="text-text-600">{selected ? selected : ""}</p>

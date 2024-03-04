@@ -13,7 +13,7 @@ schedule.scheduleJob('*/1 * * * *', async function () {
         if(new Date(v.expires).getTime() < new Date().getTime()){
             //Delete the record, it expired.
             try{
-                pocketbase.collection("reservations").delete(v.id);
+                pocketbase.collection("temp_reservations").delete(v.id);
             }catch(e){
                 console.error(e);
             }
