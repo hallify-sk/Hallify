@@ -39,3 +39,6 @@ export function dateToInputString(date: Date){
   const formattedDate = `${year}-${month}-${day}`;
   return formattedDate;
 }
+export function getMinutesToDate(date: Date | number){
+  return Math.abs(new Date(date).getTime() - Date.now());
+};

@@ -40,8 +40,11 @@
 	export let onAuth: () => void = () => {};
 
 </script>
+<header class="w-80 h-screen bg-background-100 border-r border-background-200 fixed top-0 left-0">
+	<div></div>
+</header>
 
-<header class="fixed top-0 left-0 w-screen bg-background-100 py-1 px-2">
+<header class="fixed top-0 left-0 w-screen bg-background-100 py-1 px-2 border-b border-background-200 z-50">
 	<div class="max-w-7xl mx-auto">
 		<div class="flex flex-row justify-between items-center">
 			<div class="flex flex-row flex-nowrap gap-2">
@@ -74,7 +77,7 @@
 							{/if}
 							<p>{user.name}</p>
 						</button>
-						<div class="hidden group-focus-within:flex focus-within:flex focus:flex flex-col absolute top-10 rounded-b-md bg-background-100 w-52 px-2 py-2 gap-1">
+						<div class="hidden group-focus-within:flex focus-within:flex focus:flex flex-col absolute top-11 rounded-b-md bg-background-100 w-52 px-2 py-2 gap-1 border border-background-200">
 							<a href="/"
 									class="px-4 py-2 hover:bg-background-50 rounded-md text-text-600 w-full text-center"
 								>
