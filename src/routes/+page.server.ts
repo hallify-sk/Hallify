@@ -315,13 +315,13 @@ export async function load({ locals }) {
 			.getFullList({fields: "id,expires,date,user"}),
 		ownedTempReservations: await (locals.pb as PocketBase)
 			.collection('temp_reservations')
-			.getFullList({filter: `user="${locals.user.id}"`, expand: "category"}),
+			.getFullList({filter: `user="${locals?.user?.id}"`, expand: "category"}),
 		reservations: await (locals.pb as PocketBase)
 			.collection('reservations')
 			.getFullList({ sort: 'created', fields: "id,expires,date,user" }),
 		ownedReservations: await (locals.pb as PocketBase)
 			.collection('reservations')
-			.getFullList({filter: `user="${locals.user.id}"`, expand: "category"}),
+			.getFullList({filter: `user="${locals?.user?.id}"`, expand: "category"}),
 		addons: await (locals.pb as PocketBase).collection('addons').getFullList(),
 		stages: await (locals.pb as PocketBase).collection('stages').getFullList({ sort: 'created' }),
 		categories: (

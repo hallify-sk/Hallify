@@ -77,7 +77,7 @@
 />
 <div class="flex flex-row flex-nowrap">
 	<div
-		class="min-h-screen pt-24 px-14"
+		class="min-h-screen pt-24 px-14 ml-80"
 	>
 		<h1 class="text-3xl font-bold text-text-600">Dobrý deň, {data.user?.name?.split(" ")[0]}</h1>
 		<h2 class="mt-7 text-text-500">Tu si môžete naplánovať nové události, alebo zobraziť svoje staršie události.</h2>
