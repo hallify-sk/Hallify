@@ -79,7 +79,7 @@
 	<div
 		class="min-h-screen pt-24 px-14 ml-80"
 	>
-		<h1 class="text-3xl font-bold text-text-600">Dobrý deň, {data.user?.name?.split(" ")[0]}</h1>
+		<h1 class="text-2xl font-bold text-text-600">Dobrý deň, {data.user?.name?.split(" ")[0]}</h1>
 		<h2 class="mt-7 text-text-500">Tu si môžete naplánovať nové události, alebo zobraziť svoje staršie události.</h2>
 		<div class="grid gap-7 mt-7 grid-cols-1 md:grid-cols-2 lg:grid-cols-3 grid-rows-6 w-full">
 			<button
@@ -106,7 +106,7 @@
 						d="M5 12l14 0"
 					/></svg
 				>
-				<p class="text-xl font-bold text-text-600">Vytvoriť novú událosť</p>
+				<p class="text-lg font-bold text-text-600">Vytvoriť novú událosť</p>
 				<p class="text-text-500">
 					Vytvorte novú událosť teraz a začnite svoju cestu k dokonálemu podujatiu.
 				</p>
@@ -170,7 +170,7 @@
 								</p>
 							</div>
 							<div class="flex flex-col">
-								<p class="text-xl font-bold text-text-600">{reservation.name || 'Meno události'}</p>
+								<p class="text-lg font-bold text-text-600">{reservation.name || 'Meno události'}</p>
 								<p class="text-text-500">{reservation.expand?.category?.name}</p>
 							</div>
 							<div class="flex flex-col">
