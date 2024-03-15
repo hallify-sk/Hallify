@@ -77,7 +77,7 @@
 />
 <div class="flex flex-row flex-nowrap">
 	<div
-		class="min-h-screen pt-24 px-14 ml-80"
+		class="min-h-screen pt-24 px-14"
 	>
 		<h1 class="text-2xl font-bold text-text-600">Dobrý deň, {data.user?.name?.split(" ")[0]}</h1>
 		<h2 class="mt-7 text-text-500">Tu si môžete naplánovať nové události, alebo zobraziť svoje staršie události.</h2>
@@ -170,8 +170,8 @@
 								</p>
 							</div>
 							<div class="flex flex-col">
-								<p class="text-lg font-bold text-text-600">{reservation.name || 'Meno události'}</p>
-								<p class="text-text-500">{reservation.expand?.category?.name}</p>
+								<p class="text-xl font-bold text-text-600">{reservation.name || 'Meno události'}</p>
+								<p class="text-text-500">{reservation.expand?.category?.name || 'kategória'}</p>
 							</div>
 							<div class="flex flex-col">
 								<div class="flex flex-row gap-3">
@@ -192,7 +192,7 @@
 											d="M16 3.13a4 4 0 0 1 0 7.75"
 										/><path d="M21 21v-2a4 4 0 0 0 -3 -3.85" /></svg
 									>
-									<p class="text-text-400">Počet ľudí: {reservation.guestCount}</p>
+									<p class="text-text-400">Počet ľudí: {reservation.guestCount || ""}</p>
 								</div>
 								<div class="flex flex-row gap-3">
 									<svg

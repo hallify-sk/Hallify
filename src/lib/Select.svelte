@@ -10,6 +10,11 @@
     export let additionalStyle: string = "";
     let select: HTMLElement;
     let open: boolean = false;
+
+    if(value){
+        selected = options.find(i => i.id == value)?.name;
+    }
+
     function toggleSelect(){
         open = !open;
         invalid = false;

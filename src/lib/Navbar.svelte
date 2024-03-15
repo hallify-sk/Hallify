@@ -41,7 +41,7 @@
 </script>
 
 <header
-	class="w-80 h-screen bg-background-100 border-r border-background-200 fixed top-0 left-0 z-50"
+	class="w-60 md:w-80 h-screen bg-background-100 border-r border-background-200 fixed top-0 left-0 z-50"
 >
 	<div class="px-4 gap-1 flex flex-col justify-between h-full">
 		<div class="flex flex-col gap-2 pb-2 border-b border-b-background-200 h-full">

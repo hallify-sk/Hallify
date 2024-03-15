@@ -19,5 +19,12 @@ export async function load({ locals, params }) {
 	return {
 		reservation: reservation,
 		addons: await (locals.pb as PocketBase).collection('addons').getFullList(),
+		categories: (
+			await (locals.pb as PocketBase)
+				.collection('stage_categories')
+				.getFullList({ sort: 'created' })
+		).map((i) => {
+			return { id: i.id, name: i.name };
+		})
 	};
 }
