@@ -205,9 +205,10 @@
 <Popup bind:openPopup bind:closePopup>
 	<h2 class="text-text-700 text-xl mb-4">Uložiť rozloženie</h2>
 	<form
-		action="/editor"
+		action="/editor/?/saveStage"
 		class="flex flex-col"
 		use:enhance={async ({ formData }) => {
+			console.log("sent");
 			formData.set('stage', JSON.stringify($stageData));
 			formData.set('tables', JSON.stringify($tableList));
 			formData.set('image', dataURItoBlob(await downloadStage()));
@@ -252,7 +253,6 @@
 			>
 			<button
 				type="submit"
-				on:click={closePopup}
 			class="px-4 py-2 bg-background-700 hover:bg-primary-600 rounded-md text-text-50 mt-3"
 				>Uložiť</button
 			>

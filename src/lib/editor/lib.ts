@@ -45,56 +45,90 @@ export function objectArrayToPoints(...points: { x: number; y: number; }[]){
   })].flat();
 }
 
-export function checkPolygonCollision(polygon1: Array<{x: number, y: number}>, polygon2: Array<{x: number, y: number}>) {
-  const polygons = [polygon1, polygon2];
-  let minA, maxA, projected, i, i1, j, minB, maxB;
+export function checkPolygonCollision(polygon1: Array<{x: number, y: number}>, polygon2: Array<{x: number, y: number}>){
+  //Get a line
+  let nextIndex: number = 0;
+  for (let i = 0; i < polygon1.length; i++) {
+    nextIndex = i + 1;
+    if(nextIndex === polygon1.length) nextIndex = 0;
+    
+    let nextUIndex: number = 0;
 
-  for (i = 0; i < polygons.length; i++) {
+    const pointOne = polygon1[i];
+    const pointTwo = polygon1[nextIndex];
 
-    const polygon = polygons[i];
-    for (i1 = 0; i1 < polygon.length; i1++) {
-
-      const i2 = (i1 + 1) % polygon.length;
-      const p1 = polygon[i1];
-      const p2 = polygon[i2];
-
-      const normal = { x: p2.y - p1.y, y: p1.x - p2.x };
-      minA = maxA = undefined;
-      for (j = 0; j < polygon1.length; j++) {
-        projected = normal.x * polygon1[j].x + normal.y * polygon1[j].y;
-        if (minA === undefined || projected < minA) {
-          minA = projected;
-        }
-        if (maxA === undefined || projected > maxA) {
-          maxA = projected;
-        }
+    if(polygon2.some((_, i, a) => {
+      // http://www.jeffreythompson.org/collision-detection/line-line.php
+      nextUIndex = i + 1;
+      if(nextUIndex === a.length) nextUIndex = 0;
+      const pointThree = a[i];
+      const pointFour = a[nextUIndex];
+      const uA = ((pointFour.x-pointThree.x)*(pointOne.y-pointThree.y) - (pointFour.y-pointThree.y)*(pointOne.x-pointThree.x)) / ((pointFour.y-pointThree.y)*(pointTwo.x-pointOne.x) - (pointFour.x-pointThree.x)*(pointTwo.y-pointOne.y));
+      const uB = ((pointTwo.x-pointOne.x)*(pointOne.y-pointThree.y) - (pointTwo.y-pointOne.y)*(pointOne.x-pointThree.x)) / ((pointFour.y-pointThree.y)*(pointTwo.x-pointOne.x) - (pointFour.x-pointThree.x)*(pointTwo.y-pointOne.y));
+      
+      // if uA and uB are between 0-1, lines are colliding
+      console.log(uA, uB);
+      if (uA >= 0 && uA <= 1 && uB >= 0 && uB <= 1) {
+        return true;
       }
-
-      minB = maxB = undefined;
-      for (j = 0; j < polygon2.length; j++) {
-        projected = normal.x * polygon2[j].x + normal.y * polygon2[j].y;
-        if (minB === undefined || projected < minB) {
-          minB = projected;
-        }
-        if (maxB === undefined || projected > maxB) {
-          maxB = projected;
-        }
-      }
-
-      if (maxA < minB || maxB < minA) {
-        return false;
-      }
-    }
+      return false;
+    })){
+      return true;
+    };
   }
-  return true;
-};
+}
+
+// export function checkPolygonCollision(polygon1: Array<{x: number, y: number}>, polygon2: Array<{x: number, y: number}>) {
+//   const polygons = [polygon1, polygon2];
+//   console.log(polygons);
+//   let minA, maxA, projected, i, i1, j, minB, maxB;
+
+//   for (i = 0; i < polygons.length; i++) {
+
+//     const polygon = polygons[i];
+//     for (i1 = 0; i1 < polygon.length; i1++) {
+
+//       const i2 = (i1 + 1) % polygon.length;
+//       const p1 = polygon[i1];
+//       const p2 = polygon[i2];
+
+//       const normal = { x: p2.y - p1.y, y: p1.x - p2.x };
+//       minA = maxA = undefined;
+//       for (j = 0; j < polygon1.length; j++) {
+//         projected = normal.x * polygon1[j].x + normal.y * polygon1[j].y;
+//         if (minA === undefined || projected < minA) {
+//           minA = projected;
+//         }
+//         if (maxA === undefined || projected > maxA) {
+//           maxA = projected;
+//         }
+//       }
+
+//       minB = maxB = undefined;
+//       for (j = 0; j < polygon2.length; j++) {
+//         projected = normal.x * polygon2[j].x + normal.y * polygon2[j].y;
+//         if (minB === undefined || projected < minB) {
+//           minB = projected;
+//         }
+//         if (maxB === undefined || projected > maxB) {
+//           maxB = projected;
+//         }
+//       }
+
+//       if (maxA < minB || maxB < minA) {
+//         return false;
+//       }
+//     }
+//   }
+//   return true;
+// };
   export function getMovablePolygons(layer: Konva.Layer) {
     return layer.getChildren((node) => node instanceof Konva.Group && node.draggable()) as Konva.Group[];
   }
   export function getCollisionPolygons(layer: Konva.Layer) {
     return layer.getChildren((node) => node instanceof Konva.Group && !node.draggable() && !(node instanceof Konva.Transformer) && node.name() !== "preview") as Konva.Group[];
   }
-  export function getClosestViablePosition(x: number, y: number, shape: Konva.Group, objects: Konva.Line[], grid: {
+  export function getClosestViablePosition(x: number, y: number, shape: Konva.Line, objects: Konva.Line[], grid: {
     width: number;
     height: number;
     squareSize: number;

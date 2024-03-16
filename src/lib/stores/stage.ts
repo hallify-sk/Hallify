@@ -22,7 +22,7 @@ export const tableList: Writable<
 			height: number;
 		};
 	}[]
-> = writable();
+> = writable([]);
 
 export const stageData: Writable<{
 	scale: number;

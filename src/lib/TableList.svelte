@@ -9,8 +9,7 @@
 		table: { width: number; height: number }
 	) {
 		tableList.set(
-			$tableList
-				? $tableList.concat({
+			$tableList.concat({
 						name,
 						rotation,
 						x: $stageData.width / $stageData.squareSize / 2,
@@ -18,16 +17,6 @@
 						chairs,
 						table
 					})
-				: [
-						{
-							name,
-							rotation,
-							x: $stageData.width / $stageData.squareSize / 2,
-							y: $stageData.height / $stageData.squareSize / 2,
-							chairs,
-							table
-						}
-					]
 		);
 		rerenderStage();
 		return;
@@ -60,7 +49,12 @@
 			<button
 				class="bg-background-50 rounded-md block group relative"
 				on:click={() => {
-					if($tableList && $tableList.filter((i) => i.name.includes(table.stageReferenceName)).length == table.count) return;
+					if (
+						$tableList &&
+						$tableList.filter((i) => i.name.includes(table.stageReferenceName)).length ==
+							table.count
+					)
+						return;
 					addTable(
 						`${table.stageReferenceName} ${uuidv4()}`,
 						0,
@@ -97,7 +91,13 @@
 				<div class="p-2">
 					<div class="flex flex-row content-between items-center">
 						<h2 class="text-text-600 font-semibold text-lg">{table.name}</h2>
-						<p class="float-right ml-auto {$tableList && $tableList.filter((i) => i.name.includes(table.stageReferenceName)).length == table.count ? "text-red-500" : "text-text-400"}">
+						<p
+							class="float-right ml-auto {$tableList &&
+							$tableList.filter((i) => i.name.includes(table.stageReferenceName)).length ==
+								table.count
+								? 'text-red-500'
+								: 'text-text-400'}"
+						>
 							{table.count -
 								($tableList
 									? $tableList.filter((i) => i.name.includes(table.stageReferenceName)).length
