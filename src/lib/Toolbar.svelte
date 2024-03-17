@@ -2,7 +2,7 @@
 	import { onDestroy } from 'svelte';
 	import { brush, selectedName, tableList, rerender, stageData } from './stores/stage';
 	import { applyAction, enhance } from '$app/forms';
-	import { dataURItoBlob } from './editor/lib';
+	import { countTotalChairs, dataURItoBlob } from './editor/lib';
 	import Popup from './Popup.svelte';
 
 	export let downloadStage: () => Promise<string>;
@@ -49,7 +49,7 @@
 	}
 </script>
 
-<div class="fixed top-0 left-0 pl-12 w-screen h-12 bg-background-100 flex items-center">
+<div class="fixed top-0 left-0 pl-12 w-screen h-12 bg-background-100 flex items-center border-background-200 border-b">
 	<svg
 		xmlns="http://www.w3.org/2000/svg"
 		class="icon icon-tabler icon-tabler-magnet stroke-primary-400 w-7 h-7 mx-2"
@@ -211,8 +211,12 @@
 			console.log("sent");
 			formData.set('stage', JSON.stringify($stageData));
 			formData.set('tables', JSON.stringify($tableList));
+			formData.set('chairCount', `${countTotalChairs($tableList)}`);
 			formData.set('image', dataURItoBlob(await downloadStage()));
 			return async ({ result }) => {
+				if(result.type == 'success'){
+					closePopup();
+				}
 				await applyAction(result);
 			};
 		}}

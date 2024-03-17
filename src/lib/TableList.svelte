@@ -6,17 +6,18 @@
 		name: string,
 		rotation: number,
 		chairs: { left: number; right: number; max: number },
-		table: { width: number; height: number }
+		table: { width: number; height: number; radius: number; isRound: boolean }
 	) {
+		console.log(table);
 		tableList.set(
 			$tableList.concat({
-						name,
-						rotation,
-						x: $stageData.width / $stageData.squareSize / 2,
-						y: $stageData.height / $stageData.squareSize / 2,
-						chairs,
-						table
-					})
+				name,
+				rotation,
+				x: $stageData.width / $stageData.squareSize / 2,
+				y: $stageData.height / $stageData.squareSize / 2,
+				chairs,
+				table
+			})
 		);
 		rerenderStage();
 		return;
@@ -37,6 +38,8 @@
 		updated: string;
 		width: number;
 		stageReferenceName: string;
+		isRound?: boolean;
+		radius?: number;
 		count: number;
 	}>;
 </script>
@@ -63,7 +66,7 @@
 							max: table.maxChairsPerSide,
 							right: table.maxChairsPerSide
 						},
-						{ width: table.width, height: table.height }
+						{ width: table.width, height: table.height, radius: table.radius || 0, isRound: table.isRound || false }
 					);
 				}}
 			>
@@ -85,7 +88,7 @@
 								d="M15.042 21.672 13.684 16.6m0 0-2.51 2.225.569-9.47 5.227 7.917-3.286-.672ZM12 2.25V4.5m5.834.166-1.591 1.591M20.25 10.5H18M7.757 14.743l-1.59 1.59M6 10.5H3.75m4.007-4.243-1.59-1.59"
 							/>
 						</svg>
-						Click to Add
+						Ťukni pre pridanie
 					</p>
 				</div>
 				<div class="p-2">
@@ -105,8 +108,13 @@
 						</p>
 					</div>
 					<ul class="text-text-500 text-left">
-						<li>Rozmery: {table.width} x {table.height}m</li>
-						<li>Max. stoličky: {table.maxChairsPerSide}</li>
+						{#if table.isRound}
+							<li>Polomer: {table.radius}m</li>
+							<li>Max. stoličky: {table.maxChairsPerSide}</li>
+						{:else}
+							<li>Rozmery: {table.width} x {table.height}m</li>
+							<li>Max. stoličky: {table.maxChairsPerSide}</li>
+						{/if}
 					</ul>
 				</div>
 			</button>

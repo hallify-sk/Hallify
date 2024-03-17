@@ -1,81 +1,136 @@
-import Konva from "konva";
+import Konva from 'konva';
 
 export function clamp(val: number, min: number, max: number): number {
-    return Math.min(Math.max(val, min), max);
+	return Math.min(Math.max(val, min), max);
 }
-export function pointsToRealPosition(points: Array<number>, position: {x: number, y: number}){
-    return points.map((v, i) => {
-        return Math.round(i % 2 == 0 ? v + position.x : v + position.y);
-    });
-};
-export function pointsToObjectArray(points: Array<number>){
-    return points.map((_, i, a) => {
-        return {x: a[i], y: a[i+1]} 
-    }).filter((v, i, a) => {
-        if(!(i % 2) && typeof a[i+1] !== "undefined") return true;
-    });
-};
-
-export function addChairHitbox(points: Array<{x: number, y: number}>, squareSize: number, chairSize: number, left: boolean | undefined, right: boolean | undefined){
-  //We take the points and add a buffer of 1 grid.squareSize to each side of the X axis
-  //Indices 0, 3 are to the left, 1, 2 are to the right
-  return points.map((v, i) => {
-    if(i == 1 || i == 2){
-      if(right) return {x: v.x + chairSize * squareSize, y: v.y}
-      else return {x: v.x, y: v.y}
-    }else{
-      if(left) return {x: v.x - chairSize * squareSize, y: v.y}
-      else return {x: v.x, y: v.y}
-    }
-  })
+export function pointsToRealPosition(points: Array<number>, position: { x: number; y: number }) {
+	return points.map((v, i) => {
+		return Math.round(i % 2 == 0 ? v + position.x : v + position.y);
+	});
+}
+export function pointsToObjectArray(points: Array<number>) {
+	return points
+		.map((_, i, a) => {
+			return { x: a[i], y: a[i + 1] };
+		})
+		.filter((v, i, a) => {
+			if (!(i % 2) && typeof a[i + 1] !== 'undefined') return true;
+		});
 }
 
-export function rotatePoints(points: Array<{x: number, y: number}>, originObject: {x: number, y: number}, angle: number){
-    const a = angle * (Math.PI/180); // Convert to radians
-    return points.map(point => {
-        const rotatedX = Math.cos(a) * (point.x - originObject.x) - Math.sin(a) * (point.y - originObject.y) + originObject.x;
-        const rotatedY = Math.sin(a) * (point.x - originObject.x) + Math.cos(a) * (point.y - originObject.y) + originObject.y;  
-        return {x: Math.round(rotatedX), y: Math.round(rotatedY)};
-    });
+export function addChairHitbox(
+	points: Array<{ x: number; y: number }>,
+	squareSize: number,
+	chairSize: number,
+	left: boolean | undefined,
+	right: boolean | undefined
+) {
+	//We take the points and add a buffer of 1 grid.squareSize to each side of the X axis
+	//Indices 0, 3 are to the left, 1, 2 are to the right
+	return points.map((v, i) => {
+		if (i == 1 || i == 2) {
+			if (right) return { x: v.x + chairSize * squareSize, y: v.y };
+			else return { x: v.x, y: v.y };
+		} else {
+			if (left) return { x: v.x - chairSize * squareSize, y: v.y };
+			else return { x: v.x, y: v.y };
+		}
+	});
 }
 
-export function objectArrayToPoints(...points: { x: number; y: number; }[]){
-  return [...points.map((v) => {
-    return [v.x, v.y];
-  })].flat();
+export function rotatePoints(
+	points: Array<{ x: number; y: number }>,
+	originObject: { x: number; y: number },
+	angle: number
+) {
+	const a = angle * (Math.PI / 180); // Convert to radians
+	return points.map((point) => {
+		const rotatedX =
+			Math.cos(a) * (point.x - originObject.x) -
+			Math.sin(a) * (point.y - originObject.y) +
+			originObject.x;
+		const rotatedY =
+			Math.sin(a) * (point.x - originObject.x) +
+			Math.cos(a) * (point.y - originObject.y) +
+			originObject.y;
+		return { x: Math.round(rotatedX), y: Math.round(rotatedY) };
+	});
 }
 
-export function checkPolygonCollision(polygon1: Array<{x: number, y: number}>, polygon2: Array<{x: number, y: number}>){
-  //Get a line
-  let nextIndex: number = 0;
-  for (let i = 0; i < polygon1.length; i++) {
-    nextIndex = i + 1;
-    if(nextIndex === polygon1.length) nextIndex = 0;
-    
-    let nextUIndex: number = 0;
+export function objectArrayToPoints(...points: { x: number; y: number }[]) {
+	return [
+		...points.map((v) => {
+			return [v.x, v.y];
+		})
+	].flat();
+}
 
-    const pointOne = polygon1[i];
-    const pointTwo = polygon1[nextIndex];
+export function countTotalChairs(
+	tableList: {
+		name: string;
+		rotation: number;
+		x?: number | undefined;
+		y?: number | undefined;
+		chairs: {
+			left: number;
+			right: number;
+			max: number;
+		};
+		table: {
+			width: number;
+			height: number;
+		};
+	}[]
+) {
+	return tableList.reduce((acc, table) => {
+		return acc + table.chairs.left + table.chairs.right;
+	}, 0);
+}
 
-    if(polygon2.some((_, i, a) => {
-      // http://www.jeffreythompson.org/collision-detection/line-line.php
-      nextUIndex = i + 1;
-      if(nextUIndex === a.length) nextUIndex = 0;
-      const pointThree = a[i];
-      const pointFour = a[nextUIndex];
-      const uA = ((pointFour.x-pointThree.x)*(pointOne.y-pointThree.y) - (pointFour.y-pointThree.y)*(pointOne.x-pointThree.x)) / ((pointFour.y-pointThree.y)*(pointTwo.x-pointOne.x) - (pointFour.x-pointThree.x)*(pointTwo.y-pointOne.y));
-      const uB = ((pointTwo.x-pointOne.x)*(pointOne.y-pointThree.y) - (pointTwo.y-pointOne.y)*(pointOne.x-pointThree.x)) / ((pointFour.y-pointThree.y)*(pointTwo.x-pointOne.x) - (pointFour.x-pointThree.x)*(pointTwo.y-pointOne.y));
-      
-      // if uA and uB are between 0-1, lines are colliding
-      console.log(uA, uB);
-      if (uA >= 0 && uA <= 1 && uB >= 0 && uB <= 1) {
-        return true;
-      }
-      return false;
-    })){
-      return true;
-    };
-  }
+export function checkPolygonCollision(
+	polygon1: Array<{ x: number; y: number }>,
+	polygon2: Array<{ x: number; y: number }>
+) {
+	//Get a line
+	let nextIndex: number = 0;
+	for (let i = 0; i < polygon1.length; i++) {
+		nextIndex = i + 1;
+		if (nextIndex === polygon1.length) nextIndex = 0;
+
+		let nextUIndex: number = 0;
+
+		const pointOne = polygon1[i];
+		const pointTwo = polygon1[nextIndex];
+
+		if (
+			polygon2.some((_, i, a) => {
+				// http://www.jeffreythompson.org/collision-detection/line-line.php
+				nextUIndex = i + 1;
+				if (nextUIndex === a.length) nextUIndex = 0;
+				const pointThree = a[i];
+				const pointFour = a[nextUIndex];
+				const uA =
+					((pointFour.x - pointThree.x) * (pointOne.y - pointThree.y) -
+						(pointFour.y - pointThree.y) * (pointOne.x - pointThree.x)) /
+					((pointFour.y - pointThree.y) * (pointTwo.x - pointOne.x) -
+						(pointFour.x - pointThree.x) * (pointTwo.y - pointOne.y));
+				const uB =
+					((pointTwo.x - pointOne.x) * (pointOne.y - pointThree.y) -
+						(pointTwo.y - pointOne.y) * (pointOne.x - pointThree.x)) /
+					((pointFour.y - pointThree.y) * (pointTwo.x - pointOne.x) -
+						(pointFour.x - pointThree.x) * (pointTwo.y - pointOne.y));
+
+				// if uA and uB are between 0-1, lines are colliding
+				console.log(uA, uB);
+				if (uA >= 0 && uA <= 1 && uB >= 0 && uB <= 1) {
+					return true;
+				}
+				return false;
+			})
+		) {
+			return true;
+		}
+	}
 }
 
 // export function checkPolygonCollision(polygon1: Array<{x: number, y: number}>, polygon2: Array<{x: number, y: number}>) {
@@ -122,95 +177,123 @@ export function checkPolygonCollision(polygon1: Array<{x: number, y: number}>, p
 //   }
 //   return true;
 // };
-  export function getMovablePolygons(layer: Konva.Layer) {
-    return layer.getChildren((node) => node instanceof Konva.Group && node.draggable()) as Konva.Group[];
-  }
-  export function getCollisionPolygons(layer: Konva.Layer) {
-    return layer.getChildren((node) => node instanceof Konva.Group && !node.draggable() && !(node instanceof Konva.Transformer) && node.name() !== "preview") as Konva.Group[];
-  }
-  export function getClosestViablePosition(x: number, y: number, shape: Konva.Line, objects: Konva.Line[], grid: {
-    width: number;
-    height: number;
-    squareSize: number;
-    snapSize: number;
-    color: string;
-}) {
-    // Create an empty map for the grid cells
-    const gridCells: Map<string, Konva.Line[]> = new Map();
+export function getMovablePolygons(layer: Konva.Layer) {
+	return layer.getChildren(
+		(node) => node instanceof Konva.Group && node.draggable()
+	) as Konva.Group[];
+}
+export function getCollisionPolygons(layer: Konva.Layer) {
+	return layer.getChildren(
+		(node) =>
+			node instanceof Konva.Group &&
+			!node.draggable() &&
+			!(node instanceof Konva.Transformer) &&
+			node.name() !== 'preview'
+	) as Konva.Group[];
+}
+export function getClosestViablePosition(
+	x: number,
+	y: number,
+	shape: Konva.Line,
+	objects: Konva.Line[],
+	grid: {
+		width: number;
+		height: number;
+		squareSize: number;
+		snapSize: number;
+		color: string;
+	}
+) {
+	// Create an empty map for the grid cells
+	const gridCells: Map<string, Konva.Line[]> = new Map();
 
-    // Add each object to the grid cells
-    for (const object of objects) {
-        const cellX = Math.floor(object.x() / grid.squareSize);
-        const cellY = Math.floor(object.y() / grid.squareSize);
-        const key = `${cellX},${cellY}`;
+	// Add each object to the grid cells
+	for (const object of objects) {
+		const cellX = Math.floor(object.x() / grid.squareSize);
+		const cellY = Math.floor(object.y() / grid.squareSize);
+		const key = `${cellX},${cellY}`;
 
-        if (!gridCells.has(key)) {
-            gridCells.set(key, []);
-        }
+		if (!gridCells.has(key)) {
+			gridCells.set(key, []);
+		}
 
-        gridCells.get(key)!.push(object);
-    }
+		gridCells.get(key)!.push(object);
+	}
 
-    let step = 1;
-    // eslint-disable-next-line no-constant-condition
-    while (step < 1000) {
-        for (let i = -step; i <= step; i++) {
-            for (let j = -step; j <= step; j++) {
-                if (i !== -step && i !== step && j !== -step && j !== step) {
-                    // Skip positions that are not on the current step of the spiral
-                    continue;
-                }
+	let step = 1;
+	// eslint-disable-next-line no-constant-condition
+	while (step < 1000) {
+		for (let i = -step; i <= step; i++) {
+			for (let j = -step; j <= step; j++) {
+				if (i !== -step && i !== step && j !== -step && j !== step) {
+					// Skip positions that are not on the current step of the spiral
+					continue;
+				}
 
-                // Calculate the position to check
-                const checkX = x + i * grid.squareSize * grid.snapSize;
-                const checkY = y + j * grid.squareSize * grid.snapSize;
+				// Calculate the position to check
+				const checkX = x + i * grid.squareSize * grid.snapSize;
+				const checkY = y + j * grid.squareSize * grid.snapSize;
 
-                // Update the shape's position
-                shape.x(checkX);
-                shape.y(checkY);
+				// Update the shape's position
+				shape.x(checkX);
+				shape.y(checkY);
 
-                // Get the objects in the same grid cell
-                const cellX = Math.floor(checkX / grid.squareSize);
-                const cellY = Math.floor(checkY / grid.squareSize);
-                const key = `${cellX},${cellY}`;
-                const cellObjects = gridCells.get(key) || [];
+				// Get the objects in the same grid cell
+				const cellX = Math.floor(checkX / grid.squareSize);
+				const cellY = Math.floor(checkY / grid.squareSize);
+				const key = `${cellX},${cellY}`;
+				const cellObjects = gridCells.get(key) || [];
 
-                // Check for collisions
-                const collision = cellObjects.some((object: Konva.Line) => object !== shape && checkPolygonCollision(rotatePoints(pointsToObjectArray(pointsToRealPosition(shape.points(), shape.position())), {x: shape.x(), y: shape.y()}, shape.rotation()), rotatePoints(pointsToObjectArray(pointsToRealPosition(object.points(), object.position())), {x: object.x(), y: object.y()}, object.rotation())));
+				// Check for collisions
+				const collision = cellObjects.some(
+					(object: Konva.Line) =>
+						object !== shape &&
+						checkPolygonCollision(
+							rotatePoints(
+								pointsToObjectArray(pointsToRealPosition(shape.points(), shape.position())),
+								{ x: shape.x(), y: shape.y() },
+								shape.rotation()
+							),
+							rotatePoints(
+								pointsToObjectArray(pointsToRealPosition(object.points(), object.position())),
+								{ x: object.x(), y: object.y() },
+								object.rotation()
+							)
+						)
+				);
 
-                if (!collision) {
-                    // If there's no collision, return the position as the closest viable position
-                    return { x: checkX, y: checkY };
-                }
-            }
-        }
+				if (!collision) {
+					// If there's no collision, return the position as the closest viable position
+					return { x: checkX, y: checkY };
+				}
+			}
+		}
 
-        // If all positions result in a collision, increase the step of the spiral
-        step++;
-    }
+		// If all positions result in a collision, increase the step of the spiral
+		step++;
+	}
 }
 
 export function dataURItoBlob(dataURI: string) {
-  // convert base64 to raw binary data held in a string
-  // doesn't handle URLEncoded DataURIs - see SO answer #6850276 for code that does this
-  const byteString = atob(dataURI.split(',')[1]);
+	// convert base64 to raw binary data held in a string
+	// doesn't handle URLEncoded DataURIs - see SO answer #6850276 for code that does this
+	const byteString = atob(dataURI.split(',')[1]);
 
-  // separate out the mime component
-  const mimeString = dataURI.split(',')[0].split(':')[1].split(';')[0]
+	// separate out the mime component
+	const mimeString = dataURI.split(',')[0].split(':')[1].split(';')[0];
 
-  // write the bytes of the string to an ArrayBuffer
-  const ab = new ArrayBuffer(byteString.length);
+	// write the bytes of the string to an ArrayBuffer
+	const ab = new ArrayBuffer(byteString.length);
 
-  // create a view into the buffer
-  const ia = new Uint8Array(ab);
+	// create a view into the buffer
+	const ia = new Uint8Array(ab);
 
-  // set the bytes of the buffer to the correct values
-  for (let i = 0; i < byteString.length; i++) {
-      ia[i] = byteString.charCodeAt(i);
-  }
+	// set the bytes of the buffer to the correct values
+	for (let i = 0; i < byteString.length; i++) {
+		ia[i] = byteString.charCodeAt(i);
+	}
 
-  // write the ArrayBuffer to a blob, and you're done
-  const blob = new Blob([ab], {type: mimeString});
-  return blob;
-
+	// write the ArrayBuffer to a blob, and you're done
+	const blob = new Blob([ab], { type: mimeString });
+	return blob;
 }

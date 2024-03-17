@@ -1,74 +1,51 @@
 <script lang="ts">
-    export let data;
-	import { applyAction, enhance } from "$app/forms";
-	import Stage from "$lib/Stage.svelte";
-    let width = 20;
-    let height = 20;
-    let squareSize = 30;
-    let snapSize = 0.5;
-    let borderThickness = 10;
-    let color = "#fff";
-    import { selectedName, stageData, tableList } from "$lib/stores/stage";
+	export let data;
+	import Stage from '$lib/Stage.svelte';
+	import TableList from '$lib/TableList.svelte';
+	import Toolbar from '$lib/Toolbar.svelte';
+	import { brush, modifyZones, rerender, stageData, tableList } from '$lib/stores/stage';
+	import { theme } from '$lib/stores/theme.js';
 
-    tableList.set(data.stage.tables);
-
-    stageData.set(data.stage.stage);
-    let chairs = 0;
-    function findChairsAndReplace(){
-        //Find chair count by using selectedName store value and tableList, replace value in tableList with new value
-        $tableList.find((e) => {
-            if(e.name == $selectedName){
-                e.chairs.count = chairs;
-            }
-        });
-    };
-
-    selectedName.subscribe((e) => {
-        $tableList.find((e) => {
-            if(e.name == $selectedName){
-                chairs = e.chairs.count;
-            }
-        });
-    });
+    let width = 25;
+	let height = 37;
+	let squareSize = 30;
+	let snapSize = 0.5;
+	let borderThickness = 10;
+	let color = '#fff';
+	let tablesDB = data.tables as any;
     
-    let rerender = false;
+	theme.set('light');
 
-    function rerenderStage(){
-        rerender = !rerender;
-    }
+	stageData.set(data.stage.stage);
+	tableList.set(data.stage.tables);
 
-    let downloadStage: () => Promise<Blob>;
+	let downloadStage: () => Promise<string>;
 
+	let zoneEditing: boolean = false;
+	$: if (zoneEditing) {
+		modifyZones.set(zoneEditing);
+	} else {
+		modifyZones.set(zoneEditing);
+	}
+	brush.set({ type: 'grab', snapCoefficient: 0.5 });
 </script>
-<div class="fixed top-0 left-0 flex flex-col">
-    <input bind:value={width} type="number" placeholder="Width">
-    <input bind:value={height} type="number" placeholder="Height">
-    <input bind:value={squareSize} type="number" placeholder="Square size">
-    <input bind:value={snapSize} step=0.1 min=0.1 type="number" placeholder="Square size">
-    <input bind:value={borderThickness} step=10 type="number" placeholder="Square size">
-    <input bind:value={color} type="color">
-    <label>Object properties</label>
-    <input bind:value={chairs} on:change={findChairsAndReplace} type="number"  placeholder="Chairs">
-    <button on:click={rerenderStage}>Rerender</button>
-    <form use:enhance={async ({formData}) => {
-            formData.set("stage", JSON.stringify($stageData));
-            formData.set("tables", JSON.stringify($tableList));
-            formData.set("image", await downloadStage());
-        return async ({result}) => {
-            await applyAction(result);
-        }
-    }} method="POST">
-        <button type="submit" class="text-white">Save</button>
-    </form>
+
+<div
+	class="grid place-items-center h-screen bg-background-200 ml-12"
+	style="width: calc(100vw - 18rem)"
+>
+	{#key $rerender}
+		<Stage
+			bind:downloadStage
+			grid={{ width, height, squareSize, snapSize, color, borderThickness }}
+		/>
+	{/key}
 </div>
-<div class="grid place-items-center w-screen h-screen bg-slate-950">
-    {#key rerender}
-    <Stage bind:downloadStage={downloadStage} grid={{width, height, squareSize, snapSize, color, borderThickness}}/>
-    {/key}
-</div>
+<TableList bind:tables={tablesDB} />
+<Toolbar {downloadStage} bind:stageCategories={data.stageCategories} />
 
 <style lang="postcss">
-    :global(html) {
-        @apply bg-slate-200;
-    }
+	:global(html) {
+		@apply bg-slate-200;
+	}
 </style>

@@ -20,6 +20,8 @@ export const tableList: Writable<
 		table: {
 			width: number;
 			height: number;
+      radius: number;
+      isRound: boolean;
 		};
 	}[]
 > = writable([]);

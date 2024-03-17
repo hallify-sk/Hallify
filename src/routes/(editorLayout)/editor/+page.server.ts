@@ -8,15 +8,15 @@ export async function load({locals}) {
 
 export const actions = {
     saveStage: async ({ request, locals }) => {
-      console.log("PROCESSED");
       const formData = await request.formData();
       const name = formData.get("name")?.toString();
       const stage = formData.get("stage")?.toString();
       const tables = formData.get("tables")?.toString();
+      const chairCount = formData.get("chairCount")?.toString();
       const image = formData.get("image") as Blob;
       const categories: string[] = [];
       formData.forEach((v, k) => {
-        if(!["name", "stage", "tables", "image"].includes(k)) categories.push(k);
+        if(!["name", "stage", "tables", "image", "chairCount"].includes(k)) categories.push(k);
       });
       console.log(JSON.stringify(categories));
       const data = new FormData();
@@ -27,10 +27,13 @@ export const actions = {
         data.append("tables", tables);
       };
       if(image){
-        data.append("render", image, "stage.png")
+        data.append("image", image, "stage.png")
       }
       if(name){
         data.append("name", name);
+      }
+      if(chairCount){
+        data.append("chairCount", chairCount);
       }
       if(categories.length){
         for(const category of categories){
@@ -40,7 +43,7 @@ export const actions = {
       }
       console.log(data);
       try{
-        locals.pb.collection("stages").create(data);
+        locals.pb.collection("stage_templates").create(data);
       }catch(e){
         console.error(e);
       }

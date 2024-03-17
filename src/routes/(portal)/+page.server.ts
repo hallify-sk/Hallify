@@ -303,7 +303,7 @@ export const actions = {
 				message: 'Nastala serverová chyba. Skúste to prosím neskôr.'
 			});
 		}
-		throw redirect(303, `/event/${toUpdate.id}`);
+		throw redirect(303, `/event/${toUpdate.id}/edit`);
 	}
 };
 

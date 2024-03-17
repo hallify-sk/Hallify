@@ -3,6 +3,7 @@ export const load = ({ params, data }) => {
         reservation: data.reservation,
         addons: data.addons,
         slug: params.slug,
-        categories: data.categories
+        categories: data.categories,
+        templates: data.templates
     }
 }

@@ -16,7 +16,18 @@
 	};
 	import { v4 as uuidv4 } from 'uuid';
 	import { onDestroy, onMount } from 'svelte';
-	import { Stage, Layer, Line, Group, Transformer, Rect, Label, Tag, Text } from 'svelte-konva';
+	import {
+		Stage,
+		Layer,
+		Line,
+		Group,
+		Transformer,
+		Rect,
+		Label,
+		Tag,
+		Text,
+		Circle
+	} from 'svelte-konva';
 	import {
 		addChairHitbox,
 		checkPolygonCollision,
@@ -28,12 +39,12 @@
 		objectArrayToPoints,
 		pointsToObjectArray,
 		pointsToRealPosition,
-		rotatePoints
+		rotatePoints,
+		countTotalChairs
 	} from './editor/lib';
 	import Konva from 'konva';
 	import { brush, modifyZones, rerender, selectedName, stageData, tableList } from './stores/stage';
 	import { theme } from './stores/theme';
-
 	let uiLayer: Konva.Layer;
 	let gridLayer: Konva.Layer;
 	let objectLayer: Konva.Layer;
@@ -50,6 +61,7 @@
 	let pointsHistory: Array<any[]> = [];
 	let circlesHistory: Array<Konva.Circle[]> = [];
 	let drawPreviewShape: Konva.Line;
+
 	onMount(() => {
 		stage.on('wheel', (e: any) => {
 			e.evt.preventDefault();
@@ -105,6 +117,19 @@
 						zones: $stageData.zones.filter((i) => i.name !== e.name())
 					});
 					e.remove();
+					//Make sure the tableName and UUID of the table is the same. Name format: "tableName UUID". Then, remove from tablelist
+					tableList.set(
+						$tableList.filter((i) => {
+							console.log(i.name.split(' ')[1]);
+							console.log(e.name().split(' ')[1]);
+							console.log(i.name.split(' ')[1] == e.name().split(' ')[1]);
+							return i.name.split(' ')[1] !== e.name().split(' ')[1];
+						})
+					);
+					console.log($tableList);
+					console.log(e.name());
+					console.log($tableList.find((i: any) => i.name !== e.name()));
+					//e.remove();
 				});
 				tr.nodes([]);
 			} else if (e.code == 'KeyZ' && e.ctrlKey) {
@@ -690,7 +715,7 @@
 			$stageData.collisionObjects.push({
 				name: 'wall no-select '.concat(uuidv4()),
 				points: points.flatMap((point) => [point.x, point.y]),
-				fill: "TBD",
+				fill: 'TBD',
 				stroke: $brush.stroke || 'none',
 				strokeWidth: $brush.strokeWidth || 0,
 				opacity: 0.5
@@ -933,7 +958,13 @@
 						<Line
 							config={{
 								points: object.points,
-								fill: object.fill?.replace("TBD", $theme == "dark" ? themes[$theme].background[50] : themes[$theme].background[700]) || 'black',
+								fill:
+									object.fill?.replace(
+										'TBD',
+										$theme == 'dark'
+											? themes[$theme].background[50]
+											: themes[$theme].background[700]
+									) || 'black',
 								stroke: object.stroke,
 								strokeWidth: object.strokeWidth || 0,
 								dash: object.dash,
@@ -953,71 +984,115 @@
 				}}
 			/>
 			{#if $tableList}
-			{#each $tableList as table}
-				<Group
-					config={{
-						draggable: true,
-						name: table.name,
-						x: (table.x || 0) * grid.squareSize,
-						y: (table.y || 0) * grid.squareSize,
-						rotation: table.rotation || 0,
-						offsetX: (table.table.width * grid.squareSize) / 2,
-						offsetY: (table.table.height * grid.squareSize) / 2
-					}}
-					on:dragstart={dragStart}
-					on:dragmove={dragMove}
-					on:dragend={dragEnd}
-					on:transformend={transformEnd}
-				>
-					<Line
-						config={{
-							points: [
-								0 * grid.squareSize,
-								0,
-								table.table.width * grid.squareSize,
-								0,
-								table.table.width * grid.squareSize,
-								table.table.height * grid.squareSize,
-								0 * grid.squareSize,
-								table.table.height * grid.squareSize
-							],
-							fill: themes?.[$theme]?.primary?.[500],
-							closed: true
-						}}
-					/>
+				{#each $tableList as table}
+					{#if table.table.isRound}
+						<Group
+							config={{
+								draggable: true,
+								name: table.name,
+								x: (table.x || 0) * grid.squareSize,
+								y: (table.y || 0) * grid.squareSize,
+								//rotation: table.rotation || 0,
+								//offsetX: (table.table.radius * grid.squareSize) / 2,
+								//offsetY: (table.table.radius * grid.squareSize) / 2
+							}}
+							on:dragstart={dragStart}
+							on:dragmove={dragMove}
+							on:dragend={dragEnd}
+							on:transformend={transformEnd}
+						>
+							<Circle
+								config={{
+									x: 0,
+									y: 0,
+									radius: table.table.radius * grid.squareSize,
+									fill: themes?.[$theme]?.primary?.[500]
+								}}
+							/>
+							{#each Array(8) as _, i}
+								<!--Place 8 chairs around the table-->
+								<Rect
+									config={{
+										x:
+											Math.cos((i * Math.PI) / 4) * table.table.radius * grid.squareSize * 0.8 +
+											0.1 * grid.squareSize,
+										y:
+											Math.sin((i * Math.PI) / 4) * table.table.radius * grid.squareSize * 0.8 +
+											0.1 * grid.squareSize,
+										width: 0.8 * grid.squareSize,
+										height: 0.8 * grid.squareSize,
+										fill: themes?.[$theme]?.primary?.[400],
+										cornerRadius: 4
+									}}
+								/>
+							{/each}
+						</Group>
+					{:else}
+						<Group
+							config={{
+								draggable: true,
+								name: table.name,
+								x: (table.x || 0) * grid.squareSize,
+								y: (table.y || 0) * grid.squareSize,
+								rotation: table.rotation || 0,
+								offsetX: (table.table.width * grid.squareSize) / 2,
+								offsetY: (table.table.height * grid.squareSize) / 2
+							}}
+							on:dragstart={dragStart}
+							on:dragmove={dragMove}
+							on:dragend={dragEnd}
+							on:transformend={transformEnd}
+						>
+							<Line
+								config={{
+									points: [
+										0 * grid.squareSize,
+										0,
+										table.table.width * grid.squareSize,
+										0,
+										table.table.width * grid.squareSize,
+										table.table.height * grid.squareSize,
+										0 * grid.squareSize,
+										table.table.height * grid.squareSize
+									],
+									fill: themes?.[$theme]?.primary?.[500],
+									closed: true
+								}}
+							/>
 
-					{#each Array(table.chairs.left) as _, i}
-						<Rect
-							config={{
-								x: -1 * grid.squareSize + 0.1 * grid.squareSize,
-								y:
-									((table.table.height * grid.squareSize) / table.chairs.left) * i +
-									(table.table.height * grid.squareSize) / (2 * table.chairs.left) -
-									0.5 * grid.squareSize * 0.8,
-								width: 0.8 * grid.squareSize,
-								height: 0.8 * grid.squareSize,
-								fill: themes?.[$theme]?.primary?.[400],
-								cornerRadius: 4
-							}}
-						/>
-					{/each}
-					{#each Array(table.chairs.right) as _, i}
-						<Rect
-							config={{
-								x: table.table.width * grid.squareSize + 0.1 * grid.squareSize,
-								y:
-									((table.table.height * grid.squareSize) / table.chairs.right) * i +
-									(table.table.height * grid.squareSize) / (2 * table.chairs.right) -
-									0.5 * grid.squareSize * 0.8,
-								width: 0.8 * grid.squareSize,
-								height: 0.8 * grid.squareSize,
-								fill: themes?.[$theme]?.primary?.[400],
-								cornerRadius: 4
-							}}
-						/>
-					{/each}
-				</Group>
-			{/each}
+							{#each Array(table.chairs.left) as _, i}
+								<Rect
+									config={{
+										x: -1 * grid.squareSize + 0.1 * grid.squareSize,
+										y:
+											((table.table.height * grid.squareSize) / table.chairs.left) * i +
+											(table.table.height * grid.squareSize) / (2 * table.chairs.left) -
+											0.5 * grid.squareSize * 0.8,
+										width: 0.8 * grid.squareSize,
+										height: 0.8 * grid.squareSize,
+										fill: themes?.[$theme]?.primary?.[400],
+										cornerRadius: 4
+									}}
+								/>
+							{/each}
+							{#each Array(table.chairs.right) as _, i}
+								<Rect
+									config={{
+										x: table.table.width * grid.squareSize + 0.1 * grid.squareSize,
+										y:
+											((table.table.height * grid.squareSize) / table.chairs.right) * i +
+											(table.table.height * grid.squareSize) / (2 * table.chairs.right) -
+											0.5 * grid.squareSize * 0.8,
+										width: 0.8 * grid.squareSize,
+										height: 0.8 * grid.squareSize,
+										fill: themes?.[$theme]?.primary?.[400],
+										cornerRadius: 4
+									}}
+								/>
+							{/each}
+						</Group>
+					{/if}
+				{/each}
 			{/if}
 		</Layer>
 		<Layer bind:handle={uiLayer} />
