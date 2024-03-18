@@ -991,7 +991,7 @@
 								draggable: true,
 								name: table.name,
 								x: (table.x || 0) * grid.squareSize,
-								y: (table.y || 0) * grid.squareSize,
+								y: (table.y || 0) * grid.squareSize
 								//rotation: table.rotation || 0,
 								//offsetX: (table.table.radius * grid.squareSize) / 2,
 								//offsetY: (table.table.radius * grid.squareSize) / 2
@@ -1003,25 +1003,31 @@
 						>
 							<Circle
 								config={{
-									x: 0,
-									y: 0,
+									x: (table.table.radius * grid.squareSize) / 2,
+									y: (table.table.radius * grid.squareSize) / 2,
 									radius: table.table.radius * grid.squareSize,
 									fill: themes?.[$theme]?.primary?.[500]
 								}}
 							/>
-							{#each Array(8) as _, i}
-								<!--Place 8 chairs around the table-->
+							{#each Array(6) as _, i}
 								<Rect
 									config={{
 										x:
-											Math.cos((i * Math.PI) / 4) * table.table.radius * grid.squareSize * 0.8 +
-											0.1 * grid.squareSize,
+											(table.table.radius + 0.8) *
+												grid.squareSize *
+												Math.cos((2 * Math.PI * i) / 6) +
+											grid.squareSize / 2,
 										y:
-											Math.sin((i * Math.PI) / 4) * table.table.radius * grid.squareSize * 0.8 +
-											0.1 * grid.squareSize,
-										width: 0.8 * grid.squareSize,
-										height: 0.8 * grid.squareSize,
+											(table.table.radius + 0.8) *
+												grid.squareSize *
+												Math.sin((2 * Math.PI * i) / 6) +
+											grid.squareSize / 2,
+										width: 0.8 * 30,
+										height: 0.8 * 30,
+										rotation: (i * 360) / 6,
 										fill: themes?.[$theme]?.primary?.[400],
+										offsetX: (grid.squareSize * 0.8) / 2,
+										offsetY: (grid.squareSize * 0.8) / 2,
 										cornerRadius: 4
 									}}
 								/>

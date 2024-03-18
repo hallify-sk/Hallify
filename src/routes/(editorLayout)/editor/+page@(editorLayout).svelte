@@ -12,7 +12,7 @@
 	let color = '#fff';
 	let tablesDB = data.tables as any;
 	import { theme } from '$lib/stores/theme.js';
-    
+
 	theme.set('light');
 
 	import { brush, modifyZones, rerender } from '$lib/stores/stage';
@@ -26,6 +26,16 @@
 		modifyZones.set(zoneEditing);
 	}
 	brush.set({ type: 'grab', snapCoefficient: 0.5 });
+
+	for (let i = 0; i < 8+1; i++) {
+		//+1 because we want it to return to original position;
+		const alphaRad = ((2 * Math.PI) / 8) * i;
+		const a = Math.sqrt(2 - 2 * Math.cos(alphaRad)) * 30;
+		const height = (a / 30) * Math.sqrt(Math.pow(30, 2) - Math.pow(a, 2) / 4);
+		const b = Math.sqrt(Math.pow(a, 2) - Math.pow(height, 2));
+		console.log(`Step: ${i}`)
+		console.log(a, b);
+	}
 </script>
 
 <div
