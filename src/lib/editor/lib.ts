@@ -87,6 +87,93 @@ export function countTotalChairs(
 	}, 0);
 }
 
+function pointCircle(x: number, y: number, cx: number, cy: number, r: number){
+	const distX = x - cx;
+	const distY = y - cy;
+	const distance = Math.sqrt( distX**2 + distY**2);
+
+	if(distance <= r){
+		return true;
+	}
+	return false;
+}
+
+function linePoint(x1: number, y1: number, x2: number, y2: number, px: number, py: number){
+	const d1 = getDistanceFromPoint(px, py, x1, y1);
+	const d2 = getDistanceFromPoint(px, py, x2, y2);
+
+	const lineLen = getDistanceFromPoint(x1, y1, x2, y2);
+
+	const buffer = 0.1;
+
+	if (d1+d2 >= lineLen-buffer && d1+d2 <= lineLen+buffer){
+		return true;
+	}
+	return false;
+}
+
+function getDistanceFromPoint(px: number, py: number, x: number, y: number){
+	const distX = px - x;
+	const distY = py - y;
+
+	return Math.sqrt( distX**2 + distY**2 );
+}
+
+export function checkCircleCollision(circleOne: {x: number, y: number, radius: number}, circleTwo: {x: number, y: number, radius: number}){
+	const distX = circleOne.x - circleTwo.x;
+	const distY = circleOne.y - circleTwo.y;
+
+	const distance = Math.sqrt((distX**2) + (distY**2));
+
+	if(distance <= circleOne.radius+circleTwo.radius){
+		return true;
+	}
+	return false;
+}
+
+export function checkPolygonCircleCollision(
+	polygon: Array<{ x: number; y: number }>,
+	circle: { x: number; y: number, radius: number }
+) {
+	if(polygon.some((_, i) => {
+		let nextIndex = i + 1;
+		if(nextIndex === polygon.length) nextIndex = 0;
+
+		const pointOne = polygon[i];
+		const pointTwo = polygon[nextIndex];
+
+		const insideOne = pointCircle(pointOne.x, pointOne.y, circle.x, circle.y, circle.radius);
+		const insideTwo = pointCircle(pointTwo.x, pointTwo.y, circle.x, circle.y, circle.radius);
+	
+		if(insideOne || insideTwo) return true;
+
+		let distX = pointOne.x - pointTwo.x;
+		let distY = pointOne.y - pointTwo.y;
+		const len = Math.sqrt( distX**2 + distY**2 );
+
+		const dot = ( ((circle.x-pointOne.x)*(pointTwo.x-pointOne.x)) + ((circle.y-pointOne.y)*(pointTwo.y-pointOne.y))) / len**2;
+		
+		const closestX = pointOne.x + (dot * (pointTwo.x-pointOne.x));
+		const closestY = pointOne.y + (dot * (pointTwo.y-pointOne.y));
+
+		const onSegment = linePoint(pointOne.x, pointOne.y, pointTwo.x, pointTwo.y, closestX, closestY);
+		if(!onSegment) return false;
+
+		distX = closestX - circle.x;
+		distY = closestY - circle.y;
+
+		const distance = Math.sqrt( distX**2 + distY**2);
+
+		if(distance <= circle.radius){
+			return true;
+		}
+		return false;
+	})){
+		return true;
+	};
+	return false;
+}
+
 export function checkPolygonCollision(
 	polygon1: Array<{ x: number; y: number }>,
 	polygon2: Array<{ x: number; y: number }>
@@ -121,7 +208,6 @@ export function checkPolygonCollision(
 						(pointFour.x - pointThree.x) * (pointTwo.y - pointOne.y));
 
 				// if uA and uB are between 0-1, lines are colliding
-				console.log(uA, uB);
 				if (uA >= 0 && uA <= 1 && uB >= 0 && uB <= 1) {
 					return true;
 				}

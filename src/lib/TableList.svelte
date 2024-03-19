@@ -64,7 +64,7 @@
 						{
 							left: table.maxChairsPerSide,
 							max: table.maxChairsPerSide,
-							right: table.maxChairsPerSide
+							right: table.isRound ? 0 : table.maxChairsPerSide
 						},
 						{ width: table.width, height: table.height, radius: table.radius || 0, isRound: table.isRound || false }
 					);

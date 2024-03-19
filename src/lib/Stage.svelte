@@ -40,7 +40,13 @@
 		pointsToObjectArray,
 		pointsToRealPosition,
 		rotatePoints,
-		countTotalChairs
+		countTotalChairs,
+
+		checkPolygonCircleCollision,
+
+		checkCircleCollision
+
+
 	} from './editor/lib';
 	import Konva from 'konva';
 	import { brush, modifyZones, rerender, selectedName, stageData, tableList } from './stores/stage';
@@ -415,9 +421,14 @@
 		let g = e.detail.currentTarget;
 		if ($brush.type != 'grab') return;
 		//Shape is used to determine collision
-		let shape: Konva.Line = e.detail.currentTarget.getChildren(
+		let shape: Konva.Line | Konva.Circle = e.detail.currentTarget.getChildren(
 			(node: Line) => node instanceof Konva.Line
 		)[0];
+		if (!shape) {
+			shape = e.detail.currentTarget.getChildren(
+				(node: Circle) => node instanceof Konva.Circle
+			)?.[0];
+		}
 		g.moveToTop();
 		// Calculate the new position based on the grid size
 		let newX =
@@ -442,34 +453,44 @@
 		objects = objects.filter((i) => i !== undefined);
 		//Detect if there is collision anywhere
 		let isColliding = objects.find((group: any) => {
-			let object = group.findOne((node: Line) => node instanceof Konva.Line);
+			let object: Konva.Line | Konva.Circle = group.findOne(
+				(node: Line) => node instanceof Konva.Line
+			);
+			if(!object) object = group.findOne(
+				(node: Circle) => node instanceof Konva.Circle
+			);
 
-			if (object && shape && object !== shape && object !== previewShape) {
+			if (object && shape && object !== shape) {
+				// && object !== previewShape
 				let shapeRef = $tableList.find((i) => i.name == g.name());
 				let shapeHitbox;
 				if (
 					(shapeRef?.chairs.left && shapeRef.chairs.left > 0) ||
 					(shapeRef?.chairs.right && shapeRef.chairs.right > 0)
 				) {
-					shapeHitbox = addChairHitbox(
-						pointsToObjectArray(
+					if (shape instanceof Konva.Line) {
+						shapeHitbox = addChairHitbox(
+							pointsToObjectArray(
+								pointsToRealPosition(shape.points(), {
+									x: g.x() - (g.draggable() ? g.offsetX() : 0),
+									y: g.y() - (g.draggable() ? g.offsetY() : 0)
+								})
+							),
+							grid.squareSize,
+							0.9,
+							shapeRef.chairs.left != 0,
+							shapeRef.chairs.right != 0
+						);
+					}
+				} else {
+					if (shape instanceof Konva.Line) {
+						shapeHitbox = pointsToObjectArray(
 							pointsToRealPosition(shape.points(), {
 								x: g.x() - (g.draggable() ? g.offsetX() : 0),
 								y: g.y() - (g.draggable() ? g.offsetY() : 0)
 							})
-						),
-						grid.squareSize,
-						0.9,
-						shapeRef.chairs.left != 0,
-						shapeRef.chairs.right != 0
-					);
-				} else {
-					shapeHitbox = pointsToObjectArray(
-						pointsToRealPosition(shape.points(), {
-							x: g.x() - (g.draggable() ? g.offsetX() : 0),
-							y: g.y() - (g.draggable() ? g.offsetY() : 0)
-						})
-					);
+						);
+					}
 				}
 				let objectRef = $tableList.find((i) => i.name == group.name());
 				let objectHitbox;
@@ -477,49 +498,96 @@
 					(objectRef?.chairs.left && objectRef.chairs.left > 0) ||
 					(objectRef?.chairs.right && objectRef.chairs.right > 0)
 				) {
-					objectHitbox = addChairHitbox(
-						pointsToObjectArray(
-							pointsToRealPosition(object.points(), {
-								x: object.parent.x() - (object.parent.draggable() ? object.parent.offsetX() : 0),
-								y: object.parent.y() - (object.parent.draggable() ? object.parent.offsetY() : 0)
-							})
-						),
-						grid.squareSize,
-						1,
-						objectRef.chairs.left != 0,
-						objectRef.chairs.right != 0
-					);
-				} else {
-					if (!objectRef) {
-						objectHitbox = pointsToObjectArray(
-							pointsToRealPosition(object.points(), { x: group.x(), y: group.y() })
-						);
-					} else {
-						objectHitbox = pointsToObjectArray(
-							pointsToRealPosition(object.points(), {
-								x: object.parent.x() - object.parent.offsetX(),
-								y: object.parent.y() - object.parent.offsetY()
-							})
+					if (object instanceof Konva.Line) {
+						objectHitbox = addChairHitbox(
+							pointsToObjectArray(
+								pointsToRealPosition(object.points(), {
+									x:
+										(object.parent?.x() ||
+										0) - (object.parent?.draggable() ? object.parent.offsetX() : 0),
+									y:
+										(object.parent?.y() ||
+										0) - (object.parent?.draggable() ? object.parent.offsetY() : 0)
+								})
+							),
+							grid.squareSize,
+							1,
+							objectRef.chairs.left != 0,
+							objectRef.chairs.right != 0
 						);
 					}
-				}
-				if (
-					checkPolygonCollision(
-						rotatePoints(
-							shapeHitbox,
-							{ x: shape.parent?.x() || 0, y: shape.parent?.y() || 0 },
-							shape.parent?.rotation() || 0
-						),
-						rotatePoints(
-							objectHitbox,
-							{ x: object.parent.x(), y: object.parent.y() },
-							object.parent.rotation()
-						)
-					)
-				) {
-					return true;
 				} else {
-					return false;
+					if (object instanceof Konva.Line) {
+						if (!objectRef) {
+							objectHitbox = pointsToObjectArray(
+								pointsToRealPosition(object.points(), { x: group.x(), y: group.y() })
+							);
+						} else {
+							objectHitbox = pointsToObjectArray(
+								pointsToRealPosition(object.points(), {
+									x: (object.parent?.x() || 0) - (object.parent?.offsetX() || 0),
+									y: (object.parent?.y() || 0) - (object.parent?.offsetY() || 0)
+								})
+							);
+						}
+					}
+				}
+				if (shapeHitbox && objectHitbox) {
+					if (
+						checkPolygonCollision(
+							rotatePoints(
+								shapeHitbox,
+								{ x: shape.parent?.x() || 0, y: shape.parent?.y() || 0 },
+								shape.parent?.rotation() || 0
+							),
+							rotatePoints(
+								objectHitbox,
+								{ x: object.parent?.x() || 0, y: object.parent?.y() || 0 },
+								object.parent?.rotation() || 0
+							)
+						)
+					) {
+						return true;
+					} else {
+						return false;
+					}
+				} else {
+					if(!shapeHitbox && !objectHitbox){
+						if(checkCircleCollision(
+							{x: shape.parent?.x() || 0, y: shape.parent?.y() || 0, radius: ((shapeRef?.table.radius || 0)+ (shapeRef?.chairs?.left == 0 ? 0 : 1)) * grid.squareSize},
+							{x: object.parent?.x() || 0, y: object.parent?.y() || 0, radius: ((objectRef?.table.radius || 0)+ (objectRef?.chairs?.left == 0 ? 0 : 1)) *grid.squareSize}
+						)){
+							return true;
+						}
+					}
+					//Check PolyCircle collision
+					if(shapeHitbox){
+						if(
+							checkPolygonCircleCollision(
+								rotatePoints(
+								shapeHitbox,
+								{ x: shape.parent?.x() || 0, y: shape.parent?.y() || 0 },
+								shape.parent?.rotation() || 0
+							),
+							{x: object.parent?.x() || 0, y: object.parent?.y() || 0, radius: ((objectRef?.table.radius || 0)+ (objectRef?.chairs?.left == 0 ? 0 : 1)) *grid.squareSize}
+							)
+						){
+							return true;
+						}
+					}else if(objectHitbox){
+						if(
+							checkPolygonCircleCollision(
+								rotatePoints(
+								objectHitbox,
+								{ x: object.parent?.x() || 0, y: object.parent?.y() || 0 },
+								object.parent?.rotation() || 0
+							),
+							{x: shape.parent?.x() || 0, y: shape.parent?.y() || 0, radius: ((shapeRef?.table.radius || 0) + (shapeRef?.chairs?.left == 0 ? 0 : 1)) * grid.squareSize}
+							)
+						){
+							return true;
+						}
+					}
 				}
 			}
 		});
@@ -634,7 +702,13 @@
 		//Doesnt work without timeout fsr
 		setTimeout(() => {
 			group.position(previewShape.position());
-			let shape = e.detail.currentTarget.getChildren((node: Line) => node instanceof Konva.Line)[0];
+			let shape = e.detail.currentTarget.getChildren(
+				(node: Line) => node instanceof Konva.Line
+			)?.[0];
+			if (!shape)
+				shape = e.detail.currentTarget.getChildren(
+					(node: Circle) => node instanceof Konva.Circle
+				)?.[0];
 			shape.fill('white');
 			tableList.set(
 				$tableList.map((e) => {
@@ -991,10 +1065,9 @@
 								draggable: true,
 								name: table.name,
 								x: (table.x || 0) * grid.squareSize,
-								y: (table.y || 0) * grid.squareSize
-								//rotation: table.rotation || 0,
-								//offsetX: (table.table.radius * grid.squareSize) / 2,
-								//offsetY: (table.table.radius * grid.squareSize) / 2
+								y: (table.y || 0) * grid.squareSize,
+								offsetX: (table.table.radius * grid.squareSize) / 2,
+								offsetY: (table.table.radius * grid.squareSize) / 2
 							}}
 							on:dragstart={dragStart}
 							on:dragmove={dragMove}
@@ -1009,25 +1082,25 @@
 									fill: themes?.[$theme]?.primary?.[500]
 								}}
 							/>
-							{#each Array(6) as _, i}
+							{#each Array(table.chairs.left) as _, i}
 								<Rect
 									config={{
 										x:
-											(table.table.radius + 0.8) *
+											(table.table.radius + 0.6) *
 												grid.squareSize *
-												Math.cos((2 * Math.PI * i) / 6) +
+												Math.cos((2 * Math.PI * i) / table.chairs.left) +
 											grid.squareSize / 2,
 										y:
-											(table.table.radius + 0.8) *
+											(table.table.radius + 0.6) *
 												grid.squareSize *
-												Math.sin((2 * Math.PI * i) / 6) +
+												Math.sin((2 * Math.PI * i) / table.chairs.left) +
 											grid.squareSize / 2,
-										width: 0.8 * 30,
-										height: 0.8 * 30,
-										rotation: (i * 360) / 6,
+										width: 0.6 * 30,
+										height: 0.6 * 30,
+										rotation: (i * 360) / table.chairs.left,
 										fill: themes?.[$theme]?.primary?.[400],
-										offsetX: (grid.squareSize * 0.8) / 2,
-										offsetY: (grid.squareSize * 0.8) / 2,
+										offsetX: (grid.squareSize * 0.6) / 2,
+										offsetY: (grid.squareSize * 0.6) / 2,
 										cornerRadius: 4
 									}}
 								/>

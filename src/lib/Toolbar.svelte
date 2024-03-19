@@ -4,6 +4,7 @@
 	import { applyAction, enhance } from '$app/forms';
 	import { countTotalChairs, dataURItoBlob } from './editor/lib';
 	import Popup from './Popup.svelte';
+	import Konva from 'konva';
 
 	export let downloadStage: () => Promise<string>;
 
@@ -20,7 +21,7 @@
 		$tableList.find((e) => {
 			if (e.name == $selectedName) {
 				chairsLeft = e.chairs.left;
-				chairsRight = e.chairs.right;
+				chairsRight = e.table.isRound ? 0 : e.chairs.right;
 				maxChairs = e.chairs.max;
 			}
 		});
@@ -32,6 +33,7 @@
 				chairsLeft = Math.max(Math.min(chairsLeft, maxChairs), 0) ?? 0;
 				e.chairs.left = chairsLeft;
 				chairsRight = Math.max(Math.min(chairsRight, maxChairs), 0) ?? 0;
+				if(e.table.isRound) chairsRight = 0;
 				e.chairs.right = chairsRight;
 				setTimeout(() => {
 					rerenderStage();
@@ -113,7 +115,11 @@
 			<path d="M6 19v2" />
 			<path d="M18 19v2" />
 		</svg>
+		{#if $tableList.find((e) => e.name == $selectedName)?.table.isRound}
+		<p class="text-primary-400 pointer-events-none mr-2 font-semibold mb-0.5">S : 0</p>
+		{:else}
 		<p class="text-primary-400 pointer-events-none mr-2 font-semibold mb-0.5">L : 0</p>
+		{/if}
 		<input
 			bind:value={chairsLeft}
 			class="w-32 bg-transparent appearance-none cursor-pointer mr-2"
@@ -138,6 +144,7 @@
 			}}
 			bind:value={chairsLeft}
 		/>
+		{#if !$tableList.find((e) => e.name == $selectedName)?.table.isRound}
 		<p class="text-primary-400 pointer-events-none ml-4 mr-2 font-semibold mb-0.5">P : 0</p>
 		<input
 			bind:value={chairsRight}
@@ -163,6 +170,7 @@
 			}}
 			bind:value={chairsRight}
 		/>
+		{/if}
 	{/if}
 	{#if $brush.type == 'zone'}
 		<p class="text-primary-400 pointer-events-none mr-2 font-semibold mb-0.5">výplň:</p>
