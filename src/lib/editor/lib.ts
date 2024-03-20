@@ -21,6 +21,7 @@ export function pointsToObjectArray(points: Array<number>) {
 export function addChairHitbox(
 	points: Array<{ x: number; y: number }>,
 	squareSize: number,
+	squaresPerMeter: number,
 	chairSize: number,
 	left: boolean | undefined,
 	right: boolean | undefined
@@ -29,10 +30,10 @@ export function addChairHitbox(
 	//Indices 0, 3 are to the left, 1, 2 are to the right
 	return points.map((v, i) => {
 		if (i == 1 || i == 2) {
-			if (right) return { x: v.x + chairSize * squareSize, y: v.y };
+			if (right) return { x: v.x + chairSize * squareSize * squaresPerMeter, y: v.y };
 			else return { x: v.x, y: v.y };
 		} else {
-			if (left) return { x: v.x - chairSize * squareSize, y: v.y };
+			if (left) return { x: v.x - chairSize * squareSize * squaresPerMeter, y: v.y };
 			else return { x: v.x, y: v.y };
 		}
 	});

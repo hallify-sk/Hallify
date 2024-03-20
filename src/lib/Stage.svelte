@@ -6,13 +6,15 @@
 		snapSize: number;
 		color: string;
 		borderThickness: number;
+		squaresPerMeter: number
 	} = {
 		width: 20,
 		height: 20,
 		squareSize: 30,
 		snapSize: 1,
 		color: '#fff',
-		borderThickness: 100
+		borderThickness: 100,
+		squaresPerMeter: 2
 	};
 	import { v4 as uuidv4 } from 'uuid';
 	import { onDestroy, onMount } from 'svelte';
@@ -41,12 +43,8 @@
 		pointsToRealPosition,
 		rotatePoints,
 		countTotalChairs,
-
 		checkPolygonCircleCollision,
-
 		checkCircleCollision
-
-
 	} from './editor/lib';
 	import Konva from 'konva';
 	import { brush, modifyZones, rerender, selectedName, stageData, tableList } from './stores/stage';
@@ -433,20 +431,15 @@
 		// Calculate the new position based on the grid size
 		let newX =
 			Math.round(
-				(g.x() + grid.squareSize * $brush.snapCoefficient) /
-					grid.squareSize /
-					$brush.snapCoefficient
-			) *
-			grid.squareSize *
-			$brush.snapCoefficient;
+				(g.x() + grid.squareSize * grid.squaresPerMeter * $brush.snapCoefficient) /
+					(grid.squareSize * $brush.snapCoefficient * grid.squaresPerMeter)
+			) * (grid.squareSize * $brush.snapCoefficient * grid.squaresPerMeter)
+				
 		let newY =
 			Math.round(
-				(g.y() + grid.squareSize * $brush.snapCoefficient) /
-					grid.squareSize /
-					$brush.snapCoefficient
-			) *
-			grid.squareSize *
-			$brush.snapCoefficient;
+				(g.y() + grid.squareSize * grid.squaresPerMeter * $brush.snapCoefficient) /
+					(grid.squareSize * $brush.snapCoefficient * grid.squaresPerMeter)
+			) * (grid.squareSize * $brush.snapCoefficient * grid.squaresPerMeter)
 
 		let objects = getMovablePolygons(objectLayer);
 		objects.push(...getCollisionPolygons(objectLayer));
@@ -456,9 +449,7 @@
 			let object: Konva.Line | Konva.Circle = group.findOne(
 				(node: Line) => node instanceof Konva.Line
 			);
-			if(!object) object = group.findOne(
-				(node: Circle) => node instanceof Konva.Circle
-			);
+			if (!object) object = group.findOne((node: Circle) => node instanceof Konva.Circle);
 
 			if (object && shape && object !== shape) {
 				// && object !== previewShape
@@ -477,7 +468,8 @@
 								})
 							),
 							grid.squareSize,
-							0.9,
+							grid.squaresPerMeter,
+							0.45,
 							shapeRef.chairs.left != 0,
 							shapeRef.chairs.right != 0
 						);
@@ -503,15 +495,16 @@
 							pointsToObjectArray(
 								pointsToRealPosition(object.points(), {
 									x:
-										(object.parent?.x() ||
-										0) - (object.parent?.draggable() ? object.parent.offsetX() : 0),
+										(object.parent?.x() || 0) -
+										(object.parent?.draggable() ? object.parent.offsetX() : 0),
 									y:
-										(object.parent?.y() ||
-										0) - (object.parent?.draggable() ? object.parent.offsetY() : 0)
+										(object.parent?.y() || 0) -
+										(object.parent?.draggable() ? object.parent.offsetY() : 0)
 								})
 							),
 							grid.squareSize,
-							1,
+							grid.squaresPerMeter,
+							0.45,
 							objectRef.chairs.left != 0,
 							objectRef.chairs.right != 0
 						);
@@ -552,39 +545,67 @@
 						return false;
 					}
 				} else {
-					if(!shapeHitbox && !objectHitbox){
-						if(checkCircleCollision(
-							{x: shape.parent?.x() || 0, y: shape.parent?.y() || 0, radius: ((shapeRef?.table.radius || 0)+ (shapeRef?.chairs?.left == 0 ? 0 : 1)) * grid.squareSize},
-							{x: object.parent?.x() || 0, y: object.parent?.y() || 0, radius: ((objectRef?.table.radius || 0)+ (objectRef?.chairs?.left == 0 ? 0 : 1)) *grid.squareSize}
-						)){
+					if (!shapeHitbox && !objectHitbox) {
+						if (
+							checkCircleCollision(
+								{
+									x: shape.parent?.x() || 0,
+									y: shape.parent?.y() || 0,
+									radius:
+										((shapeRef?.table.radius || 0) + (shapeRef?.chairs?.left == 0 ? 0 : 0.5)) *
+										grid.squareSize * grid.squaresPerMeter
+								},
+								{
+									x: object.parent?.x() || 0,
+									y: object.parent?.y() || 0,
+									radius:
+										((objectRef?.table.radius || 0) + (objectRef?.chairs?.left == 0 ? 0 : 0.5)) *
+										grid.squareSize * grid.squaresPerMeter
+								}
+							)
+						) {
 							return true;
 						}
 					}
 					//Check PolyCircle collision
-					if(shapeHitbox){
-						if(
+					if (shapeHitbox) {
+						console.log("SHAPE HITBOX")
+						if (
 							checkPolygonCircleCollision(
 								rotatePoints(
-								shapeHitbox,
-								{ x: shape.parent?.x() || 0, y: shape.parent?.y() || 0 },
-								shape.parent?.rotation() || 0
-							),
-							{x: object.parent?.x() || 0, y: object.parent?.y() || 0, radius: ((objectRef?.table.radius || 0)+ (objectRef?.chairs?.left == 0 ? 0 : 1)) *grid.squareSize}
+									shapeHitbox,
+									{ x: shape.parent?.x() || 0, y: shape.parent?.y() || 0 },
+									shape.parent?.rotation() || 0
+								),
+								{
+									x: object.parent?.x() || 0,
+									y: object.parent?.y() || 0,
+									radius:
+										((objectRef?.table.radius || 0) + (objectRef?.chairs?.left == 0 ? 0 : 0.5)) *
+										grid.squareSize * grid.squaresPerMeter
+								}
 							)
-						){
+						) {
 							return true;
 						}
-					}else if(objectHitbox){
-						if(
+					} else if (objectHitbox) {
+						console.log("OBJECT HITBOX")
+						if (
 							checkPolygonCircleCollision(
 								rotatePoints(
-								objectHitbox,
-								{ x: object.parent?.x() || 0, y: object.parent?.y() || 0 },
-								object.parent?.rotation() || 0
-							),
-							{x: shape.parent?.x() || 0, y: shape.parent?.y() || 0, radius: ((shapeRef?.table.radius || 0) + (shapeRef?.chairs?.left == 0 ? 0 : 1)) * grid.squareSize}
+									objectHitbox,
+									{ x: object.parent?.x() || 0, y: object.parent?.y() || 0 },
+									object.parent?.rotation() || 0
+								),
+								{
+									x: shape.parent?.x() || 0,
+									y: shape.parent?.y() || 0,
+									radius:
+										((shapeRef?.table.radius || 0) + (shapeRef?.chairs?.left == 0 ? 0 : 0.5)) *
+										grid.squareSize * grid.squaresPerMeter
+								}
 							)
-						){
+						) {
 							return true;
 						}
 					}
@@ -647,7 +668,7 @@
 		// Calculate the new position based on the grid size
 		let newX =
 			Math.round(
-				(shape.x() + grid.squareSize * $brush.snapCoefficient) /
+				(shape.x() + grid.squareSize * grid.squaresPerMeter * $brush.snapCoefficient) /
 					grid.squareSize /
 					$brush.snapCoefficient
 			) *
@@ -655,11 +676,11 @@
 			$brush.snapCoefficient;
 		let newY =
 			Math.round(
-				(shape.y() + grid.squareSize * $brush.snapCoefficient) /
+				(shape.y() + grid.squareSize * grid.squaresPerMeter * $brush.snapCoefficient) /
 					grid.squareSize /
-					$brush.snapCoefficient
+					$brush.snapCoefficient / grid.squaresPerMeter
 			) *
-			grid.squareSize *
+			grid.squareSize * grid.squaresPerMeter *
 			$brush.snapCoefficient;
 		//If there was no collision, continue in calculating new viable position
 		let position = getClosestViablePosition(
@@ -809,6 +830,7 @@
 	}
 
 	import themes from '$lib/themes.json';
+	import { sequence } from '@sveltejs/kit/hooks';
 </script>
 
 {#if typeof window !== 'undefined'}
@@ -1066,8 +1088,8 @@
 								name: table.name,
 								x: (table.x || 0) * grid.squareSize,
 								y: (table.y || 0) * grid.squareSize,
-								offsetX: (table.table.radius * grid.squareSize) / 2,
-								offsetY: (table.table.radius * grid.squareSize) / 2
+								offsetX: grid.squareSize * grid.squaresPerMeter / 2,
+								offsetY: grid.squareSize * grid.squaresPerMeter / 2
 							}}
 							on:dragstart={dragStart}
 							on:dragmove={dragMove}
@@ -1076,9 +1098,9 @@
 						>
 							<Circle
 								config={{
-									x: (table.table.radius * grid.squareSize) / 2,
-									y: (table.table.radius * grid.squareSize) / 2,
-									radius: table.table.radius * grid.squareSize,
+									x: grid.squareSize * grid.squaresPerMeter / 2,
+									y: grid.squareSize / 2 * grid.squaresPerMeter,
+									radius: table.table.radius * grid.squareSize * grid.squaresPerMeter,
 									fill: themes?.[$theme]?.primary?.[500]
 								}}
 							/>
@@ -1086,21 +1108,21 @@
 								<Rect
 									config={{
 										x:
-											(table.table.radius + 0.6) *
+											(table.table.radius * grid.squaresPerMeter + (0.25 * grid.squaresPerMeter)) *
 												grid.squareSize *
 												Math.cos((2 * Math.PI * i) / table.chairs.left) +
-											grid.squareSize / 2,
+											grid.squareSize / 2 * grid.squaresPerMeter,
 										y:
-											(table.table.radius + 0.6) *
+											(table.table.radius * grid.squaresPerMeter + (0.25 * grid.squaresPerMeter)) *
 												grid.squareSize *
 												Math.sin((2 * Math.PI * i) / table.chairs.left) +
-											grid.squareSize / 2,
-										width: 0.6 * 30,
-										height: 0.6 * 30,
+											grid.squareSize / 2 * grid.squaresPerMeter,
+										width: 0.4 * grid.squareSize * grid.squaresPerMeter,
+										height: 0.4 * grid.squareSize * grid.squaresPerMeter,
 										rotation: (i * 360) / table.chairs.left,
 										fill: themes?.[$theme]?.primary?.[400],
-										offsetX: (grid.squareSize * 0.6) / 2,
-										offsetY: (grid.squareSize * 0.6) / 2,
+										offsetX: (grid.squareSize * grid.squaresPerMeter * 0.4) / 2,
+										offsetY: (grid.squareSize * grid.squaresPerMeter * 0.4) / 2,
 										cornerRadius: 4
 									}}
 								/>
@@ -1114,8 +1136,8 @@
 								x: (table.x || 0) * grid.squareSize,
 								y: (table.y || 0) * grid.squareSize,
 								rotation: table.rotation || 0,
-								offsetX: (table.table.width * grid.squareSize) / 2,
-								offsetY: (table.table.height * grid.squareSize) / 2
+								offsetX: grid.squareSize * grid.squaresPerMeter / 2,
+								offsetY: grid.squareSize * grid.squaresPerMeter / 2
 							}}
 							on:dragstart={dragStart}
 							on:dragmove={dragMove}
@@ -1125,14 +1147,14 @@
 							<Line
 								config={{
 									points: [
-										0 * grid.squareSize,
 										0,
-										table.table.width * grid.squareSize,
 										0,
-										table.table.width * grid.squareSize,
-										table.table.height * grid.squareSize,
-										0 * grid.squareSize,
-										table.table.height * grid.squareSize
+										table.table.width * grid.squareSize * grid.squaresPerMeter,
+										0,
+										table.table.width * grid.squareSize * grid.squaresPerMeter,
+										table.table.height * grid.squareSize * grid.squaresPerMeter,
+										0,
+										table.table.height * grid.squareSize * grid.squaresPerMeter
 									],
 									fill: themes?.[$theme]?.primary?.[500],
 									closed: true
@@ -1142,13 +1164,13 @@
 							{#each Array(table.chairs.left) as _, i}
 								<Rect
 									config={{
-										x: -1 * grid.squareSize + 0.1 * grid.squareSize,
+										x: -1 * grid.squareSize * grid.squaresPerMeter + 0.55 * grid.squareSize * grid.squaresPerMeter,
 										y:
-											((table.table.height * grid.squareSize) / table.chairs.left) * i +
-											(table.table.height * grid.squareSize) / (2 * table.chairs.left) -
-											0.5 * grid.squareSize * 0.8,
-										width: 0.8 * grid.squareSize,
-										height: 0.8 * grid.squareSize,
+											((table.table.height * grid.squareSize * grid.squaresPerMeter) / table.chairs.left) * i +
+											(table.table.height * grid.squareSize * grid.squaresPerMeter) / (2 * table.chairs.left) -
+											0.5 * grid.squareSize * grid.squaresPerMeter * 0.4,
+										width: 0.4 * grid.squareSize * grid.squaresPerMeter,
+										height: 0.4 * grid.squareSize * grid.squaresPerMeter,
 										fill: themes?.[$theme]?.primary?.[400],
 										cornerRadius: 4
 									}}
@@ -1157,13 +1179,13 @@
 							{#each Array(table.chairs.right) as _, i}
 								<Rect
 									config={{
-										x: table.table.width * grid.squareSize + 0.1 * grid.squareSize,
+										x: table.table.width * grid.squareSize * grid.squaresPerMeter + 0.05 * grid.squareSize * grid.squaresPerMeter,
 										y:
-											((table.table.height * grid.squareSize) / table.chairs.right) * i +
-											(table.table.height * grid.squareSize) / (2 * table.chairs.right) -
-											0.5 * grid.squareSize * 0.8,
-										width: 0.8 * grid.squareSize,
-										height: 0.8 * grid.squareSize,
+											((table.table.height * grid.squareSize * grid.squaresPerMeter) / table.chairs.right) * i +
+											(table.table.height * grid.squareSize * grid.squaresPerMeter) / (2 * table.chairs.right) -
+											0.5 * grid.squareSize * grid.squaresPerMeter * 0.4,
+										width: 0.4 * grid.squareSize * grid.squaresPerMeter,
+										height: 0.4 * grid.squareSize * grid.squaresPerMeter,
 										fill: themes?.[$theme]?.primary?.[400],
 										cornerRadius: 4
 									}}
