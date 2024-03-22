@@ -6,11 +6,12 @@
 	import { brush, modifyZones, rerender, stageData, tableList } from '$lib/stores/stage';
 	import { theme } from '$lib/stores/theme.js';
 
-    let width = 25;
-	let height = 37;
+	let width = 36;
+	let height = 46;
 	let squareSize = 30;
-	let snapSize = 0.5;
+	let snapSize = 1;
 	let borderThickness = 10;
+	let squaresPerMeter = 2;
 	let color = '#fff';
 	let tablesDB = data.tables as any;
     
@@ -37,7 +38,7 @@
 	{#key $rerender}
 		<Stage
 			bind:downloadStage
-			grid={{ width, height, squareSize, snapSize, color, borderThickness }}
+			grid={{ width, height, squareSize, snapSize, color, borderThickness, squaresPerMeter }}
 		/>
 	{/key}
 </div>

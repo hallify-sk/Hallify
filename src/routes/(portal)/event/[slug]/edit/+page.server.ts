@@ -1,8 +1,77 @@
-import { PUBLIC_CALENDAR_EXPIRE } from '$env/static/public';
 import { error, fail } from '@sveltejs/kit';
 import PocketBase from 'pocketbase';
 
 export const actions = {
+	confirmReservation: async ({ request, locals, params }) => {
+		const data = await request.formData();
+		const name = data.get('menoUdalosti')?.toString();
+		const date = data.get('date')?.toString();
+		const peopleCount = data.get('pocetHosti')?.toString();
+		const type = data.get('type')?.toString();
+		const selectedAddons = [];
+		for (const pair of data.keys()) {
+			if (!['type', 'date', 'pocetHosti', 'menoUdalosti'].includes(pair)) selectedAddons.push(pair);
+		}
+		console.log(selectedAddons);
+
+		if (!locals.user) {
+			return fail(401, {
+				incorrect: true,
+				message: 'Pre vytvorenie rezervácie musíte byť prihlásený.',
+				type: 'auth'
+			});
+		}
+
+		if (!name || name == '') {
+			return fail(401, {
+				incorrect: true,
+				message: 'Pre vytvorenie rezervácie musíte zadať jej názov.',
+				type: 'name'
+			});
+		}
+
+		if (!type || type == '') {
+			return fail(401, {
+				incorrect: true,
+				message: 'Pre vytvorenie rezervácie musíte zadať typ udalosti.',
+				type: 'type'
+			});
+		}
+
+		if (!peopleCount || peopleCount == '' || isNaN(parseInt(peopleCount)) || parseInt(peopleCount) <= 0 || parseInt(peopleCount) > 120) {
+			return fail(401, {
+				incorrect: true,
+				message: 'Pre vytvorenie rezervácie musíte zadať počet ľudí.',
+				type: 'personCount'
+			});
+		}
+		try {
+			const res = await (locals.pb as PocketBase).collection('reservations').create({
+				name,
+				user: locals.user.id,
+				guestCount: peopleCount,
+				category: type,
+				addons: selectedAddons,
+				date: date
+			});
+			await (locals.pb as PocketBase).collection("temp_reservations").delete(params.slug);
+			return { success: true, reservationId: res.id };
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		} catch (e: any) {
+			if (e?.data?.data?.date) {
+				return fail(401, {
+					incorrect: true,
+					message: 'Vaša rezervácia prepadla a dátum si už rezervoval niekto iný.'
+				});
+			} else {
+				console.log(e);
+				return fail(500, {
+					incorrect: true,
+					message: 'Nastala serverová chyba. Skúste to prosím neskôr.'
+				});
+			}
+		}
+	},
 	updateReservation: async ({ request, locals, params }) => {
 		const data = await request.formData();
 		const name = data.get('menoUdalosti')?.toString();
@@ -33,23 +102,20 @@ export const actions = {
 		if (!type || type == '') {
 			return fail(401, {
 				incorrect: true,
-				message: 'Pre vytvorenie rezervácie musíte zadať druh události.',
+				message: 'Pre vytvorenie rezervácie musíte zadať typ udalosti.',
 				type: 'type'
 			});
 		}
 
-		if (!peopleCount || peopleCount == '' || isNaN(parseInt(peopleCount))) {
+		if (!peopleCount || peopleCount == '' || isNaN(parseInt(peopleCount)) || parseInt(peopleCount) <= 0 || parseInt(peopleCount) > 120) {
 			return fail(401, {
 				incorrect: true,
 				message: 'Pre vytvorenie rezervácie musíte zadať počet ľudí.',
 				type: 'personCount'
 			});
 		}
-		const expires = new Date(new Date().getTime() + parseInt(PUBLIC_CALENDAR_EXPIRE) * 60000);
-		//Try to update current reservation
 		try {
-			await (locals.pb as PocketBase).collection('temp_reservations').update(params.slug, {
-				expires,
+			await (locals.pb as PocketBase).collection('reservations').update(params.slug, {
 				name,
 				guestCount: peopleCount,
 				category: type,

@@ -17,12 +17,14 @@
 />
 
 <div class="flex flex-row flex-nowrap relative">
+	{#if data.reservation?.expires}
 	<p class="absolute w-full top-0 text-center bg-primary-500 text-text-800">Ponuka vyprší o: {Math.floor(getMinutesToDate(data.reservation.expires) / 60 / 1000)} minút</p>
+	{/if}
 	<div
 		class="min-h-screen pt-24 px-14 w-full xl:w-3/4"
 	>
 		<div class="flex flex-row flex-nowrap items-center justify-between">
-			<h1 class="text-3xl font-bold text-text-600">Detaily události</h1>
+			<h1 class="text-3xl font-bold text-text-600">Detaily udalosti</h1>
 			<div class="relative group">
 				<button
 					type="button"
@@ -65,7 +67,7 @@
 				</div>
 			</div>
 		</div>
-		<h2 class="mt-7 text-text-500">Tu si môžete zobraziť detaily vašej události, poprípade ich ešte upraviť.</h2>
+		<h2 class="mt-7 text-text-500">Tu si môžete zobraziť detaily vašej udalosti, poprípade ich ešte upraviť.</h2>
 		<form class="grid grid-cols-1 lg:grid-cols-2 mt-7 gap-3 w-full">
             <fieldset class="relative text-input">
 				<input
@@ -86,7 +88,7 @@
 					class="absolute top-0.5 left-1 {nameError
 						? 'text-red-500'
 						: 'text-text-400'} text-sm peer-focus:top-0.5 peer-focus:left-1 peer-focus:text-text-400 peer-focus:text-sm peer-placeholder-shown:top-3 peer-placeholder-shown:left-1 peer-placeholder-shown:text-text-500 peer-placeholder-shown:text-base pointer-events-none ml-1 duration-75"
-					>Názov události</label
+					>Názov udalosti</label
 				>
 			</fieldset>
             <fieldset class="relative text-input">
@@ -130,7 +132,7 @@
 					class="absolute top-0.5 left-1 {dateError
 						? 'text-red-500'
 						: 'text-text-400'} text-sm peer-focus:top-0.5 peer-focus:left-1 peer-focus:text-text-400 peer-focus:text-sm peer-placeholder-shown:top-3 peer-placeholder-shown:left-1 peer-placeholder-shown:text-text-500 peer-placeholder-shown:text-base pointer-events-none ml-1 duration-75"
-					>Dátum události</label
+					>Dátum udalosti</label
 				>
 			</fieldset>
 			<fieldset class="relative text-input">

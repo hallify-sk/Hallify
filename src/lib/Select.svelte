@@ -35,8 +35,8 @@
 
 <div bind:this={select} class="flex flex-col flex-nowrap w-full relative {additionalStyle}">
     <input type="text" id={name} name={name} bind:value={value} class="hidden">
-    <button type="button" on:click={toggleSelect} class="pb-0.5 px-2 pt-5 relative text-left cursor-pointer bg-background-100 w-full rounded-md text-text-600 peer group h-12">
-        <p class="absolute {selected ? "top-0.5 left-1 text-sm text-text-400" : open ? "top-0.5 left-1 text-sm text-text-400" : "left-1 top-3 text-text-500"} pointer-events-none duration-100 bg rounded px-1 font-thin">{defaultText}</p>
+    <button type="button" on:click={toggleSelect} class="pb-0.5 px-2 pt-5 relative text-left cursor-pointer bg-background-100 w-full rounded-md text-text-600 {invalid ? "border border-red-500" : ""} peer group h-12 ">
+        <p class="absolute {selected ? "top-0.5 left-1 text-sm text-text-400" : open ? "top-0.5 left-1 text-sm text-text-400" : `left-1 top-3 ${invalid ? 'text-red-500' : 'text-text-500'}`} pointer-events-none duration-100 bg rounded px-1">{defaultText}</p>
         <p class="text-text-600">{selected ? selected : ""}</p>
         {#if open}
         <svg class="w-4 h-4 absolute right-2 top-4" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">

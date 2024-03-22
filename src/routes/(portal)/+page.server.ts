@@ -244,7 +244,7 @@ export const actions = {
 		if (!type || type == '') {
 			return fail(401, {
 				incorrect: true,
-				message: 'Pre vytvorenie rezervácie musíte zadať druh události.',
+				message: 'Pre vytvorenie rezervácie musíte zadať druh udalosti.',
 				type: 'type'
 			});
 		}

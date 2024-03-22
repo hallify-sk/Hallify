@@ -36,7 +36,7 @@ export function addChairHitbox(
 			if (left) return { x: v.x - chairSize * squareSize * squaresPerMeter, y: v.y };
 			else return { x: v.x, y: v.y };
 		}
-	});
+	})
 }
 
 export function rotatePoints(
