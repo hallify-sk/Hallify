@@ -326,7 +326,24 @@
 				</div>
 			{/each}
 		</div>
-		<h2 class="col-span-1 md:col-span-2 lg:col-span-3">Helol</h2>
+		<h2 class="col-span-1 md:col-span-2 lg:col-span-3 text-text-600 text-lg flex flex-row gap-1 items-center">
+			<svg
+				xmlns="http://www.w3.org/2000/svg"
+				width="24"
+				height="24"
+				viewBox="0 0 24 24"
+				fill="none"
+				stroke="currentColor"
+				stroke-width="2"
+				stroke-linecap="round"
+				stroke-linejoin="round"
+				class="icon icon-tabler icons-tabler-outline icon-tabler-history"
+				><path stroke="none" d="M0 0h24v24H0z" fill="none" /><path d="M12 8l0 4l2 2" /><path
+					d="M3.05 11a9 9 0 1 1 .5 4m-.5 5v-5h5"
+				/></svg
+			>
+			Archív udalostí
+		</h2>
 		<div class="grid gap-7 grid-cols-1 md:grid-cols-2 lg:grid-cols-3 auto-rows-fr w-full">
 			{#each data.ownedReservations.filter((i) => new Date(i.date).getTime() < new Date().getTime()) as reservation, i}
 				<div class="relative">
