@@ -76,12 +76,12 @@
 	user={data.user}
 />
 <div class="flex flex-row flex-nowrap">
-	<div
-		class="min-h-screen pt-24 px-14"
-	>
-		<h1 class="text-2xl font-bold text-text-600">Dobrý deň, {data.user?.name?.split(" ")[0]}</h1>
-		<h2 class="mt-7 text-text-500">Tu si môžete naplánovať nové udalosti, alebo zobraziť svoje staršie udalosti.</h2>
-		<div class="grid gap-7 mt-7 grid-cols-1 md:grid-cols-2 lg:grid-cols-3 grid-rows-6 w-full">
+	<div class="min-h-screen pt-24 px-14 flex flex-col flex-nowrap gap-4">
+		<h1 class="text-2xl font-bold text-text-600">Dobrý deň, {data.user?.name?.split(' ')[0]}</h1>
+		<h2 class="mt-7 text-text-500">
+			Tu si môžete naplánovať nové udalosti, alebo zobraziť svoje staršie udalosti.
+		</h2>
+		<div class="grid gap-7 mt-7 grid-cols-1 md:grid-cols-2 lg:grid-cols-3 auto-rows-fr w-full">
 			<button
 				on:click={() => {
 					if (data.user) {
@@ -192,7 +192,7 @@
 											d="M16 3.13a4 4 0 0 1 0 7.75"
 										/><path d="M21 21v-2a4 4 0 0 0 -3 -3.85" /></svg
 									>
-									<p class="text-text-400">Počet ľudí: {reservation.guestCount || ""}</p>
+									<p class="text-text-400">Počet ľudí: {reservation.guestCount || ''}</p>
 								</div>
 								<div class="flex flex-row gap-3">
 									<svg
@@ -221,7 +221,7 @@
 					</a>
 				</div>
 			{/each}
-			{#each data.ownedReservations as reservation, i}
+			{#each data.ownedReservations.filter((i) => new Date(i.date).getTime() > new Date().getTime()) as reservation, i}
 				<div class="relative">
 					<div
 						class="flex flex-row flex-nowrap justify-end absolute top-1 right-1 items-center z-20 float-right"
@@ -296,7 +296,114 @@
 											d="M16 3.13a4 4 0 0 1 0 7.75"
 										/><path d="M21 21v-2a4 4 0 0 0 -3 -3.85" /></svg
 									>
-									<p class="text-text-400">Počet ľudí: {reservation.guestCount || ""}</p>
+									<p class="text-text-400">Počet ľudí: {reservation.guestCount || ''}</p>
+								</div>
+								<div class="flex flex-row gap-3">
+									<svg
+										xmlns="http://www.w3.org/2000/svg"
+										class="icon icon-tabler icon-tabler-calendar-due stroke-primary-400 rounded-full w-6 h-6"
+										width="24"
+										height="24"
+										viewBox="0 0 24 24"
+										stroke-width="1.5"
+										stroke="currentColor"
+										fill="none"
+										stroke-linecap="round"
+										stroke-linejoin="round"
+										><path stroke="none" d="M0 0h24v24H0z" fill="none" /><path
+											d="M4 5m0 2a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v12a2 2 0 0 1 -2 2h-12a2 2 0 0 1 -2 -2z"
+										/><path d="M16 3v4" /><path d="M8 3v4" /><path d="M4 11h16" /><path
+											d="M12 16m-1 0a1 1 0 1 0 2 0a1 1 0 1 0 -2 0"
+										/></svg
+									>
+									<p class="text-text-400">
+										Dátum: {new Date(reservation.date).toLocaleDateString('sk')}
+									</p>
+								</div>
+							</div>
+						</div>
+					</a>
+				</div>
+			{/each}
+		</div>
+		<h2 class="col-span-1 md:col-span-2 lg:col-span-3">Helol</h2>
+		<div class="grid gap-7 grid-cols-1 md:grid-cols-2 lg:grid-cols-3 auto-rows-fr w-full">
+			{#each data.ownedReservations.filter((i) => new Date(i.date).getTime() < new Date().getTime()) as reservation, i}
+				<div class="relative">
+					<div
+						class="flex flex-row flex-nowrap justify-end absolute top-1 right-1 items-center z-20 float-right"
+					>
+						<div class="relative group">
+							<button
+								type="button"
+								class="p-1 hover:bg-background-50 rounded-full text-text-600 aspect-square flex flex-row gap-2 items-center"
+							>
+								<svg
+									xmlns="http://www.w3.org/2000/svg"
+									class="icon icon-tabler icon-tabler-dots stroke-primary-400"
+									width="24"
+									height="24"
+									viewBox="0 0 24 24"
+									stroke-width="1.5"
+									stroke="currentColor"
+									fill="none"
+									stroke-linecap="round"
+									stroke-linejoin="round"
+									><path stroke="none" d="M0 0h24v24H0z" fill="none" /><path
+										d="M5 12m-1 0a1 1 0 1 0 2 0a1 1 0 1 0 -2 0"
+									/><path d="M12 12m-1 0a1 1 0 1 0 2 0a1 1 0 1 0 -2 0" /><path
+										d="M19 12m-1 0a1 1 0 1 0 2 0a1 1 0 1 0 -2 0"
+									/></svg
+								>
+							</button>
+							<div
+								class="hidden group-focus-within:flex focus-within:flex focus:flex flex-col absolute top-9 rounded-md -right-4 bg-background-100 w-52 px-2 py-2 gap-1 border border-background-200"
+							>
+								<a
+									href="/event/{reservation.id}/edit"
+									class="px-4 py-2 hover:bg-background-50 rounded-md text-text-600 w-full text-center"
+								>
+									Nastavenia
+								</a>
+								<button
+									on:click={openDeletePopup}
+									type="button"
+									class="px-4 py-2 bg-background-700 hover:bg-primary-600 rounded-md text-text-50 w-full"
+								>
+									Vymazať
+								</button>
+							</div>
+						</div>
+					</div>
+					<a
+						href="/event/{reservation.id}"
+						class="rounded-md relative bg-background-100 h-full flex flex-col justify-center text-left border-primary-500 hover:brightness-105"
+					>
+						<div class="p-8 pt-0 flex flex-col gap-6 mt-6">
+							<div class="flex flex-col">
+								<p class="text-xl font-bold text-text-600">{reservation.name || 'Meno udalosti'}</p>
+								<p class="text-text-500">{reservation.expand?.category?.name || 'kategória'}</p>
+							</div>
+							<div class="flex flex-col">
+								<div class="flex flex-row gap-3">
+									<svg
+										xmlns="http://www.w3.org/2000/svg"
+										class="icon icon-tabler icon-tabler-users stroke-primary-400 rounded-full w-6 h-6"
+										width="24"
+										height="24"
+										viewBox="0 0 24 24"
+										stroke-width="1.5"
+										stroke="currentColor"
+										fill="none"
+										stroke-linecap="round"
+										stroke-linejoin="round"
+										><path stroke="none" d="M0 0h24v24H0z" fill="none" /><path
+											d="M9 7m-4 0a4 4 0 1 0 8 0a4 4 0 1 0 -8 0"
+										/><path d="M3 21v-2a4 4 0 0 1 4 -4h4a4 4 0 0 1 4 4v2" /><path
+											d="M16 3.13a4 4 0 0 1 0 7.75"
+										/><path d="M21 21v-2a4 4 0 0 0 -3 -3.85" /></svg
+									>
+									<p class="text-text-400">Počet ľudí: {reservation.guestCount || ''}</p>
 								</div>
 								<div class="flex flex-row gap-3">
 									<svg
