@@ -116,11 +116,6 @@
 		window.addEventListener('keydown', (e) => {
 			if (e.code == 'Delete') {
 				tr.nodes().forEach((e) => {
-					stageData.set({
-						...$stageData,
-						zones: $stageData.zones.filter((i) => i.name !== e.name())
-					});
-					e.remove();
 					//Make sure the tableName and UUID of the table is the same. Name format: "tableName UUID". Then, remove from tablelist
 					tableList.set(
 						$tableList.filter((i) => {
@@ -130,10 +125,6 @@
 							return i.name.split(' ')[1] !== e.name().split(' ')[1];
 						})
 					);
-					console.log($tableList);
-					console.log(e.name());
-					console.log($tableList.find((i: any) => i.name !== e.name()));
-					//e.remove();
 				});
 				tr.nodes([]);
 			} else if (e.code == 'KeyZ' && e.ctrlKey) {

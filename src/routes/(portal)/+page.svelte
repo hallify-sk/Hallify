@@ -75,7 +75,7 @@
 	bind:closeRegisterPopup
 	user={data.user}
 />
-<div class="flex flex-row flex-nowrap">
+<div class="flex flex-row flex-nowrap pb-8">
 	<div class="min-h-screen pt-24 px-14 flex flex-col flex-nowrap gap-4">
 		<h1 class="text-2xl font-bold text-text-600">Dobrý deň, {data.user?.name?.split(' ')[0]}</h1>
 		<h2 class="mt-7 text-text-500">
@@ -114,12 +114,12 @@
 			{#each data.ownedTempReservations as reservation, i}
 				<div class="relative">
 					<div
-						class="flex flex-row flex-nowrap justify-end absolute w-full top-7 right-1 items-center z-20"
+						class="flex flex-row flex-nowrap justify-end absolute w-full top-8 right-2 items-center z-20"
 					>
 						<div class="relative group">
 							<button
 								type="button"
-								class="p-1 hover:bg-background-50 rounded-full text-text-600 aspect-square flex flex-row gap-2 items-center"
+								class="p-1 hover:bg-background-50 rounded-md text-text-600 aspect-square flex flex-row gap-2 items-center"
 							>
 								<svg
 									xmlns="http://www.w3.org/2000/svg"
@@ -224,12 +224,12 @@
 			{#each data.ownedReservations.filter((i) => new Date(i.date).getTime() > new Date().getTime()) as reservation, i}
 				<div class="relative">
 					<div
-						class="flex flex-row flex-nowrap justify-end absolute top-1 right-1 items-center z-20 float-right"
+						class="flex flex-row flex-nowrap justify-end absolute top-2 right-2 items-center z-20 float-right"
 					>
 						<div class="relative group">
 							<button
 								type="button"
-								class="p-1 hover:bg-background-50 rounded-full text-text-600 aspect-square flex flex-row gap-2 items-center"
+								class="p-1 hover:bg-background-50 rounded-md text-text-600 aspect-square flex flex-row gap-2 items-center"
 							>
 								<svg
 									xmlns="http://www.w3.org/2000/svg"
@@ -348,12 +348,12 @@
 			{#each data.ownedReservations.filter((i) => new Date(i.date).getTime() < new Date().getTime()) as reservation, i}
 				<div class="relative">
 					<div
-						class="flex flex-row flex-nowrap justify-end absolute top-1 right-1 items-center z-20 float-right"
+						class="flex flex-row flex-nowrap justify-end absolute top-2 right-2 items-center z-20 float-right"
 					>
 						<div class="relative group">
 							<button
 								type="button"
-								class="p-1 hover:bg-background-50 rounded-full text-text-600 aspect-square flex flex-row gap-2 items-center"
+								class="p-1 hover:bg-background-50 rounded-md text-text-600 aspect-square flex flex-row gap-2 items-center"
 							>
 								<svg
 									xmlns="http://www.w3.org/2000/svg"

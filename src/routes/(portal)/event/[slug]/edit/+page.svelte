@@ -48,14 +48,14 @@
 			<h1 class="text-3xl font-bold text-text-600">Detaily udalosti</h1>
 		</div>
 		<h2 class="mt-7 text-text-500">Tu si môžete zobraziť detaily vašej udalosti, poprípade ich upraviť {data.reservation.expires ? "pred dokončením rezervácie." : "."}</h2>
-		<form method="post" action={data.reservation.expires ? "/event/{data.slug}/edit/?/confirmReservation" : "/event/{data.slug}/edit/?/updateReservation"}
+		<form method="post" action={data.reservation.expires ? `/event/${data.slug}/edit/?/confirmReservation` : `/event/${data.slug}/edit/?/updateReservation`}
 		use:enhance={({ formData }) => {
 			formData.append("date", data.reservation.date);
 			return ({ result }) => {
 				console.log(result);
 				if(result.type == "success"){
 					console.log("got here");
-					goto(`/event/${result.data.reservationId}`);
+					goto(`/event/${result.data?.reservationId}`);
 				}else if(result.type == "failure"){
 					switch (result.data?.type){
 						case "name":
