@@ -17,9 +17,12 @@
 				case 'w':
 					setBrush('wall');
 					break;
-				case 't':
-				setBrush('placeTables');
-				break;
+				case 'e':
+					setBrush('wallGrab');
+					break;
+				case 'l':
+					setBrush('zoneGrab');
+					break;
 			}
 		});
 	});
@@ -80,6 +83,45 @@
 	</button>
 	<button
 		on:click={() => {
+			setBrush('zoneGrab');
+		}}
+		class="w-full overflow-hidden h-12 rounded-md hover:bg-background-200 flex items-center relative justify-around gap-6 {$brush.type ==
+		'zoneGrab'
+			? 'text-primary-600 bg-background-200'
+			: 'text-primary-400'}"
+	>
+		<svg
+			xmlns="http://www.w3.org/2000/svg"
+			fill="none"
+			viewBox="0 0 24 24"
+			stroke-width="1.5"
+			stroke="currentColor"
+			class="w-5 h-5 absolute left-1.5"
+		>
+			<path
+				stroke-linecap="round"
+				stroke-linejoin="round"
+				d="m21 7.5-2.25-1.313M21 7.5v2.25m0-2.25-2.25 1.313M3 7.5l2.25-1.313M3 7.5l2.25 1.313M3 7.5v2.25m9 3 2.25-1.313M12 12.75l-2.25-1.313M12 12.75V15m0 6.75 2.25-1.313M12 21.75V19.5m0 2.25-2.25-1.313m0-16.875L12 2.25l2.25 1.313M21 14.25v2.25l-2.25 1.313m-13.5 0L3 16.5v-2.25"
+			/>
+		</svg>
+		<svg
+			data-slot="icon"
+			aria-hidden="true"
+			fill="currentColor"
+			viewBox="0 0 20 20"
+			xmlns="http://www.w3.org/2000/svg"
+			class="w-5 h-5 absolute left-4 top-5"
+		>
+			<path
+				clip-rule="evenodd"
+				d="M11 2a1 1 0 1 0-2 0v6.5a.5.5 0 0 1-1 0V3a1 1 0 1 0-2 0v5.5a.5.5 0 0 1-1 0V5a1 1 0 1 0-2 0v7a7 7 0 1 0 14 0V8a1 1 0 1 0-2 0v3.5a.5.5 0 0 1-1 0V3a1 1 0 1 0-2 0v5.5a.5.5 0 0 1-1 0V2Z"
+				fill-rule="evenodd"
+			></path>
+		</svg>
+		<p class="absolute left-12 w-28 overflow-hidden text-left">Zone grab</p>
+	</button>
+	<button
+		on:click={() => {
 			setBrush('wall');
 		}}
 		class="w-full overflow-hidden h-12 rounded-md hover:bg-background-200 flex items-center relative justify-around gap-6 {$brush.type ==
@@ -101,28 +143,37 @@
 	</button>
 	<button
 		on:click={() => {
-			setBrush('placeTables');
+			setBrush('wallGrab');
 		}}
 		class="w-full overflow-hidden h-12 rounded-md hover:bg-background-200 flex items-center relative justify-around gap-6 {$brush.type ==
-		'placeTables'
+		'wallGrab'
 			? 'text-primary-600 bg-background-200'
 			: 'text-primary-400'}"
 	>
 		<svg
 			xmlns="http://www.w3.org/2000/svg"
-			class="w-6 h-6 absolute left-2"
-			width="24"
-			height="24"
 			viewBox="0 0 24 24"
-			stroke-width="2"
-			stroke="currentColor"
-			fill="none"
-			stroke-linecap="round"
-			stroke-linejoin="round"
-			><path stroke="none" d="M0 0h24v24H0z" fill="none" /><path d="M3 6h18" /><path
-				d="M4 6v13"
-			/><path d="M20 19v-13" /><path d="M4 10h16" /><path d="M15 6v8a2 2 0 0 0 2 2h3" /></svg
+			fill="currentColor"
+			class="w-6 h-6 absolute left-2"
 		>
-		<p class="absolute left-12 w-28 overflow-hidden text-left">Place Tables</p>
+			<path
+				d="M12.378 1.602a.75.75 0 0 0-.756 0L3 6.632l9 5.25 9-5.25-8.622-5.03ZM21.75 7.93l-9 5.25v9l8.628-5.032a.75.75 0 0 0 .372-.648V7.93ZM11.25 22.18v-9l-9-5.25v8.57a.75.75 0 0 0 .372.648l8.628 5.033Z"
+			/>
+		</svg>
+		<svg
+			data-slot="icon"
+			aria-hidden="true"
+			fill="currentColor"
+			viewBox="0 0 20 20"
+			xmlns="http://www.w3.org/2000/svg"
+			class="w-5 h-5 absolute left-4 top-5 stroke-text-50"
+		>
+			<path
+				clip-rule="evenodd"
+				d="M11 2a1 1 0 1 0-2 0v6.5a.5.5 0 0 1-1 0V3a1 1 0 1 0-2 0v5.5a.5.5 0 0 1-1 0V5a1 1 0 1 0-2 0v7a7 7 0 1 0 14 0V8a1 1 0 1 0-2 0v3.5a.5.5 0 0 1-1 0V3a1 1 0 1 0-2 0v5.5a.5.5 0 0 1-1 0V2Z"
+				fill-rule="evenodd"
+			></path>
+		</svg>
+		<p class="absolute left-12 w-28 overflow-hidden text-left">Wall grab</p>
 	</button>
 </div>

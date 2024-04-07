@@ -4,7 +4,6 @@
 	import { applyAction, enhance } from '$app/forms';
 	import { countTotalChairs, dataURItoBlob } from './editor/lib';
 	import Popup from './Popup.svelte';
-	import Konva from 'konva';
 
 	export let downloadStage: () => Promise<string>;
 

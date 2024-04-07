@@ -370,6 +370,12 @@
 		switch ($brush.type) {
 			case 'grab':
 				{
+					// Remove all circles from the stage
+					if(uiLayer){
+						points = [];
+						circles = [];
+						uiLayer.removeChildren();
+					}
 					if (!objectLayer) return;
 					objectLayer.children
 						.filter((i) => !i.hasName('wall'))
