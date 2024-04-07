@@ -190,6 +190,14 @@ export function checkPolygonCollision(
 		const pointOne = polygon1[i];
 		const pointTwo = polygon1[nextIndex];
 
+		if(polyPoint(polygon1, polygon2[0].x, polygon2[0].y)){
+			return true;
+		};
+
+		if(polyPoint(polygon2, polygon1[0].x, polygon1[0].y)){
+			return true;
+		};
+
 		if (
 			polygon2.some((_, i, a) => {
 				// http://www.jeffreythompson.org/collision-detection/line-line.php
@@ -219,6 +227,30 @@ export function checkPolygonCollision(
 		}
 	}
 }
+  
+  function polyPoint(vertices: Array<{x: number, y: number}>, px: number, py: number): boolean {
+	let collision = false;
+  
+	// go through each of the vertices, plus the next vertex in the list
+	let next = 0;
+	for (let current = 0; current < vertices.length; current++) {
+  
+	  // get next vertex in list, if we've hit the end, wrap around to 0
+	  next = current + 1;
+	  if (next == vertices.length) next = 0;
+  
+	  // get the PVectors at our current position
+	  let vc = vertices[current];    // c for "current"
+	  let vn = vertices[next];       // n for "next"
+  
+	  // compare position, flip 'collision' variable back and forth
+	  if (((vc.y > py && vn.y < py) || (vc.y < py && vn.y > py)) &&
+		  (px < (vn.x - vc.x) * (py - vc.y) / (vn.y - vc.y) + vc.x)) {
+		collision = !collision;
+	  }
+	}
+	return collision;
+  }
 
 // export function checkPolygonCollision(polygon1: Array<{x: number, y: number}>, polygon2: Array<{x: number, y: number}>) {
 //   const polygons = [polygon1, polygon2];
