@@ -1,27 +1,36 @@
 <script lang="ts">
+	// Exported variables
 	export let popupVisible = false;
+	export let onClose: () => void = () => {};
+	export let onOpen: () => void = () => {};
 
+	// Function to open the popup
 	export function openPopup() {
 		onOpen();
-		popupVisible = !popupVisible;
+		popupVisible = true;
 	}
+
+	// Function to close the popup
 	export function closePopup() {
 		onClose();
 		popupVisible = false;
 	}
-	export let onClose: () => void = () => {};
-	export let onOpen: () => void = () => {};
 </script>
 
 {#if popupVisible}
-	<!-- svelte-ignore a11y-click-events-have-key-events -->
-	<!-- svelte-ignore a11y-no-static-element-interactions -->
-	<div
-		class="w-screen h-screen bg-black/20 fixed top-0 left-0 grid place-items-center z-50 cursor-pointer"
+	<!-- Overlay -->
+	<button
+		type="button"
+		class="w-screen h-screen bg-black/20 fixed top-0 left-0 grid place-items-center z-50 cursor-pointer text-left"
 		on:click={closePopup}
 	>
-		<div class="bg-background-50 p-6 rounded-md block cursor-default" on:click|stopPropagation>
+		<!-- Popup content -->
+		<button
+			type="button"
+			class="bg-background-50 p-6 rounded-md block cursor-default text-left"
+			on:click|stopPropagation
+		>
 			<slot />
-		</div>
-	</div>
+		</button>
+	</button>
 {/if}

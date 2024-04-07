@@ -1,56 +1,83 @@
 <script lang="ts">
+	// Import necessary modules and components
 	import { onDestroy } from 'svelte';
 	import { brush, selectedName, tableList, rerender, stageData } from './stores/stage';
 	import { applyAction, enhance } from '$app/forms';
 	import { countTotalChairs, dataURItoBlob } from './editor/lib';
 	import Popup from './Popup.svelte';
 
+	// Exported functions and variables
 	export let downloadStage: () => Promise<string>;
-
 	export let stageCategories: Array<any> = [];
+
+	// Local variables
 	let openPopup: () => void;
 	let closePopup: () => void;
-
 	let chairsLeft: number;
 	let chairsRight: number;
 	let maxChairs: number;
 
-	const unsubscribe = selectedName.subscribe((e) => {
+	type Table = {
+		name: string;
+		rotation: number;
+		x?: number | undefined;
+		y?: number | undefined;
+		chairs: {
+			left: number;
+			right: number;
+			max: number;
+		};
+		table: {
+			width: number;
+			height: number;
+			radius: number;
+			isRound: boolean;
+		};
+	};
+
+	// Function to update chair counts for a given table
+	const updateChairs = (table: Table) => {
+		if (table.name == $selectedName) {
+			chairsLeft = table.chairs.left;
+			chairsRight = table.table.isRound ? 0 : table.chairs.right;
+			maxChairs = table.chairs.max;
+		}
+	};
+
+	// Subscribe to selectedName store and update chair counts when it changes
+	const unsubscribe = selectedName.subscribe(() => {
 		if (!$tableList) return;
-		$tableList.find((e) => {
-			if (e.name == $selectedName) {
-				chairsLeft = e.chairs.left;
-				chairsRight = e.table.isRound ? 0 : e.chairs.right;
-				maxChairs = e.chairs.max;
-			}
-		});
+		$tableList.forEach(updateChairs);
 	});
+
+	// Function to update chair counts and rerender the stage
 	function recountChairs() {
-		//Find chair count by using selectedName store value and tableList, replace value in tableList with new value
-		$tableList.find((e) => {
-			if (e.name == $selectedName) {
+		$tableList.forEach((table) => {
+			if (table.name == $selectedName) {
 				chairsLeft = Math.max(Math.min(chairsLeft, maxChairs), 0) ?? 0;
-				e.chairs.left = chairsLeft;
+				table.chairs.left = chairsLeft;
 				chairsRight = Math.max(Math.min(chairsRight, maxChairs), 0) ?? 0;
-				if(e.table.isRound) chairsRight = 0;
-				e.chairs.right = chairsRight;
-				setTimeout(() => {
-					rerenderStage();
-				});
+				if (table.table.isRound) chairsRight = 0;
+				table.chairs.right = chairsRight;
+				rerenderStage();
 			}
 		});
 	}
 
+	// Unsubscribe from selectedName store when component is destroyed
 	onDestroy(() => {
 		unsubscribe?.();
 	});
 
+	// Function to toggle rerender store value
 	function rerenderStage() {
 		$rerender = !$rerender;
 	}
 </script>
 
-<div class="fixed top-0 left-0 pl-12 w-screen h-12 bg-background-100 flex items-center border-background-200 border-b">
+<div
+	class="fixed top-0 left-0 pl-12 w-screen h-12 bg-background-100 flex items-center border-background-200 border-b"
+>
 	<svg
 		xmlns="http://www.w3.org/2000/svg"
 		class="icon icon-tabler icon-tabler-magnet stroke-primary-400 w-7 h-7 mx-2"
@@ -115,9 +142,9 @@
 			<path d="M18 19v2" />
 		</svg>
 		{#if $tableList.find((e) => e.name == $selectedName)?.table.isRound}
-		<p class="text-primary-400 pointer-events-none mr-2 font-semibold mb-0.5">S : 0</p>
+			<p class="text-primary-400 pointer-events-none mr-2 font-semibold mb-0.5">S : 0</p>
 		{:else}
-		<p class="text-primary-400 pointer-events-none mr-2 font-semibold mb-0.5">L : 0</p>
+			<p class="text-primary-400 pointer-events-none mr-2 font-semibold mb-0.5">L : 0</p>
 		{/if}
 		<input
 			bind:value={chairsLeft}
@@ -144,31 +171,31 @@
 			bind:value={chairsLeft}
 		/>
 		{#if !$tableList.find((e) => e.name == $selectedName)?.table.isRound}
-		<p class="text-primary-400 pointer-events-none ml-4 mr-2 font-semibold mb-0.5">P : 0</p>
-		<input
-			bind:value={chairsRight}
-			class="w-32 bg-transparent appearance-none cursor-pointer mr-2"
-			type="range"
-			min="0"
-			max={maxChairs}
-			on:change={recountChairs}
-		/>
-		<p class="text-primary-400 pointer-events-none mr-2 font-semibold mb-0.5">{maxChairs}</p>
-		<input
-			min="0"
-			max={maxChairs}
-			type="number"
-			class="w-10 appearance-none bg-background-200 text-text-700 text-center rounded-md py-0.5"
-			on:blur={recountChairs}
-			on:keydown={(e) => {
-				if (e.code == 'Enter') {
-					e.preventDefault();
-					recountChairs();
-					e.currentTarget.blur();
-				}
-			}}
-			bind:value={chairsRight}
-		/>
+			<p class="text-primary-400 pointer-events-none ml-4 mr-2 font-semibold mb-0.5">P : 0</p>
+			<input
+				bind:value={chairsRight}
+				class="w-32 bg-transparent appearance-none cursor-pointer mr-2"
+				type="range"
+				min="0"
+				max={maxChairs}
+				on:change={recountChairs}
+			/>
+			<p class="text-primary-400 pointer-events-none mr-2 font-semibold mb-0.5">{maxChairs}</p>
+			<input
+				min="0"
+				max={maxChairs}
+				type="number"
+				class="w-10 appearance-none bg-background-200 text-text-700 text-center rounded-md py-0.5"
+				on:blur={recountChairs}
+				on:keydown={(e) => {
+					if (e.code == 'Enter') {
+						e.preventDefault();
+						recountChairs();
+						e.currentTarget.blur();
+					}
+				}}
+				bind:value={chairsRight}
+			/>
 		{/if}
 	{/if}
 	{#if $brush.type == 'zone'}
@@ -215,13 +242,13 @@
 		action="/editor/?/saveStage"
 		class="flex flex-col"
 		use:enhance={async ({ formData }) => {
-			console.log("sent");
+			console.log('sent');
 			formData.set('stage', JSON.stringify($stageData));
 			formData.set('tables', JSON.stringify($tableList));
 			formData.set('chairCount', `${countTotalChairs($tableList)}`);
 			formData.set('image', dataURItoBlob(await downloadStage()));
 			return async ({ result }) => {
-				if(result.type == 'success'){
+				if (result.type == 'success') {
 					closePopup();
 				}
 				await applyAction(result);
@@ -264,7 +291,7 @@
 			>
 			<button
 				type="submit"
-			class="px-4 py-2 bg-background-700 hover:bg-primary-600 rounded-md text-text-50 mt-3"
+				class="px-4 py-2 bg-background-700 hover:bg-primary-600 rounded-md text-text-50 mt-3"
 				>Uložiť</button
 			>
 		</div>
