@@ -47,7 +47,7 @@
 		checkCircleCollision
 	} from './editor/lib';
 	import Konva from 'konva';
-	import { brush, modifyZones, rerender, selectedName, stageData, tableList } from './stores/stage';
+	import { brush, currentTween, modifyZones, rerender, selectedName, stageData, tableList } from './stores/stage';
 	import { theme } from './stores/theme';
 	let uiLayer: Konva.Layer;
 	let gridLayer: Konva.Layer;
@@ -397,12 +397,26 @@
 
 	let previewShape: Konva.Line;
 	function dragStart(e: any) {
-		let shape = e.detail.currentTarget;
+		let shape = e.detail.currentTarget as Konva.Line | Konva.Circle;
 		if ($brush.type != 'grab') return;
 		// Create a clone of the shape
 		previewShape = shape.clone();
 		previewShape.name('preview');
 		previewShape.draggable(false);
+
+		//Animate scaling down to 0.9 with BackEaseOut using Konva.Tween
+		const tween = new Konva.Tween({
+			node: shape,
+			scaleX: 0.8,
+			scaleY: 0.8,
+			duration: 0.1,
+			easing: Konva.Easings.BackEaseOut
+		});
+
+		currentTween.set(tween);
+
+		tween.play();
+		
 
 		// Make the clone semi-transparent
 		previewShape.opacity(0.5);
@@ -726,6 +740,10 @@
 		if ($brush.type != 'grab') return;
 		let group = e.detail.currentTarget;
 		//Doesnt work without timeout fsr
+		
+		//reverse the tween set
+		$currentTween.reverse();
+
 		setTimeout(() => {
 			group.position(previewShape.position());
 			let shape = e.detail.currentTarget.getChildren(
@@ -735,7 +753,7 @@
 				shape = e.detail.currentTarget.getChildren(
 					(node: Circle) => node instanceof Konva.Circle
 				)?.[0];
-			shape.fill('white');
+
 			tableList.set(
 				$tableList.map((e) => {
 					if (e.name == group.name()) {

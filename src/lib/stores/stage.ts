@@ -1,3 +1,4 @@
+import type Konva from 'konva';
 import { writable, type Writable } from 'svelte/store';
 
 export const selectedName: Writable<string | null> = writable(null);
@@ -25,6 +26,8 @@ export const tableList: Writable<
 		};
 	}[]
 > = writable([]);
+
+export const currentTween: Writable<Konva.Tween> = writable();
 
 export const stageData: Writable<{
 	scale: number;
