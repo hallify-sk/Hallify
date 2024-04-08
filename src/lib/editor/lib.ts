@@ -136,6 +136,7 @@ export function checkPolygonCircleCollision(
 	polygon: Array<{ x: number; y: number }>,
 	circle: { x: number; y: number, radius: number }
 ) {
+
 	if(polygon.some((_, i) => {
 		let nextIndex = i + 1;
 		if(nextIndex === polygon.length) nextIndex = 0;
@@ -145,7 +146,6 @@ export function checkPolygonCircleCollision(
 
 		const insideOne = pointCircle(pointOne.x, pointOne.y, circle.x, circle.y, circle.radius);
 		const insideTwo = pointCircle(pointTwo.x, pointTwo.y, circle.x, circle.y, circle.radius);
-	
 		if(insideOne || insideTwo) return true;
 
 		let distX = pointOne.x - pointTwo.x;
@@ -172,6 +172,8 @@ export function checkPolygonCircleCollision(
 	})){
 		return true;
 	};
+
+	if (polyPoint(polygon, circle.x,circle.y)) return true;
 	return false;
 }
 
@@ -240,8 +242,8 @@ export function checkPolygonCollision(
 	  if (next == vertices.length) next = 0;
   
 	  // get the PVectors at our current position
-	  let vc = vertices[current];    // c for "current"
-	  let vn = vertices[next];       // n for "next"
+	  const vc = vertices[current];    // c for "current"
+	  const vn = vertices[next];       // n for "next"
   
 	  // compare position, flip 'collision' variable back and forth
 	  if (((vc.y > py && vn.y < py) || (vc.y < py && vn.y > py)) &&
@@ -252,50 +254,6 @@ export function checkPolygonCollision(
 	return collision;
   }
 
-// export function checkPolygonCollision(polygon1: Array<{x: number, y: number}>, polygon2: Array<{x: number, y: number}>) {
-//   const polygons = [polygon1, polygon2];
-//   console.log(polygons);
-//   let minA, maxA, projected, i, i1, j, minB, maxB;
-
-//   for (i = 0; i < polygons.length; i++) {
-
-//     const polygon = polygons[i];
-//     for (i1 = 0; i1 < polygon.length; i1++) {
-
-//       const i2 = (i1 + 1) % polygon.length;
-//       const p1 = polygon[i1];
-//       const p2 = polygon[i2];
-
-//       const normal = { x: p2.y - p1.y, y: p1.x - p2.x };
-//       minA = maxA = undefined;
-//       for (j = 0; j < polygon1.length; j++) {
-//         projected = normal.x * polygon1[j].x + normal.y * polygon1[j].y;
-//         if (minA === undefined || projected < minA) {
-//           minA = projected;
-//         }
-//         if (maxA === undefined || projected > maxA) {
-//           maxA = projected;
-//         }
-//       }
-
-//       minB = maxB = undefined;
-//       for (j = 0; j < polygon2.length; j++) {
-//         projected = normal.x * polygon2[j].x + normal.y * polygon2[j].y;
-//         if (minB === undefined || projected < minB) {
-//           minB = projected;
-//         }
-//         if (maxB === undefined || projected > maxB) {
-//           maxB = projected;
-//         }
-//       }
-
-//       if (maxA < minB || maxB < minA) {
-//         return false;
-//       }
-//     }
-//   }
-//   return true;
-// };
 export function getMovablePolygons(layer: Konva.Layer) {
 	return layer.getChildren(
 		(node) => node instanceof Konva.Group && node.draggable()
