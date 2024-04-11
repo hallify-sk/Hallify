@@ -5,7 +5,9 @@ declare global {
 		interface Locals {
 			authExpired: boolean, //True when token was invalidated on request.
 			pb: PocketBase,
-			user: Record | Admin | null
+			user: Record | Admin | null,
+			pbSecretURL: string
+			pbApiURL: string
 		}
 		interface LayoutData{
 			isValid: boolean
