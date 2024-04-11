@@ -1,5 +1,13 @@
 import Konva from 'konva';
 
+export type Grid = {
+	width: number;
+	height: number;
+	squareSize: number;
+	borderThickness: number;
+	squaresPerMeter: number;
+};
+
 export function clamp(val: number, min: number, max: number): number {
 	return Math.min(Math.max(val, min), max);
 }

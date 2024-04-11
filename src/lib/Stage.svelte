@@ -1,18 +1,8 @@
 <script lang="ts">
-	export let grid: {
-		width: number;
-		height: number;
-		squareSize: number;
-		snapSize: number;
-		color: string;
-		borderThickness: number;
-		squaresPerMeter: number;
-	} = {
+	export let grid: Grid = {
 		width: 20,
 		height: 20,
 		squareSize: 30,
-		snapSize: 1,
-		color: '#fff',
 		borderThickness: 100,
 		squaresPerMeter: 2
 	};
@@ -25,16 +15,12 @@
 		Group,
 		Transformer,
 		Rect,
-		Label,
-		Tag,
-		Text,
 		Circle
 	} from 'svelte-konva';
 	import {
 		addChairHitbox,
 		checkPolygonCollision,
 		clamp,
-		dataURItoBlob,
 		getClosestViablePosition,
 		getCollisionPolygons,
 		getMovablePolygons,
@@ -42,12 +28,22 @@
 		pointsToObjectArray,
 		pointsToRealPosition,
 		rotatePoints,
-		countTotalChairs,
 		checkPolygonCircleCollision,
-		checkCircleCollision
+		checkCircleCollision,
+
+		type Grid
+
 	} from './editor/lib';
 	import Konva from 'konva';
-	import { brush, currentTween, modifyZones, rerender, selectedName, stageData, tableList } from './stores/stage';
+	import {
+		brush,
+		currentTween,
+		modifyZones,
+		rerender,
+		selectedName,
+		stageData,
+		tableList
+	} from './stores/stage';
 	import { theme } from './stores/theme';
 	let uiLayer: Konva.Layer;
 	let gridLayer: Konva.Layer;
@@ -61,6 +57,7 @@
 	$: if (grid && (grid.width || grid.height) && gridLayer) setTimeout(() => gridLayer.cache());
 	const scaleBy = 1.2;
 	let points: any[] = [];
+	let rulerPoints: Konva.Circle[] = [];
 	let circles: Konva.Circle[] = [];
 	let pointsHistory: Array<any[]> = [];
 	let circlesHistory: Array<Konva.Circle[]> = [];
@@ -356,6 +353,118 @@
 						}
 					}
 					break;
+				case 'ruler': {
+					const { offsetX, offsetY } = e.evt;
+					const zoomLevel = stage.scaleX();
+					const stageX = stage.x();
+					const stageY = stage.y();
+					const point = {
+						x:
+							Math.round(
+								(offsetX - stageX) / zoomLevel / (grid.squareSize * $brush.snapCoefficient)
+							) *
+							grid.squareSize *
+							$brush.snapCoefficient,
+						y:
+							Math.round(
+								(offsetY - stageY) / zoomLevel / (grid.squareSize * $brush.snapCoefficient)
+							) *
+							grid.squareSize *
+							$brush.snapCoefficient
+					};
+
+					if (
+						point.x >= 0 &&
+						point.x <= grid.width * grid.squareSize &&
+						point.y >= 0 &&
+						point.y <= grid.height * grid.squareSize
+					) {
+						drawPreviewShape?.destroy();
+						points.push(point);
+						// Create a new circle at the point and add it to the stage
+						const circle = new Konva.Circle({
+							draggable: true,
+							name: 'ruler ' + uuidv4(),
+							x: point.x,
+							y: point.y,
+							radius: 5,
+							fill: points.length == 1 ? themes[$theme].accent[600] : themes[$theme].accent[400]
+						});
+						if (points.length == 1) {
+							// circle.on('mouseenter', () => {
+							// 	stage.container().style.cursor = 'pointer';
+							// });
+							// circle.on('mouseleave', () => {
+							// 	stage.container().style.cursor = 'default';
+							// });
+							circle.addEventListener('dragstart', () => {
+								
+								// Create a clone of the shape
+								previewShape = circle.clone();
+								previewShape.name('preview');
+								previewShape.draggable(false);
+
+								// Make the clone semi-transparent
+								previewShape.opacity(0.5);
+
+								// Add the clone to the layer
+								uiLayer.add(previewShape);
+							});
+							circle.addEventListener('dragmove', () => {
+								// Calculate the new position based on the grid size
+								let newX =
+									Math.round(
+										(circle.x() + grid.squareSize * grid.squaresPerMeter * $brush.snapCoefficient) /
+											grid.squareSize /
+											$brush.snapCoefficient
+									) *
+									grid.squareSize *
+									$brush.snapCoefficient;
+								let newY =
+									Math.round(
+										(circle.y() + grid.squareSize * grid.squaresPerMeter * $brush.snapCoefficient) /
+											grid.squareSize /
+											$brush.snapCoefficient /
+											grid.squaresPerMeter
+									) *
+									grid.squareSize *
+									grid.squaresPerMeter *
+									$brush.snapCoefficient;
+								//If there was no collision, continue in calculating new viable position
+								// Update the preview shape's position
+
+								previewShape.x(newX || 0);
+								previewShape.y(newY || 0);
+							});
+							circle.addEventListener('dragend', (e) => {
+								e.preventDefault();
+								setTimeout(() => {
+									circle.position(previewShape.position());
+									previewShape.destroy();
+								}, 0);
+								objectLayer.batchDraw();
+								objectLayer.draw();
+							});
+						}
+						uiLayer.add(circle);
+						rulerPoints.push(circle);
+						const previewZone = new Konva.Line({
+							points: points.flatMap((point) => [point.x, point.y]),
+							fill: $brush.color || 'blue',
+							stroke: $brush.stroke || 'black',
+							strokeWidth: $brush.strokeWidth || 0,
+							opacity: 0.2,
+							closed: true
+						});
+						uiLayer.add(previewZone);
+						drawPreviewShape = previewZone;
+						circles.forEach((circle) => {
+							circle.moveToTop();
+						});
+						uiLayer.draw();
+					}
+					break;
+				}
 			}
 		});
 	});
@@ -374,7 +483,11 @@
 					if (uiLayer) {
 						points = [];
 						circles = [];
-						uiLayer.removeChildren();
+						uiLayer.children
+							.filter((i) => !i.name().includes('ruler'))
+							.forEach((c) => {
+								c.remove();
+							});
 					}
 					if (!objectLayer) return;
 					objectLayer.children
@@ -416,7 +529,6 @@
 		currentTween.set(tween);
 
 		tween.play();
-		
 
 		// Make the clone semi-transparent
 		previewShape.opacity(0.5);
@@ -681,7 +793,17 @@
 
 	function nonCollisionDragMove(e: any) {
 		//Shape is used to determine collision and position
-		let shape: Konva.Line = e.detail.currentTarget;
+		console.log(e);
+		let shape: Konva.Line | Konva.Circle = e.detail.currentTarget.getChildren(
+			(node: Line) => node instanceof Konva.Line
+		)[0];
+		if (!shape) {
+			shape = e.detail.currentTarget.getChildren(
+				(node: Circle) => node instanceof Konva.Circle
+			)?.[0];
+		}
+
+		console.log(shape);
 		// Calculate the new position based on the grid size
 		let newX =
 			Math.round(
@@ -740,7 +862,7 @@
 		if ($brush.type != 'grab') return;
 		let group = e.detail.currentTarget;
 		//Doesnt work without timeout fsr
-		
+
 		//reverse the tween set
 		$currentTween.reverse();
 
