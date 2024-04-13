@@ -1,7 +1,7 @@
 import { PUBLIC_DEV } from '$env/static/public';
 import PocketBase from 'pocketbase';
 
-import { readFile, promises as fs } from 'fs';
+import { promises as fs } from 'fs';
 
 //const pocketbase = new PocketBase(POCKETBASE_URL);
 
@@ -37,17 +37,16 @@ let pbIsset = false;
 let pbSecretURL: string = '';
 let pbAPIURL: string = '';
 
-
-
-readFile('config/pocketbase.json', (e, data) => {
+//Hack to scope the variables
+await fs.readFile('config/pocketbase.json').then((data => {
 	const { POCKETBASE_URL, POCKETBASE_API_URL } = JSON.parse(data.toString());
 	pbSecretURL = POCKETBASE_URL;
 	pbAPIURL = POCKETBASE_API_URL;
 
-	if (POCKETBASE_URL != "") {
+	if(POCKETBASE_URL != ""){
 		pbIsset = true;
 	}
-});
+}));
 
 export const handle = async ({ event, resolve }) => {
 	if(!pbIsset){
@@ -60,7 +59,6 @@ export const handle = async ({ event, resolve }) => {
 			pbIsset = true;
 		}
 	}
-	console.log(event);
 	event.locals.authExpired = false;
 
 	if(pbSecretURL && pbSecretURL != ""){
