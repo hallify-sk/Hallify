@@ -5,7 +5,7 @@
 	import { Bar } from 'svelte-chartjs';
 	import 'chart.js/auto';
 	import { writable } from 'svelte/store';
-	import { onDestroy } from 'svelte';
+	import { onDestroy, onMount } from 'svelte';
 	import Calendar from '$lib/Calendar.svelte';
 
 	let emailRegisterError: boolean = false;
@@ -19,16 +19,17 @@
 
 	let counts: Array<(number)> = [];
 
+	let pollingInterval: NodeJS.Timeout;
 
 	const reservations = writable('week');
-
-	const pollingInterval = setInterval(async () => {
-		console.log("RESET");
+	onMount(() => {
+		pollingInterval = setInterval(async () => {
 		await invalidateAll();
 		reservationData.labels = [];
 		counts = [];
 		recalculateData();
 	}, 5000);
+	});
 
 	onDestroy(() => {
 		clearInterval(pollingInterval);
@@ -98,25 +99,32 @@
 		<div class="w-60 bg-background-100 h-screen block"></div>
 		<div class="w-full min-h-screen grid auto-rows-min grid-cols-12 p-8 gap-4">
 			<div class="col-span-12 md:col-span-5 lg:col-span-4 xl:col-span-3">
-				<Calendar/>
+				<Calendar 
+					highlightedDays={data.reservations}
+					blockPastDays={false}
+					onSelect={() => {
+						console.log("selected");
+					}}
+				/>
 			</div>
 			<div class="col-span-12 md:col-span-7 lg:col-span-8 xl:col-span-9 bg-background-100">
 				<h2>Event details</h2>
 			</div>
 			<div class="col-span-12 lg:col-span-6">
 				{#key reservationDataCache !== reservationData}
-				<Bar
-					options={{
-						scales: {
-							y: {
-								ticks: {
-									precision: 0
+					<Bar
+						options={{
+							maintainAspectRatio: false,
+							scales: {
+								y: {
+									ticks: {
+										precision: 0
+									}
 								}
 							}
-						}
-					}}
-					data={reservationData}
-				/>
+						}}
+						data={reservationData}
+					/>
 				{/key}
 			</div>
 			<div class="col-span-6">

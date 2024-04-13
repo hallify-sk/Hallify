@@ -17,6 +17,10 @@
 
 	export let tempBlockedDays: RecordModel[] = [];
 	export let blockedDays: RecordModel[] = [];
+	export let highlightedDays: RecordModel[] = [];
+
+	export let blockPastDays: boolean = true;
+
 	export let user: string = "";
 
 	const unsubscribeMonth = month.subscribe(() => {
@@ -73,6 +77,9 @@
 
 	export let selectedDateString: string | null = null;
 	export let selectedDate: Date | null = null;
+
+	export let onSelect: () => void = () => {};
+
 </script>
 
 <div class="flex flex-col overflow-hidden">
@@ -163,12 +170,14 @@
 							<button type="button"
 								data-selected={dateToInputString(day.JSDate) == selectedDateString}
 								data-blocked={blockedDays.some(i => new Date(i.date).getTime() == day.JSDate.getTime())}
+								data-highlighted={highlightedDays.some(i => new Date(i.date).getTime() == day.JSDate.getTime())}
 								disabled={ 
-									(new Date().getTime() + 1000 * 60 * 60 * 24 * 6) - day.JSDate.getTime() > 0 
+									blockPastDays&&((new Date().getTime() + 1000 * 60 * 60 * 24 * 6) - day.JSDate.getTime() > 0)
 									|| tempBlockedDays.filter(i => i.user != user).some(i => new Date(i.date).getTime() == day.JSDate.getTime()) 
 									|| blockedDays.some(i => new Date(i.date).getTime() == day.JSDate.getTime())
 								}
 								on:click={() => {
+									onSelect();
 									selectedDate = day.JSDate;
 									selectedDateString = dateToInputString(day.JSDate);
 								}}
@@ -177,8 +186,10 @@
 									? 'text-accent-500 bg-secondary-200 hover:bg-secondary-300'
 									: 'text-text-600 hover:bg-background-200 disabled:text-text-400'}
 								col-start-{day.weekdayIndex + 1}
-								text-center grid place-items-center text-lg aspect-square rounded-full data-[selected="true"]:bg-primary-500 data-[selected="true"]:text-text-100 relative
+								text-center grid place-items-center text-lg aspect-square rounded-full relative
+								data-[highlighted="true"]:hover:bg-primary-500 data-[highlighted="true"]:hover:text-primary-600 data-[highlighted="true"]:bg-primary-400 data-[highlighted="true"]:text-primary-600
 								data-[blocked="true"]:hover:bg-accent-500 data-[blocked="true"]:hover:text-accent-600 data-[blocked="true"]:bg-accent-400 data-[blocked="true"]:text-accent-600
+								data-[selected="true"]:!bg-primary-500 data-[selected="true"]:!text-text-100
 								'
 							>
 								{day.day}

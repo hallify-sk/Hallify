@@ -2,7 +2,6 @@
 	import '../../app.css';
 
 	import { enhance, applyAction } from '$app/forms';
-	import { redirect } from '@sveltejs/kit';
 
 	let pocketbasePrivateURL = false;
 	let pocketbaseAPIURL = false;
