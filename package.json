@@ -43,11 +43,13 @@
 		"@resvg/resvg-js": "^2.0.0",
 		"@sveltejs/adapter-node": "^2.0.2",
 		"canvas": "^2.11.2",
+		"chart.js": "^4.4.2",
 		"headless-calendar": "^3.0.0",
 		"konva": "^9.2.3",
 		"node-schedule": "^2.1.1",
 		"pocketbase": "^0.20.1",
 		"sharp": "^0.30.4",
+		"svelte-chartjs": "^3.1.5",
 		"svelte-konva": "^0.3.1",
 		"uuid": "^9.0.1"
 	}

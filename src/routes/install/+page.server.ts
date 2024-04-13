@@ -38,7 +38,7 @@ export const actions = {
             });
         });
 
-        throw redirect(303, `/install/account`);
+        throw redirect(303, `/admin?fromInstall=true`);
     },
 };
 

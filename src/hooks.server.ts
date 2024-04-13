@@ -10,8 +10,8 @@ import { readFile } from 'fs';
 //Found better solution - use hooks with Pocketbase. Will do before first release.
 //await pocketbase.admins.authWithPassword(PB_ADMIN_LOGIN, PB_ADMIN_PASSWORD);
 
-import schedule from 'node-schedule';
-import { redirect } from '@sveltejs/kit';
+//import schedule from 'node-schedule';
+import { error, redirect } from '@sveltejs/kit';
 /*
 schedule.scheduleJob('*/ /*1 * * * *', async function () {
     //Prevents crash on sleep or network disconnect
@@ -37,13 +37,25 @@ let pbIsset = false;
 let pbSecretURL: string = '';
 let pbAPIURL: string = '';
 
+
+
+readFile('config/pocketbase.json', (e, data) => {
+	const { POCKETBASE_URL, POCKETBASE_API_URL } = JSON.parse(data.toString());
+	pbSecretURL = POCKETBASE_URL;
+	pbAPIURL = POCKETBASE_API_URL;
+
+	if (POCKETBASE_URL != "") {
+		pbIsset = true;
+	}
+});
+
 const pbPollingInterval = setInterval(() => {
 	readFile('config/pocketbase.json', (e, data) => {
-		const { POCKETBASE_URL, POCKETBASE_API_URL, account_created } = JSON.parse(data.toString());
+		const { POCKETBASE_URL, POCKETBASE_API_URL } = JSON.parse(data.toString());
 		pbSecretURL = POCKETBASE_URL;
 		pbAPIURL = POCKETBASE_API_URL;
 
-		if (account_created) {
+		if (POCKETBASE_URL != "") {
 			pbIsset = true;
 			clearInterval(pbPollingInterval);
 		}
@@ -51,26 +63,43 @@ const pbPollingInterval = setInterval(() => {
 }, 1000);
 
 export const handle = async ({ event, resolve }) => {
+	console.log(event);
 	event.locals.authExpired = false;
+
+	if(pbSecretURL && pbSecretURL != ""){
+		event.locals.pb = new PocketBase(pbSecretURL);
+	}
+
     event.locals.pbSecretURL = pbSecretURL;
     event.locals.pbApiURL = pbAPIURL;
 	if (!pbIsset) {
+		console.log("KOKOT");
 		if (!event.route.id?.startsWith('/install')) {
-			throw redirect(300, '/install');
+			throw redirect(307, '/install');
 		}
 		const response = await resolve(event);
 
 		return response;
 	} else {
-		event.locals.pb = new PocketBase(pbSecretURL);
+		if(event.route.id == "/install") throw error(404);
 		event.locals.pb.authStore.loadFromCookie(event.request.headers.get('cookie') || '');
 		if (event.locals.pb.authStore.isValid) {
 			try {
 				await event.locals.pb.collection('users').authRefresh();
 			} catch (e) {
-				event.locals.pb.authStore.clear();
-				event.locals.authExpired = true;
-				e;
+				if(event.route.id?.startsWith("/admin")){
+					try{
+						await event.locals.pb.admins.authRefresh();
+					}catch(e){
+						event.locals.pb.authStore.clear();
+						event.locals.authExpired = true;
+						e;
+					}
+				}else{
+					event.locals.pb.authStore.clear();
+					event.locals.authExpired = true;
+					e;
+				}
 			}
 			event.locals.user = (event.locals.pb as PocketBase).authStore.model;
 		} else {
