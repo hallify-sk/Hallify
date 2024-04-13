@@ -41,9 +41,6 @@
 							}
 							errorMessage = typeof result.data?.message == 'string' ? result.data.message : '';
 						}
-						if (result.type == 'success') {
-							throw redirect(300, '/install/account');
-						}
 						await applyAction(result);
 					};
 				}}

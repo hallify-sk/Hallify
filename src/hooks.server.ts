@@ -1,7 +1,7 @@
 import { PUBLIC_DEV } from '$env/static/public';
 import PocketBase from 'pocketbase';
 
-import { readFile } from 'fs';
+import { readFile, promises as fs } from 'fs';
 
 //const pocketbase = new PocketBase(POCKETBASE_URL);
 
@@ -49,20 +49,17 @@ readFile('config/pocketbase.json', (e, data) => {
 	}
 });
 
-const pbPollingInterval = setInterval(() => {
-	readFile('config/pocketbase.json', (e, data) => {
+export const handle = async ({ event, resolve }) => {
+	if(!pbIsset){
+		const data = await fs.readFile('config/pocketbase.json');
 		const { POCKETBASE_URL, POCKETBASE_API_URL } = JSON.parse(data.toString());
 		pbSecretURL = POCKETBASE_URL;
 		pbAPIURL = POCKETBASE_API_URL;
-
-		if (POCKETBASE_URL != "") {
+	
+		if(POCKETBASE_URL != ""){
 			pbIsset = true;
-			clearInterval(pbPollingInterval);
 		}
-	});
-}, 1000);
-
-export const handle = async ({ event, resolve }) => {
+	}
 	console.log(event);
 	event.locals.authExpired = false;
 

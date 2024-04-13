@@ -37,7 +37,6 @@ export const actions = {
                 console.log(e);
             });
         });
-
         throw redirect(303, `/admin?fromInstall=true`);
     },
 };
