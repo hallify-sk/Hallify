@@ -76,7 +76,7 @@
 	];
 
 	export let selectedDateString: string | null = null;
-	export let selectedDate: Date | null = null;
+	export let selectedDate: Writable<Date | null> = writable();
 
 	export let onSelect: () => void = () => {};
 
@@ -178,7 +178,7 @@
 								}
 								on:click={() => {
 									onSelect();
-									selectedDate = day.JSDate;
+									selectedDate.set(day.JSDate);
 									selectedDateString = dateToInputString(day.JSDate);
 								}}
 								class='

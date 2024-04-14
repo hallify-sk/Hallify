@@ -4,12 +4,13 @@
 	import { page } from '$app/stores';
 	import { Bar } from 'svelte-chartjs';
 	import 'chart.js/auto';
-	import { writable } from 'svelte/store';
+	import { writable, type Unsubscriber, type Writable } from 'svelte/store';
 	import { onDestroy, onMount } from 'svelte';
 	import Calendar from '$lib/Calendar.svelte';
 
 	import themes from "$lib/themes.json";
 	import { theme } from '$lib/stores/theme.js';
+	import type { RecordModel } from 'pocketbase';
 
 	let emailRegisterError: boolean = false;
 	let passwordRegisterError: boolean = false;
@@ -94,6 +95,23 @@
 	if ($reservations == 'week' && data.reservations) {
 			recalculateData();
 	}
+
+	let selectedDate: Writable<Date | null>;
+console.log(data);
+	let selectedEvent: RecordModel | undefined;
+
+	let unsubscribe: Unsubscriber;
+
+	onMount(() => {
+		unsubscribe = selectedDate.subscribe(() => {
+			selectedEvent = data.reservations?.find(i => new Date(i.date).getTime() == $selectedDate?.getTime());
+			console.log(selectedEvent);
+		});
+	});
+
+	onDestroy(() => {
+		unsubscribe?.();
+	})
 </script>
 
 {#if data.user}
@@ -104,13 +122,16 @@
 				<Calendar 
 					highlightedDays={data.reservations}
 					blockPastDays={false}
-					onSelect={() => {
-						console.log("selected");
-					}}
+					bind:selectedDate
 				/>
 			</div>
-			<div class="col-span-12 md:col-span-7 lg:col-span-8 xl:col-span-9 bg-background-100">
+			<div class="col-span-12 md:col-span-7 lg:col-span-8 xl:col-span-9 bg-background-100 rounded-md p-2">
 				<h2>Event details</h2>
+				{#key selectedDate}
+				{#if selectedEvent?.id}
+				<p>{selectedDate}</p>
+				{/if}
+				{/key}
 			</div>
 			<div class="col-span-12 lg:col-span-6">
 				{#key reservationDataCache !== reservationData}
