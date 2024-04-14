@@ -8,6 +8,9 @@
 	import { onDestroy, onMount } from 'svelte';
 	import Calendar from '$lib/Calendar.svelte';
 
+	import themes from "$lib/themes.json";
+	import { theme } from '$lib/stores/theme.js';
+
 	let emailRegisterError: boolean = false;
 	let passwordRegisterError: boolean = false;
 
@@ -35,6 +38,8 @@
 		clearInterval(pollingInterval);
 	});
 
+	console.log($theme);
+
 	let reservationData: {
 		labels: Array<string>;
 		datasets: Array<{
@@ -48,10 +53,10 @@
 		labels: [],
 		datasets: [
 			{
-				backgroundColor: "#ff0000",
+				backgroundColor: themes?.[$theme]?.primary?.[100],
 				data: [],
-				borderWidth: 1,
-				borderColor: "#aa0000",
+				borderWidth: 2,
+				borderColor: themes?.[$theme]?.primary?.[300],
 				label: "Vytvorené rezervácie"
 			}
 		]
@@ -88,10 +93,7 @@
 
 	if ($reservations == 'week' && data.reservations) {
 			recalculateData();
-			console.log(reservationData.labels);
-			console.log(counts);
 	}
-	console.log(data);
 </script>
 
 {#if data.user}
