@@ -4,6 +4,7 @@ export const load = ({ params, data }) => {
         addons: data.addons,
         slug: params.slug,
         categories: data.categories,
-        templates: data.templates
+        templates: data.templates,
+        apiUrl: data.apiUrl
     }
 }

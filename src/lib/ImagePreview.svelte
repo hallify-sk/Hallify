@@ -20,7 +20,7 @@
         </div>
         <div class="grid grid-cols-5 w-[40rem] gap-2">
             <div class="col-span-3 aspect-square overflow-auto rounded-md">
-                <img src={imageSrc} alt={imageAlt} class="w-full">
+                <img src={imageSrc} alt={imageAlt} class="h-full mx-auto">
             </div>
             <div class="col-span-2">
                 <!--Stage details-->

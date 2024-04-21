@@ -6,7 +6,6 @@
 	import { goto } from '$app/navigation';
 	import { enhance, applyAction } from '$app/forms';
 
-	import { PUBLIC_API_URL } from '$env/static/public';
 	import ImagePreview from '$lib/ImagePreview.svelte';
 	import type { RecordModel } from 'pocketbase';
 
@@ -38,7 +37,7 @@
 			type="button"
 			on:click={() => {
 				openImage(
-					`${PUBLIC_API_URL}/files/${template.collectionId}/${template.id}/${template.image}`,
+					`${data.apiUrl}/files/${template.collectionId}/${template.id}/${template.image}`,
 					template.id,
 					template
 				);
@@ -46,8 +45,8 @@
 			class="mt-1 flex flex-row items-center gap-2 hover:brightness-90"
 		>
 			<img
-				src="{PUBLIC_API_URL}/files/{template.collectionId}/{template.id}/{template.image}"
-				alt=""
+				src="{data.apiUrl}/files/{template.collectionId}/{template.id}/{template.image}"
+				alt="Stage template"
 			/>
 		</button>
 	{/each}

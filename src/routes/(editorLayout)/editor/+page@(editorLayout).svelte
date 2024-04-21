@@ -17,6 +17,7 @@
 	theme.set('light');
 
 	import { brush, modifyZones, rerender } from '$lib/stores/stage';
+	import StageOop from '$lib/StageOOP.svelte';
 
 	let downloadStage: () => Promise<string>;
 

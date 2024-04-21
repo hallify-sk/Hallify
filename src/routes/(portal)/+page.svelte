@@ -10,6 +10,7 @@
 	import { onMount, onDestroy } from 'svelte';
 	import Checkbox from '$lib/Checkbox.svelte';
 	import { getMinutesToDate } from '$lib/lib.js';
+	import type { Writable } from 'svelte/store';
 	export let data;
 	console.log(data);
 
@@ -19,7 +20,7 @@
 	let openHallPopup: () => void;
 	let closeHallPopup: () => void;
 
-	let selectedDate: Date | null;
+	let selectedDate: Writable<Date | null>;
 	let selectedDateString: string | null;
 
 	let openLoginPopup: () => void;
@@ -496,7 +497,7 @@
 	bind:openPopup={openCalendarPopup}
 	bind:closePopup={closeCalendarPopup}
 	onClose={() => {
-		selectedDate = null;
+		selectedDate.set(null);
 		errorCalendarMessage = '';
 	}}
 >
@@ -540,7 +541,7 @@
 			<p class="text-text-700 my-2">
 				Vybraný deň:
 				{#if selectedDate}
-					<span class="text-text-600">{selectedDate?.toLocaleDateString('sk')}</span>
+					<span class="text-text-600">{$selectedDate?.toLocaleDateString('sk')}</span>
 				{/if}
 			</p>
 			<input type="date" class="hidden" name="date" id="date" bind:value={selectedDateString} />

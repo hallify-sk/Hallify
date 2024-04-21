@@ -56,7 +56,8 @@ export async function load({locals}) {
 	}else{
 		return {
 			user: locals.user,
-			reservations: await locals.pb.collection('reservations').getFullList({ sort: 'created'/*, fields: "id,created,date"*/ }) as RecordModel[],
+			reservations: await locals.pb.collection('reservations').getFullList({ sort: 'created', expand: "user,addons,category" }) as RecordModel[],
+			apiUrl: locals.pbApiURL
 		};
 	}
 }

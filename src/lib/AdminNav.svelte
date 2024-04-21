@@ -1,0 +1,264 @@
+<script lang="ts">
+	import { applyAction, enhance } from '$app/forms';
+	import { PUBLIC_TURNSTILE_TOKEN } from '$env/static/public';
+	import type { AuthModel } from 'pocketbase';
+	import Popup from './Popup.svelte';
+	import { createAvatar } from '@dicebear/core';
+	import { initials } from '@dicebear/collection';
+	import { Turnstile } from 'svelte-turnstile';
+	import { invalidateAll } from '$app/navigation';
+	export let openLoginPopup: () => void = () => {};
+	export let user: AuthModel;
+</script>
+
+<header
+	class="w-60 md:w-80 h-screen bg-background-100 border-r border-background-200 fixed top-0 left-0 z-50"
+>
+	<div class="px-4 gap-1 flex flex-col justify-between h-full">
+		<div class="flex flex-col gap-2 pb-2 border-b border-b-background-200 h-full">
+			<a href="/" class="flex items-center gap-4 py-2 mb-10">
+				<img src="https://via.placeholder.com/150" alt="logo" class="h-10 w-10" />
+				<p class="text-lg font-semibold text-text-600">Reduta</p>
+			</a>
+			<a
+				class="flex py-3 px-2 rounded-md text-text-500 hover:text-text-700 hover:bg-background-200 gap-4"
+				href="/"
+			>
+				<svg
+					xmlns="http://www.w3.org/2000/svg"
+					width="24"
+					height="24"
+					viewBox="0 0 24 24"
+					fill="none"
+					stroke="currentColor"
+					stroke-width="2"
+					stroke-linecap="round"
+					stroke-linejoin="round"
+					class="icon icon-tabler icons-tabler-outline icon-tabler-calendar-time"
+					><path stroke="none" d="M0 0h24v24H0z" fill="none" /><path
+						d="M11.795 21h-6.795a2 2 0 0 1 -2 -2v-12a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v4"
+					/><path d="M18 18m-4 0a4 4 0 1 0 8 0a4 4 0 1 0 -8 0" /><path d="M15 3v4" /><path
+						d="M7 3v4"
+					/><path d="M3 11h16" /><path d="M18 16.496v1.504l1 1" /></svg
+				>
+				Moje podujatia
+			</a>
+			<a
+				class="flex py-3 px-2 rounded-md text-text-500 hover:text-text-700 hover:bg-background-200 gap-4"
+				href="/"
+			>
+				<svg
+					xmlns="http://www.w3.org/2000/svg"
+					width="24"
+					height="24"
+					viewBox="0 0 24 24"
+					fill="none"
+					stroke="currentColor"
+					stroke-width="2"
+					stroke-linecap="round"
+					stroke-linejoin="round"
+					class="icon icon-tabler icons-tabler-outline icon-tabler-info-circle"
+					><path stroke="none" d="M0 0h24v24H0z" fill="none" /><path
+						d="M3 12a9 9 0 1 0 18 0a9 9 0 0 0 -18 0"
+					/><path d="M12 9h.01" /><path d="M11 12h1v4h1" /></svg
+				>
+				Služby
+			</a>
+			<a
+				class="flex py-3 px-2 rounded-md text-text-500 hover:text-text-700 hover:bg-background-200 gap-4"
+				href="/"
+			>
+				<svg
+					xmlns="http://www.w3.org/2000/svg"
+					width="24"
+					height="24"
+					viewBox="0 0 24 24"
+					fill="none"
+					stroke="currentColor"
+					stroke-width="2"
+					stroke-linecap="round"
+					stroke-linejoin="round"
+					class="icon icon-tabler icons-tabler-outline icon-tabler-message"
+					><path stroke="none" d="M0 0h24v24H0z" fill="none" /><path d="M8 9h8" /><path
+						d="M8 13h6"
+					/><path
+						d="M18 4a3 3 0 0 1 3 3v8a3 3 0 0 1 -3 3h-5l-5 3v-3h-2a3 3 0 0 1 -3 -3v-8a3 3 0 0 1 3 -3h12z"
+					/></svg
+				>
+				Kontakt
+			</a>
+		</div>
+		<div class="flex flex-col gap-2 py-2">
+			{#if user}
+				<div class="pl-1 pr-4 py-1 rounded-md text-text-700 flex flex-row gap-3 items-center">
+					<!--
+					{#if profilePic}
+						<img
+							class="rounded-full overflow-hidden w-8"
+							src={profilePic}
+							alt="Profilový obrázok"
+						/>
+					{/if}
+					<p>{user?.name}</p>
+					-->
+				</div>
+				<a
+					class="flex py-3 px-2 rounded-md text-text-500 hover:text-text-700 hover:bg-background-200 gap-4"
+					href="/"
+				>
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						width="24"
+						height="24"
+						viewBox="0 0 24 24"
+						fill="none"
+						stroke="currentColor"
+						stroke-width="2"
+						stroke-linecap="round"
+						stroke-linejoin="round"
+						class="icon icon-tabler icons-tabler-outline icon-tabler-settings"
+						><path stroke="none" d="M0 0h24v24H0z" fill="none" /><path
+							d="M10.325 4.317c.426 -1.756 2.924 -1.756 3.35 0a1.724 1.724 0 0 0 2.573 1.066c1.543 -.94 3.31 .826 2.37 2.37a1.724 1.724 0 0 0 1.065 2.572c1.756 .426 1.756 2.924 0 3.35a1.724 1.724 0 0 0 -1.066 2.573c.94 1.543 -.826 3.31 -2.37 2.37a1.724 1.724 0 0 0 -2.572 1.065c-.426 1.756 -2.924 1.756 -3.35 0a1.724 1.724 0 0 0 -2.573 -1.066c-1.543 .94 -3.31 -.826 -2.37 -2.37a1.724 1.724 0 0 0 -1.065 -2.572c-1.756 -.426 -1.756 -2.924 0 -3.35a1.724 1.724 0 0 0 1.066 -2.573c-.94 -1.543 .826 -3.31 2.37 -2.37c1 .608 2.296 .07 2.572 -1.065z"
+						/><path d="M9 12a3 3 0 1 0 6 0a3 3 0 0 0 -6 0" /></svg
+					>
+					Nastavenia
+				</a>
+				<form
+					method="POST"
+					action="/?/logout"
+					class="flex w-full"
+					use:enhance={async () => {
+						return async ({ result }) => {
+							if (result.type == 'success') {
+								invalidateAll();
+							}
+							applyAction(result);
+						};
+					}}
+				>
+					<button
+						type="submit"
+						class="flex py-3 px-2 rounded-md text-text-100 gap-4 w-full bg-primary-700 hover:bg-primary-600"
+					>
+						<svg
+							xmlns="http://www.w3.org/2000/svg"
+							width="24"
+							height="24"
+							viewBox="0 0 24 24"
+							fill="none"
+							stroke="currentColor"
+							stroke-width="2"
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							class="icon icon-tabler icons-tabler-outline icon-tabler-logout"
+							><path stroke="none" d="M0 0h24v24H0z" fill="none" /><path
+								d="M14 8v-2a2 2 0 0 0 -2 -2h-7a2 2 0 0 0 -2 2v12a2 2 0 0 0 2 2h7a2 2 0 0 0 2 -2v-2"
+							/><path d="M9 12h12l-3 -3" /><path d="M18 15l3 -3" /></svg
+						>
+						Odhlásiť sa
+					</button>
+				</form>
+			{:else}
+				<button
+					type="button"
+					on:click={openLoginPopup}
+					class="flex py-3 px-2 rounded-md text-text-100 gap-4 w-full bg-primary-700 hover:bg-primary-600"
+				>
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						width="24"
+						height="24"
+						viewBox="0 0 24 24"
+						fill="none"
+						stroke="currentColor"
+						stroke-width="2"
+						stroke-linecap="round"
+						stroke-linejoin="round"
+						class="icon icon-tabler icons-tabler-outline icon-tabler-login"
+						><path stroke="none" d="M0 0h24v24H0z" fill="none" /><path
+							d="M15 8v-2a2 2 0 0 0 -2 -2h-7a2 2 0 0 0 -2 2v12a2 2 0 0 0 2 2h7a2 2 0 0 0 2 -2v-2"
+						/><path d="M21 12h-13l3 -3" /><path d="M11 15l-3 -3" /></svg
+					>
+					Prihlásiť sa
+				</button>
+			{/if}
+		</div>
+	</div>
+</header>
+<!--
+<header
+	class="fixed top-0 left-0 w-screen bg-background-100 py-1 px-2 border-b border-background-200 z-30"
+>
+	<div class="max-w-7xl mx-auto">
+		<div class="flex flex-row justify-between items-center">
+			<div class="flex flex-row flex-nowrap gap-2">
+				<a class="flex items-center gap-2 pr-4 border-r border-background-100" href="/">
+					<img src="https://via.placeholder.com/150" alt="logo" class="h-10 w-10" />
+					<p class="text-lg font-semibold text-text-600">Reduta</p>
+				</a>
+				<nav class="flex flex-row flex-nowrap gap-8 items-center mx-4 text-text-600">
+					<a href="/#about" class="hover:text-text-400">Moje podujatia</a>
+					<a href="/#services" class="hover:text-text-400">Služby</a>
+					<a href="/#contact" class="hover:text-text-400">Kontakt</a>
+				</nav>
+			</div>
+			<div class="flex flex-row flex-nowrap gap-2 items-center">
+				{#if !user}
+					<button
+						type="button"
+						on:click={openLoginPopup}
+						class="px-4 py-2 bg-background-700 hover:bg-primary-600 rounded-md text-text-50"
+						>Prihlásenie</button
+					>
+				{:else}
+					<div class="relative group">
+						<button
+							type="button"
+							class="pl-1 pr-4 py-1 hover:bg-background-50 rounded-md text-text-600 flex flex-row gap-2 items-center"
+						>
+							{#if profilePic}
+								<img
+									class="rounded-full overflow-hidden w-8"
+									src={profilePic}
+									alt="Profilový obrázok"
+								/>
+							{/if}
+                            
+							<p>{user.name}</p>
+						</button>
+						<div
+							class="hidden group-focus-within:flex focus-within:flex focus:flex flex-col absolute top-11 rounded-b-md bg-background-100 w-52 px-2 py-2 gap-1 border border-background-200"
+						>
+							<a
+								href="/"
+								class="px-4 py-2 hover:bg-background-50 rounded-md text-text-600 w-full text-center"
+							>
+								Nastavenia
+							</a>
+							<form
+								method="POST"
+								action="/?/logout"
+								class="flex w-full"
+								use:enhance={async () => {
+									return async ({ result }) => {
+										if (result.type == 'success') {
+											invalidateAll();
+										}
+										applyAction(result);
+									};
+								}}
+							>
+								<button
+									type="submit"
+									class="px-4 py-2 bg-background-700 hover:bg-primary-600 rounded-md text-text-50 w-full"
+								>
+									Odhlásiť sa
+								</button>
+							</form>
+						</div>
+					</div>
+				{/if}
+			</div>
+		</div>
+	</div>
+</header> -->

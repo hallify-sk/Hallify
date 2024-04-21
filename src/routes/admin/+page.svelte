@@ -1,16 +1,20 @@
 <script lang="ts">
 	import { enhance, applyAction } from '$app/forms';
 	import { invalidateAll } from '$app/navigation';
-	import { page } from '$app/stores';
 	import { Bar } from 'svelte-chartjs';
 	import 'chart.js/auto';
 	import { writable, type Unsubscriber, type Writable } from 'svelte/store';
 	import { onDestroy, onMount } from 'svelte';
 	import Calendar from '$lib/Calendar.svelte';
 
-	import themes from "$lib/themes.json";
+	import themes from '$lib/themes.json';
 	import { theme } from '$lib/stores/theme.js';
 	import type { RecordModel } from 'pocketbase';
+	import AdminNav from '$lib/AdminNav.svelte';
+	import Popup from '$lib/Popup.svelte';
+
+	let openEventPopup: () => {};
+	let closeEventPopup: () => {};
 
 	let emailRegisterError: boolean = false;
 	let passwordRegisterError: boolean = false;
@@ -21,25 +25,23 @@
 
 	export let data;
 
-	let counts: Array<(number)> = [];
+	let counts: Array<number> = [];
 
 	let pollingInterval: NodeJS.Timeout;
 
 	const reservations = writable('week');
 	onMount(() => {
 		pollingInterval = setInterval(async () => {
-		await invalidateAll();
-		reservationData.labels = [];
-		counts = [];
-		recalculateData();
-	}, 5000);
+			await invalidateAll();
+			reservationData.labels = [];
+			counts = [];
+			recalculateData();
+		}, 5000);
 	});
 
 	onDestroy(() => {
 		clearInterval(pollingInterval);
 	});
-
-	console.log($theme);
 
 	let reservationData: {
 		labels: Array<string>;
@@ -49,6 +51,7 @@
 			backgroundColor: Array<string> | string;
 			borderWidth: number;
 			borderColor: Array<string> | string;
+			borderRadius: number;
 		}>;
 	} = {
 		labels: [],
@@ -58,7 +61,8 @@
 				data: [],
 				borderWidth: 2,
 				borderColor: themes?.[$theme]?.primary?.[300],
-				label: "Vytvorené rezervácie"
+				label: 'Vytvorené rezervácie',
+				borderRadius: 5
 			}
 		]
 	};
@@ -71,69 +75,82 @@
 			backgroundColor: Array<string> | string;
 			borderWidth: number;
 			borderColor: Array<string> | string;
+			borderRadius: number;
 		}>;
 	};
 
-	function recalculateData(days: number = 7){
+	function recalculateData(days: number = 7) {
 		reservationDataCache = structuredClone(reservationData);
 		let lastxDays = Array.from({ length: days }, (_, i) => {
-				const d = new Date().setUTCHours(0,0,0,0) - i * 86400000;
-				reservationData.labels.unshift(
-					new Date(d).toLocaleDateString('sk')
-				);
-				return d;
-			});
-			//Get every day in the last 7 days and count how many reservations there are for each day
-			reservationData.datasets[0].data = lastxDays.map((day) => {
-				return data.reservations?.reduce((acc, reservation) => {
-						return new Date(reservation.created).setUTCHours(0,0,0,0) === day ? acc + 1 : acc;
+			const d = new Date().setUTCHours(0, 0, 0, 0) - i * 86400000;
+			reservationData.labels.unshift(new Date(d).toLocaleDateString('sk'));
+			return d;
+		});
+		//Get every day in the last 7 days and count how many reservations there are for each day
+		reservationData.datasets[0].data = lastxDays
+			.map((day) => {
+				return (
+					data.reservations?.reduce((acc, reservation) => {
+						return new Date(reservation.created).setUTCHours(0, 0, 0, 0) === day ? acc + 1 : acc;
 					}, 0) || 0
-				
-			}).reverse();
+				);
+			})
+			.reverse();
 	}
+
+	import { Calendar as calendar } from 'headless-calendar';
+	console.log(new Date().toISOString().slice(0, 10));
+	console.log(
+		calendar.custom(
+			new Date().toISOString().slice(0, 10),
+			new Date(Date.now() + 1000 * 60 * 60 * 24 * 7).toISOString().slice(0, 10)
+		)
+	);
 
 	if ($reservations == 'week' && data.reservations) {
-			recalculateData();
+		recalculateData();
 	}
 
-	let selectedDate: Writable<Date | null>;
-console.log(data);
+	let selectedDate: Writable<Date | null> = writable(null);
+	console.log(data);
 	let selectedEvent: RecordModel | undefined;
 
 	let unsubscribe: Unsubscriber;
 
 	onMount(() => {
 		unsubscribe = selectedDate.subscribe(() => {
-			selectedEvent = data.reservations?.find(i => new Date(i.date).getTime() == $selectedDate?.getTime());
-			console.log(selectedEvent);
+			selectedEvent = data.reservations?.find(
+				(i) => new Date(i.date).setUTCHours(0, 0, 0, 0) == $selectedDate?.getTime()
+			);
 		});
 	});
 
 	onDestroy(() => {
 		unsubscribe?.();
-	})
+	});
+
+	console.log(data.user);
+
+	$: if (data.user) {
+		console.log('CHANGE');
+	}
 </script>
 
 {#if data.user}
-	<div class="flex flex-row flex-nowrap">
-		<div class="w-60 bg-background-100 h-screen block"></div>
+	<AdminNav user={data.user} />
+	<div class="flex flex-row flex-nowrap pt-12 pl-80">
 		<div class="w-full min-h-screen grid auto-rows-min grid-cols-12 p-8 gap-4">
-			<div class="col-span-12 md:col-span-5 lg:col-span-4 xl:col-span-3">
-				<Calendar 
+			<!--<div class="col-span-12 md:col-span-5 lg:col-span-4 xl:col-span-3">
+				<Calendar
 					highlightedDays={data.reservations}
 					blockPastDays={false}
+					onSelect={() => {
+						openEventPopup();
+					}}
 					bind:selectedDate
 				/>
 			</div>
-			<div class="col-span-12 md:col-span-7 lg:col-span-8 xl:col-span-9 bg-background-100 rounded-md p-2">
-				<h2>Event details</h2>
-				{#key selectedDate}
-				{#if selectedEvent?.id}
-				<p>{selectedDate}</p>
-				{/if}
-				{/key}
-			</div>
-			<div class="col-span-12 lg:col-span-6">
+			<div class="col-span-12 md:col-span-7 lg:col-span-8 xl:col-span-9">
 				{#key reservationDataCache !== reservationData}
 					<Bar
 						options={{
@@ -179,9 +196,18 @@ console.log(data);
 						]
 					}}
 				/>
-			</div>
+			</div>-->
 		</div>
 	</div>
+
+	<Popup bind:closePopup={closeEventPopup} bind:openPopup={openEventPopup}>
+		<div class="max-w-xl">
+			<img
+				src="http://localhost:8090/api/files/5yw1wmo1kh08q5p/srrrgzndboytak5/stage_Vt78Dmjp1X.png?token="
+				alt=""
+			/>
+		</div>
+	</Popup>
 {:else}
 	<div
 		class="w-full h-screen grid place-items-center z-50 text-left bg-[url(/Waves.svg)] bg-no-repeat bg-cover"
