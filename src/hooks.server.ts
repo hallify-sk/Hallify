@@ -68,7 +68,6 @@ export const handle = async ({ event, resolve }) => {
     event.locals.pbSecretURL = pbSecretURL;
     event.locals.pbApiURL = pbAPIURL;
 	if (!pbIsset) {
-		console.log("KOKOT");
 		if (!event.route.id?.startsWith('/install')) {
 			throw redirect(307, '/install');
 		}
