@@ -38,35 +38,35 @@ let pbSecretURL: string = '';
 let pbAPIURL: string = '';
 
 //Hack to scope the variables
-await fs.readFile('config/pocketbase.json').then((data => {
+await fs.readFile('config/pocketbase.json').then((data) => {
 	const { POCKETBASE_URL, POCKETBASE_API_URL } = JSON.parse(data.toString());
 	pbSecretURL = POCKETBASE_URL;
 	pbAPIURL = POCKETBASE_API_URL;
 
-	if(POCKETBASE_URL != ""){
+	if (POCKETBASE_URL != '') {
 		pbIsset = true;
 	}
-}));
+});
 
 export const handle = async ({ event, resolve }) => {
-	if(!pbIsset){
+	if (!pbIsset) {
 		const data = await fs.readFile('config/pocketbase.json');
 		const { POCKETBASE_URL, POCKETBASE_API_URL } = JSON.parse(data.toString());
 		pbSecretURL = POCKETBASE_URL;
 		pbAPIURL = POCKETBASE_API_URL;
-	
-		if(POCKETBASE_URL != ""){
+
+		if (POCKETBASE_URL != '') {
 			pbIsset = true;
 		}
 	}
 	event.locals.authExpired = false;
 
-	if(pbSecretURL && pbSecretURL != ""){
+	if (pbSecretURL && pbSecretURL != '') {
 		event.locals.pb = new PocketBase(pbSecretURL);
 	}
 
-    event.locals.pbSecretURL = pbSecretURL;
-    event.locals.pbApiURL = pbAPIURL;
+	event.locals.pbSecretURL = pbSecretURL;
+	event.locals.pbApiURL = pbAPIURL;
 	if (!pbIsset) {
 		if (!event.route.id?.startsWith('/install')) {
 			throw redirect(307, '/install');
@@ -75,21 +75,15 @@ export const handle = async ({ event, resolve }) => {
 
 		return response;
 	} else {
-		if(event.route.id == "/install") throw error(404);
+		if (event.route.id == '/install') throw error(404);
 		event.locals.pb.authStore.loadFromCookie(event.request.headers.get('cookie') || '');
 		if (event.locals.pb.authStore.isValid) {
 			try {
 				await event.locals.pb.collection('users').authRefresh();
 			} catch (e) {
-				if(event.route.id?.startsWith("/admin")){
-					try{
-						await event.locals.pb.admins.authRefresh();
-					}catch(e){
-						event.locals.pb.authStore.clear();
-						event.locals.authExpired = true;
-						e;
-					}
-				}else{
+				try {
+					await event.locals.pb.admins.authRefresh();
+				} catch (e) {
 					event.locals.pb.authStore.clear();
 					event.locals.authExpired = true;
 					e;

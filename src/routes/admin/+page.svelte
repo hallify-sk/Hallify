@@ -99,13 +99,13 @@
 	}
 
 	import { Calendar as calendar } from 'headless-calendar';
-	console.log(new Date().toISOString().slice(0, 10));
-	console.log(
-		calendar.custom(
+
+	const nextWeek = calendar.custom(
 			new Date().toISOString().slice(0, 10),
 			new Date(Date.now() + 1000 * 60 * 60 * 24 * 7).toISOString().slice(0, 10)
-		)
-	);
+		);
+
+	console.log(nextWeek.getWeekdayNames());
 
 	if ($reservations == 'week' && data.reservations) {
 		recalculateData();
@@ -140,6 +140,41 @@
 	<AdminNav user={data.user} />
 	<div class="flex flex-row flex-nowrap pt-12 pl-80">
 		<div class="w-full min-h-screen grid auto-rows-min grid-cols-12 p-8 gap-4">
+			<h1 class="col-span-12 text-xl text-text-600 font-semibold">Nástenka</h1>
+			<div class="col-span-12 md:col-span-6 bg-background-100 h-full block rounded-md overflow-hidden">
+				<h2 class="text-text-600 bg-background-200 py-1 px-2">Najbližšie 7 dní</h2>
+				<p class="text-sm text-right mr-2 py-0.5"><a href="/admin/reservations" class="text-accent-600 hover:text-accent-400 text-sm">Zobraziť všetky udalosti</a></p>
+				<div class="grid grid-rows-7 m-2 mt-0">
+					{#each Array(7) as _, i}
+					{#if data.reservations.find(e => new Date(e.date).setUTCHours(0,0,0,0) == new Date(Date.now() + 1000 * 60 * 60 * 24 * i).setUTCHours(0, 0, 0, 0))}
+					<a href="/admin/reservations/{data.reservations.find(e => new Date(e.date).setUTCHours(0,0,0,0) == new Date(Date.now() + 1000 * 60 * 60 * 24 * i).setUTCHours(0, 0, 0, 0))?.id}" class="border-t p-2 border-gray-300 hover:bg-background-200 rounded-md flex flex-row gap-2">
+						<div class="flex flex-col border-r border-background-200 pr-2">
+							<p class="text-text-400 m-0 p-0 text-sm">{new Date(Date.now() + 1000 * 60 * 60 * 24 * i).toLocaleDateString("sk")}</p>
+							<p class="text-text-600 m-0 p-0">{new Date(Date.now() + 1000 * 60 * 60 * 24 * i).toLocaleDateString("sk", { weekday: 'long' })}</p>	
+						</div>
+						<div class="flex flex-col">
+							<p class="text-text-600">Meno udalosti: <span class="text-text-500">{data.reservations.find(e => new Date(e.date).setUTCHours(0,0,0,0) == new Date(Date.now() + 1000 * 60 * 60 * 24 * i).setUTCHours(0, 0, 0, 0))?.name}</span></p>
+							<p class="text-text-600">Typ udalosti: <span class="text-text-500">{data.reservations.find(e => new Date(e.date).setUTCHours(0,0,0,0) == new Date(Date.now() + 1000 * 60 * 60 * 24 * i).setUTCHours(0, 0, 0, 0))?.expand?.category?.name}</span></p>
+						</div>
+						<div class="ml-auto items-end flex">
+							<p class="text-text-400 text-xs underline">Zobraziť detail</p>
+						</div>
+					</a>
+					{:else}
+					<div class="border-t p-2 border-gray-300 hover:bg-background-200 rounded-md flex flex-row gap-2">
+						<div class="flex flex-col border-r border-background-200 pr-2">
+							<p class="text-text-400 m-0 p-0 text-sm">{new Date(Date.now() + 1000 * 60 * 60 * 24 * i).toLocaleDateString("sk")}</p>
+							<p class="text-text-600 m-0 p-0">{new Date(Date.now() + 1000 * 60 * 60 * 24 * i).toLocaleDateString("sk", { weekday: 'long' })}</p>	
+						</div>
+						<div class="flex flex-col">
+							<p class="text-text-600">Bez udalosti</p>
+						</div>
+					</div>
+					{/if}
+					{/each}
+				</div>
+				
+			</div>
 			<!--<div class="col-span-12 md:col-span-5 lg:col-span-4 xl:col-span-3">
 				<Calendar
 					highlightedDays={data.reservations}

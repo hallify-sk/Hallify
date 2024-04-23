@@ -51,13 +51,13 @@ export const actions = {
 
 /** @type {import('./$types').PageServerLoad} */
 export async function load({locals}) {
-	if(!locals.pb.authStore.isAdmin){
+	/*if(!locals.pb.authStore.isAdmin){
 		return {};
-	}else{
+	}else{*/
 		return {
 			user: locals.user,
 			reservations: await locals.pb.collection('reservations').getFullList({ sort: 'created', expand: "user,addons,category" }) as RecordModel[],
 			apiUrl: locals.pbApiURL
 		};
-	}
+	//}
 }
