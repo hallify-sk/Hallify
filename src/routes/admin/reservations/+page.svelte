@@ -72,7 +72,7 @@
 	async function redirectToreservation(
 		id: string
 	): Promise<MouseEventHandler<HTMLTableRowElement> | null | undefined> {
-		await goto(`/reservations/${id}`);
+		await goto(`/admin/reservations/${id}`);
 		return;
 	}
 
@@ -150,9 +150,9 @@
 </script>
 
 <AdminNav user={data.user} />
-<div class="flex flex-col flex-nowrap pt-12 pl-80">
-	<h1 class="col-span-12 text-xl text-text-600 font-semibold mx-8">Rezervácie</h1>
-	<div bind:this={tableWrapper} class="overflow-auto min-h-screen w-full">
+<div class="flex flex-col flex-nowrap pt-24 pl-80">
+	<h1 class="col-span-12 text-text-600 font-semibold mx-14 text-3xl">Rezervácie</h1>
+	<div bind:this={tableWrapper} class="overflow-auto w-full">
 		<form
 			id="reservationselect"
 			action="?/removereservations"

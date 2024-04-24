@@ -138,12 +138,12 @@
 
 {#if data.user}
 	<AdminNav user={data.user} />
-	<div class="flex flex-row flex-nowrap pt-12 pl-80">
-		<div class="w-full min-h-screen grid auto-rows-min grid-cols-12 p-8 gap-4">
-			<h1 class="col-span-12 text-xl text-text-600 font-semibold">Nástenka</h1>
+	<div class="flex flex-row flex-nowrap pl-80">
+		<div class="w-full min-h-screen grid auto-rows-min grid-cols-12 px-14 pt-24 gap-8">
+			<h1 class="col-span-12 text-3xl text-text-600 font-semibold">Nástenka</h1>
 			<div class="col-span-12 md:col-span-6 bg-background-100 h-full block rounded-md overflow-hidden">
 				<h2 class="text-text-600 bg-background-200 py-1 px-2">Najbližšie 7 dní</h2>
-				<p class="text-sm text-right mr-2 py-0.5"><a href="/admin/reservations" class="text-accent-600 hover:text-accent-400 text-sm">Zobraziť všetky udalosti</a></p>
+				<p class="text-sm text-right mr-2 py-0.5"><a href="/admin/reservations" class="text-accent-600 hover:text-accent-400 text-sm">Zobraziť všetky rezervácie</a></p>
 				<div class="grid grid-rows-7 m-2 mt-0">
 					{#each Array(7) as _, i}
 					{#if data.reservations.find(e => new Date(e.date).setUTCHours(0,0,0,0) == new Date(Date.now() + 1000 * 60 * 60 * 24 * i).setUTCHours(0, 0, 0, 0))}
