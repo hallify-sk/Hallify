@@ -16,76 +16,30 @@
 >
 	<div class="px-4 gap-1 flex flex-col justify-between h-full">
 		<div class="flex flex-col gap-2 pb-2 border-b border-b-background-200 h-full">
-			<a href="/" class="flex items-center gap-4 py-2 mb-10">
+			<a href="/admin" class="flex items-center gap-4 py-2 mb-10">
 				<img src="https://via.placeholder.com/150" alt="logo" class="h-10 w-10" />
 				<p class="text-lg font-semibold text-text-600">Reduta</p>
 			</a>
 			<a
 				class="flex py-3 px-2 rounded-md text-text-500 hover:text-text-700 hover:bg-background-200 gap-4"
-				href="/"
+				href="/admin"
 			>
-				<svg
-					xmlns="http://www.w3.org/2000/svg"
-					width="24"
-					height="24"
-					viewBox="0 0 24 24"
-					fill="none"
-					stroke="currentColor"
-					stroke-width="2"
-					stroke-linecap="round"
-					stroke-linejoin="round"
-					class="icon icon-tabler icons-tabler-outline icon-tabler-calendar-time"
-					><path stroke="none" d="M0 0h24v24H0z" fill="none" /><path
-						d="M11.795 21h-6.795a2 2 0 0 1 -2 -2v-12a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v4"
-					/><path d="M18 18m-4 0a4 4 0 1 0 8 0a4 4 0 1 0 -8 0" /><path d="M15 3v4" /><path
-						d="M7 3v4"
-					/><path d="M3 11h16" /><path d="M18 16.496v1.504l1 1" /></svg
-				>
-				Moje podujatia
+			<svg  xmlns="http://www.w3.org/2000/svg"  width="24"  height="24"  viewBox="0 0 24 24"  fill="none"  stroke="currentColor"  stroke-width="2"  stroke-linecap="round"  stroke-linejoin="round"  class="icon icon-tabler icons-tabler-outline icon-tabler-pin"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M15 4.5l-4 4l-4 1.5l-1.5 1.5l7 7l1.5 -1.5l1.5 -4l4 -4" /><path d="M9 15l-4.5 4.5" /><path d="M14.5 4l5.5 5.5" /></svg>
+				Nástenka
 			</a>
 			<a
 				class="flex py-3 px-2 rounded-md text-text-500 hover:text-text-700 hover:bg-background-200 gap-4"
-				href="/"
+				href="/admin/reservations"
 			>
-				<svg
-					xmlns="http://www.w3.org/2000/svg"
-					width="24"
-					height="24"
-					viewBox="0 0 24 24"
-					fill="none"
-					stroke="currentColor"
-					stroke-width="2"
-					stroke-linecap="round"
-					stroke-linejoin="round"
-					class="icon icon-tabler icons-tabler-outline icon-tabler-info-circle"
-					><path stroke="none" d="M0 0h24v24H0z" fill="none" /><path
-						d="M3 12a9 9 0 1 0 18 0a9 9 0 0 0 -18 0"
-					/><path d="M12 9h.01" /><path d="M11 12h1v4h1" /></svg
-				>
-				Služby
+			<svg  xmlns="http://www.w3.org/2000/svg"  width="24"  height="24"  viewBox="0 0 24 24"  fill="none"  stroke="currentColor"  stroke-width="2"  stroke-linecap="round"  stroke-linejoin="round"  class="icon icon-tabler icons-tabler-outline icon-tabler-calendar"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M4 7a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v12a2 2 0 0 1 -2 2h-12a2 2 0 0 1 -2 -2v-12z" /><path d="M16 3v4" /><path d="M8 3v4" /><path d="M4 11h16" /><path d="M11 15h1" /><path d="M12 15v3" /></svg>
+				Zoznam rezervácií
 			</a>
 			<a
 				class="flex py-3 px-2 rounded-md text-text-500 hover:text-text-700 hover:bg-background-200 gap-4"
-				href="/"
+				href="/admin/users"
 			>
-				<svg
-					xmlns="http://www.w3.org/2000/svg"
-					width="24"
-					height="24"
-					viewBox="0 0 24 24"
-					fill="none"
-					stroke="currentColor"
-					stroke-width="2"
-					stroke-linecap="round"
-					stroke-linejoin="round"
-					class="icon icon-tabler icons-tabler-outline icon-tabler-message"
-					><path stroke="none" d="M0 0h24v24H0z" fill="none" /><path d="M8 9h8" /><path
-						d="M8 13h6"
-					/><path
-						d="M18 4a3 3 0 0 1 3 3v8a3 3 0 0 1 -3 3h-5l-5 3v-3h-2a3 3 0 0 1 -3 -3v-8a3 3 0 0 1 3 -3h12z"
-					/></svg
-				>
-				Kontakt
+			<svg  xmlns="http://www.w3.org/2000/svg"  width="24"  height="24"  viewBox="0 0 24 24"  fill="none"  stroke="currentColor"  stroke-width="2"  stroke-linecap="round"  stroke-linejoin="round"  class="icon icon-tabler icons-tabler-outline icon-tabler-users"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M9 7m-4 0a4 4 0 1 0 8 0a4 4 0 1 0 -8 0" /><path d="M3 21v-2a4 4 0 0 1 4 -4h4a4 4 0 0 1 4 4v2" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /><path d="M21 21v-2a4 4 0 0 0 -3 -3.85" /></svg>
+				Používatelia
 			</a>
 		</div>
 		<div class="flex flex-col gap-2 py-2">

@@ -79,7 +79,7 @@ export const actions = {
 		const type = data.get('type')?.toString();
 		const selectedAddons = [];
 		for (const pair of data.keys()) {
-			if (!['type', 'date', 'pocetHosti', 'menoUdalosti'].includes(pair)) selectedAddons.push(pair);
+			if (!['type', 'date', 'pocetHosti', 'menoUdalosti', 'adminComment'].includes(pair)) selectedAddons.push(pair);
 		}
 		console.log(selectedAddons);
 
@@ -119,6 +119,7 @@ export const actions = {
 				name,
 				guestCount: peopleCount,
 				category: type,
+				adminNotes: data.get("adminComment")?.toString() || "",
 				addons: selectedAddons
 			});
 			return { success: true };
@@ -143,7 +144,7 @@ export const actions = {
 export async function load({ locals, params }) {
 	let reservation;
 		try {
-			reservation = await (locals.pb as PocketBase).collection('reservations').getOne(params.slug);
+			reservation = await (locals.pb as PocketBase).collection('reservations').getOne(params.slug, {expand: "user"});
 			console.log(reservation);
 		} catch (e) {
 			console.log(e)

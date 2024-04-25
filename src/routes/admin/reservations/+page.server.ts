@@ -1,5 +1,3 @@
-import type { RecordModel } from 'pocketbase';
-
 /** @type {import('./$types').PageServerLoad} */
 export async function load({locals}) {
 	/*if(!locals.pb.authStore.isAdmin){

@@ -44,14 +44,14 @@
 		<div class="flex flex-row flex-nowrap items-center justify-between">
 			<h1 class="text-3xl font-bold text-text-600">Detaily rezervácie</h1>
 		</div>
-		<form method="post" action={data.reservation.expires ? `/event/${data.slug}/edit/?/confirmReservation` : `/event/${data.slug}/edit/?/updateReservation`}
+		<form method="post" action={data.reservation.expires ? `/admin/reservations/${data.slug}/?/confirmReservation` : `/admin/reservations/${data.slug}/?/updateReservation`}
 		use:enhance={({ formData }) => {
 			formData.append("date", data.reservation.date);
 			return ({ result }) => {
 				console.log(result);
 				if(result.type == "success"){
 					console.log("got here");
-					goto(`/event/${result.data?.reservationId}`);
+					goto(`/admin/reservations/`);
 				}else if(result.type == "failure"){
 					switch (result.data?.type){
 						case "name":
@@ -76,7 +76,12 @@
 			{#if error}
 				<p class="text-red-500 col-span-1 lg:col-span-2">{error}</p>
 			{/if}
-			<a class="col-span-1 lg:col-span-2">A</a>
+			<a href="/admin/users/{data.user.id}" class="appearance-none w-full col-span-1 bg-background-100 text-text-600 text-left rounded-md py-0.5 px-2 peer border lg:col-span-2 mt-0.5 flex flex-col justify-center flex-nowrap {dateError
+				? 'border-red-500'
+				: 'border-primary-200'}">
+				<p class="text-sm text-text-400">Majiteľ rezervácie</p>
+				{data.reservation.expand?.user?.name}
+			</a>
             <fieldset class="relative text-input">
 				<!-- svelte-ignore missing-declaration -->
 				<input
@@ -179,25 +184,26 @@
 				{:else}
 				<div class="col-span-4 bg-background-100 rounded-md p-4 flex justify-center items-center flex-col flex-nowrap gap-2">
 					<p class="p-4 rounded-full aspect-square text-center text-3xl pointer-events-none text-text-400">:(</p>
-					<p class="text-center text-text-600">Bohužiaľ, nepodarilo sa nám pre Vás nájsť rozloženie sály.</p>
+					<p class="text-center text-text-600">Bohužiaľ, nepodarilo sa nám nájsť vhodné rozloženie sály.</p>
 					<a href="/editor" class="px-4 py-2 bg-accent-700 hover:bg-accent-600 rounded-md text-text-50">Vytvoriť rozloženie sály</a>
 				</div>
 				{/if}
 			</div>
+			<textarea placeholder="Komentár admina (neviditeľné pre používateľa) [max. 600 znakov]" maxlength="600" class="bg-background-100 resize-none rounded-md col-span-1 lg:col-span-2 min-h-40 p-2" name="adminComment" id="adminComment">{data.reservation.adminNotes || ""}</textarea>
 			<div class="ml-auto mt-3 items-center flex flex-row flex-nowrap gap-2 col-span-1 lg:col-span-2">
 				<button
 					type="reset"
 					on:click={()=>{
-						goto(`/event/${data.slug}`);
+						goto(`/admin/reservations`);
 					}}
 					class="px-4 py-2 bg-background-100 hover:bg-background-200 rounded-md text-text-900"
-					>Zrušiť</button
+					>Späť</button
 				>
 				<button
 					type="submit"
 					class="px-4 py-2 bg-background-700 hover:bg-primary-600 rounded-md text-text-50 w-[120px]"
 				>
-					Rezervovať
+					Zmeniť
 				</button>
 			</div>
         </form>

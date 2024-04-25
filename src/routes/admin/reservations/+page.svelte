@@ -168,6 +168,7 @@
 				<colgroup>
 					<col class="w-10" />
 					<col class="w-auto min-w-[200px]" />
+					<col class="w-auto min-w-[200px]" />
 					<col class="w-auto min-w-[160px]" />
 					<col class="w-auto min-w-[160px]" />
 					<col class="w-auto min-w-[160px]" />
@@ -190,6 +191,13 @@
 							}}
 							class="text-left hover:bg-background-100 px-2 cursor-pointer hover:text-text-600 rounded-t"
 							>Názov</th
+						>
+						<th
+							on:click={() => {
+								handleSortProperty('user');
+							}}
+							class="text-left hover:bg-background-100 px-2 cursor-pointer hover:text-text-600 rounded-t"
+							>Používateľ</th
 						>
 						<th
 							on:click={() => {
@@ -249,6 +257,9 @@
 									>#{reservation.id} - {reservation.name == ''
 										? 'Nenastavené'
 										: reservation.name}</td
+								>
+								<td class="px-2 whitespace-nowrap overflow-ellipsis overflow-hidden"
+									>{reservation.expand?.user.name}</td
 								>
 								<td class="px-2">
 									{#if reservation.expand?.category?.name}
