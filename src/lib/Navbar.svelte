@@ -25,8 +25,9 @@
 	let nameRegisterError: boolean = false;
 	let errorRegisterMessage: string = '';
 
-	function turnstileLoginError() {
+	function turnstileLoginError(e: any) {
 		errorLoginMessage = 'Skúste obnoviť stránku (zlyhala CAPTCHA)';
+		console.log(e);
 	}
 
 	export let user: AuthModel;
@@ -454,7 +455,7 @@
 			}}
 		>
 			<p class="text-red-500 mb-2 max-w-xs">{errorRegisterMessage}</p>
-			<Turnstile siteKey={PUBLIC_TURNSTILE_TOKEN} appearance="interaction-only" />
+			<Turnstile siteKey={PUBLIC_TURNSTILE_TOKEN} appearance="always" />
 			<fieldset class="relative text-input">
 				<input
 					on:change={() => (nameRegisterError = false)}
