@@ -14,6 +14,8 @@ export const actions = {
 		const email = data.get('email')?.toString();
 		const password = data.get('password')?.toString();
 		const turnstile = data.get('cf-turnstile-response')?.toString();
+		console.log(data);
+		console.log(turnstile);
 		if (!email || email.trim() == '') {
 			return fail(400, { incorrect: true, message: 'Vyžaduje sa e-mail', type: 'email' });
 		}
@@ -34,6 +36,7 @@ export const actions = {
 				method: 'POST'
 			});
 			const outcome = await result.json();
+			//console.log(outcome);
 			if (!outcome.success)
 				return fail(400, {
 					incorrect: true,

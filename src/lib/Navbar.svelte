@@ -332,7 +332,7 @@
 			<Turnstile
 				on:turnstile-error={turnstileLoginError}
 				siteKey={PUBLIC_TURNSTILE_TOKEN}
-				appearance="interaction-only"
+				appearance="always"
 			/>
 			<fieldset class="relative text-input">
 				<input

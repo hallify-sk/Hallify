@@ -27,8 +27,9 @@ export const actions = {
 			const result: Response = await fetch(PUBLIC_TURNSTILE_URL, {
 				body: formData,
 				method: 'POST'
-			});
+			})
 			const outcome = await result.json();
+			console.log(outcome);
 			if (!outcome.success)
 				return fail(400, {
 					incorrect: true,
