@@ -329,11 +329,12 @@
 				};
 			}}
 		>
+		
 			<p class="text-red-500 mb-2 max-w-xs">{errorLoginMessage}</p>
 			<Turnstile
 				on:turnstile-error={turnstileLoginError}
 				siteKey={PUBLIC_TURNSTILE_TOKEN}
-				appearance="always"
+				appearance="execute"
 			/>
 			<fieldset class="relative text-input">
 				<input
@@ -455,7 +456,7 @@
 			}}
 		>
 			<p class="text-red-500 mb-2 max-w-xs">{errorRegisterMessage}</p>
-			<Turnstile siteKey={PUBLIC_TURNSTILE_TOKEN} appearance="always" />
+			<Turnstile siteKey={PUBLIC_TURNSTILE_TOKEN} appearance="execute" />
 			<fieldset class="relative text-input">
 				<input
 					on:change={() => (nameRegisterError = false)}

@@ -10,6 +10,7 @@
 	import { browser } from '$app/environment';
 	import type { ActionResult } from '@sveltejs/kit';
 	import AdminNav from '$lib/AdminNav.svelte';
+	import Popup from '$lib/Popup.svelte';
 
 	export let data;
 	let selectAll: boolean,
@@ -147,11 +148,17 @@
 		mapCheckboxes();
 		reservations.sort(tableSort);
 	}
+
+	let openConfirmModal = () => {};
+	let closeConfirmModal = () => {};
+
+	let errorConfirmMessage: string = '';
+
 </script>
 
 <AdminNav user={data.user} />
 <div class="flex flex-col flex-nowrap pt-24 pl-80">
-	<h1 class="col-span-12 text-text-600 font-semibold mx-14 text-3xl">Rezervácie</h1>
+	<h1 class="col-span-12 text-text-600 font-semibold mx-14 text-2xl">Rezervácie</h1>
 	<div bind:this={tableWrapper} class="overflow-auto w-full">
 		<form
 			id="reservationselect"
@@ -259,7 +266,7 @@
 										: reservation.name}</td
 								>
 								<td class="px-2 whitespace-nowrap overflow-ellipsis overflow-hidden"
-									>{reservation.expand?.user.name}</td
+									>{reservation.expand?.user?.name}</td
 								>
 								<td class="px-2">
 									{#if reservation.expand?.category?.name}
@@ -395,23 +402,56 @@
 			rezerváci{checkboxes.filter((t) => t?.checked === true).length > 1 ? 'e' : 'a'}
 		</p>
 		<button
-			type="submit"
+			type="button"
+			on:click={openConfirmModal}
 			class="flex py-2 px-2 rounded-md text-text-100 gap-4 bg-accent-700 hover:bg-accent-600"
 		>
 			Vymazať rezerváci{checkboxes.filter((t) => t?.checked === true).length > 1 ? 'e' : 'u'}
 		</button>
-		<!--
-		<button
-			form="ticketSelect"
-			type="submit"
-			on:click={deleteSelected}
-			class="p-2 cursor-pointer text-red-600 duration-100 hover:bg-red-400/20 bg-red-400/10 px-4 rounded"
-			>Delete selected</button
-		>-->
 	</div>
 {/if}
 
-<style>
+<Popup bind:openPopup={openConfirmModal} bind:closePopup={closeConfirmModal}>
+	<div class="w-80">
+		<h2 class="text-text-700 text-xl mb-2">Vymazať rezerváci{checkboxes.filter((t) => t?.checked === true).length > 1 ? 'e' : 'u'}</h2>
+		<p class="text-text-500 mb-4">Na vymazanie rezerváci{checkboxes.filter((t) => t?.checked === true).length > 1 ? 'í' : 'e'} potrebujete zadať dôvod, ktorý bude poslaný uživateľom cez E-Mail.</p>
+		{#if errorConfirmMessage}
+			<p class="text-red-500 mb-2 max-w-xs">{errorConfirmMessage}</p>
+		{/if}
+		<form
+			action="?/removereservations"
+			method="POST"
+			class="flex flex-col"
+			use:enhance={(() => {
+				return async ({ result }) => {
+					if (result.type === 'failure') {
+						errorConfirmMessage = typeof result.data?.message == 'string' ? result.data.message : '';
+					} else {
+						await deleteSelected();
+					}
+				};
+			})}
+			>
+			<textarea placeholder="Dôvod na zrušenie rezerváci{checkboxes.filter((t) => t?.checked === true).length > 1 ? 'í' : 'e'}" maxlength="600" minlength="30" class="bg-background-100 resize-none rounded-md col-span-1 lg:col-span-2 min-h-40 p-2 text-text-600" name="reason" id="reason"></textarea>
+			<div class="ml-auto mt-3 items-center flex flex-row flex-nowrap gap-2">
+				<button
+					type="reset"
+					on:click={closeConfirmModal}
+					class="px-4 py-2 bg-background-100 hover:bg-background-200 rounded-md text-text-900"
+					>Zrušiť</button
+				>
+				<button
+					type="submit"
+					class="px-4 py-2 bg-background-700 hover:bg-primary-600 rounded-md text-text-50"
+				>
+					Vymazať rezerváci{checkboxes.filter((t) => t?.checked === true).length > 1 ? 'e' : 'u'}
+				</button>
+			</div>
+		</form>
+	</div>
+</Popup>
+
+<style lang="postcss">
 	th,
 	td:not(.ignoreBorder) {
 		@apply border-b border-slate-400/40;
