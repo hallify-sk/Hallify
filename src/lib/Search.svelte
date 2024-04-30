@@ -1,5 +1,13 @@
-<form class="w-full flex flex-row flex-nowrap">
-    <div class="aspect-square bg-background-100 grid place-items-center rounded-l-lg w-12"
+<script lang="ts">
+    export let value: string = "";
+
+    export function resetValue(){
+        value = "";
+    };
+</script>
+
+<form method="get" class="w-full flex flex-row flex-nowrap">
+    <div class="aspect-square bg-background-100 grid place-items-center rounded-l-lg w-12 text-text-400"
     ><svg
         xmlns="http://www.w3.org/2000/svg"
         width="24"
@@ -17,9 +25,12 @@
     >
     </div>
     <div class="w-full relative">
-        <input type="text" placeholder="Jožko Mrkvička" class="w-full p-3 rounded-r-lg bg-background-100 border-l border-l-background-200 outline-none focus:brightness-95" />
+        <input id="query" name="query" bind:value type="text" placeholder="Jožko Mrkvička" class="w-full p-3 rounded-r-lg bg-background-100 border-l border-l-background-200 outline-none focus:brightness-95" />
+        {#if value.trim() != ""}
         <div class="absolute right-2 top-1/2 -translate-y-1/2">
-            <button class="bg-primary-500 p-1 px-4 text-text-50 rounded-md">Search</button>
+            <button on:click={resetValue} type="reset" class="bg-background-100 hover:bg-background-200 rounded-md text-text-900 p-1 px-4">Restart</button>
+            <button type="submit" class="bg-primary-500 hover:bg-primary-600 p-1 px-4 text-text-50 rounded-md">Search</button>
         </div>
+        {/if}
     </div>
 </form>
