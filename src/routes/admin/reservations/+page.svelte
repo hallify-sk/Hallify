@@ -10,6 +10,7 @@
 	import { browser } from '$app/environment';
 	import type { ActionResult } from '@sveltejs/kit';
 	import AdminNav from '$lib/AdminNav.svelte';
+	import Search from '$lib/Search.svelte';
 	import Popup from '$lib/Popup.svelte';
 
 	export let data;
@@ -158,7 +159,10 @@
 
 <AdminNav user={data.user} />
 <div class="flex flex-col flex-nowrap pt-24 pl-80">
-	<h1 class="col-span-12 text-text-600 font-semibold mx-14 text-2xl">Rezervácie</h1>
+	<h1 class="col-span-12 text-text-600 font-semibold mx-14 text-3xl">Rezervácie</h1>
+	<div class="my-8 px-14 max-w-6xl mx-auto w-full">
+		<Search/>
+	</div>
 	<div bind:this={tableWrapper} class="overflow-auto w-full">
 		<form
 			id="reservationselect"

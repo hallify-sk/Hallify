@@ -99,6 +99,8 @@
 	}
 
 	import { Calendar as calendar } from 'headless-calendar';
+	import { PUBLIC_TURNSTILE_TOKEN } from '$env/static/public';
+	import { Turnstile } from 'svelte-turnstile';
 
 	const nextWeek = calendar.custom(
 			new Date().toISOString().slice(0, 10),
@@ -133,6 +135,10 @@
 
 	$: if (data.user) {
 		console.log('CHANGE');
+	}
+
+	function turnstileLoginError() {
+		errorMessage = 'Skúste obnoviť stránku (zlyhala CAPTCHA)';
 	}
 </script>
 
@@ -281,6 +287,11 @@
 				{#if errorMessage}
 					<p class="text-red-500 mt-2 max-w-xs">{errorMessage}</p>
 				{/if}
+				<Turnstile
+				on:turnstile-error={turnstileLoginError}
+					siteKey={PUBLIC_TURNSTILE_TOKEN}
+					appearance="always"
+				/>
 				<fieldset class="relative text-input mt-2">
 					<input
 						on:change={() => (emailRegisterError = false)}
