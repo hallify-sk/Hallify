@@ -48,6 +48,7 @@
 		"konva": "^9.2.3",
 		"node-schedule": "^2.1.1",
 		"pocketbase": "^0.20.1",
+		"rebuild": "^0.1.2",
 		"sharp": "^0.30.4",
 		"svelte-chartjs": "^3.1.5",
 		"svelte-konva": "^0.3.1",

@@ -4,42 +4,63 @@
 	export let value: string = '';
 	export let data: ListResult<RecordModel>;
 
-	console.log(data);
+	let inputElement: HTMLInputElement;
+
+	const supportedLocales = ["sk", "en"];
 	export function resetValue() {
 		value = '';
 	}
+	//Run this function recursively if the value is an object, return the keys
+	function deepSearch(obj: { [any: string]: any }, value: string) {
+		for (let key in obj) {
+			if (typeof obj[key] === 'string' && obj[key].toLowerCase().includes(value.toLowerCase())) {
+				return true;
+			}
+			if (typeof obj[key] === 'object' && obj[key] !== null) {
+				if (deepSearch(obj[key], value)) {
+					return true;
+				}
+			}
+		}
+		return false;
+	}
+
+	function updateSuggestions() {
+		const suggestions = findSuggestions();
+	}
 
 	function findSuggestions() {
-		if (value.trim().length < 3) return {};
-		let val = data.items.filter((v, i, a) => {
+		value = inputElement.value;
+		if (value.trim().length < 3) return [];
+		if(value.startsWith("#")){
+			value = value.slice(1);
+		}
+		return data.items.filter((v, i, a) => {
 			const keys = Object.keys(v);
 			return keys.some((key) => {
 				switch (typeof v[key]) {
 					case 'string': {
-						return v[key].includes(value);
+						for(const locale of supportedLocales){
+							if(new Date(v[key]).toLocaleDateString(locale).toLowerCase().includes(value.toLowerCase())){
+								return true
+							}
+							if(new Date(v[key]).toLocaleTimeString(locale).toLowerCase().includes(value.toLowerCase())){
+								return true
+							}
+							if(new Date(v[key]).toLocaleString(locale).toLowerCase().includes(value.toLowerCase())){
+								return true
+							}
+						}
+						return v[key].toLowerCase().includes(value.toLowerCase());
 					}
 					case 'object': {
-						const secondKeys = Object.keys(v[key]);
-						return secondKeys.some((secKey) => {
-                            console.log(key, secKey);
-							switch (typeof v[key][secKey]) {
-								case 'string': {
-									return v[key][secKey].includes(value);
-								}
-								case 'object': {
-									return false;
-								}
-								default:
-									return false;
-							}
-						});
+						return deepSearch(v[key], value.toLowerCase());
 					}
 					default:
 						return false;
 				}
 			});
 		});
-		console.log(val);
 	}
 </script>
 
@@ -65,7 +86,8 @@
 	</div>
 	<div class="w-full flex flex-row flex-nowrap">
 		<input
-			on:change={findSuggestions}
+			bind:this={inputElement}
+			on:input={updateSuggestions}
 			id="query"
 			name="query"
 			bind:value

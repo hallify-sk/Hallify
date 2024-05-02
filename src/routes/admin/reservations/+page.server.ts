@@ -1,12 +1,17 @@
-/** @type {import('./$types').PageServerLoad} */
-export async function load({locals}) {
-	/*if(!locals.pb.authStore.isAdmin){
-		return {};
-	}else{*/
-		return {
-			user: locals.user,
-			reservations: await locals.pb.collection('reservations').getList(0,10, { sort: 'created', expand: "user,addons,category" }),
-			apiUrl: locals.pbApiURL
-		};
-	//}
+/** @type {import('./$types.d.ts').ServerLoad} */
+export async function load({locals, url}) {
+
+	let reservations;
+
+	if(url.searchParams.get("query")){
+		reservations = await locals.pb.collection('reservations').getFullList({ sort: 'created', expand: "user,addons,category"});
+	}else{
+		reservations = await locals.pb.collection('reservations').getList(0,50, { sort: 'created', expand: "user,addons,category" });
+	};
+
+	return {
+		user: locals.user,
+		reservations,
+		apiUrl: locals.pbApiURL
+	};
 }
