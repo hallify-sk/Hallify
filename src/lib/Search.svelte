@@ -1,14 +1,22 @@
 <script lang="ts">
-	import type { RecordModel, ListResult } from 'pocketbase';
+	import { goto } from '$app/navigation';
+	import { page } from '$app/stores';
+	import type { RecordModel } from 'pocketbase';
 
 	export let value: string = '';
-	export let data: ListResult<RecordModel>;
+	export let data: RecordModel[];
+		console.log(data);
 
 	let inputElement: HTMLInputElement;
+
+	export let suggestions: RecordModel[] = data;
 
 	const supportedLocales = ["sk", "en"];
 	export function resetValue() {
 		value = '';
+		$page.url.searchParams.delete('query');
+		suggestions = [];
+		goto(`?${$page.url.searchParams.toString()}`);
 	}
 	//Run this function recursively if the value is an object, return the keys
 	function deepSearch(obj: { [any: string]: any }, value: string) {
@@ -25,17 +33,18 @@
 		return false;
 	}
 
-	function updateSuggestions() {
-		const suggestions = findSuggestions();
+	export function updateSuggestions() {
+		suggestions = findSuggestions();
+		console.log(suggestions)
 	}
 
 	function findSuggestions() {
 		value = inputElement.value;
-		if (value.trim().length < 3) return [];
+		if (value.trim().length == 0) return [];
 		if(value.startsWith("#")){
 			value = value.slice(1);
 		}
-		return data.items.filter((v, i, a) => {
+		const result = data.filter((v, i, a) => {
 			const keys = Object.keys(v);
 			return keys.some((key) => {
 				switch (typeof v[key]) {
@@ -56,15 +65,19 @@
 					case 'object': {
 						return deepSearch(v[key], value.toLowerCase());
 					}
+					case 'number': {
+						return v[key] == parseInt(value.toLowerCase());
+					}
 					default:
 						return false;
 				}
 			});
 		});
+		return result;
 	}
 </script>
 
-<form method="get" class="w-full flex flex-row flex-nowrap">
+<form method="get" class="w-full flex flex-row flex-nowrap relative group">
 	<div
 		class="aspect-square bg-background-100 grid place-items-center rounded-l-lg w-12 text-text-400"
 	>
@@ -84,7 +97,7 @@
 			/><path d="M21 21l-6 -6" /></svg
 		>
 	</div>
-	<div class="w-full flex flex-row flex-nowrap">
+	<div class="w-full flex flex-row flex-nowrap peer">
 		<input
 			bind:this={inputElement}
 			on:input={updateSuggestions}
@@ -92,7 +105,7 @@
 			name="query"
 			bind:value
 			type="text"
-			placeholder="Jožko Mrkvička"
+			placeholder="Hľadať na tejto strane"
 			class="w-full p-3 peer {value.trim() == ''
 				? 'rounded-r-lg'
 				: ''} bg-background-100 border-l border-l-background-200 text-text-600 outline-none focus:brightness-95"
@@ -104,13 +117,8 @@
 				<button
 					on:click={resetValue}
 					type="reset"
-					class="bg-background-100 hover:bg-background-200 rounded-md text-text-900 p-1 px-4"
+					class="bg-primary-500 hover:bg-primary-600 rounded-md text-text-50 p-1 px-4"
 					>Restart</button
-				>
-				<button
-					type="submit"
-					class="bg-primary-500 hover:bg-primary-600 p-1 px-4 text-text-50 rounded-md"
-					>Search</button
 				>
 			</div>
 		{/if}

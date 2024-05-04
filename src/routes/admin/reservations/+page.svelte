@@ -14,6 +14,7 @@
 	import Popup from '$lib/Popup.svelte';
 
 	export let data;
+
 	let selectAll: boolean,
 		checkboxes: Array<{ id: string; checked: boolean }> = [],
 		reservations: RecordModel[],
@@ -21,12 +22,20 @@
 		tableWrapper: HTMLElement,
 		loadingreservation: boolean = false,
 		deleteModal: boolean = false,
-		pbPage: number = 1;
+		pbPage: number = 1,
+		suggestions: RecordModel[] = [];
 
 	$: if (data) {
 		const resultData: ListResult<RecordModel> = data.reservations;
+		console.log('got here');
 		reservations = resultData.items.sort(tableSort);
 		mapCheckboxes();
+	}
+
+	$: if (suggestions) {
+		mapCheckboxes();
+		handleCheckboxUpdate();
+		console.log(suggestions);
 	}
 
 	function handleTableShadow() {
@@ -34,6 +43,7 @@
 	}
 
 	onMount(async () => {
+		handleTableShadow();
 		if (browser) {
 			window.addEventListener('resize', handleTableShadow);
 		}
@@ -146,6 +156,9 @@
 		if (result.type != 'success') return;
 		if (!result.data) return;
 		reservations = [...reservations, ...(result.data.reservations as any).items];
+		setTimeout(() => {
+			updateQuery();
+		}, 1);
 		mapCheckboxes();
 		reservations.sort(tableSort);
 	}
@@ -155,13 +168,21 @@
 
 	let errorConfirmMessage: string = '';
 
+	let query: string = '';
+
+	let updateQuery: () => void = () => {};
 </script>
 
 <AdminNav user={data.user} />
 <div class="flex flex-col flex-nowrap pt-24 pl-80">
 	<h1 class="col-span-12 text-text-600 font-semibold mx-14 text-3xl">Rezervácie</h1>
 	<div class="my-8 px-14 max-w-6xl mx-auto w-full">
-		<Search data={data.reservations}/>
+		<Search
+			bind:suggestions
+			data={reservations}
+			bind:updateSuggestions={updateQuery}
+			bind:value={query}
+		/>
 	</div>
 	<div bind:this={tableWrapper} class="overflow-auto w-full">
 		<form
@@ -246,7 +267,107 @@
 					</tr>
 				</thead>
 				<tbody>
-					{#if reservations?.length}
+					{#if query}
+						{#if suggestions.filter((i) => suggestions.some((o) => o.id == i.id)).length}
+							{#each suggestions.filter( (i) => suggestions.some((o) => o.id == i.id) ) as suggestion, index}
+								<tr
+									on:click={async () => {
+										await redirectToreservation(suggestion.id);
+									}}
+									class="hover:bg-background-100 cursor-pointer duration-100 border-b border-slate-400/40 group"
+								>
+									<td
+										on:click|stopPropagation
+										class="flex items-center px-8 whitespace-nowrap h-[3rem] mt-1"
+									>
+										<Checkbox
+											onCheck={handleCheckboxUpdate}
+											bind:checked={checkboxes[index].checked}
+											name={suggestion.id}
+										/>
+									</td>
+									<td class="px-2 whitespace-nowrap overflow-ellipsis overflow-hidden max-w-80"
+										>#{suggestion.id} - {suggestion.name == ''
+											? 'Nenastavené'
+											: suggestion.name}</td
+									>
+									<td class="px-2 whitespace-nowrap overflow-ellipsis overflow-hidden"
+										>{suggestion.expand?.user?.name}</td
+									>
+									<td class="px-2">
+										{#if suggestion.expand?.category?.name}
+											{suggestion.expand.category.name}
+										{:else}
+											Nenastavené
+										{/if}
+									</td>
+									<td class="px-2">
+										{#if suggestion.guestCount}
+											{suggestion.guestCount}
+										{:else}
+											Nenastavené
+										{/if}
+									</td>
+									<td class="px-2">
+										<div class="flex flex-col gap-0">
+											<p class="leading-5">{new Date(suggestion.date).toLocaleDateString('sk')}</p>
+										</div>
+									</td>
+									<td class="px-2">
+										<div class="flex flex-col gap-0">
+											<p class="leading-5">
+												{new Date(suggestion.created).toLocaleDateString('sk')}
+											</p>
+											<p class="leading-5 text-sm text-slate-400">
+												{new Date(suggestion.created).toLocaleTimeString('sk')}
+											</p>
+										</div>
+									</td>
+									<td
+										class="px-4 right-0 sticky bg-background-50 {displayShadow
+											? 'arrow'
+											: ''} transition-colors border-b border-slate-400/400 group-hover:bg-background-100 duration-100"
+									>
+										<svg
+											xmlns="http://www.w3.org/2000/svg"
+											viewBox="0 0 20 20"
+											fill="currentColor"
+											class="w-5 h-5"
+										>
+											<path
+												fill-rule="evenodd"
+												d="M3 10a.75.75 0 01.75-.75h10.638L10.23 5.29a.75.75 0 111.04-1.08l5.5 5.25a.75.75 0 010 1.08l-5.5 5.25a.75.75 0 11-1.04-1.08l4.158-3.96H3.75A.75.75 0 013 10z"
+												clip-rule="evenodd"
+											/>
+										</svg>
+									</td>
+								</tr>
+							{/each}
+						{:else}
+							<tr>
+								<td class="text-center leading-10 py-6" colspan="7">
+									{#if !suggestions.length}
+										<p>Nenašli sa žiadne rezervácie vyhovujúce vyhľadávaniu</p>
+									{:else}
+										<svg
+											xmlns="http://www.w3.org/2000/svg"
+											fill="none"
+											viewBox="0 0 24 24"
+											stroke-width="1.5"
+											stroke="currentColor"
+											class="w-6 h-6 mx-auto animate-spin"
+										>
+											<path
+												stroke-linecap="round"
+												stroke-linejoin="round"
+												d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99"
+											/>
+										</svg>
+									{/if}
+								</td>
+							</tr>
+						{/if}
+					{:else if reservations.length}
 						{#each reservations as reservation, index}
 							<tr
 								on:click={async () => {
@@ -264,7 +385,7 @@
 										name={reservation.id}
 									/>
 								</td>
-								<td class="px-2 whitespace-nowrap overflow-ellipsis overflow-hidden"
+								<td class="px-2 whitespace-nowrap overflow-ellipsis overflow-hidden max-w-80"
 									>#{reservation.id} - {reservation.name == ''
 										? 'Nenastavené'
 										: reservation.name}</td
@@ -325,7 +446,7 @@
 						<tr>
 							<td class="text-center leading-10 py-6" colspan="7">
 								{#if !reservations.length}
-									<p>No reservations found.</p>
+									<p>Nenašli sa žiadne rezervácie</p>
 								{:else}
 									<svg
 										xmlns="http://www.w3.org/2000/svg"
@@ -348,45 +469,43 @@
 					{#if reservations.length < data.reservations.totalItems}
 						<tr>
 							<td class="text-center leading-10 py-2" colspan="7">
-								<button
-									type="submit"
-									class="cursor-pointer text-black bg-gray-400/20 hover:bg-gray-400/40 rounded px-4"
-								>
-									{#if loadingreservation}
-										<svg
-											xmlns="http://www.w3.org/2000/svg"
-											fill="none"
-											viewBox="0 0 24 24"
-											stroke-width="1.5"
-											stroke="currentColor"
-											class="w-6 h-6 mx-auto animate-spin"
-										>
-											<path
-												stroke-linecap="round"
-												stroke-linejoin="round"
-												d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99"
-											/>
-										</svg>
-									{:else}
-										<form
-											action="?/getMorereservations"
-											method="post"
-											use:enhance={({ formData }) => {
-												pbPage += 1;
-												formData.set('page', `${pbPage}`);
-												return async ({ result }) => {
-													handleLoadingreservations(result);
+								{#if loadingreservation}
+									<svg
+										xmlns="http://www.w3.org/2000/svg"
+										fill="none"
+										viewBox="0 0 24 24"
+										stroke-width="1.5"
+										stroke="currentColor"
+										class="w-6 h-6 mx-auto animate-spin"
+									>
+										<path
+											stroke-linecap="round"
+											stroke-linejoin="round"
+											d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99"
+										/>
+									</svg>
+								{:else}
+									<form
+										action="?/getMoreReservations"
+										method="post"
+										use:enhance={({ formData }) => {
+											pbPage += 1;
+											formData.set('page', `${pbPage}`);
+											return async ({ result }) => {
+												handleLoadingreservations(result);
 
-													await applyAction(result);
-												};
-											}}
+												await applyAction(result);
+											};
+										}}
+									>
+										<button
+											class="px-4 bg-background-100 hover:bg-background-200 rounded-md text-text-900"
+											type="submit"
 										>
-											<button type="submit">
-												Load more ({data.reservations.totalItems - reservations.length})
-											</button>
-										</form>
-									{/if}
-								</button>
+											Načítať ďalšie ({data.reservations.totalItems - reservations.length})
+										</button>
+									</form>
+								{/if}
 							</td>
 						</tr>
 					{/if}
@@ -402,7 +521,8 @@
 		class="shadow fixed bottom-20 left-1/2 -translate-x-1/2 justify-between border border-background-200 bg-background-100 rounded-full w-[28rem] flex items-center px-6 py-2"
 	>
 		<p class="text-text-600">
-			Označen{checkboxes.filter((t) => t?.checked === true).length > 1 ? 'é' : 'á'} <b>{checkboxes.filter((t) => t?.checked === true).length}</b>
+			Označen{checkboxes.filter((t) => t?.checked === true).length > 1 ? 'é' : 'á'}
+			<b>{checkboxes.filter((t) => t?.checked === true).length}</b>
 			rezerváci{checkboxes.filter((t) => t?.checked === true).length > 1 ? 'e' : 'a'}
 		</p>
 		<button
@@ -417,8 +537,13 @@
 
 <Popup bind:openPopup={openConfirmModal} bind:closePopup={closeConfirmModal}>
 	<div class="w-80">
-		<h2 class="text-text-700 text-xl mb-2">Vymazať rezerváci{checkboxes.filter((t) => t?.checked === true).length > 1 ? 'e' : 'u'}</h2>
-		<p class="text-text-500 mb-4">Na vymazanie rezerváci{checkboxes.filter((t) => t?.checked === true).length > 1 ? 'í' : 'e'} potrebujete zadať dôvod, ktorý bude poslaný uživateľom cez E-Mail.</p>
+		<h2 class="text-text-700 text-xl mb-2">
+			Vymazať rezerváci{checkboxes.filter((t) => t?.checked === true).length > 1 ? 'e' : 'u'}
+		</h2>
+		<p class="text-text-500 mb-4">
+			Na vymazanie rezerváci{checkboxes.filter((t) => t?.checked === true).length > 1 ? 'í' : 'e'} potrebujete
+			zadať dôvod, ktorý bude poslaný uživateľom cez E-Mail.
+		</p>
 		{#if errorConfirmMessage}
 			<p class="text-red-500 mb-2 max-w-xs">{errorConfirmMessage}</p>
 		{/if}
@@ -426,17 +551,28 @@
 			action="?/removereservations"
 			method="POST"
 			class="flex flex-col"
-			use:enhance={(() => {
+			use:enhance={() => {
 				return async ({ result }) => {
 					if (result.type === 'failure') {
-						errorConfirmMessage = typeof result.data?.message == 'string' ? result.data.message : '';
+						errorConfirmMessage =
+							typeof result.data?.message == 'string' ? result.data.message : '';
 					} else {
 						await deleteSelected();
 					}
 				};
-			})}
-			>
-			<textarea placeholder="Dôvod na zrušenie rezerváci{checkboxes.filter((t) => t?.checked === true).length > 1 ? 'í' : 'e'}" maxlength="600" minlength="30" class="bg-background-100 resize-none rounded-md col-span-1 lg:col-span-2 min-h-40 p-2 text-text-600" name="reason" id="reason"></textarea>
+			}}
+		>
+			<textarea
+				placeholder="Dôvod na zrušenie rezerváci{checkboxes.filter((t) => t?.checked === true)
+					.length > 1
+					? 'í'
+					: 'e'}"
+				maxlength="600"
+				minlength="30"
+				class="bg-background-100 resize-none rounded-md col-span-1 lg:col-span-2 min-h-40 p-2 text-text-600"
+				name="reason"
+				id="reason"
+			></textarea>
 			<div class="ml-auto mt-3 items-center flex flex-row flex-nowrap gap-2">
 				<button
 					type="reset"
