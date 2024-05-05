@@ -42,7 +42,7 @@
 		class="min-h-screen pt-24 px-14 w-full xl:w-3/4"
 	>
 		<div class="flex flex-row flex-nowrap items-center justify-between">
-			<h1 class="text-3xl font-bold text-text-600">Detaily rezervácie</h1>
+			<h1 class="text-2xl font-bold text-text-600">Detaily rezervácie</h1>
 		</div>
 		<form method="post" action={data.reservation.expires ? `/admin/reservations/${data.slug}/?/confirmReservation` : `/admin/reservations/${data.slug}/?/updateReservation`}
 		use:enhance={({ formData }) => {

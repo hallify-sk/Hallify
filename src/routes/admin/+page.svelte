@@ -143,7 +143,7 @@
 </script>
 
 {#if data.user}
-	<AdminNav user={data.user} />
+	<AdminNav />
 	<div class="flex flex-row flex-nowrap pl-80">
 		<div class="w-full min-h-screen grid auto-rows-min grid-cols-12 px-14 pt-24 gap-8">
 			<h1 class="col-span-12 text-2xl text-text-600 font-semibold">Nástenka</h1>

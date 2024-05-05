@@ -182,7 +182,7 @@
 
 <AdminNav />
 <div class="flex flex-col flex-nowrap pt-24 pl-80">
-	<h1 class="col-span-12 text-text-600 font-semibold mx-14 text-3xl">Rezervácie</h1>
+	<h1 class="col-span-12 text-text-600 font-semibold mx-14 text-2xl">Rezervácie</h1>
 	<div class="my-8 px-14 max-w-6xl mx-auto w-full">
 		<Search
 			bind:suggestions
