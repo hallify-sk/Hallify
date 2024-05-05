@@ -2,10 +2,9 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
 	import type { RecordModel } from 'pocketbase';
-
+	//Default value is taken from URL parameter
 	export let value: string = '';
 	export let data: RecordModel[];
-		console.log(data);
 
 	let inputElement: HTMLInputElement;
 
@@ -35,7 +34,7 @@
 
 	export function updateSuggestions() {
 		suggestions = findSuggestions();
-		console.log(suggestions)
+		$page.url.searchParams.set('query', value);
 	}
 
 	function findSuggestions() {
@@ -75,6 +74,11 @@
 		});
 		return result;
 	}
+
+	function updateQueryParameter() {
+		$page.url.searchParams.set('query', value);
+		goto(`?${$page.url.searchParams.toString()}`);
+	}
 </script>
 
 <form method="get" class="w-full flex flex-row flex-nowrap relative group">
@@ -100,6 +104,7 @@
 	<div class="w-full flex flex-row flex-nowrap peer">
 		<input
 			bind:this={inputElement}
+			on:change={updateQueryParameter}
 			on:input={updateSuggestions}
 			id="query"
 			name="query"

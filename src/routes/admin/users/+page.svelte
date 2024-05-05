@@ -17,17 +17,17 @@
 
 	let selectAll: boolean,
 		checkboxes: Array<{ id: string; checked: boolean }> = [],
-		reservations: RecordModel[],
+		users: RecordModel[],
 		displayShadow: boolean = false,
 		tableWrapper: HTMLElement,
-		loadingreservation: boolean = false,
+		loadinguser: boolean = false,
 		deleteModal: boolean = false,
 		pbPage: number = 1,
 		suggestions: RecordModel[] = [];
 
 	$: if (data) {
-		const resultData: ListResult<RecordModel> = data.reservations;
-		reservations = resultData.items.sort(tableSort);
+		const resultData: ListResult<RecordModel> = data.users;
+		users = resultData.items.sort(tableSort);
 		mapCheckboxes();
 	}
 
@@ -80,10 +80,10 @@
 		}
 	}
 
-	async function redirectToreservation(
+	async function redirectTouser(
 		id: string
 	): Promise<MouseEventHandler<HTMLTableRowElement> | null | undefined> {
-		await goto(`/admin/reservations/${id}`);
+		await goto(`/admin/users/${id}`);
 		return;
 	}
 
@@ -96,7 +96,7 @@
 		)
 			modFilter = `-${filter}`;
 		$page.url.searchParams.set('sortBy', modFilter);
-		reservations = reservations.sort(tableSort);
+		users = users.sort(tableSort);
 		return await goto(`?${$page.url.searchParams.toString()}`);
 	}
 
@@ -145,16 +145,16 @@
 		checkboxes = [];
 		//Remap checkboxes into array;
 		if (query) {
-			suggestions.map((reservation, i) => {
-				checkboxes[i] = { id: reservation.id, checked: false };
+			suggestions.map((user, i) => {
+				checkboxes[i] = { id: user.id, checked: false };
 			});
 		} else {
-			reservations.map((reservation, i) => {
-				checkboxes[i] = { id: reservation.id, checked: false };
+			users.map((user, i) => {
+				checkboxes[i] = { id: user.id, checked: false };
 			});
 		}
 	}
-	async function handleLoadingreservations(
+	async function handleLoadingusers(
 		result: ActionResult<
 			globalThis.Record<string, unknown> | undefined,
 			globalThis.Record<string, unknown> | undefined
@@ -162,12 +162,12 @@
 	) {
 		if (result.type != 'success') return;
 		if (!result.data) return;
-		reservations = [...reservations, ...(result.data.reservations as any).items];
+		users = [...users, ...(result.data.users as any).items];
 		setTimeout(() => {
 			updateQuery();
 		}, 1);
 		mapCheckboxes();
-		reservations.sort(tableSort);
+		users.sort(tableSort);
 	}
 
 	let openConfirmModal = () => {};
@@ -180,21 +180,21 @@
 	let updateQuery: () => void = () => {};
 </script>
 
-<AdminNav />
+<AdminNav/>
 <div class="flex flex-col flex-nowrap pt-24 pl-80">
-	<h1 class="col-span-12 text-text-600 font-semibold mx-14 text-3xl">Rezervácie</h1>
+	<h1 class="col-span-12 text-text-600 font-semibold mx-14 text-3xl">Používatelia</h1>
 	<div class="my-8 px-14 max-w-6xl mx-auto w-full">
 		<Search
 			bind:suggestions
-			data={reservations}
+			data={users}
 			bind:updateSuggestions={updateQuery}
 			bind:value={query}
 		/>
 	</div>
 	<div bind:this={tableWrapper} class="overflow-auto w-full">
 		<!-- <form
-			id="reservationselect"
-			action="?/removeReservations"
+			id="userselect"
+			action="?/removeusers"
 			method="POST"
 			use:enhance={() => {
 				return async ({ result }) => {
@@ -210,15 +210,13 @@
 				<col class="w-auto min-w-[200px]" />
 				<col class="w-auto min-w-[160px]" />
 				<col class="w-auto min-w-[160px]" />
-				<col class="w-auto min-w-[160px]" />
-				<col class="w-auto min-w-[160px]" />
 				<col class="w-12" />
 			</colgroup>
 			<thead>
 				<tr>
 					<th class="flex items-center px-8 whitespace-nowrap h-[3rem] mt-1">
 						<Checkbox
-							disabled={!Boolean(reservations?.length) ||
+							disabled={!Boolean(users?.length) ||
 								(!Boolean(suggestions?.length) && Boolean(query))}
 							bind:checked={selectAll}
 							onCheck={handleMassCheckboxUpdate}
@@ -234,38 +232,24 @@
 					>
 					<th
 						on:click={() => {
-							handleSortProperty('user');
+							handleSortProperty('email');
 						}}
 						class="text-left hover:bg-background-100 px-2 cursor-pointer hover:text-text-600 rounded-t"
-						>Používateľ</th
-					>
-					<th
-						on:click={() => {
-							handleSortProperty('category');
-						}}
-						class="text-left hover:bg-background-100 px-2 cursor-pointer hover:text-text-600 rounded-t"
-						>Kategória</th
-					>
-					<th
-						on:click={() => {
-							handleSortProperty('guestCount');
-						}}
-						class="text-left hover:bg-background-100 px-2 cursor-pointer hover:text-text-600 rounded-t"
-						>Počet hostí</th
-					>
-					<th
-						on:click={() => {
-							handleSortProperty('date');
-						}}
-						class="text-left hover:bg-background-100 px-2 cursor-pointer hover:text-text-600 rounded-t"
-						>Dátum</th
+						>E-mail</th
 					>
 					<th
 						on:click={() => {
 							handleSortProperty('created');
 						}}
 						class="text-left hover:bg-background-100 px-2 cursor-pointer hover:text-text-600 rounded-t"
-						>Vytvorené</th
+						>Vytvorený</th
+					>
+					<th
+						on:click={() => {
+							handleSortProperty('edited');
+						}}
+						class="text-left hover:bg-background-100 px-2 cursor-pointer hover:text-text-600 rounded-t"
+						>Posledná zmena</th
 					>
 					<th
 						class="px-4 right-0 sticky bg-background-50 {displayShadow
@@ -280,7 +264,7 @@
 						{#each suggestions.filter( (i) => suggestions.some((o) => o.id == i.id) ) as suggestion, index}
 							<tr
 								on:click={async () => {
-									await redirectToreservation(suggestion.id);
+									await redirectTouser(suggestion.id);
 								}}
 								class="hover:bg-background-100 cursor-pointer duration-100 border-b border-slate-400/40 group"
 							>
@@ -307,27 +291,8 @@
 									</div>
 								</td>
 								<td class="px-2 whitespace-nowrap overflow-ellipsis overflow-hidden"
-									>{suggestion.expand?.user?.name}</td
+									>{suggestion.email}</td
 								>
-								<td class="px-2">
-									{#if suggestion.expand?.category?.name}
-										{suggestion.expand.category.name}
-									{:else}
-										Nenastavené
-									{/if}
-								</td>
-								<td class="px-2">
-									{#if suggestion.guestCount}
-										{suggestion.guestCount}
-									{:else}
-										Nenastavené
-									{/if}
-								</td>
-								<td class="px-2">
-									<div class="flex flex-col gap-0">
-										<p class="leading-5">{new Date(suggestion.date).toLocaleDateString('sk')}</p>
-									</div>
-								</td>
 								<td class="px-2">
 									<div class="flex flex-col gap-0">
 										<p class="leading-5">
@@ -335,6 +300,16 @@
 										</p>
 										<p class="leading-5 text-sm text-slate-400">
 											{new Date(suggestion.created).toLocaleTimeString('sk')}
+										</p>
+									</div>
+								</td>
+								<td class="px-2">
+									<div class="flex flex-col gap-0">
+										<p class="leading-5">
+											{new Date(suggestion.updated).toLocaleDateString('sk')}
+										</p>
+										<p class="leading-5 text-sm text-slate-400">
+											{new Date(suggestion.updated).toLocaleTimeString('sk')}
 										</p>
 									</div>
 								</td>
@@ -362,7 +337,7 @@
 						<tr>
 							<td class="text-center leading-10 py-6" colspan="7">
 								{#if !suggestions.length}
-									<p>Nenašli sa žiadne rezervácie vyhovujúce vyhľadávaniu</p>
+									<p>Nenašli sa žiadny používatelia vyhovujúci vyhľadávaniu</p>
 								{:else}
 									<svg
 										xmlns="http://www.w3.org/2000/svg"
@@ -382,11 +357,11 @@
 							</td>
 						</tr>
 					{/if}
-				{:else if reservations.length}
-					{#each reservations as reservation, index}
+				{:else if users.length}
+					{#each users as user, index}
 						<tr
 							on:click={async () => {
-								await redirectToreservation(reservation.id);
+								await redirectTouser(user.id);
 							}}
 							class="hover:bg-background-100 cursor-pointer duration-100 border-b border-slate-400/40 group"
 						>
@@ -397,51 +372,42 @@
 								<Checkbox
 									onCheck={handleCheckboxUpdate}
 									bind:checked={checkboxes[index].checked}
-									name={reservation.id}
+									name={user.id}
 								/>
 							</td>
 							<td class="px-2">
 								<div class="flex flex-col gap-0">
 									<p class="leading-5 whitespace-nowrap overflow-ellipsis overflow-hidden max-w-60">
-										{reservation.name}
+										{user.name}
 									</p>
 									<p class="leading-5 text-sm text-slate-400">
-										{reservation.id}
+										{user.id}
 									</p>
 								</div>
 							</td>
 							<td class="px-2 whitespace-nowrap overflow-ellipsis overflow-hidden"
-								>{reservation.expand?.user?.name}</td
-							>
-							<td class="px-2">
-								{#if reservation.expand?.category?.name}
-									{reservation.expand.category.name}
-								{:else}
-									Nenastavené
-								{/if}
-							</td>
-							<td class="px-2">
-								{#if reservation.guestCount}
-									{reservation.guestCount}
-								{:else}
-									Nenastavené
-								{/if}
-							</td>
-							<td class="px-2">
-								<div class="flex flex-col gap-0">
-									<p class="leading-5">{new Date(reservation.date).toLocaleDateString('sk')}</p>
-								</div>
-							</td>
-							<td class="px-2">
-								<div class="flex flex-col gap-0">
-									<p class="leading-5">
-										{new Date(reservation.created).toLocaleDateString('sk')}
-									</p>
-									<p class="leading-5 text-sm text-slate-400">
-										{new Date(reservation.created).toLocaleTimeString('sk')}
-									</p>
-								</div>
-							</td>
+									>{user.email}</td
+								>
+								<td class="px-2">
+									<div class="flex flex-col gap-0">
+										<p class="leading-5">
+											{new Date(user.created).toLocaleDateString('sk')}
+										</p>
+										<p class="leading-5 text-sm text-slate-400">
+											{new Date(user.created).toLocaleTimeString('sk')}
+										</p>
+									</div>
+								</td>
+								<td class="px-2">
+									<div class="flex flex-col gap-0">
+										<p class="leading-5">
+											{new Date(user.updated).toLocaleDateString('sk')}
+										</p>
+										<p class="leading-5 text-sm text-slate-400">
+											{new Date(user.updated).toLocaleTimeString('sk')}
+										</p>
+									</div>
+								</td>
 							<td
 								class="px-4 right-0 sticky bg-background-50 {displayShadow
 									? 'arrow'
@@ -465,8 +431,8 @@
 				{:else}
 					<tr>
 						<td class="text-center leading-10 py-6" colspan="7">
-							{#if !reservations.length}
-								<p>Nenašli sa žiadne rezervácie</p>
+							{#if !users.length}
+								<p>Nenašli sa žiadny používatelia</p>
 							{:else}
 								<svg
 									xmlns="http://www.w3.org/2000/svg"
@@ -486,10 +452,10 @@
 						</td>
 					</tr>
 				{/if}
-				{#if reservations.length < data.reservations.totalItems}
+				{#if users.length < data.users.totalItems}
 					<tr>
 						<td class="text-center leading-10 py-2" colspan="7">
-							{#if loadingreservation}
+							{#if loadinguser}
 								<svg
 									xmlns="http://www.w3.org/2000/svg"
 									fill="none"
@@ -506,13 +472,13 @@
 								</svg>
 							{:else}
 								<form
-									action="?/getMoreReservations"
+									action="?/getMoreusers"
 									method="post"
 									use:enhance={({ formData }) => {
 										pbPage += 1;
 										formData.set('page', `${pbPage}`);
 										return async ({ result }) => {
-											handleLoadingreservations(result);
+											handleLoadingusers(result);
 
 											await applyAction(result);
 										};
@@ -522,7 +488,7 @@
 										class="px-4 bg-background-100 hover:bg-background-200 rounded-md text-text-900"
 										type="submit"
 									>
-										Načítať ďalšie ({data.reservations.totalItems - reservations.length})
+										Načítať ďalšie ({data.users.totalItems - users.length})
 									</button>
 								</form>
 							{/if}
@@ -541,16 +507,16 @@
 		class="shadow fixed bottom-20 left-1/2 -translate-x-1/2 justify-between border border-background-200 bg-background-100 rounded-full w-[28rem] flex items-center px-6 py-2"
 	>
 		<p class="text-text-600">
-			Označen{checkboxes.filter((t) => t?.checked === true).length > 1 ? 'é' : 'á'}
+			Označen{checkboxes.filter((t) => t?.checked === true).length > 1 ? 'í' : 'ý'}
 			<b>{checkboxes.filter((t) => t?.checked === true).length}</b>
-			rezerváci{checkboxes.filter((t) => t?.checked === true).length > 1 ? 'e' : 'a'}
+			používate{checkboxes.filter((t) => t?.checked === true).length > 1 ? 'lia' : 'ľ'}
 		</p>
 		<button
 			type="button"
 			on:click={openConfirmModal}
 			class="flex py-2 px-2 rounded-md text-text-100 gap-4 bg-accent-700 hover:bg-accent-600"
 		>
-			Vymazať rezerváci{checkboxes.filter((t) => t?.checked === true).length > 1 ? 'e' : 'u'}
+			Vymazať používateľ{checkboxes.filter((t) => t?.checked === true).length > 1 ? 'ov' : 'a'}
 		</button>
 	</div>
 {/if}
@@ -558,17 +524,17 @@
 <Popup bind:openPopup={openConfirmModal} bind:closePopup={closeConfirmModal}>
 	<div class="w-80">
 		<h2 class="text-text-700 text-xl mb-2">
-			Vymazať rezerváci{checkboxes.filter((t) => t?.checked === true).length > 1 ? 'e' : 'u'}
+			Vymazať používateľ{checkboxes.filter((t) => t?.checked === true).length > 1 ? 'ov' : 'a'}
 		</h2>
 		<p class="text-text-500 mb-4">
-			Na vymazanie rezerváci{checkboxes.filter((t) => t?.checked === true).length > 1 ? 'í' : 'e'} potrebujete
-			zadať dôvod, ktorý bude poslaný uživateľom cez E-Mail. Táto akcia je nevratná.
+			Na vymazanie používateľ{checkboxes.filter((t) => t?.checked === true).length > 1 ? 'ov' : 'a'} potrebujete
+			zadať dôvod, ktorý im bude poslaný cez E-Mail. Táto akcia je nevratná.
 		</p>
 		{#if errorConfirmMessage}
 			<p class="text-red-500 mb-2 max-w-xs">{errorConfirmMessage}</p>
 		{/if}
 		<form
-			action="?/removeReservations"
+			action="?/removeusers"
 			method="POST"
 			class="flex flex-col"
 			use:enhance={({ formData }) => {
@@ -588,10 +554,10 @@
 			}}
 		>
 			<textarea
-				placeholder="Dôvod na zrušenie rezerváci{checkboxes.filter((t) => t?.checked === true)
+				placeholder="Dôvod na vymazanie používateľ{checkboxes.filter((t) => t?.checked === true)
 					.length > 1
-					? 'í'
-					: 'e'}"
+					? 'ov'
+					: 'a'}"
 				maxlength="600"
 				minlength="30"
 				class="bg-background-100 resize-none rounded-md col-span-1 lg:col-span-2 min-h-40 p-2 text-text-600"
@@ -609,7 +575,7 @@
 					type="submit"
 					class="px-4 py-2 bg-background-700 hover:bg-primary-600 rounded-md text-text-50"
 				>
-					Vymazať rezerváci{checkboxes.filter((t) => t?.checked === true).length > 1 ? 'e' : 'u'}
+					Vymazať používateľ{checkboxes.filter((t) => t?.checked === true).length > 1 ? 'ov' : 'a'}
 				</button>
 			</div>
 		</form>

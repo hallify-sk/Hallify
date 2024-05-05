@@ -33,7 +33,7 @@
 
 	let error: string = "";
 </script>
-<AdminNav user={data.user} />
+<AdminNav />
 <div class="flex flex-row flex-nowrap relative ml-80">
 	{#if data.reservation?.expires}
 	<p class="absolute w-full top-0 text-center bg-primary-500 text-text-800">Ponuka vyprší o: {Math.floor(getMinutesToDate(data.reservation.expires) / 60 / 1000)} minút</p>
@@ -76,7 +76,7 @@
 			{#if error}
 				<p class="text-red-500 col-span-1 lg:col-span-2">{error}</p>
 			{/if}
-			<a href="/admin/users/{data.user.id}" class="appearance-none w-full col-span-1 bg-background-100 text-text-600 text-left rounded-md py-0.5 px-2 peer border lg:col-span-2 mt-0.5 flex flex-col justify-center flex-nowrap {dateError
+			<a href="/admin/users/{data.reservation.user}" class="appearance-none w-full col-span-1 bg-background-100 text-text-600 text-left rounded-md py-0.5 px-2 peer border lg:col-span-2 mt-0.5 flex flex-col justify-center flex-nowrap {dateError
 				? 'border-red-500'
 				: 'border-primary-200'}">
 				<p class="text-sm text-text-400">Majiteľ rezervácie</p>
