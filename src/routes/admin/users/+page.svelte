@@ -534,7 +534,7 @@
 			<p class="text-red-500 mb-2 max-w-xs">{errorConfirmMessage}</p>
 		{/if}
 		<form
-			action="?/removeusers"
+			action="?/removeUsers"
 			method="POST"
 			class="flex flex-col"
 			use:enhance={({ formData }) => {
