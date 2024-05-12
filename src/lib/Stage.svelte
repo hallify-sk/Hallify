@@ -8,15 +8,7 @@
 	};
 	import { v4 as uuidv4 } from 'uuid';
 	import { onDestroy, onMount } from 'svelte';
-	import {
-		Stage,
-		Layer,
-		Line,
-		Group,
-		Transformer,
-		Rect,
-		Circle
-	} from 'svelte-konva';
+	import { Stage, Layer, Line, Group, Transformer, Rect, Circle } from 'svelte-konva';
 	import {
 		addChairHitbox,
 		checkPolygonCollision,
@@ -30,9 +22,7 @@
 		rotatePoints,
 		checkPolygonCircleCollision,
 		checkCircleCollision,
-
 		type Grid
-
 	} from './editor/lib';
 	import Konva from 'konva';
 	import {
@@ -111,7 +101,8 @@
 			});
 		});
 		window.addEventListener('keydown', (e) => {
-			if (e.code == 'Delete') {
+			console.log(e.code);
+			if (e.code == 'Delete' || e.code == 'Backspace') {
 				tr.nodes().forEach((e) => {
 					//Make sure the tableName and UUID of the table is the same. Name format: "tableName UUID". Then, remove from tablelist
 					tableList.set(
@@ -398,7 +389,6 @@
 							// 	stage.container().style.cursor = 'default';
 							// });
 							circle.addEventListener('dragstart', () => {
-								
 								// Create a clone of the shape
 								previewShape = circle.clone();
 								previewShape.name('preview');
@@ -416,7 +406,7 @@
 									Math.round(
 										(circle.x() + grid.squareSize * grid.squaresPerMeter * $brush.snapCoefficient) /
 											grid.squareSize /
-											$brush.snapCoefficient
+											($brush.snapCoefficient)
 									) *
 									grid.squareSize *
 									$brush.snapCoefficient;
@@ -552,20 +542,26 @@
 		}
 		g.moveToTop();
 		// Calculate the new position based on the grid size
-		let newX =
+		let newX = $brush.snapCoefficient == 0 ? 
+		g.x() + g.offsetX()
+		:
 			Math.round(
-				(g.x() + grid.squareSize * grid.squaresPerMeter * $brush.snapCoefficient) /
-					(grid.squareSize * $brush.snapCoefficient * grid.squaresPerMeter)
+				(g.x() +
+					(g.offsetX() - $brush.snapCoefficient / 2 * grid.squareSize * grid.squaresPerMeter) +
+					grid.squareSize * grid.squaresPerMeter * $brush.snapCoefficient / 2) /
+					(grid.squareSize * $brush.snapCoefficient / 2 * grid.squaresPerMeter)
 			) *
-			(grid.squareSize * $brush.snapCoefficient * grid.squaresPerMeter);
-
-		let newY =
+			(grid.squareSize * $brush.snapCoefficient / 2 * grid.squaresPerMeter);
+		let newY = $brush.snapCoefficient == 0 ? 
+		g.y() + g.offsetY()
+		:
 			Math.round(
-				(g.y() + grid.squareSize * grid.squaresPerMeter * $brush.snapCoefficient) /
-					(grid.squareSize * $brush.snapCoefficient * grid.squaresPerMeter)
+				(g.y() +
+					(g.offsetY() - $brush.snapCoefficient / 2 * grid.squareSize * grid.squaresPerMeter) +
+					grid.squareSize * grid.squaresPerMeter * $brush.snapCoefficient / 2) /
+					(grid.squareSize * $brush.snapCoefficient / 2 * grid.squaresPerMeter)
 			) *
-			(grid.squareSize * $brush.snapCoefficient * grid.squaresPerMeter);
-
+			(grid.squareSize * $brush.snapCoefficient / 2 * grid.squaresPerMeter);
 		let objects = getMovablePolygons(objectLayer);
 		objects.push(...getCollisionPolygons(objectLayer));
 		objects = objects.filter((i) => i !== undefined);
@@ -807,22 +803,20 @@
 		// Calculate the new position based on the grid size
 		let newX =
 			Math.round(
-				(shape.x() + grid.squareSize * grid.squaresPerMeter * $brush.snapCoefficient) /
-					grid.squareSize /
-					$brush.snapCoefficient
+				(shape.x() +
+					(shape.offsetX() - $brush.snapCoefficient * grid.squareSize * grid.squaresPerMeter) +
+					grid.squareSize * grid.squaresPerMeter * $brush.snapCoefficient) /
+					(grid.squareSize * $brush.snapCoefficient * grid.squaresPerMeter)
 			) *
-			grid.squareSize *
-			$brush.snapCoefficient;
+			(grid.squareSize * $brush.snapCoefficient * grid.squaresPerMeter);
 		let newY =
 			Math.round(
-				(shape.y() + grid.squareSize * grid.squaresPerMeter * $brush.snapCoefficient) /
-					grid.squareSize /
-					$brush.snapCoefficient /
-					grid.squaresPerMeter
+				(shape.y() +
+					(shape.offsetY() - $brush.snapCoefficient * grid.squareSize * grid.squaresPerMeter) +
+					grid.squareSize * grid.squaresPerMeter * $brush.snapCoefficient) /
+					(grid.squareSize * $brush.snapCoefficient * grid.squaresPerMeter)
 			) *
-			grid.squareSize *
-			grid.squaresPerMeter *
-			$brush.snapCoefficient;
+			(grid.squareSize * $brush.snapCoefficient * grid.squaresPerMeter);
 		//If there was no collision, continue in calculating new viable position
 		let position = getClosestViablePosition(
 			newX,

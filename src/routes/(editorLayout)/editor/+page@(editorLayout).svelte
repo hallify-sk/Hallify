@@ -27,7 +27,7 @@
 	} else {
 		modifyZones.set(zoneEditing);
 	}
-	brush.set({ type: 'grab', snapCoefficient: 0.5 });
+	brush.set({ type: 'grab', snapCoefficient: 1 });
 
 	for (let i = 0; i < 8+1; i++) {
 		//+1 because we want it to return to original position;

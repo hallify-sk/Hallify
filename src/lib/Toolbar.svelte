@@ -99,7 +99,7 @@
 		bind:value={$brush.snapCoefficient}
 		class="w-32 bg-transparent appearance-none cursor-pointer mr-2"
 		type="range"
-		min="0.25"
+		min="0"
 		step="0.25"
 		max="1"
 	/>
