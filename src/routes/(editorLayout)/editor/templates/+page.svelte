@@ -26,6 +26,7 @@
 		imageSrc = src;
 		imageAlt = alt;
 		openImagePreview = true;
+		console.log(template);
 		reservationData = template;
 	}
 </script>

@@ -14,7 +14,7 @@ export async function load({ locals }) {
 		templates: 
 			(await (locals.pb as PocketBase)
 				.collection('stage_templates')
-				.getFullList()),
+				.getFullList({expand: "categories"})),
 		apiUrl: locals.pbApiURL
 	};
 }

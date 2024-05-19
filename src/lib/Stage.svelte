@@ -6,6 +6,7 @@
 		borderThickness: 100,
 		squaresPerMeter: 2
 	};
+	console.log(grid);
 	import { v4 as uuidv4 } from 'uuid';
 	import { onDestroy, onMount } from 'svelte';
 	import { Stage, Layer, Line, Group, Transformer, Rect, Circle } from 'svelte-konva';

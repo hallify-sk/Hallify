@@ -10,6 +10,7 @@
     function closeImage(){
 		isOpen = false;
 	}
+    console.log(reservationData);
 </script>
 
 <div class="w-screen h-screen fixed top-0 left-0 bg-black/50 z-50 place-items-center p-8 {isOpen ? "grid" : "hidden"}">

@@ -281,14 +281,10 @@ export function getClosestViablePosition(
 	y: number,
 	shape: Konva.Line,
 	objects: Konva.Line[],
-	grid: {
-		width: number;
-		height: number;
-		squareSize: number;
-		snapSize: number;
-		color: string;
-	}
+	grid: Grid
 ) {
+
+	//return { x: x + grid.squareSize, y: y + grid.squareSize};
 	// Create an empty map for the grid cells
 	const gridCells: Map<string, Konva.Line[]> = new Map();
 
@@ -316,8 +312,8 @@ export function getClosestViablePosition(
 				}
 
 				// Calculate the position to check
-				const checkX = x + i * grid.squareSize * grid.snapSize;
-				const checkY = y + j * grid.squareSize * grid.snapSize;
+				const checkX = x + i * grid.squareSize;
+				const checkY = y + j * grid.squareSize;
 
 				// Update the shape's position
 				shape.x(checkX);

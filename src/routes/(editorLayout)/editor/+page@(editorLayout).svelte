@@ -35,8 +35,6 @@
 		const a = Math.sqrt(2 - 2 * Math.cos(alphaRad)) * 30;
 		const height = (a / 30) * Math.sqrt(Math.pow(30, 2) - Math.pow(a, 2) / 4);
 		const b = Math.sqrt(Math.pow(a, 2) - Math.pow(height, 2));
-		console.log(`Step: ${i}`)
-		console.log(a, b);
 	}
 </script>
 
@@ -47,7 +45,7 @@
 	{#key $rerender}
 		<Stage
 			bind:downloadStage
-			grid={{ width, height, squareSize, snapSize, color, borderThickness, squaresPerMeter }}
+			grid={{ width, height, squareSize, borderThickness, squaresPerMeter }}
 		/>
 	{/key}
 </div>
