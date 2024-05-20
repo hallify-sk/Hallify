@@ -6,6 +6,6 @@
 
 </script>
 
-<div class="bg-background-50 min-h-screen">
+<div class="bg-background-100 min-h-screen pr-4 pl-64">
 	<slot />
 </div>

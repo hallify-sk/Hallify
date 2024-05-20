@@ -24,7 +24,7 @@
 	let errorMessage: string = '';
 
 	export let data;
-
+	console.log(data);
 	let counts: Array<number> = [];
 
 	let pollingInterval: NodeJS.Timeout;
@@ -143,8 +143,8 @@
 </script>
 
 {#if data.user}
-	<AdminNav />
-	<div class="flex flex-row flex-nowrap pl-80">
+	<AdminNav pageName="Nástenka" />
+	<div class="flex flex-row flex-nowrap pl-60">
 		<div class="w-full min-h-screen grid auto-rows-min grid-cols-12 px-14 pt-24 gap-8">
 			<h1 class="col-span-12 text-2xl text-text-600 font-semibold">Nástenka</h1>
 			<div class="col-span-12 md:col-span-6 bg-background-100 h-full block rounded-md overflow-hidden">

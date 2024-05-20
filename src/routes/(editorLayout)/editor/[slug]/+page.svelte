@@ -30,7 +30,6 @@
 	}
 	brush.set({ type: 'grab', snapCoefficient: 0.5 });
 </script>
-
 <div
 	class="grid place-items-center h-screen bg-background-200 ml-12"
 	style="width: calc(100vw - 18rem)"
