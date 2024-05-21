@@ -9,7 +9,7 @@
 	for={name}
 	class="relative w-10 h-5 grid bg-background-200 rounded-full border-2 border-slate-400/60 
     hover:border-slate-400 cursor-pointer duration-100 has-[:checked]:bg-emerald-500 
-    has-[:checked]:border-emerald-500 group place-items-center has-[:disabled]:border-slate-300"
+    has-[:checked]:border-emerald-500 group place-items-center has-[:disabled]:border-slate-300 has-[:disabled]:cursor-default"
 >
 <input
 on:change={onCheck}
