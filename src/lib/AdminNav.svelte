@@ -41,8 +41,8 @@
 	<div class="gap-1 flex flex-col justify-between h-full">
 		<div class="flex flex-col gap-2 pb-2 h-full">
 			<a href="/admin" class="flex items-center gap-4 py-2 mb-4 bg-background-800 shadow-lg px-4">
-				<img src="https://via.placeholder.com/150" alt="logo" class="h-10 w-10" />
-				<p class="text-lg font-semibold text-text-100">Reduta</p>
+				<img src="/Hallify.svg" alt="logo" class="h-10 w-10" />
+				<p class="text-lg font-semibold text-text-100">Hallify</p>
 			</a>
 			<div class="pl-4 mb-8">
 				<p
