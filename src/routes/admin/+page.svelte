@@ -251,7 +251,7 @@
 	</Popup>
 {:else}
 	<div
-		class="w-full h-screen grid place-items-center z-50 text-left bg-[url(/Waves.svg)] bg-no-repeat bg-cover"
+		class="w-full h-screen grid place-items-center z-50 text-left bg-[url(/Waves.svg)] bg-no-repeat bg-cover absolute left-0 top-0"
 	>
 		<div class="bg-background-50 p-8 rounded-md shadow-md z-10">
 			<h2 class="text-text-700 text-xl mb-4">Admin Login</h2>
