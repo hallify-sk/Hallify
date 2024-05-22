@@ -6,7 +6,7 @@
 </script>
 
 <header
-	class="fixed top-0 left-0 w-full bg-background-100 flex flex-row flex-nowrap justify-between items-center pl-64 pr-2 py-6"
+	class="fixed top-0 left-0 w-full bg-background-100 flex flex-row flex-nowrap justify-between items-center pl-64 pr-2 py-6 z-50"
 >	
 	<h1 class="text-xl text-text-600 ml-8 font-semibold">{pageName}</h1>
 	<form

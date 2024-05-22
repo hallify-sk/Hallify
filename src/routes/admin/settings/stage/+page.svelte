@@ -37,33 +37,23 @@
   </script>
 
 <AdminNav pageName="Nastavenia sály" />
-<div class="flex flex-row flex-nowrap">
-	<Toaster position="bottom-right" visibleToasts={3} />
-	<div class="w-full min-h-screen grid auto-rows-min grid-cols-12 px-2 pt-24 gap-8">
-		<div class="bg-background-50 px-10 py-6 col-span-3 rounded-md flex flex-col justify-center">
-			<ul>
-				<li>
-					<a
-						href="#"
-						class="w-full text-text-600 hover:text-text-700 flex text-center items-center justify-center rounded-md"
-						>Nastavenia modulu</a
-					>
-				</li>
-			</ul>
-		</div>
+<Toaster position="bottom-right" visibleToasts={3} />
+<div class="flex flex-row flex-nowrap justify-stretch h-screen">
+	<div class="w-full px-2 pt-24 gap-8 flex justify-stretch pb-6">
 		<form
 			on:input={saveChanges}
 			bind:this={form}
 			action="?/saveChanges"
 			method="POST"
 			use:enhance
-			class="bg-background-50 px-10 py-6 col-span-9 rounded-md overflow-auto max-h-full divide-y divide-background-100"
+			class="bg-background-50 px-10 py-6 col-span-12 rounded-md divide-y divide-background-100 self-stretch overflow-auto"
 		>
 			{#key data?.config?.[0]}
+			<h2 class="py-2 text-text-300 text-sm select-none">Nastavenia modulu</h2>
 			<div class="grid grid-cols-12 items-center py-2">
 				<div class="flex flex-col col-span-11">
 					<p class="text-text-800">Zapnúť modul</p>
-					<p class="text-sm text-text-600 max-w-4xl">
+					<p class="text-text-600 max-w-4xl text-xs">
 						Zapnutie tohto modulu umožní plánovanie rozloženia sály priamo v Hallify. Pri vypnutí
 						modulu sa existujúce rezervácie nezmenia, avšak všetky nové rezervácie tento modul
 						nebudu môcť použiť.
@@ -83,33 +73,36 @@
 					</p>
 				</div>
 				<div class="col-span-1 grid place-items-center">
-					<Toggle name="toggle2" checked={config?.value?.toggle2} disabled={!moduleEnabled} />
+					<Toggle name="ownLayouts" checked={config?.value?.ownLayouts} disabled={!moduleEnabled} />
 				</div>
 			</div>
 			<div class="grid grid-cols-12 items-center py-2 {moduleEnabled ? '' : 'disabled'}">
 				<div class="flex flex-col col-span-11">
-					<p class="text-text-800">Povoliť vlastné rozloženia</p>
+					<p class="text-text-800">Vynútiť rozloženie sály pri rezervácií</p>
 					<p class="text-sm text-text-600 max-w-4xl">
-						Zapnutím tejto možnosti si uživatelia môžu vytvárať vlastné rozloženia stolov vo Vašej
-						sále. Ak je táto možnosť vypnutá, používatelia si môžu vyberať iba z vašich
-						pred-tvorených rozložení.
+						Ak je táto možnosť zapnutá, uživatelia si musia vybrať/vytvoriť rozloženie stolov predtým, ako sa im umožní vytvoriť rezerváciu. Ak je táto možnosť vypnutá, uživatelia si môžu rozloženie stolov dodatočne vyplniť neskôr.
 					</p>
 				</div>
 				<div class="col-span-1 grid place-items-center">
-					<Toggle name="toggle3" checked={config?.value?.toggle3} disabled={!moduleEnabled} />
+					<Toggle name="forceLayoutOnReservation" checked={config?.value?.forceLayoutOnReservation} disabled={!moduleEnabled} />
 				</div>
 			</div>
-			<div class="grid grid-cols-12 items-center py-2 {moduleEnabled ? '' : 'disabled'}">
-				<div class="flex flex-col col-span-11">
-					<p class="text-text-800">Povoliť vlastné rozloženia</p>
-					<p class="text-sm text-text-600 max-w-4xl">
-						Zapnutím tejto možnosti si uživatelia môžu vytvárať vlastné rozloženia stolov vo Vašej
-						sále. Ak je táto možnosť vypnutá, používatelia si môžu vyberať iba z vašich
-						pred-tvorených rozložení.
+			<h2 class="py-2 text-text-300 text-sm select-none">Rozloženia</h2>
+			<div class="grid grid-cols-12 gap-2 items-center py-2 {moduleEnabled ? '' : 'disabled'}">
+				<div class="flex flex-col col-span-10">
+					<p class="text-text-800">Základný plán sály</p>
+					<p class="text-sm text-text-600 max-w-3xl">
+						Toto je základné rozloženie sály, na ktoré viete následne vytvárať rozloženia. Ak zmeníte plán, existujúce rozloženia môžu byť ovplyvnené.
 					</p>
 				</div>
-				<div class="col-span-1 grid place-items-center">
-					<Toggle name="toggle4" checked={config?.value?.toggle4} disabled={!moduleEnabled} />
+				<div class="grid col-span-2 place-items-center">
+					<button
+						type="submit"
+						disabled={!moduleEnabled}
+						class="px-4 py-2 bg-background-700 hover:bg-primary-600 rounded-md text-text-50 w-[120px] disabled:bg-background-300 disabled:text-text-400"
+					>
+						Zobraziť
+					</button>
 				</div>
 			</div>
 			{/key}
