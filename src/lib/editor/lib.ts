@@ -4,9 +4,13 @@ export type Grid = {
 	width: number;
 	height: number;
 	squareSize: number;
-	borderThickness: number;
+	borderThicknessX: number;
+	borderThicknessY: number;
 	squaresPerMeter: number;
 };
+
+export const midpoint = ([x1, y1]: number[], [x2, y2]: number[]) => [(x1 + x2) / 2, (y1 + y2) / 2];
+
 
 export function clamp(val: number, min: number, max: number): number {
 	return Math.min(Math.max(val, min), max);

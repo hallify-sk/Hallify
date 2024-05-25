@@ -1,9 +1,14 @@
 <script lang="ts">
+	export let canvas = {
+		height: 1000,
+		width: 1000
+	};
 	export let grid: Grid = {
 		width: 20,
 		height: 20,
 		squareSize: 30,
-		borderThickness: 100,
+		borderThicknessX: 100,
+		borderThicknessY: 100,
 		squaresPerMeter: 2
 	};
 	console.log(grid);
@@ -23,7 +28,8 @@
 		rotatePoints,
 		checkPolygonCircleCollision,
 		checkCircleCollision,
-		type Grid
+		type Grid,
+		midpoint
 	} from './editor/lib';
 	import Konva from 'konva';
 	import {
@@ -48,7 +54,9 @@
 	$: if (grid && (grid.width || grid.height) && gridLayer) setTimeout(() => gridLayer.cache());
 	const scaleBy = 1.2;
 	let points: any[] = [];
-	let rulerPoints: Konva.Circle[] = [];
+	let rulerPoints: any[] = [];
+	let rulerLine: Konva.Line;
+	let rulerText: Konva.Text;
 	let circles: Konva.Circle[] = [];
 	let pointsHistory: Array<any[]> = [];
 	let circlesHistory: Array<Konva.Circle[]> = [];
@@ -79,19 +87,19 @@
 				y: (pointer?.y || 0) - mousePointTo.y * newScale
 			};
 
-			let newX = Math.min(pos.x, grid.borderThickness * grid.squareSize * newScale);
-			let newY = Math.min(pos.y, grid.borderThickness * grid.squareSize * newScale);
+			let newX = Math.min(pos.x, grid.borderThicknessX * grid.squareSize * newScale);
+			let newY = Math.min(pos.y, grid.borderThicknessY * grid.squareSize * newScale);
 			newX = Math.max(
 				newX,
 				-grid.width * grid.squareSize * newScale +
 					stage.width() -
-					grid.borderThickness * grid.squareSize * newScale
+					grid.borderThicknessX * grid.squareSize * newScale
 			);
 			newY = Math.max(
 				newY,
 				-grid.height * grid.squareSize * newScale +
 					stage.height() -
-					grid.borderThickness * grid.squareSize * newScale
+					grid.borderThicknessY * grid.squareSize * newScale
 			);
 			stage.position({ x: newX, y: newY });
 			stageData.set({
@@ -102,22 +110,40 @@
 			});
 		});
 		window.addEventListener('keydown', (e) => {
-			console.log(e.code);
 			if (e.code == 'Delete' || e.code == 'Backspace') {
-				tr.nodes().forEach((e) => {
-					//Make sure the tableName and UUID of the table is the same. Name format: "tableName UUID". Then, remove from tablelist
-					tableList.set(
-						$tableList.filter((i) => {
-							console.log(i.name.split(' ')[1]);
-							console.log(e.name().split(' ')[1]);
-							console.log(i.name.split(' ')[1] == e.name().split(' ')[1]);
-							return i.name.split(' ')[1] !== e.name().split(' ')[1];
-						})
-					);
-				});
-				tr.nodes([]);
+				switch ($brush.type) {
+					case 'grab':
+						{
+							tr.nodes().forEach((e) => {
+								//Make sure the tableName and UUID of the table is the same. Name format: "tableName UUID". Then, remove from tablelist
+								tableList.set(
+									$tableList.filter((i) => {
+										console.log(i.name.split(' ')[1]);
+										console.log(e.name().split(' ')[1]);
+										console.log(i.name.split(' ')[1] == e.name().split(' ')[1]);
+										return i.name.split(' ')[1] !== e.name().split(' ')[1];
+									})
+								);
+							});
+							tr.nodes([]);
+						}
+						break;
+					case 'ruler': {
+						rulerPoints = [];
+						uiLayer.children.forEach((e) => {
+							console.log(e);
+							if (e.name().includes('ruler')) {
+								e?.destroy();
+							}
+						});
+					}
+				}
 			} else if (e.code == 'KeyZ' && e.ctrlKey) {
 				if (pointsHistory.length > 0 && circlesHistory.length > 0) {
+					uiLayer.children
+						.filter((i) => i.name().includes('wallPreview'))
+						.forEach((i) => i.destroy());
+					let previewZone: Konva.Line;
 					points = pointsHistory.pop() as any[];
 					circles = circlesHistory.pop() as any[];
 
@@ -125,25 +151,101 @@
 					uiLayer.removeChildren();
 
 					// Re-render the circles
-					circles.forEach((circle, i) => {
-						const newCircle = new Konva.Circle({
-							x: circle.x(),
-							y: circle.y(),
-							radius: circle.radius(),
-							fill: circle.fill(),
-							stroke: circle.stroke(),
-							strokeWidth: circle.strokeWidth()
+					circles.forEach((nCircle, i) => {
+						const circle = new Konva.Circle({
+							x: nCircle.x(),
+							y: nCircle.y(),
+							radius: nCircle.radius(),
+							fill: nCircle.fill(),
+							stroke: nCircle.stroke(),
+							strokeWidth: nCircle.strokeWidth(),
+							draggable: true
 						});
 
-						uiLayer.add(newCircle);
+						circle.addEventListener('dragstart', () => {
+							// Create a clone of the shape
+							previewShape = circle.clone();
+							previewShape.name('preview');
+							previewShape.draggable(false);
+
+							// Make the clone semi-transparent
+							previewShape.opacity(0.5);
+
+							// Add the clone to the layer
+							uiLayer.add(previewShape);
+						});
+						circle.addEventListener('dragmove', () => {
+							let replacedPoint = points.find((i) => i.ref.name() == circle.name());
+							points = points.filter((i) => i.ref.name() != circle.name());
+							uiLayer.children
+								.filter((i) => i.name().includes('wallPreview'))
+								.forEach((i) => i.destroy());
+							previewZone?.remove();
+							let newX =
+								$brush.snapCoefficient == 0
+									? circle.x() + circle.offsetX()
+									: Math.round(
+											(circle.x() +
+												(circle.offsetX() -
+													($brush.snapCoefficient / 2) * grid.squareSize * grid.squaresPerMeter) +
+												(grid.squareSize * grid.squaresPerMeter * $brush.snapCoefficient) / 2) /
+												(((grid.squareSize * $brush.snapCoefficient) / 2) * grid.squaresPerMeter)
+										) *
+										(((grid.squareSize * $brush.snapCoefficient) / 2) * grid.squaresPerMeter);
+							let newY =
+								$brush.snapCoefficient == 0
+									? circle.y() + circle.offsetY()
+									: Math.round(
+											(circle.y() +
+												(circle.offsetY() -
+													($brush.snapCoefficient / 2) * grid.squareSize * grid.squaresPerMeter) +
+												(grid.squareSize * grid.squaresPerMeter * $brush.snapCoefficient) / 2) /
+												(((grid.squareSize * $brush.snapCoefficient) / 2) * grid.squaresPerMeter)
+										) *
+										(((grid.squareSize * $brush.snapCoefficient) / 2) * grid.squaresPerMeter);
+							//If there was no collision, continue in calculating new viable position
+							// Update the preview shape's position
+							points.push({ x: newX, y: newY, ref: circle, index: replacedPoint?.index });
+							if (points.length > 1) {
+								console.log(points);
+								previewZone = new Konva.Line({
+									name: 'wallPreview' + uuidv4(),
+									//Sort by index so the points are in order
+									points: points
+										.sort((a, b) => a.index - b.index)
+										.flatMap((point) => [point.x, point.y]),
+									fill: $brush.color || 'blue',
+									stroke: $brush.stroke || 'black',
+									strokeWidth: $brush.strokeWidth || 0,
+									opacity: 0.2,
+									closed: true
+								});
+								uiLayer.add(previewZone);
+								previewZone.moveToBottom();
+							}
+
+							previewShape.x(newX || 0);
+							previewShape.y(newY || 0);
+						});
+						circle.addEventListener('dragend', (e) => {
+							e.preventDefault();
+							setTimeout(() => {
+								circle.position(previewShape.position());
+								previewShape.destroy();
+							}, 0);
+							objectLayer.batchDraw();
+							objectLayer.draw();
+						});
+
+						uiLayer.add(circle);
 						if (i == 0) {
-							newCircle.on('mouseenter', () => {
+							circle.on('mouseenter', () => {
 								stage.container().style.cursor = 'pointer';
 							});
-							newCircle.on('mouseleave', () => {
+							circle.on('mouseleave', () => {
 								stage.container().style.cursor = 'default';
 							});
-							newCircle.addEventListener('click', () => {
+							circle.addEventListener('click', () => {
 								if ($brush.type == 'zone') {
 									createZone();
 								} else if ($brush.type == 'wall') {
@@ -153,7 +255,8 @@
 						}
 					});
 
-					const previewZone = new Konva.Line({
+					previewZone = new Konva.Line({
+						name: 'wallPreview' + uuidv4(),
 						points: points.flatMap((point) => [point.x, point.y]),
 						fill: $brush.color || 'blue',
 						stroke: $brush.stroke || 'black',
@@ -162,6 +265,7 @@
 						closed: true
 					});
 					uiLayer.add(previewZone);
+					previewZone.moveToBottom();
 					drawPreviewShape = previewZone;
 
 					// Draw the layer
@@ -208,24 +312,29 @@
 					}
 					break;
 				case 'zone':
-					{
+				let previewZone: Konva.Line;
 						const { offsetX, offsetY } = e.evt;
 						const zoomLevel = stage.scaleX();
 						const stageX = stage.x();
 						const stageY = stage.y();
-						const point = {
+
+						const point: { x: number; y: number; ref?: Konva.Circle; index?: number } = {
 							x:
-								Math.round(
-									(offsetX - stageX) / zoomLevel / (grid.squareSize * $brush.snapCoefficient)
-								) *
-								grid.squareSize *
-								$brush.snapCoefficient,
+								$brush.snapCoefficient == 0
+									? Math.round((offsetX - stageX) / zoomLevel)
+									: Math.round(
+											(offsetX - stageX) / zoomLevel / (grid.squareSize * $brush.snapCoefficient)
+										) *
+										grid.squareSize *
+										$brush.snapCoefficient,
 							y:
-								Math.round(
-									(offsetY - stageY) / zoomLevel / (grid.squareSize * $brush.snapCoefficient)
-								) *
-								grid.squareSize *
-								$brush.snapCoefficient
+								$brush.snapCoefficient == 0
+									? Math.round((offsetY - stageY) / zoomLevel)
+									: Math.round(
+											(offsetY - stageY) / zoomLevel / (grid.squareSize * $brush.snapCoefficient)
+										) *
+										grid.squareSize *
+										$brush.snapCoefficient
 						};
 
 						if (
@@ -234,17 +343,100 @@
 							point.y >= 0 &&
 							point.y <= grid.height * grid.squareSize
 						) {
-							drawPreviewShape?.destroy();
+							uiLayer.children
+								.filter((i) => i.name().includes('zonePreview'))
+								.forEach((i) => i.destroy());
 							pointsHistory.push([...points]);
 							circlesHistory.push([...circles]);
-							points.push(point);
+
 							// Create a new circle at the point and add it to the stage
 							const circle = new Konva.Circle({
-								name: 'no-select ' + uuidv4(),
+								name: 'no-select zonePoint' + uuidv4(),
 								x: point.x,
 								y: point.y,
 								radius: 5,
-								fill: points.length == 1 ? themes[$theme].accent[600] : themes[$theme].accent[400]
+								fill:
+									points.length == 0
+										? themes[$theme].secondary[600]
+										: themes[$theme].secondary[400],
+								draggable: true
+							});
+							point.ref = circle;
+							point.index = points.length;
+							points.push(point);
+							circle.addEventListener('dragstart', () => {
+								// Create a clone of the shape
+								previewShape = circle.clone();
+								previewShape.name('preview');
+								previewShape.draggable(false);
+
+								// Make the clone semi-transparent
+								previewShape.opacity(0.5);
+
+								// Add the clone to the layer
+								uiLayer.add(previewShape);
+							});
+							circle.addEventListener('dragmove', () => {
+								let replacedPoint = points.find((i) => i.ref.name() == circle.name());
+								points = points.filter((i) => i.ref.name() != circle.name());
+								uiLayer.children
+									.filter((i) => i.name().includes('zonePreview'))
+									.forEach((i) => i.destroy());
+								previewZone?.remove();
+								let newX =
+									$brush.snapCoefficient == 0
+										? circle.x() + circle.offsetX()
+										: Math.round(
+												(circle.x() +
+													(circle.offsetX() -
+														($brush.snapCoefficient / 2) * grid.squareSize * grid.squaresPerMeter) +
+													(grid.squareSize * grid.squaresPerMeter * $brush.snapCoefficient) / 2) /
+													(((grid.squareSize * $brush.snapCoefficient) / 2) * grid.squaresPerMeter)
+											) *
+											(((grid.squareSize * $brush.snapCoefficient) / 2) * grid.squaresPerMeter);
+								let newY =
+									$brush.snapCoefficient == 0
+										? circle.y() + circle.offsetY()
+										: Math.round(
+												(circle.y() +
+													(circle.offsetY() -
+														($brush.snapCoefficient / 2) * grid.squareSize * grid.squaresPerMeter) +
+													(grid.squareSize * grid.squaresPerMeter * $brush.snapCoefficient) / 2) /
+													(((grid.squareSize * $brush.snapCoefficient) / 2) * grid.squaresPerMeter)
+											) *
+											(((grid.squareSize * $brush.snapCoefficient) / 2) * grid.squaresPerMeter);
+								//If there was no collision, continue in calculating new viable position
+								// Update the preview shape's position
+								points.push({ x: newX, y: newY, ref: circle, index: replacedPoint.index });
+								if (points.length > 1) {
+									console.log(points);
+									previewZone = new Konva.Line({
+										name: 'zonePreview' + uuidv4(),
+										//Sort by index so the points are in order
+										points: points
+											.sort((a, b) => a.index - b.index)
+											.flatMap((point) => [point.x, point.y]),
+										fill: $brush.color || 'blue',
+										stroke: $brush.stroke || 'black',
+										strokeWidth: $brush.strokeWidth || 0,
+										opacity: 0.2,
+										closed: true
+									});
+									uiLayer.add(previewZone);
+									previewZone.moveToBottom();
+								}
+
+								previewShape.x(newX || 0);
+								previewShape.y(newY || 0);
+							});
+							circle.addEventListener('dragend', (e) => {
+								e.preventDefault();
+								setTimeout(() => {
+									circle.position(previewShape.position());
+									previewShape.destroy();
+								}, 0);
+								objectLayer.batchDraw();
+								objectLayer.draw();
 							});
 							if (points.length == 1) {
 								circle.on('mouseenter', () => {
@@ -259,8 +451,12 @@
 							}
 							uiLayer.add(circle);
 							circles.push(circle);
-							const previewZone = new Konva.Line({
-								points: points.flatMap((point) => [point.x, point.y]),
+							previewZone = new Konva.Line({
+								name: 'zonePreview' + uuidv4(),
+								//Sort points so left most point is first, then clockwise
+								points: points
+									.sort((a, b) => a.index - b.index)
+									.flatMap((point) => [point.x, point.y]),
 								fill: $brush.color || 'blue',
 								stroke: $brush.stroke || 'black',
 								strokeWidth: $brush.strokeWidth || 0,
@@ -269,32 +465,38 @@
 							});
 							uiLayer.add(previewZone);
 							drawPreviewShape = previewZone;
+							previewZone.moveToBottom();
 							circles.forEach((circle) => {
 								circle.moveToTop();
 							});
 							uiLayer.draw();
 						}
-					}
 					break;
 				case 'wall':
 					{
+						let previewZone: Konva.Line;
 						const { offsetX, offsetY } = e.evt;
 						const zoomLevel = stage.scaleX();
 						const stageX = stage.x();
 						const stageY = stage.y();
-						const point = {
+
+						const point: { x: number; y: number; ref?: Konva.Circle; index?: number } = {
 							x:
-								Math.round(
-									(offsetX - stageX) / zoomLevel / (grid.squareSize * $brush.snapCoefficient)
-								) *
-								grid.squareSize *
-								$brush.snapCoefficient,
+								$brush.snapCoefficient == 0
+									? Math.round((offsetX - stageX) / zoomLevel)
+									: Math.round(
+											(offsetX - stageX) / zoomLevel / (grid.squareSize * $brush.snapCoefficient)
+										) *
+										grid.squareSize *
+										$brush.snapCoefficient,
 							y:
-								Math.round(
-									(offsetY - stageY) / zoomLevel / (grid.squareSize * $brush.snapCoefficient)
-								) *
-								grid.squareSize *
-								$brush.snapCoefficient
+								$brush.snapCoefficient == 0
+									? Math.round((offsetY - stageY) / zoomLevel)
+									: Math.round(
+											(offsetY - stageY) / zoomLevel / (grid.squareSize * $brush.snapCoefficient)
+										) *
+										grid.squareSize *
+										$brush.snapCoefficient
 						};
 
 						if (
@@ -303,17 +505,100 @@
 							point.y >= 0 &&
 							point.y <= grid.height * grid.squareSize
 						) {
-							drawPreviewShape?.destroy();
+							uiLayer.children
+								.filter((i) => i.name().includes('wallPreview'))
+								.forEach((i) => i.destroy());
 							pointsHistory.push([...points]);
 							circlesHistory.push([...circles]);
-							points.push(point);
+
 							// Create a new circle at the point and add it to the stage
 							const circle = new Konva.Circle({
-								name: 'no-select ' + uuidv4(),
+								name: 'no-select wallPoint' + uuidv4(),
 								x: point.x,
 								y: point.y,
 								radius: 5,
-								fill: points.length == 1 ? themes[$theme].accent[600] : themes[$theme].accent[400]
+								fill:
+									points.length == 0
+										? themes[$theme].secondary[600]
+										: themes[$theme].secondary[400],
+								draggable: true
+							});
+							point.ref = circle;
+							point.index = points.length;
+							points.push(point);
+							circle.addEventListener('dragstart', () => {
+								// Create a clone of the shape
+								previewShape = circle.clone();
+								previewShape.name('preview');
+								previewShape.draggable(false);
+
+								// Make the clone semi-transparent
+								previewShape.opacity(0.5);
+
+								// Add the clone to the layer
+								uiLayer.add(previewShape);
+							});
+							circle.addEventListener('dragmove', () => {
+								let replacedPoint = points.find((i) => i.ref.name() == circle.name());
+								points = points.filter((i) => i.ref.name() != circle.name());
+								uiLayer.children
+									.filter((i) => i.name().includes('wallPreview'))
+									.forEach((i) => i.destroy());
+								previewZone?.remove();
+								let newX =
+									$brush.snapCoefficient == 0
+										? circle.x() + circle.offsetX()
+										: Math.round(
+												(circle.x() +
+													(circle.offsetX() -
+														($brush.snapCoefficient / 2) * grid.squareSize * grid.squaresPerMeter) +
+													(grid.squareSize * grid.squaresPerMeter * $brush.snapCoefficient) / 2) /
+													(((grid.squareSize * $brush.snapCoefficient) / 2) * grid.squaresPerMeter)
+											) *
+											(((grid.squareSize * $brush.snapCoefficient) / 2) * grid.squaresPerMeter);
+								let newY =
+									$brush.snapCoefficient == 0
+										? circle.y() + circle.offsetY()
+										: Math.round(
+												(circle.y() +
+													(circle.offsetY() -
+														($brush.snapCoefficient / 2) * grid.squareSize * grid.squaresPerMeter) +
+													(grid.squareSize * grid.squaresPerMeter * $brush.snapCoefficient) / 2) /
+													(((grid.squareSize * $brush.snapCoefficient) / 2) * grid.squaresPerMeter)
+											) *
+											(((grid.squareSize * $brush.snapCoefficient) / 2) * grid.squaresPerMeter);
+								//If there was no collision, continue in calculating new viable position
+								// Update the preview shape's position
+								points.push({ x: newX, y: newY, ref: circle, index: replacedPoint.index });
+								if (points.length > 1) {
+									console.log(points);
+									previewZone = new Konva.Line({
+										name: 'wallPreview' + uuidv4(),
+										//Sort by index so the points are in order
+										points: points
+											.sort((a, b) => a.index - b.index)
+											.flatMap((point) => [point.x, point.y]),
+										fill: $brush.color || 'blue',
+										stroke: $brush.stroke || 'black',
+										strokeWidth: $brush.strokeWidth || 0,
+										opacity: 0.2,
+										closed: true
+									});
+									uiLayer.add(previewZone);
+									previewZone.moveToBottom();
+								}
+
+								previewShape.x(newX || 0);
+								previewShape.y(newY || 0);
+							});
+							circle.addEventListener('dragend', (e) => {
+								e.preventDefault();
+								setTimeout(() => {
+									circle.position(previewShape.position());
+									previewShape.destroy();
+								}, 0);
+								objectLayer.batchDraw();
+								objectLayer.draw();
 							});
 							if (points.length == 1) {
 								circle.on('mouseenter', () => {
@@ -328,8 +613,12 @@
 							}
 							uiLayer.add(circle);
 							circles.push(circle);
-							const previewZone = new Konva.Line({
-								points: points.flatMap((point) => [point.x, point.y]),
+							previewZone = new Konva.Line({
+								name: 'wallPreview' + uuidv4(),
+								//Sort points so left most point is first, then clockwise
+								points: points
+									.sort((a, b) => a.index - b.index)
+									.flatMap((point) => [point.x, point.y]),
 								fill: $brush.color || 'blue',
 								stroke: $brush.stroke || 'black',
 								strokeWidth: $brush.strokeWidth || 0,
@@ -338,6 +627,7 @@
 							});
 							uiLayer.add(previewZone);
 							drawPreviewShape = previewZone;
+							previewZone.moveToBottom();
 							circles.forEach((circle) => {
 								circle.moveToTop();
 							});
@@ -364,7 +654,7 @@
 							grid.squareSize *
 							$brush.snapCoefficient
 					};
-
+					if (rulerPoints.length == 2) return;
 					if (
 						point.x >= 0 &&
 						point.x <= grid.width * grid.squareSize &&
@@ -372,7 +662,6 @@
 						point.y <= grid.height * grid.squareSize
 					) {
 						drawPreviewShape?.destroy();
-						points.push(point);
 						// Create a new circle at the point and add it to the stage
 						const circle = new Konva.Circle({
 							draggable: true,
@@ -380,77 +669,156 @@
 							x: point.x,
 							y: point.y,
 							radius: 5,
-							fill: points.length == 1 ? themes[$theme].accent[600] : themes[$theme].accent[400]
+							fill: themes[$theme].accent[700]
 						});
-						if (points.length == 1) {
-							// circle.on('mouseenter', () => {
-							// 	stage.container().style.cursor = 'pointer';
-							// });
-							// circle.on('mouseleave', () => {
-							// 	stage.container().style.cursor = 'default';
-							// });
-							circle.addEventListener('dragstart', () => {
-								// Create a clone of the shape
-								previewShape = circle.clone();
-								previewShape.name('preview');
-								previewShape.draggable(false);
+						rulerPoints.push({ point, ref: circle });
+						circle.addEventListener('dragstart', () => {
+							// Create a clone of the shape
+							previewShape = circle.clone();
+							previewShape.name('preview');
+							previewShape.draggable(false);
 
-								// Make the clone semi-transparent
-								previewShape.opacity(0.5);
+							// Make the clone semi-transparent
+							previewShape.opacity(0.5);
 
-								// Add the clone to the layer
-								uiLayer.add(previewShape);
-							});
-							circle.addEventListener('dragmove', () => {
-								// Calculate the new position based on the grid size
-								let newX =
-									Math.round(
-										(circle.x() + grid.squareSize * grid.squaresPerMeter * $brush.snapCoefficient) /
-											grid.squareSize /
-											($brush.snapCoefficient)
-									) *
-									grid.squareSize *
-									$brush.snapCoefficient;
-								let newY =
-									Math.round(
-										(circle.y() + grid.squareSize * grid.squaresPerMeter * $brush.snapCoefficient) /
-											grid.squareSize /
-											$brush.snapCoefficient /
-											grid.squaresPerMeter
-									) *
-									grid.squareSize *
-									grid.squaresPerMeter *
-									$brush.snapCoefficient;
-								//If there was no collision, continue in calculating new viable position
-								// Update the preview shape's position
+							// Add the clone to the layer
+							uiLayer.add(previewShape);
+						});
+						circle.addEventListener('dragmove', () => {
+							rulerPoints = rulerPoints.filter((i) => i.ref.name() != circle.name());
+							rulerLine?.remove();
+							rulerText?.remove();
+							let newX =
+								$brush.snapCoefficient == 0
+									? circle.x() + circle.offsetX()
+									: Math.round(
+											(circle.x() +
+												(circle.offsetX() -
+													($brush.snapCoefficient / 2) * grid.squareSize * grid.squaresPerMeter) +
+												(grid.squareSize * grid.squaresPerMeter * $brush.snapCoefficient) / 2) /
+												(((grid.squareSize * $brush.snapCoefficient) / 2) * grid.squaresPerMeter)
+										) *
+										(((grid.squareSize * $brush.snapCoefficient) / 2) * grid.squaresPerMeter);
+							let newY =
+								$brush.snapCoefficient == 0
+									? circle.y() + circle.offsetY()
+									: Math.round(
+											(circle.y() +
+												(circle.offsetY() -
+													($brush.snapCoefficient / 2) * grid.squareSize * grid.squaresPerMeter) +
+												(grid.squareSize * grid.squaresPerMeter * $brush.snapCoefficient) / 2) /
+												(((grid.squareSize * $brush.snapCoefficient) / 2) * grid.squaresPerMeter)
+										) *
+										(((grid.squareSize * $brush.snapCoefficient) / 2) * grid.squaresPerMeter);
+							//If there was no collision, continue in calculating new viable position
+							// Update the preview shape's position
+							rulerPoints.push({ point: { x: newX, y: newY }, ref: circle });
+							if (rulerPoints[1]) {
+								const textPos = midpoint(
+									[rulerPoints[0].point.x, rulerPoints[0].point.y],
+									[rulerPoints[1].point.x, rulerPoints[1].point.y]
+								);
+								rulerText = new Konva.Text({
+									name: 'ruler ' + uuidv4(),
+									x: textPos[0],
+									y: textPos[1],
+									text:
+										(
+											distanceBetweenPoints(
+												{ x: rulerPoints[0].point.x, y: rulerPoints[0].point.y },
+												{ x: rulerPoints[1].point.x, y: rulerPoints[1].point.y }
+											) /
+											grid.squaresPerMeter /
+											grid.squareSize
+										).toFixed(2) + 'm',
+									fill: 'white',
+									stroke: 'black',
+									strokeWidth: 0.5,
+									fontSize: 24,
+									fontFamily: 'Poppins',
+									align: 'center'
+								});
+								rulerText.setPosition({
+									x: textPos[0] - rulerText.width() / 2,
+									y: textPos[1] - rulerText.height() / 2
+								});
+								uiLayer.add(rulerText);
+							}
 
-								previewShape.x(newX || 0);
-								previewShape.y(newY || 0);
+							previewShape.x(newX || 0);
+							previewShape.y(newY || 0);
+
+							rulerLine = new Konva.Line({
+								name: 'ruler ' + uuidv4(),
+								points: rulerPoints.flatMap((point) => [point.point.x, point.point.y]),
+								stroke: $brush.stroke || 'black',
+								strokeWidth: $brush.strokeWidth || 2,
+								opacity: 0.2,
+								closed: true
 							});
-							circle.addEventListener('dragend', (e) => {
-								e.preventDefault();
-								setTimeout(() => {
-									circle.position(previewShape.position());
-									previewShape.destroy();
-								}, 0);
-								objectLayer.batchDraw();
-								objectLayer.draw();
+							uiLayer.add(rulerLine);
+							rulerLine.moveToTop();
+							rulerText?.moveToTop();
+							rulerPoints.forEach((point) => {
+								point.ref.moveToTop();
 							});
-						}
+						});
+						circle.addEventListener('dragend', (e) => {
+							e.preventDefault();
+							setTimeout(() => {
+								circle.position(previewShape.position());
+								previewShape.destroy();
+							}, 0);
+							objectLayer.batchDraw();
+							objectLayer.draw();
+						});
+
 						uiLayer.add(circle);
-						rulerPoints.push(circle);
-						const previewZone = new Konva.Line({
-							points: points.flatMap((point) => [point.x, point.y]),
+						rulerLine = new Konva.Line({
+							name: 'ruler ' + uuidv4(),
+							points: rulerPoints.flatMap((point) => [point.point.x, point.point.y]),
 							fill: $brush.color || 'blue',
 							stroke: $brush.stroke || 'black',
-							strokeWidth: $brush.strokeWidth || 0,
+							strokeWidth: $brush.strokeWidth || 2,
 							opacity: 0.2,
 							closed: true
 						});
-						uiLayer.add(previewZone);
-						drawPreviewShape = previewZone;
-						circles.forEach((circle) => {
-							circle.moveToTop();
+						if (rulerPoints[1]) {
+							const textPos = midpoint(
+								[rulerPoints[0].point.x, rulerPoints[0].point.y],
+								[rulerPoints[1].point.x, rulerPoints[1].point.y]
+							);
+							rulerText = new Konva.Text({
+								name: 'ruler ' + uuidv4(),
+								x: textPos[0],
+								y: textPos[1],
+								text:
+									(
+										distanceBetweenPoints(
+											{ x: rulerPoints[0].point.x, y: rulerPoints[0].point.y },
+											{ x: rulerPoints[1].point.x, y: rulerPoints[1].point.y }
+										) /
+										grid.squaresPerMeter /
+										grid.squareSize
+									).toFixed(2) + 'm',
+								fill: 'white',
+								stroke: 'black',
+								strokeWidth: 0.5,
+								fontSize: 24,
+								fontFamily: 'Poppins',
+								align: 'center'
+							});
+							rulerText.setPosition({
+								x: textPos[0] - rulerText.width() / 2,
+								y: textPos[1] - rulerText.height() / 2
+							});
+							uiLayer.add(rulerText);
+						}
+						uiLayer.add(rulerLine);
+						rulerLine.moveToTop();
+						rulerText?.moveToTop();
+						rulerPoints.forEach((circle) => {
+							circle.ref.moveToTop();
 						});
 						uiLayer.draw();
 					}
@@ -543,26 +911,28 @@
 		}
 		g.moveToTop();
 		// Calculate the new position based on the grid size
-		let newX = $brush.snapCoefficient == 0 ? 
-		g.x() + g.offsetX()
-		:
-			Math.round(
-				(g.x() +
-					(g.offsetX() - $brush.snapCoefficient / 2 * grid.squareSize * grid.squaresPerMeter) +
-					grid.squareSize * grid.squaresPerMeter * $brush.snapCoefficient / 2) /
-					(grid.squareSize * $brush.snapCoefficient / 2 * grid.squaresPerMeter)
-			) *
-			(grid.squareSize * $brush.snapCoefficient / 2 * grid.squaresPerMeter);
-		let newY = $brush.snapCoefficient == 0 ? 
-		g.y() + g.offsetY()
-		:
-			Math.round(
-				(g.y() +
-					(g.offsetY() - $brush.snapCoefficient / 2 * grid.squareSize * grid.squaresPerMeter) +
-					grid.squareSize * grid.squaresPerMeter * $brush.snapCoefficient / 2) /
-					(grid.squareSize * $brush.snapCoefficient / 2 * grid.squaresPerMeter)
-			) *
-			(grid.squareSize * $brush.snapCoefficient / 2 * grid.squaresPerMeter);
+		let newX =
+			$brush.snapCoefficient == 0
+				? g.x() + g.offsetX()
+				: Math.round(
+						(g.x() +
+							(g.offsetX() -
+								($brush.snapCoefficient / 2) * grid.squareSize * grid.squaresPerMeter) +
+							(grid.squareSize * grid.squaresPerMeter * $brush.snapCoefficient) / 2) /
+							(((grid.squareSize * $brush.snapCoefficient) / 2) * grid.squaresPerMeter)
+					) *
+					(((grid.squareSize * $brush.snapCoefficient) / 2) * grid.squaresPerMeter);
+		let newY =
+			$brush.snapCoefficient == 0
+				? g.y() + g.offsetY()
+				: Math.round(
+						(g.y() +
+							(g.offsetY() -
+								($brush.snapCoefficient / 2) * grid.squareSize * grid.squaresPerMeter) +
+							(grid.squareSize * grid.squaresPerMeter * $brush.snapCoefficient) / 2) /
+							(((grid.squareSize * $brush.snapCoefficient) / 2) * grid.squaresPerMeter)
+					) *
+					(((grid.squareSize * $brush.snapCoefficient) / 2) * grid.squaresPerMeter);
 		let objects = getMovablePolygons(objectLayer);
 		objects.push(...getCollisionPolygons(objectLayer));
 		objects = objects.filter((i) => i !== undefined);
@@ -971,34 +1341,37 @@
 
 	import themes from '$lib/themes.json';
 	import { sequence } from '@sveltejs/kit/hooks';
+	import { distanceBetweenPoints } from 'chart.js/helpers';
+
+	console.log(canvas.width / 4);
 </script>
 
 {#if typeof window !== 'undefined'}
 	<Stage
 		bind:handle={stage}
 		config={{
-			width: 800,
-			height: 800,
+			width: canvas.width,
+			height: canvas.height,
 			draggable: true,
 			scaleX: $stageData?.scale ? $stageData.scale : 1,
 			scaleY: $stageData?.scale ? $stageData.scale : 1,
-			x: $stageData?.x ? $stageData.x : 0,
+			x: $stageData?.x ? $stageData.x : Math.round(canvas.width / 4),
 			y: $stageData?.y ? $stageData.y : 0,
 			dragBoundFunc: function (pos) {
 				let scale = stage.scaleX(); // assuming stage is scaled uniformly in x and y directions
-				let newX = Math.min(pos.x, grid.borderThickness * grid.squareSize * scale);
-				let newY = Math.min(pos.y, grid.borderThickness * grid.squareSize * scale);
+				let newX = Math.min(pos.x, grid.borderThicknessX * grid.squareSize * scale);
+				let newY = Math.min(pos.y, grid.borderThicknessY * grid.squareSize * scale);
 				newX = Math.max(
 					newX,
 					-grid.width * grid.squareSize * scale +
 						stage.width() -
-						grid.borderThickness * grid.squareSize * scale
+						grid.borderThicknessX * grid.squareSize * scale
 				);
 				newY = Math.max(
 					newY,
 					-grid.height * grid.squareSize * scale +
 						stage.height() -
-						grid.borderThickness * grid.squareSize * scale
+						grid.borderThicknessY * grid.squareSize * scale
 				);
 				stageData.set({
 					...$stageData,
@@ -1068,8 +1441,8 @@
 			<!--BORDERS-->
 			<Group
 				config={{
-					x: -grid.borderThickness * grid.squareSize,
-					y: -grid.borderThickness * grid.squareSize,
+					x: -grid.borderThicknessX * grid.squareSize,
+					y: -grid.borderThicknessY * grid.squareSize,
 					name: 'wall top'
 				}}
 			>
@@ -1078,14 +1451,14 @@
 						points: objectArrayToPoints(
 							{ x: 0, y: 0 },
 							{
-								x: 2 * grid.borderThickness * grid.squareSize + grid.width * grid.squareSize,
+								x: 2 * grid.borderThicknessX * grid.squareSize + grid.width * grid.squareSize,
 								y: 0
 							},
 							{
-								x: 2 * grid.borderThickness * grid.squareSize + grid.width * grid.squareSize,
-								y: grid.borderThickness * grid.squareSize
+								x: 2 * grid.borderThicknessX * grid.squareSize + grid.width * grid.squareSize,
+								y: grid.borderThicknessY * grid.squareSize
 							},
-							{ x: 0, y: grid.borderThickness * grid.squareSize }
+							{ x: 0, y: grid.borderThicknessY * grid.squareSize }
 						),
 						closed: true,
 						x: 0,
@@ -1096,7 +1469,7 @@
 			</Group>
 			<Group
 				config={{
-					x: -grid.borderThickness * grid.squareSize,
+					x: -grid.borderThicknessX * grid.squareSize,
 					y: grid.height * grid.squareSize,
 					name: 'wall bottom'
 				}}
@@ -1106,14 +1479,14 @@
 						points: objectArrayToPoints(
 							{ x: 0, y: 0 },
 							{
-								x: 2 * grid.borderThickness * grid.squareSize + grid.width * grid.squareSize,
+								x: 2 * grid.borderThicknessX * grid.squareSize + grid.width * grid.squareSize,
 								y: 0
 							},
 							{
-								x: 2 * grid.borderThickness * grid.squareSize + grid.width * grid.squareSize,
-								y: grid.borderThickness * grid.squareSize
+								x: 2 * grid.borderThicknessX * grid.squareSize + grid.width * grid.squareSize,
+								y: grid.borderThicknessY * grid.squareSize
 							},
-							{ x: 0, y: grid.borderThickness * grid.squareSize }
+							{ x: 0, y: grid.borderThicknessY * grid.squareSize }
 						),
 						closed: true,
 						x: 0,
@@ -1124,8 +1497,8 @@
 			</Group>
 			<Group
 				config={{
-					x: -grid.borderThickness * grid.squareSize,
-					y: -grid.borderThickness * grid.squareSize,
+					x: -grid.borderThicknessX * grid.squareSize,
+					y: -grid.borderThicknessY * grid.squareSize,
 					name: 'wall left'
 				}}
 			>
@@ -1133,14 +1506,14 @@
 					config={{
 						points: objectArrayToPoints(
 							{ x: 0, y: 0 },
-							{ x: grid.borderThickness * grid.squareSize, y: 0 },
+							{ x: grid.borderThicknessX * grid.squareSize, y: 0 },
 							{
-								x: grid.borderThickness * grid.squareSize,
-								y: grid.height * grid.squareSize + 2 * grid.borderThickness * grid.squareSize
+								x: grid.borderThicknessX * grid.squareSize,
+								y: grid.height * grid.squareSize + 2 * grid.borderThicknessY * grid.squareSize
 							},
 							{
 								x: 0,
-								y: grid.height * grid.squareSize + 2 * grid.borderThickness * grid.squareSize
+								y: grid.height * grid.squareSize + 2 * grid.borderThicknessY * grid.squareSize
 							}
 						),
 						closed: true,
@@ -1153,7 +1526,7 @@
 			<Group
 				config={{
 					x: grid.width * grid.squareSize,
-					y: -grid.borderThickness * grid.squareSize,
+					y: -grid.borderThicknessY * grid.squareSize,
 					name: 'wall right'
 				}}
 			>
@@ -1161,14 +1534,14 @@
 					config={{
 						points: objectArrayToPoints(
 							{ x: 0, y: 0 },
-							{ x: grid.borderThickness * grid.squareSize, y: 0 },
+							{ x: grid.borderThicknessX * grid.squareSize, y: 0 },
 							{
-								x: grid.borderThickness * grid.squareSize,
-								y: grid.height * grid.squareSize + 2 * grid.borderThickness * grid.squareSize
+								x: grid.borderThicknessX * grid.squareSize,
+								y: grid.height * grid.squareSize + 2 * grid.borderThicknessY * grid.squareSize
 							},
 							{
 								x: 0,
-								y: grid.height * grid.squareSize + 2 * grid.borderThickness * grid.squareSize
+								y: grid.height * grid.squareSize + 2 * grid.borderThicknessY * grid.squareSize
 							}
 						),
 						closed: true,
