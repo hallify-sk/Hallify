@@ -2,7 +2,6 @@
 	export let data;
 	import Brushes from '$lib/Brushes.svelte';
 	import Stage from '$lib/Stage.svelte';
-	import TableList from '$lib/TableList.svelte';
 	import Toolbar from '$lib/Toolbar.svelte';
 	let width = 36;
 	let height = 46;
@@ -18,6 +17,8 @@
 	import { brush, modifyZones, rerender } from '$lib/stores/stage';
 	import StageOop from '$lib/StageOOP.svelte';
 	import { onMount, tick } from 'svelte';
+	import StageSettings from '$lib/StageSettings.svelte';
+	import TableList from '$lib/TableList.svelte';
 
 	let downloadStage: () => Promise<string>;
 
@@ -53,12 +54,14 @@
 		{#key $rerender}
 		<Stage
 		bind:downloadStage
-		canvas={{height: canvasHeight-100, width: canvasWidth-100}}
+		canvas={{height: canvasHeight, width: canvasWidth-100}}
 		grid={{ width, height, squareSize, borderThicknessX, borderThicknessY, squaresPerMeter }}
 	/>
 {/key}
 	</div>
 </div>
+<StageSettings bind:stageWidth={width} bind:stageHeight={height} bind:square={squareSize}/>
+<TableList tables={data.tables}/>
 <Toolbar {downloadStage} bind:stageCategories={data.stageCategories} />
 <Brushes />
 

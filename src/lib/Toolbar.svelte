@@ -239,7 +239,7 @@
 <Popup bind:openPopup bind:closePopup>
 	<h2 class="text-text-700 text-xl mb-4">Uložiť rozloženie</h2>
 	<form
-		action="/editor/?/saveStage"
+		action="?/saveStage"
 		class="flex flex-col"
 		use:enhance={async ({ formData }) => {
 			console.log('sent');

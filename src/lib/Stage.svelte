@@ -437,6 +437,8 @@
 								}, 0);
 								objectLayer.batchDraw();
 								objectLayer.draw();
+								pointsHistory.push([...points]);
+								circlesHistory.push([...circles]);
 							});
 							if (points.length == 1) {
 								circle.on('mouseenter', () => {
@@ -537,6 +539,8 @@
 
 								// Add the clone to the layer
 								uiLayer.add(previewShape);
+
+								console.log(JSON.stringify(pointsHistory), JSON.stringify(circlesHistory));
 							});
 							circle.addEventListener('dragmove', () => {
 								let replacedPoint = points.find((i) => i.ref.name() == circle.name());
@@ -571,7 +575,6 @@
 								// Update the preview shape's position
 								points.push({ x: newX, y: newY, ref: circle, index: replacedPoint.index });
 								if (points.length > 1) {
-									console.log(points);
 									previewZone = new Konva.Line({
 										name: 'wallPreview' + uuidv4(),
 										//Sort by index so the points are in order
@@ -599,6 +602,9 @@
 								}, 0);
 								objectLayer.batchDraw();
 								objectLayer.draw();
+								pointsHistory.push([...points]);
+								circlesHistory.push([...circles]);
+								console.log(JSON.stringify(pointsHistory), JSON.stringify(circlesHistory));
 							});
 							if (points.length == 1) {
 								circle.on('mouseenter', () => {

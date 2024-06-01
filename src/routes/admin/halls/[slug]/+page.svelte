@@ -30,6 +30,7 @@
 				body: formData
 			});
 			if (!response.ok) {
+				console.log(response);
 				toast.error('Nastala chyba pri ukladaní zmien');
 				data.hall.config = startingData;
 			}
