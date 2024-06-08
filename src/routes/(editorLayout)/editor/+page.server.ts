@@ -1,4 +1,10 @@
 /** @type {import('./$types').PageServerLoad} */
+/**
+ * Load function for fetching data needed for the page.
+ * 
+ * @param {object} locals - The locals object containing pb.
+ * @returns {object} An object containing tables and stageCategories.
+ */
 export async function load({locals}) {
 	return {
 		tables: await locals.pb.collection("tables").getFullList(),
@@ -6,7 +12,18 @@ export async function load({locals}) {
 	};
 }
 
+/**
+ * Actions object containing the saveStage action.
+ */
 export const actions = {
+    /**
+     * Action to save the stage data.
+     * 
+     * @param {object} param0 - Object containing request and locals.
+     * @param {object} param0.request - The request object.
+     * @param {object} param0.locals - The locals object containing pb.
+     * @returns {object} Object indicating the success status.
+     */
     saveStage: async ({ request, locals }) => {
       const formData = await request.formData();
       const name = formData.get("name")?.toString();
@@ -50,4 +67,4 @@ export const actions = {
       // Process the form data and perform actions
       return { success: true };
     },
-  };
+};

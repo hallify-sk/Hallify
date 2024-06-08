@@ -1,36 +1,66 @@
 <script lang="ts">
-	export let data;
 	import Brushes from '$lib/Brushes.svelte';
 	import Stage from '$lib/Stage.svelte';
 	import TableList from '$lib/TableList.svelte';
 	import Toolbar from '$lib/Toolbar.svelte';
+	/** Object containing data passed to the component. */
+	export let data;
+
+	/** Width of the stage. */
 	let width = 36;
+
+	/** Height of the stage. */
 	let height = 46;
+
+	/** Size of each square on the stage. */
 	let squareSize = 30;
+
+	/** Snap size for grid snapping. */
 	let snapSize = 1;
+
+	/** Thickness of the stage border. */
 	let borderThickness = 10;
+
+	/** Number of squares per meter on the stage. */
 	let squaresPerMeter = 2;
+
+	/** Default color for the stage. */
 	let color = '#fff';
+
+	/** Tables data obtained from the data object. */
 	let tablesDB = data.tables as any;
+
+	/**
+	 * Theme setting for the component.
+	 * @type {import("$lib/stores/theme.js").Theme}
+	 */
 	import { theme } from '$lib/stores/theme.js';
 
+	/** Set the theme to light. */
 	theme.set('light');
 
+	/** Stores for managing brush, zone modification, and rerendering. */
 	import { brush, modifyZones, rerender } from '$lib/stores/stage';
-	import StageOop from '$lib/StageOOP.svelte';
 
+	/** Function to download the stage. */
 	let downloadStage: () => Promise<string>;
 
+	/** Flag indicating whether zone editing is active. */
 	let zoneEditing: boolean = false;
+
+	/** Update zone modification status based on zoneEditing flag. */
 	$: if (zoneEditing) {
 		modifyZones.set(zoneEditing);
 	} else {
 		modifyZones.set(zoneEditing);
 	}
+
+	/** Set the brush type and snap coefficient. */
 	brush.set({ type: 'grab', snapCoefficient: 1 });
 
-	for (let i = 0; i < 8+1; i++) {
-		//+1 because we want it to return to original position;
+	/** Calculate positions for stage elements. */
+	for (let i = 0; i < 8 + 1; i++) {
+		//+1 because we want it to return to the original position;
 		const alphaRad = ((2 * Math.PI) / 8) * i;
 		const a = Math.sqrt(2 - 2 * Math.cos(alphaRad)) * 30;
 		const height = (a / 30) * Math.sqrt(Math.pow(30, 2) - Math.pow(a, 2) / 4);
