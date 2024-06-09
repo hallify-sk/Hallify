@@ -20,14 +20,14 @@ export const actions: import("./$types").Actions = {
 			throw error(404, { message: "Not found" });
 		}
 		let newData;
-		var object: { [key: string]: string } = {};
+		const object: { [key: string]: string } = {};
 		data.forEach(function (value, key) {
 			if (key == "hallName" || key == "disabled") return;
 			object[key] = value.toString();
 		});
 		console.log(object);
 		try {
-			var json = JSON.stringify(object);
+			let json = JSON.stringify(object);
 			//If toggleModule is updated, only update toggleModule
 			console.log(data.get("toggleModule"));
 			if (!data.get("toggleModule")) {

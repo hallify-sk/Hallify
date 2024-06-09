@@ -270,7 +270,7 @@
 				<tr>
 					<th class="flex items-center px-8 whitespace-nowrap h-[3rem] mt-1">
 						<Checkbox
-							disabled={!Boolean(reservations?.length) || (!Boolean(suggestions?.length) && Boolean(query))}
+							disabled={!reservations?.length || (!suggestions?.length && Boolean(query))}
 							bind:checked={selectAll}
 							onCheck={handleMassCheckboxUpdate}
 							name="select-all"

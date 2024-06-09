@@ -195,12 +195,10 @@ export async function load({ locals, params }) {
 			return { id: i.id, name: i.name };
 		}),
 		templates: (
-			await (locals.pb as PocketBase)
-				.collection("stage_templates")
-				.getList(0, 3, {
-					filter: `categories.id?="${reservation.category}"&&chairCount>=${reservation.guestCount}`,
-					expand: "tags,categories"
-				})
+			await (locals.pb as PocketBase).collection("stage_templates").getList(0, 3, {
+				filter: `categories.id?="${reservation.category}"&&chairCount>=${reservation.guestCount}`,
+				expand: "tags,categories"
+			})
 		).items
 	};
 }
