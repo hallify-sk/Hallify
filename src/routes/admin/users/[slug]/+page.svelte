@@ -2,7 +2,6 @@
 	import AdminNav from "$lib/AdminNav.svelte";
 	import { goto } from "$app/navigation";
 	import { enhance, applyAction } from "$app/forms";
-	import type { RecordModel } from "pocketbase";
 
 	export let data;
 
@@ -54,7 +53,6 @@
 				<p class="text-red-500 col-span-1 lg:col-span-2">{error}</p>
 			{/if}
 			<fieldset class="relative text-input">
-				<!-- svelte-ignore missing-declaration -->
 				<input
 					on:change={() => (nameError = false)}
 					placeholder=""
@@ -76,7 +74,6 @@
 				>
 			</fieldset>
 			<fieldset class="relative text-input">
-				<!-- svelte-ignore missing-declaration -->
 				<input
 					on:change={() => (nameError = false)}
 					placeholder=""
