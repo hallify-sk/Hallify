@@ -1,10 +1,10 @@
 <script lang="ts">
 	// Import necessary modules and components
-	import { onDestroy } from 'svelte';
-	import { brush, selectedName, tableList, rerender, stageData } from './stores/stage';
-	import { applyAction, enhance } from '$app/forms';
-	import { countTotalChairs, dataURItoBlob } from './editor/lib';
-	import Popup from './Popup.svelte';
+	import { onDestroy } from "svelte";
+	import { brush, selectedName, tableList, rerender, stageData } from "./stores/stage";
+	import { applyAction, enhance } from "$app/forms";
+	import { countTotalChairs, dataURItoBlob } from "./editor/lib";
+	import Popup from "./Popup.svelte";
 
 	// Exported functions and variables
 	export let downloadStage: () => Promise<string>;
@@ -75,9 +75,7 @@
 	}
 </script>
 
-<div
-	class="fixed top-0 left-0 pl-12 w-screen h-12 bg-background-100 flex items-center border-background-200 border-b"
->
+<div class="fixed top-0 left-0 pl-12 w-screen h-12 bg-background-100 flex items-center border-background-200 border-b">
 	<svg
 		xmlns="http://www.w3.org/2000/svg"
 		class="icon icon-tabler icon-tabler-magnet stroke-primary-400 w-7 h-7 mx-2"
@@ -88,9 +86,7 @@
 		stroke-linejoin="round"
 	>
 		<path stroke="none" d="M0 0h24v24H0z" fill="none" />
-		<path
-			d="M4 13v-8a2 2 0 0 1 2 -2h1a2 2 0 0 1 2 2v8a2 2 0 0 0 6 0v-8a2 2 0 0 1 2 -2h1a2 2 0 0 1 2 2v8a8 8 0 0 1 -16 0"
-		/>
+		<path d="M4 13v-8a2 2 0 0 1 2 -2h1a2 2 0 0 1 2 2v8a2 2 0 0 0 6 0v-8a2 2 0 0 1 2 -2h1a2 2 0 0 1 2 2v8a8 8 0 0 1 -16 0" />
 		<path d="M4 8l5 0" />
 		<path d="M15 8l4 0" />
 	</svg>
@@ -113,7 +109,7 @@
 		type="number"
 		class="w-10 appearance-none bg-background-200 text-text-700 rounded-md py-0.5 text-center"
 		on:keydown={(e) => {
-			if (e.code == 'Enter') {
+			if (e.code == "Enter") {
 				e.preventDefault();
 				$brush.snapCoefficient = Math.max(Math.min($brush.snapCoefficient, 1), 0.25) ?? 0;
 				e.currentTarget.blur();
@@ -122,7 +118,7 @@
 		bind:value={$brush.snapCoefficient}
 	/>
 	<span class="border-r border-primary-200 mx-3 block w-1 h-10"></span>
-	{#if $selectedName && $brush.type == 'grab'}
+	{#if $selectedName && $brush.type == "grab"}
 		<svg
 			xmlns="http://www.w3.org/2000/svg"
 			class="icon icon-tabler icon-tabler-armchair w-7 h-7 stroke-primary-400 mr-2"
@@ -134,9 +130,7 @@
 			stroke-linejoin="round"
 		>
 			<path stroke="none" d="M0 0h24v24H0z" fill="none" />
-			<path
-				d="M5 11a2 2 0 0 1 2 2v2h10v-2a2 2 0 1 1 4 0v4a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-4a2 2 0 0 1 2 -2z"
-			/>
+			<path d="M5 11a2 2 0 0 1 2 2v2h10v-2a2 2 0 1 1 4 0v4a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-4a2 2 0 0 1 2 -2z" />
 			<path d="M5 11v-5a3 3 0 0 1 3 -3h8a3 3 0 0 1 3 3v5" />
 			<path d="M6 19v2" />
 			<path d="M18 19v2" />
@@ -162,7 +156,7 @@
 			class="w-10 appearance-none bg-background-200 text-text-700 text-center rounded-md py-0.5"
 			on:blur={recountChairs}
 			on:keydown={(e) => {
-				if (e.code == 'Enter') {
+				if (e.code == "Enter") {
 					e.preventDefault();
 					recountChairs();
 					e.currentTarget.blur();
@@ -188,7 +182,7 @@
 				class="w-10 appearance-none bg-background-200 text-text-700 text-center rounded-md py-0.5"
 				on:blur={recountChairs}
 				on:keydown={(e) => {
-					if (e.code == 'Enter') {
+					if (e.code == "Enter") {
 						e.preventDefault();
 						recountChairs();
 						e.currentTarget.blur();
@@ -198,7 +192,7 @@
 			/>
 		{/if}
 	{/if}
-	{#if $brush.type == 'zone'}
+	{#if $brush.type == "zone"}
 		<p class="text-primary-400 pointer-events-none mr-2 font-semibold mb-0.5">výplň:</p>
 		<input type="color" class="mr-4" bind:value={$brush.color} />
 		<p class="text-primary-400 pointer-events-none mr-2 font-semibold mb-0.5">okraj:</p>
@@ -212,11 +206,7 @@
 		/>
 	{/if}
 
-	<button
-		on:click={openPopup}
-		type="submit"
-		class="ml-auto mr-2 px-4 py-1 rounded-md flex flex-row gap-2 hover:bg-background-200"
-	>
+	<button on:click={openPopup} type="submit" class="ml-auto mr-2 px-4 py-1 rounded-md flex flex-row gap-2 hover:bg-background-200">
 		<svg
 			xmlns="http://www.w3.org/2000/svg"
 			class="icon icon-tabler icon-tabler-device-floppy stroke-primary-400 ml-auto w-7 h-7"
@@ -242,13 +232,13 @@
 		action="?/saveStage"
 		class="flex flex-col"
 		use:enhance={async ({ formData }) => {
-			console.log('sent');
-			formData.set('stage', JSON.stringify($stageData));
-			formData.set('tables', JSON.stringify($tableList));
-			formData.set('chairCount', `${countTotalChairs($tableList)}`);
-			formData.set('image', dataURItoBlob(await downloadStage()));
+			console.log("sent");
+			formData.set("stage", JSON.stringify($stageData));
+			formData.set("tables", JSON.stringify($tableList));
+			formData.set("chairCount", `${countTotalChairs($tableList)}`);
+			formData.set("image", dataURItoBlob(await downloadStage()));
 			return async ({ result }) => {
-				if (result.type == 'success') {
+				if (result.type == "success") {
 					closePopup();
 				}
 				await applyAction(result);
@@ -283,51 +273,44 @@
 			{/each}
 		</fieldset>
 		<div class="ml-auto">
-			<button
-				type="reset"
-				on:click={closePopup}
-				class="px-4 py-2 bg-background-100 hover:bg-background-200 rounded-md text-text-900 mt-3"
+			<button type="reset" on:click={closePopup} class="px-4 py-2 bg-background-100 hover:bg-background-200 rounded-md text-text-900 mt-3"
 				>Zrušiť</button
 			>
-			<button
-				type="submit"
-				class="px-4 py-2 bg-background-700 hover:bg-primary-600 rounded-md text-text-50 mt-3"
-				>Uložiť</button
-			>
+			<button type="submit" class="px-4 py-2 bg-background-700 hover:bg-primary-600 rounded-md text-text-50 mt-3">Uložiť</button>
 		</div>
 	</form>
 </Popup>
 
 <style lang="postcss">
-	input[type='range']::-webkit-slider-runnable-track {
+	input[type="range"]::-webkit-slider-runnable-track {
 		@apply bg-primary-300 block h-1 rounded-full;
 	}
-	input[type='range']::-moz-range-track {
+	input[type="range"]::-moz-range-track {
 		@apply bg-primary-300 block h-1 rounded-full;
 	}
-	input[type='range']::-webkit-slider-thumb {
+	input[type="range"]::-webkit-slider-thumb {
 		@apply appearance-none h-3 w-3 bg-primary-500 rounded-full border-none;
 		margin-top: calc((0.25rem / 2) - (0.75rem / 2));
 	}
-	input[type='range']::-moz-range-thumb {
+	input[type="range"]::-moz-range-thumb {
 		@apply appearance-none h-3 w-3 bg-primary-500 rounded-full border-none;
 	}
-	input[type='number'] {
+	input[type="number"] {
 		-moz-appearance: textfield;
 		appearance: textfield;
 		@apply m-0;
 	}
-	input[type='number']::-webkit-inner-spin-button,
-	input[type='number']::-webkit-outer-spin-button {
+	input[type="number"]::-webkit-inner-spin-button,
+	input[type="number"]::-webkit-outer-spin-button {
 		@apply appearance-none m-0;
 	}
-	input[type='color'] {
+	input[type="color"] {
 		@apply appearance-none w-10 h-8 bg-transparent border-none cursor-pointer;
 	}
-	input[type='color']::-webkit-color-swatch {
+	input[type="color"]::-webkit-color-swatch {
 		@apply rounded-md border-none;
 	}
-	input[type='color']::-moz-color-swatch {
+	input[type="color"]::-moz-color-swatch {
 		@apply rounded-md border-none;
 	}
 </style>

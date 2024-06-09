@@ -1,27 +1,16 @@
 <script lang="ts">
-	import Checkbox from '$lib/Checkbox.svelte';
-	import Select from '$lib/Select.svelte';
-	import Navbar from '$lib/Navbar.svelte';
-	import { getMinutesToDate } from '$lib/lib.js';
-	import { goto } from '$app/navigation';
-	import { enhance, applyAction } from '$app/forms';
+	import Navbar from "$lib/Navbar.svelte";
+	import ImagePreview from "$lib/ImagePreview.svelte";
+	import type { RecordModel } from "pocketbase";
 
-	import ImagePreview from '$lib/ImagePreview.svelte';
-	import type { RecordModel } from 'pocketbase';
+	export let data: any;
 
-	export let data;
-	console.log(data);
-
-	let nameError: boolean = false;
-	let categoryError: boolean = false;
-	let dateError: boolean = false;
-	let guestError: boolean = false;
-
-	let openImagePreview: boolean = false;
-	let imageSrc: string = '';
-	let imageAlt: string = '';
-	let reservationData: RecordModel;
-
+	/**
+	 * Handles opening an image preview and storing reservation data.
+	 * @param src The image source
+	 * @param alt The alternative text for the image
+	 * @param template The reservation template data
+	 */
 	function openImage(src: string, alt: string, template: RecordModel) {
 		imageSrc = src;
 		imageAlt = alt;
@@ -29,6 +18,11 @@
 		console.log(template);
 		reservationData = template;
 	}
+
+	let openImagePreview: boolean = false;
+	let imageSrc: string = "";
+	let imageAlt: string = "";
+	let reservationData: RecordModel;
 </script>
 
 <Navbar user={data.user} />
@@ -37,32 +31,24 @@
 		<button
 			type="button"
 			on:click={() => {
-				openImage(
-					`${data.apiUrl}/files/${template.collectionId}/${template.id}/${template.image}`,
-					template.id,
-					template
-				);
+				openImage(`${data.apiUrl}/files/${template.collectionId}/${template.id}/${template.image}`, template.id, template);
 			}}
 			class="mt-1 flex flex-row items-center gap-2 hover:brightness-90"
 		>
-			<img
-				src="{data.apiUrl}/files/{template.collectionId}/{template.id}/{template.image}"
-				alt="Stage template"
-			/>
+			<img src="{data.apiUrl}/files/{template.collectionId}/{template.id}/{template.image}" alt="Stage template" />
 		</button>
 	{/each}
 </div>
-
 <ImagePreview bind:isOpen={openImagePreview} bind:imageSrc bind:imageAlt bind:reservationData />
 
 <style lang="postcss">
-	input[type='number'] {
+	input[type="number"] {
 		-moz-appearance: textfield;
 		appearance: textfield;
 		@apply m-0;
 	}
-	input[type='number']::-webkit-inner-spin-button,
-	input[type='number']::-webkit-outer-spin-button {
+	input[type="number"]::-webkit-inner-spin-button,
+	input[type="number"]::-webkit-outer-spin-button {
 		@apply appearance-none m-0;
 	}
 </style>

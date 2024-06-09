@@ -1,12 +1,12 @@
 <script lang="ts">
-	import { applyAction, enhance } from '$app/forms';
-	import { PUBLIC_TURNSTILE_TOKEN } from '$env/static/public';
-	import type { AuthModel } from 'pocketbase';
-	import Popup from './Popup.svelte';
-	import { createAvatar } from '@dicebear/core';
-	import { initials } from '@dicebear/collection';
-	import { Turnstile } from 'svelte-turnstile';
-	import { invalidateAll } from '$app/navigation';
+	import { applyAction, enhance } from "$app/forms";
+	import { PUBLIC_TURNSTILE_TOKEN } from "$env/static/public";
+	import type { AuthModel } from "pocketbase";
+	import Popup from "./Popup.svelte";
+	import { createAvatar } from "@dicebear/core";
+	import { initials } from "@dicebear/collection";
+	import { Turnstile } from "svelte-turnstile";
+	import { invalidateAll } from "$app/navigation";
 	export let openLoginPopup: () => void = () => {};
 	let loadingLogin: boolean = false;
 	export let closeLoginPopup: () => void = () => {};
@@ -18,15 +18,15 @@
 	//Validation variables
 	let emailLoginError: boolean = false;
 	let passwordLoginError: boolean = false;
-	let errorLoginMessage: string = '';
+	let errorLoginMessage: string = "";
 
 	let emailRegisterError: boolean = false;
 	let passwordRegisterError: boolean = false;
 	let nameRegisterError: boolean = false;
-	let errorRegisterMessage: string = '';
+	let errorRegisterMessage: string = "";
 
 	function turnstileLoginError(e: any) {
-		errorLoginMessage = 'Skúste obnoviť stránku (zlyhala CAPTCHA)';
+		errorLoginMessage = "Skúste obnoviť stránku (zlyhala CAPTCHA)";
 		console.log(e);
 	}
 
@@ -41,19 +41,14 @@
 	export let onAuth: () => void = () => {};
 </script>
 
-<header
-	class="w-60 md:w-80 h-screen bg-background-100 border-r border-background-200 fixed top-0 left-0 z-50"
->
+<header class="w-60 md:w-80 h-screen bg-background-100 border-r border-background-200 fixed top-0 left-0 z-50">
 	<div class="px-4 gap-1 flex flex-col justify-between h-full">
 		<div class="flex flex-col gap-2 pb-2 border-b border-b-background-200 h-full">
 			<a href="/" class="flex items-center gap-4 py-2 mb-10">
 				<img src="https://via.placeholder.com/150" alt="logo" class="h-10 w-10" />
 				<p class="text-lg font-semibold text-text-600">Reduta</p>
 			</a>
-			<a
-				class="flex py-3 px-2 rounded-md text-text-500 hover:text-text-700 hover:bg-background-200 gap-4"
-				href="/"
-			>
+			<a class="flex py-3 px-2 rounded-md text-text-500 hover:text-text-700 hover:bg-background-200 gap-4" href="/">
 				<svg
 					xmlns="http://www.w3.org/2000/svg"
 					width="24"
@@ -67,16 +62,13 @@
 					class="icon icon-tabler icons-tabler-outline icon-tabler-calendar-time"
 					><path stroke="none" d="M0 0h24v24H0z" fill="none" /><path
 						d="M11.795 21h-6.795a2 2 0 0 1 -2 -2v-12a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v4"
-					/><path d="M18 18m-4 0a4 4 0 1 0 8 0a4 4 0 1 0 -8 0" /><path d="M15 3v4" /><path
-						d="M7 3v4"
-					/><path d="M3 11h16" /><path d="M18 16.496v1.504l1 1" /></svg
+					/><path d="M18 18m-4 0a4 4 0 1 0 8 0a4 4 0 1 0 -8 0" /><path d="M15 3v4" /><path d="M7 3v4" /><path d="M3 11h16" /><path
+						d="M18 16.496v1.504l1 1"
+					/></svg
 				>
 				Moje podujatia
 			</a>
-			<a
-				class="flex py-3 px-2 rounded-md text-text-500 hover:text-text-700 hover:bg-background-200 gap-4"
-				href="/"
-			>
+			<a class="flex py-3 px-2 rounded-md text-text-500 hover:text-text-700 hover:bg-background-200 gap-4" href="/">
 				<svg
 					xmlns="http://www.w3.org/2000/svg"
 					width="24"
@@ -88,16 +80,13 @@
 					stroke-linecap="round"
 					stroke-linejoin="round"
 					class="icon icon-tabler icons-tabler-outline icon-tabler-info-circle"
-					><path stroke="none" d="M0 0h24v24H0z" fill="none" /><path
-						d="M3 12a9 9 0 1 0 18 0a9 9 0 0 0 -18 0"
-					/><path d="M12 9h.01" /><path d="M11 12h1v4h1" /></svg
+					><path stroke="none" d="M0 0h24v24H0z" fill="none" /><path d="M3 12a9 9 0 1 0 18 0a9 9 0 0 0 -18 0" /><path d="M12 9h.01" /><path
+						d="M11 12h1v4h1"
+					/></svg
 				>
 				Služby
 			</a>
-			<a
-				class="flex py-3 px-2 rounded-md text-text-500 hover:text-text-700 hover:bg-background-200 gap-4"
-				href="/"
-			>
+			<a class="flex py-3 px-2 rounded-md text-text-500 hover:text-text-700 hover:bg-background-200 gap-4" href="/">
 				<svg
 					xmlns="http://www.w3.org/2000/svg"
 					width="24"
@@ -109,9 +98,7 @@
 					stroke-linecap="round"
 					stroke-linejoin="round"
 					class="icon icon-tabler icons-tabler-outline icon-tabler-message"
-					><path stroke="none" d="M0 0h24v24H0z" fill="none" /><path d="M8 9h8" /><path
-						d="M8 13h6"
-					/><path
+					><path stroke="none" d="M0 0h24v24H0z" fill="none" /><path d="M8 9h8" /><path d="M8 13h6" /><path
 						d="M18 4a3 3 0 0 1 3 3v8a3 3 0 0 1 -3 3h-5l-5 3v-3h-2a3 3 0 0 1 -3 -3v-8a3 3 0 0 1 3 -3h12z"
 					/></svg
 				>
@@ -122,18 +109,11 @@
 			{#if user}
 				<div class="pl-1 pr-4 py-1 rounded-md text-text-700 flex flex-row gap-3 items-center">
 					{#if profilePic}
-						<img
-							class="rounded-full overflow-hidden w-8"
-							src={profilePic}
-							alt="Profilový obrázok"
-						/>
+						<img class="rounded-full overflow-hidden w-8" src={profilePic} alt="Profilový obrázok" />
 					{/if}
 					<p>{user?.name}</p>
 				</div>
-				<a
-					class="flex py-3 px-2 rounded-md text-text-500 hover:text-text-700 hover:bg-background-200 gap-4"
-					href="/"
-				>
+				<a class="flex py-3 px-2 rounded-md text-text-500 hover:text-text-700 hover:bg-background-200 gap-4" href="/">
 					<svg
 						xmlns="http://www.w3.org/2000/svg"
 						width="24"
@@ -157,17 +137,14 @@
 					class="flex w-full"
 					use:enhance={async () => {
 						return async ({ result }) => {
-							if (result.type == 'success') {
+							if (result.type == "success") {
 								invalidateAll();
 							}
 							applyAction(result);
 						};
 					}}
 				>
-					<button
-						type="submit"
-						class="flex py-3 px-2 rounded-md text-text-100 gap-4 w-full bg-primary-700 hover:bg-primary-600"
-					>
+					<button type="submit" class="flex py-3 px-2 rounded-md text-text-100 gap-4 w-full bg-primary-700 hover:bg-primary-600">
 						<svg
 							xmlns="http://www.w3.org/2000/svg"
 							width="24"
@@ -303,24 +280,24 @@
 					loadingLogin = false;
 					emailLoginError = false;
 					passwordLoginError = false;
-					if (result.type == 'failure') {
+					if (result.type == "failure") {
 						switch (result.data?.type) {
-							case 'email':
+							case "email":
 								emailLoginError = true;
 								break;
-							case 'password':
+							case "password":
 								passwordLoginError = true;
 								break;
-							case 'auth':
+							case "auth":
 								{
 									emailLoginError = true;
 									passwordLoginError = true;
 								}
 								break;
 						}
-						errorLoginMessage = typeof result.data?.message == 'string' ? result.data.message : '';
+						errorLoginMessage = typeof result.data?.message == "string" ? result.data.message : "";
 					}
-					if (result.type == 'success') {
+					if (result.type == "success") {
 						closeLoginPopup();
 						onAuth?.();
 						await invalidateAll();
@@ -329,13 +306,8 @@
 				};
 			}}
 		>
-		
 			<p class="text-red-500 mb-2 max-w-xs">{errorLoginMessage}</p>
-			<Turnstile
-				on:turnstile-error={turnstileLoginError}
-				siteKey={PUBLIC_TURNSTILE_TOKEN}
-				appearance="execute"
-			/>
+			<Turnstile on:turnstile-error={turnstileLoginError} siteKey={PUBLIC_TURNSTILE_TOKEN} appearance="execute" />
 			<fieldset class="relative text-input">
 				<input
 					on:change={() => (emailLoginError = false)}
@@ -387,16 +359,10 @@
 				>
 			</p>
 			<div class="ml-auto mt-3 items-center flex flex-row flex-nowrap gap-2">
-				<button
-					type="reset"
-					on:click={closeLoginPopup}
-					class="px-4 py-2 bg-background-100 hover:bg-background-200 rounded-md text-text-900"
+				<button type="reset" on:click={closeLoginPopup} class="px-4 py-2 bg-background-100 hover:bg-background-200 rounded-md text-text-900"
 					>Zrušiť</button
 				>
-				<button
-					type="submit"
-					class="px-4 py-2 bg-background-700 hover:bg-primary-600 rounded-md text-text-50 w-[120px]"
-				>
+				<button type="submit" class="px-4 py-2 bg-background-700 hover:bg-primary-600 rounded-md text-text-50 w-[120px]">
 					{#if loadingLogin}
 						<svg
 							xmlns="http://www.w3.org/2000/svg"
@@ -404,10 +370,7 @@
 							stroke="currentColor"
 							fill="none"
 							stroke-linecap="round"
-							stroke-linejoin="round"
-							><path stroke="none" d="M0 0h24v24H0z" fill="none" /><path
-								d="M12 3a9 9 0 1 0 9 9"
-							/></svg
+							stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none" /><path d="M12 3a9 9 0 1 0 9 9" /></svg
 						>
 					{:else}
 						Prihlásiť sa
@@ -431,22 +394,21 @@
 					emailRegisterError = false;
 					passwordRegisterError = false;
 					nameRegisterError = false;
-					if (result.type == 'failure') {
+					if (result.type == "failure") {
 						switch (result.data?.type) {
-							case 'name':
+							case "name":
 								nameRegisterError = true;
 								break;
-							case 'email':
+							case "email":
 								emailRegisterError = true;
 								break;
-							case 'password':
+							case "password":
 								passwordRegisterError = true;
 								break;
 						}
-						errorRegisterMessage =
-							typeof result.data?.message == 'string' ? result.data.message : '';
+						errorRegisterMessage = typeof result.data?.message == "string" ? result.data.message : "";
 					}
-					if (result.type == 'success') {
+					if (result.type == "success") {
 						closeRegisterPopup();
 						onAuth?.();
 						await invalidateAll();
@@ -533,13 +495,9 @@
 					on:click={() => {
 						closeRegisterPopup();
 					}}
-					class="px-4 py-2 bg-background-100 hover:bg-background-200 rounded-md text-text-900"
-					>Zrušiť</button
+					class="px-4 py-2 bg-background-100 hover:bg-background-200 rounded-md text-text-900">Zrušiť</button
 				>
-				<button
-					type="submit"
-					class="px-4 py-2 bg-background-700 hover:bg-primary-600 rounded-md text-text-50 w-[120px]"
-				>
+				<button type="submit" class="px-4 py-2 bg-background-700 hover:bg-primary-600 rounded-md text-text-50 w-[120px]">
 					{#if loadingRegister}
 						<svg
 							xmlns="http://www.w3.org/2000/svg"
@@ -547,10 +505,7 @@
 							stroke="currentColor"
 							fill="none"
 							stroke-linecap="round"
-							stroke-linejoin="round"
-							><path stroke="none" d="M0 0h24v24H0z" fill="none" /><path
-								d="M12 3a9 9 0 1 0 9 9"
-							/></svg
+							stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none" /><path d="M12 3a9 9 0 1 0 9 9" /></svg
 						>
 					{:else}
 						Prihlásenie

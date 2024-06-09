@@ -1,12 +1,24 @@
-import type Konva from 'konva';
-import { writable, type Writable } from 'svelte/store';
+import type Konva from "konva";
+import { writable, type Writable } from "svelte/store";
 
+/**
+ * Defines a writable store for the selected name.
+ */
 export const selectedName: Writable<string | null> = writable(null);
 
+/**
+ * Defines a writable store for triggering a rerender.
+ */
 export const rerender: Writable<boolean> = writable(false);
 
+/**
+ * Defines a writable store for modifying zones.
+ */
 export const modifyZones: Writable<boolean> = writable(false);
 
+/**
+ * Defines a writable store for the list of tables.
+ */
 export const tableList: Writable<
 	{
 		name: string;
@@ -21,14 +33,20 @@ export const tableList: Writable<
 		table: {
 			width: number;
 			height: number;
-      radius: number;
-      isRound: boolean;
+			radius: number;
+			isRound: boolean;
 		};
 	}[]
 > = writable([]);
 
+/**
+ * Defines a writable store for the current tween.
+ */
 export const currentTween: Writable<Konva.Tween> = writable();
 
+/**
+ * Defines a writable store for stage data.
+ */
 export const stageData: Writable<{
 	scale: number;
 	x: number;
@@ -412,13 +430,16 @@ export const stageData: Writable<{
   "scale": 0.75,
   "x": 57.5,
   "y": -10
-}*/);
-
+}*/
+);
+/**
+ * Defines a writable store for brush properties.
+ */
 export const brush: Writable<{
 	type: string;
 	color?: string;
 	opacity?: number;
 	stroke?: string;
 	strokeWidth?: number;
-    snapCoefficient: number;
+	snapCoefficient: number;
 }> = writable();

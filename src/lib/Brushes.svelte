@@ -1,30 +1,30 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
-	import { brush } from './stores/stage';
+	import { onMount } from "svelte";
+	import { brush } from "./stores/stage";
 
 	function setBrush(brushStr: string) {
 		brush.set({ type: brushStr, snapCoefficient: $brush.snapCoefficient });
 	}
 	onMount(() => {
-		window.addEventListener('keydown', (e) => {
+		window.addEventListener("keydown", (e) => {
 			switch (e.key) {
-				case 'g':
-					setBrush('grab');
+				case "g":
+					setBrush("grab");
 					break;
-				case 'z':
-					setBrush('zone');
+				case "z":
+					setBrush("zone");
 					break;
-				case 'w':
-					setBrush('wall');
+				case "w":
+					setBrush("wall");
 					break;
-				case 'e':
-					setBrush('wallGrab');
+				case "e":
+					setBrush("wallGrab");
 					break;
-				case 'l':
-					setBrush('zoneGrab');
+				case "l":
+					setBrush("zoneGrab");
 					break;
-				case 'r':
-					setBrush('ruler');
+				case "r":
+					setBrush("ruler");
 					break;
 			}
 		});
@@ -36,10 +36,9 @@
 >
 	<button
 		on:click={() => {
-			setBrush('grab');
+			setBrush("grab");
 		}}
-		class="w-full overflow-hidden h-12 rounded-md hover:bg-background-200 flex items-center relative justify-around gap-6 {$brush.type ==
-		'grab'
+		class="w-full overflow-hidden h-12 rounded-md hover:bg-background-200 flex items-center relative justify-around gap-6 {$brush.type == 'grab'
 			? 'text-primary-600 bg-background-200'
 			: 'text-primary-400'}"
 	>
@@ -61,10 +60,9 @@
 	</button>
 	<button
 		on:click={() => {
-			setBrush('zone');
+			setBrush("zone");
 		}}
-		class="w-full overflow-hidden h-12 rounded-md hover:bg-background-200 flex items-center relative justify-around gap-6 {$brush.type ==
-		'zone'
+		class="w-full overflow-hidden h-12 rounded-md hover:bg-background-200 flex items-center relative justify-around gap-6 {$brush.type == 'zone'
 			? 'text-primary-600 bg-background-200'
 			: 'text-primary-400'}"
 	>
@@ -86,7 +84,7 @@
 	</button>
 	<button
 		on:click={() => {
-			setBrush('zoneGrab');
+			setBrush("zoneGrab");
 		}}
 		class="w-full overflow-hidden h-12 rounded-md hover:bg-background-200 flex items-center relative justify-around gap-6 {$brush.type ==
 		'zoneGrab'
@@ -125,19 +123,13 @@
 	</button>
 	<button
 		on:click={() => {
-			setBrush('wall');
+			setBrush("wall");
 		}}
-		class="w-full overflow-hidden h-12 rounded-md hover:bg-background-200 flex items-center relative justify-around gap-6 {$brush.type ==
-		'wall'
+		class="w-full overflow-hidden h-12 rounded-md hover:bg-background-200 flex items-center relative justify-around gap-6 {$brush.type == 'wall'
 			? 'text-primary-600 bg-background-200'
 			: 'text-primary-400'}"
 	>
-		<svg
-			xmlns="http://www.w3.org/2000/svg"
-			viewBox="0 0 24 24"
-			fill="currentColor"
-			class="w-6 h-6 absolute left-2"
-		>
+		<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-6 h-6 absolute left-2">
 			<path
 				d="M12.378 1.602a.75.75 0 0 0-.756 0L3 6.632l9 5.25 9-5.25-8.622-5.03ZM21.75 7.93l-9 5.25v9l8.628-5.032a.75.75 0 0 0 .372-.648V7.93ZM11.25 22.18v-9l-9-5.25v8.57a.75.75 0 0 0 .372.648l8.628 5.033Z"
 			/>
@@ -146,19 +138,14 @@
 	</button>
 	<button
 		on:click={() => {
-			setBrush('wallGrab');
+			setBrush("wallGrab");
 		}}
 		class="w-full overflow-hidden h-12 rounded-md hover:bg-background-200 flex items-center relative justify-around gap-6 {$brush.type ==
 		'wallGrab'
 			? 'text-primary-600 bg-background-200'
 			: 'text-primary-400'}"
 	>
-		<svg
-			xmlns="http://www.w3.org/2000/svg"
-			viewBox="0 0 24 24"
-			fill="currentColor"
-			class="w-6 h-6 absolute left-2"
-		>
+		<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-6 h-6 absolute left-2">
 			<path
 				d="M12.378 1.602a.75.75 0 0 0-.756 0L3 6.632l9 5.25 9-5.25-8.622-5.03ZM21.75 7.93l-9 5.25v9l8.628-5.032a.75.75 0 0 0 .372-.648V7.93ZM11.25 22.18v-9l-9-5.25v8.57a.75.75 0 0 0 .372.648l8.628 5.033Z"
 			/>
@@ -181,10 +168,9 @@
 	</button>
 	<button
 		on:click={() => {
-			setBrush('ruler');
+			setBrush("ruler");
 		}}
-		class="w-full overflow-hidden h-12 rounded-md hover:bg-background-200 flex items-center relative justify-around gap-6 {$brush.type ==
-		'ruler'
+		class="w-full overflow-hidden h-12 rounded-md hover:bg-background-200 flex items-center relative justify-around gap-6 {$brush.type == 'ruler'
 			? 'text-primary-600 bg-background-200'
 			: 'text-primary-400'}"
 	>
@@ -193,7 +179,7 @@
 			width="24"
 			height="24"
 			viewBox="0 0 24 24"
-			class="w-6 h-6 absolute left-2 "
+			class="w-6 h-6 absolute left-2"
 			fill="none"
 			stroke="currentColor"
 			stroke-width="2"
@@ -201,9 +187,7 @@
 			stroke-linejoin="round"
 			><path stroke="none" d="M0 0h24v24H0z" fill="none" /><path
 				d="M5 4h14a1 1 0 0 1 1 1v5a1 1 0 0 1 -1 1h-7a1 1 0 0 0 -1 1v7a1 1 0 0 1 -1 1h-5a1 1 0 0 1 -1 -1v-14a1 1 0 0 1 1 -1"
-			/><path d="M4 8l2 0" /><path d="M4 12l3 0" /><path d="M4 16l2 0" /><path d="M8 4l0 2" /><path
-				d="M12 4l0 3"
-			/><path d="M16 4l0 2" /></svg
+			/><path d="M4 8l2 0" /><path d="M4 12l3 0" /><path d="M4 16l2 0" /><path d="M8 4l0 2" /><path d="M12 4l0 3" /><path d="M16 4l0 2" /></svg
 		>
 		<p class="absolute left-12 w-28 overflow-hidden text-left">Ruler</p>
 	</button>

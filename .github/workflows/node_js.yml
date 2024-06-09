@@ -1,0 +1,60 @@
+name: Code style
+
+on:
+    push:
+        branches: ["main"]
+    pull_request:
+        branches: ["main"]
+
+jobs:
+    Formatting:
+        runs-on: ubuntu-latest
+
+        strategy:
+            matrix:
+                node-version: [20.x]
+                # See supported Node.js release schedule at https://nodejs.org/en/about/releases/
+
+        steps:
+            - uses: actions/checkout@v4
+            - name: Use Node.js ${{ matrix.node-version }}
+              uses: actions/setup-node@v3
+              with:
+                  node-version: ${{ matrix.node-version }}
+                  cache: "npm"
+            - run: npm ci
+            - run: npm run format:check
+    Eslint:
+        runs-on: ubuntu-latest
+
+        strategy:
+            matrix:
+                node-version: [20.x]
+                # See supported Node.js release schedule at https://nodejs.org/en/about/releases/
+
+        steps:
+            - uses: actions/checkout@v4
+            - name: Use Node.js ${{ matrix.node-version }}
+              uses: actions/setup-node@v3
+              with:
+                  node-version: ${{ matrix.node-version }}
+                  cache: "npm"
+            - run: npm ci
+            - run: npm run lint
+    SvelteKit:
+        runs-on: ubuntu-latest
+
+        strategy:
+            matrix:
+                node-version: [20.x]
+                # See supported Node.js release schedule at https://nodejs.org/en/about/releases/
+
+        steps:
+            - uses: actions/checkout@v4
+            - name: Use Node.js ${{ matrix.node-version }}
+              uses: actions/setup-node@v3
+              with:
+                  node-version: ${{ matrix.node-version }}
+                  cache: "npm"
+            - run: npm ci
+            - run: npm run check

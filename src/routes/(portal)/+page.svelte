@@ -1,18 +1,18 @@
 <script lang="ts">
-	import { enhance, applyAction } from '$app/forms';
-	import { PUBLIC_TURNSTILE_TOKEN } from '$env/static/public';
-	import { Turnstile } from 'svelte-turnstile';
-	import Calendar from '$lib/Calendar.svelte';
-	import Select from '$lib/Select.svelte';
-	import Navbar from '$lib/Navbar.svelte';
-	import Popup from '$lib/Popup.svelte';
-	import { invalidateAll } from '$app/navigation';
-	import { onMount, onDestroy } from 'svelte';
-	import Checkbox from '$lib/Checkbox.svelte';
-	import { getMinutesToDate } from '$lib/lib.js';
-	import type { Writable } from 'svelte/store';
+	import Calendar from "$lib/Calendar.svelte";
+	import Select from "$lib/Select.svelte";
+	import Navbar from "$lib/Navbar.svelte";
+	import Popup from "$lib/Popup.svelte";
+	import Checkbox from "$lib/Checkbox.svelte";
+	import { enhance, applyAction } from "$app/forms";
+	import { PUBLIC_TURNSTILE_TOKEN } from "$env/static/public";
+	import { Turnstile } from "svelte-turnstile";
+	import { invalidateAll } from "$app/navigation";
+	import { onMount, onDestroy } from "svelte";
+	import { getMinutesToDate } from "$lib/lib.js";
+	import type { Writable } from "svelte/store";
+
 	export let data;
-	console.log(data);
 
 	let openCalendarPopup: () => void;
 	let closeCalendarPopup: () => void;
@@ -37,7 +37,7 @@
 	let errorHallMessage: string | unknown;
 
 	function turnstileLoginError() {
-		errorCalendarMessage = 'Skúste obnoviť stránku (zlyhala CAPTCHA)';
+		errorCalendarMessage = "Skúste obnoviť stránku (zlyhala CAPTCHA)";
 	}
 
 	let pollingInterval: NodeJS.Timeout;
@@ -78,12 +78,14 @@
 />
 <div class="flex flex-row flex-nowrap pb-8">
 	<div class="min-h-screen pt-24 px-14 flex flex-col flex-nowrap gap-4">
-		<h1 class="text-2xl font-bold text-text-600">{data.user?.name ? `Dobrý deň, ${data.user?.name?.split(" ")[0]}` : "Vitajte"}</h1>
+		<h1 class="text-2xl font-bold text-text-600">
+			{data.user?.name ? `Dobrý deň, ${data.user?.name?.split(" ")[0]}` : "Vitajte"}
+		</h1>
 		<h2 class="mt-7 text-text-500">
 			{#if data.user}
-			Tu si môžete naplánovať nové udalosti, alebo zobraziť svoje staršie udalosti.
+				Tu si môžete naplánovať nové udalosti, alebo zobraziť svoje staršie udalosti.
 			{:else}
-			Pre vytvorenie udalosti sa musíte prihlásiť alebo zaregistrovať.
+				Pre vytvorenie udalosti sa musíte prihlásiť alebo zaregistrovať.
 			{/if}
 		</h2>
 		<div class="grid gap-7 mt-7 grid-cols-1 md:grid-cols-2 lg:grid-cols-3 auto-rows-fr w-full">
@@ -106,21 +108,14 @@
 					stroke="currentColor"
 					fill="none"
 					stroke-linecap="round"
-					stroke-linejoin="round"
-					><path stroke="none" d="M0 0h24v24H0z" fill="none" /><path d="M12 5l0 14" /><path
-						d="M5 12l14 0"
-					/></svg
+					stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none" /><path d="M12 5l0 14" /><path d="M5 12l14 0" /></svg
 				>
 				<p class="text-lg font-bold text-text-600">Vytvoriť novú udalosť</p>
-				<p class="text-text-500">
-					Vytvorte novú udalosť teraz a začnite svoju cestu k dokonálemu podujatiu.
-				</p>
+				<p class="text-text-500">Vytvorte novú udalosť teraz a začnite svoju cestu k dokonálemu podujatiu.</p>
 			</button>
 			{#each data.ownedTempReservations as reservation, i}
 				<div class="relative">
-					<div
-						class="flex flex-row flex-nowrap justify-end absolute w-full top-8 right-2 items-center z-20"
-					>
+					<div class="flex flex-row flex-nowrap justify-end absolute w-full top-8 right-2 items-center z-20">
 						<div class="relative group">
 							<button
 								type="button"
@@ -137,11 +132,9 @@
 									fill="none"
 									stroke-linecap="round"
 									stroke-linejoin="round"
-									><path stroke="none" d="M0 0h24v24H0z" fill="none" /><path
-										d="M5 12m-1 0a1 1 0 1 0 2 0a1 1 0 1 0 -2 0"
-									/><path d="M12 12m-1 0a1 1 0 1 0 2 0a1 1 0 1 0 -2 0" /><path
-										d="M19 12m-1 0a1 1 0 1 0 2 0a1 1 0 1 0 -2 0"
-									/></svg
+									><path stroke="none" d="M0 0h24v24H0z" fill="none" /><path d="M5 12m-1 0a1 1 0 1 0 2 0a1 1 0 1 0 -2 0" /><path
+										d="M12 12m-1 0a1 1 0 1 0 2 0a1 1 0 1 0 -2 0"
+									/><path d="M19 12m-1 0a1 1 0 1 0 2 0a1 1 0 1 0 -2 0" /></svg
 								>
 							</button>
 							<div
@@ -175,8 +168,8 @@
 								</p>
 							</div>
 							<div class="flex flex-col">
-								<p class="text-xl font-bold text-text-600">{reservation.name || 'Meno udalosti'}</p>
-								<p class="text-text-500">{reservation.expand?.category?.name || 'kategória'}</p>
+								<p class="text-xl font-bold text-text-600">{reservation.name || "Meno udalosti"}</p>
+								<p class="text-text-500">{reservation.expand?.category?.name || "kategória"}</p>
 							</div>
 							<div class="flex flex-col">
 								<div class="flex flex-row gap-3">
@@ -191,13 +184,11 @@
 										fill="none"
 										stroke-linecap="round"
 										stroke-linejoin="round"
-										><path stroke="none" d="M0 0h24v24H0z" fill="none" /><path
-											d="M9 7m-4 0a4 4 0 1 0 8 0a4 4 0 1 0 -8 0"
-										/><path d="M3 21v-2a4 4 0 0 1 4 -4h4a4 4 0 0 1 4 4v2" /><path
-											d="M16 3.13a4 4 0 0 1 0 7.75"
-										/><path d="M21 21v-2a4 4 0 0 0 -3 -3.85" /></svg
+										><path stroke="none" d="M0 0h24v24H0z" fill="none" /><path d="M9 7m-4 0a4 4 0 1 0 8 0a4 4 0 1 0 -8 0" /><path
+											d="M3 21v-2a4 4 0 0 1 4 -4h4a4 4 0 0 1 4 4v2"
+										/><path d="M16 3.13a4 4 0 0 1 0 7.75" /><path d="M21 21v-2a4 4 0 0 0 -3 -3.85" /></svg
 									>
-									<p class="text-text-400">Počet ľudí: {reservation.guestCount || ''}</p>
+									<p class="text-text-400">Počet ľudí: {reservation.guestCount || ""}</p>
 								</div>
 								<div class="flex flex-row gap-3">
 									<svg
@@ -218,7 +209,7 @@
 										/></svg
 									>
 									<p class="text-text-400">
-										Dátum: {new Date(reservation.date).toLocaleDateString('sk')}
+										Dátum: {new Date(reservation.date).toLocaleDateString("sk")}
 									</p>
 								</div>
 							</div>
@@ -228,9 +219,7 @@
 			{/each}
 			{#each data.ownedReservations.filter((i) => new Date(i.date).getTime() > new Date().getTime()) as reservation, i}
 				<div class="relative">
-					<div
-						class="flex flex-row flex-nowrap justify-end absolute top-2 right-2 items-center z-20 float-right"
-					>
+					<div class="flex flex-row flex-nowrap justify-end absolute top-2 right-2 items-center z-20 float-right">
 						<div class="relative group">
 							<button
 								type="button"
@@ -247,11 +236,9 @@
 									fill="none"
 									stroke-linecap="round"
 									stroke-linejoin="round"
-									><path stroke="none" d="M0 0h24v24H0z" fill="none" /><path
-										d="M5 12m-1 0a1 1 0 1 0 2 0a1 1 0 1 0 -2 0"
-									/><path d="M12 12m-1 0a1 1 0 1 0 2 0a1 1 0 1 0 -2 0" /><path
-										d="M19 12m-1 0a1 1 0 1 0 2 0a1 1 0 1 0 -2 0"
-									/></svg
+									><path stroke="none" d="M0 0h24v24H0z" fill="none" /><path d="M5 12m-1 0a1 1 0 1 0 2 0a1 1 0 1 0 -2 0" /><path
+										d="M12 12m-1 0a1 1 0 1 0 2 0a1 1 0 1 0 -2 0"
+									/><path d="M19 12m-1 0a1 1 0 1 0 2 0a1 1 0 1 0 -2 0" /></svg
 								>
 							</button>
 							<div
@@ -279,8 +266,8 @@
 					>
 						<div class="p-8 pt-0 flex flex-col gap-6 mt-6">
 							<div class="flex flex-col">
-								<p class="text-xl font-bold text-text-600">{reservation.name || 'Meno udalosti'}</p>
-								<p class="text-text-500">{reservation.expand?.category?.name || 'kategória'}</p>
+								<p class="text-xl font-bold text-text-600">{reservation.name || "Meno udalosti"}</p>
+								<p class="text-text-500">{reservation.expand?.category?.name || "kategória"}</p>
 							</div>
 							<div class="flex flex-col">
 								<div class="flex flex-row gap-3">
@@ -295,13 +282,11 @@
 										fill="none"
 										stroke-linecap="round"
 										stroke-linejoin="round"
-										><path stroke="none" d="M0 0h24v24H0z" fill="none" /><path
-											d="M9 7m-4 0a4 4 0 1 0 8 0a4 4 0 1 0 -8 0"
-										/><path d="M3 21v-2a4 4 0 0 1 4 -4h4a4 4 0 0 1 4 4v2" /><path
-											d="M16 3.13a4 4 0 0 1 0 7.75"
-										/><path d="M21 21v-2a4 4 0 0 0 -3 -3.85" /></svg
+										><path stroke="none" d="M0 0h24v24H0z" fill="none" /><path d="M9 7m-4 0a4 4 0 1 0 8 0a4 4 0 1 0 -8 0" /><path
+											d="M3 21v-2a4 4 0 0 1 4 -4h4a4 4 0 0 1 4 4v2"
+										/><path d="M16 3.13a4 4 0 0 1 0 7.75" /><path d="M21 21v-2a4 4 0 0 0 -3 -3.85" /></svg
 									>
-									<p class="text-text-400">Počet ľudí: {reservation.guestCount || ''}</p>
+									<p class="text-text-400">Počet ľudí: {reservation.guestCount || ""}</p>
 								</div>
 								<div class="flex flex-row gap-3">
 									<svg
@@ -322,7 +307,7 @@
 										/></svg
 									>
 									<p class="text-text-400">
-										Dátum: {new Date(reservation.date).toLocaleDateString('sk')}
+										Dátum: {new Date(reservation.date).toLocaleDateString("sk")}
 									</p>
 								</div>
 							</div>
@@ -343,18 +328,14 @@
 				stroke-linecap="round"
 				stroke-linejoin="round"
 				class="icon icon-tabler icons-tabler-outline icon-tabler-history"
-				><path stroke="none" d="M0 0h24v24H0z" fill="none" /><path d="M12 8l0 4l2 2" /><path
-					d="M3.05 11a9 9 0 1 1 .5 4m-.5 5v-5h5"
-				/></svg
+				><path stroke="none" d="M0 0h24v24H0z" fill="none" /><path d="M12 8l0 4l2 2" /><path d="M3.05 11a9 9 0 1 1 .5 4m-.5 5v-5h5" /></svg
 			>
 			Archív udalostí
 		</h2>
 		<div class="grid gap-7 grid-cols-1 md:grid-cols-2 lg:grid-cols-3 auto-rows-fr w-full">
 			{#each data.ownedReservations.filter((i) => new Date(i.date).getTime() < new Date().getTime()) as reservation, i}
 				<div class="relative">
-					<div
-						class="flex flex-row flex-nowrap justify-end absolute top-2 right-2 items-center z-20 float-right"
-					>
+					<div class="flex flex-row flex-nowrap justify-end absolute top-2 right-2 items-center z-20 float-right">
 						<div class="relative group">
 							<button
 								type="button"
@@ -371,11 +352,9 @@
 									fill="none"
 									stroke-linecap="round"
 									stroke-linejoin="round"
-									><path stroke="none" d="M0 0h24v24H0z" fill="none" /><path
-										d="M5 12m-1 0a1 1 0 1 0 2 0a1 1 0 1 0 -2 0"
-									/><path d="M12 12m-1 0a1 1 0 1 0 2 0a1 1 0 1 0 -2 0" /><path
-										d="M19 12m-1 0a1 1 0 1 0 2 0a1 1 0 1 0 -2 0"
-									/></svg
+									><path stroke="none" d="M0 0h24v24H0z" fill="none" /><path d="M5 12m-1 0a1 1 0 1 0 2 0a1 1 0 1 0 -2 0" /><path
+										d="M12 12m-1 0a1 1 0 1 0 2 0a1 1 0 1 0 -2 0"
+									/><path d="M19 12m-1 0a1 1 0 1 0 2 0a1 1 0 1 0 -2 0" /></svg
 								>
 							</button>
 							<div
@@ -403,8 +382,8 @@
 					>
 						<div class="p-8 pt-0 flex flex-col gap-6 mt-6">
 							<div class="flex flex-col">
-								<p class="text-xl font-bold text-text-600">{reservation.name || 'Meno udalosti'}</p>
-								<p class="text-text-500">{reservation.expand?.category?.name || 'kategória'}</p>
+								<p class="text-xl font-bold text-text-600">{reservation.name || "Meno udalosti"}</p>
+								<p class="text-text-500">{reservation.expand?.category?.name || "kategória"}</p>
 							</div>
 							<div class="flex flex-col">
 								<div class="flex flex-row gap-3">
@@ -419,13 +398,11 @@
 										fill="none"
 										stroke-linecap="round"
 										stroke-linejoin="round"
-										><path stroke="none" d="M0 0h24v24H0z" fill="none" /><path
-											d="M9 7m-4 0a4 4 0 1 0 8 0a4 4 0 1 0 -8 0"
-										/><path d="M3 21v-2a4 4 0 0 1 4 -4h4a4 4 0 0 1 4 4v2" /><path
-											d="M16 3.13a4 4 0 0 1 0 7.75"
-										/><path d="M21 21v-2a4 4 0 0 0 -3 -3.85" /></svg
+										><path stroke="none" d="M0 0h24v24H0z" fill="none" /><path d="M9 7m-4 0a4 4 0 1 0 8 0a4 4 0 1 0 -8 0" /><path
+											d="M3 21v-2a4 4 0 0 1 4 -4h4a4 4 0 0 1 4 4v2"
+										/><path d="M16 3.13a4 4 0 0 1 0 7.75" /><path d="M21 21v-2a4 4 0 0 0 -3 -3.85" /></svg
 									>
-									<p class="text-text-400">Počet ľudí: {reservation.guestCount || ''}</p>
+									<p class="text-text-400">Počet ľudí: {reservation.guestCount || ""}</p>
 								</div>
 								<div class="flex flex-row gap-3">
 									<svg
@@ -446,7 +423,7 @@
 										/></svg
 									>
 									<p class="text-text-400">
-										Dátum: {new Date(reservation.date).toLocaleDateString('sk')}
+										Dátum: {new Date(reservation.date).toLocaleDateString("sk")}
 									</p>
 								</div>
 							</div>
@@ -462,21 +439,13 @@
 	<form class="flex flex-col" method="post" action="">
 		<div class="w-80">
 			<h2 class="text-text-700 text-xl mb-2">Vymazanie udalosti</h2>
-			<h3 class="text-text-500 mb-4">
-				Vážne chcete zrušiť túto udalosť? Túto akciu nie je možné vrátiť späť.
-			</h3>
+			<h3 class="text-text-500 mb-4">Vážne chcete zrušiť túto udalosť? Túto akciu nie je možné vrátiť späť.</h3>
 		</div>
 		<div class="ml-auto mt-3 items-center flex flex-row flex-nowrap gap-2">
-			<button
-				type="reset"
-				on:click={closeDeletePopup}
-				class="px-4 py-2 bg-background-100 hover:bg-background-200 rounded-md text-text-900"
+			<button type="reset" on:click={closeDeletePopup} class="px-4 py-2 bg-background-100 hover:bg-background-200 rounded-md text-text-900"
 				>Zrušiť</button
 			>
-			<button
-				type="submit"
-				class="px-4 py-2 bg-background-700 hover:bg-primary-600 rounded-md text-text-50 w-[120px]"
-			>
+			<button type="submit" class="px-4 py-2 bg-background-700 hover:bg-primary-600 rounded-md text-text-50 w-[120px]">
 				{#if isLoadingCalendar}
 					<svg
 						xmlns="http://www.w3.org/2000/svg"
@@ -484,10 +453,7 @@
 						stroke="currentColor"
 						fill="none"
 						stroke-linecap="round"
-						stroke-linejoin="round"
-						><path stroke="none" d="M0 0h24v24H0z" fill="none" /><path
-							d="M12 3a9 9 0 1 0 9 9"
-						/></svg
+						stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none" /><path d="M12 3a9 9 0 1 0 9 9" /></svg
 					>
 				{:else}
 					Vymazať
@@ -502,7 +468,7 @@
 	bind:closePopup={closeCalendarPopup}
 	onClose={() => {
 		selectedDate.set(null);
-		errorCalendarMessage = '';
+		errorCalendarMessage = "";
 	}}
 >
 	<form
@@ -514,21 +480,17 @@
 			return ({ result }) => {
 				isLoadingCalendar = false;
 				console.log(result);
-				if (result.type == 'success') {
+				if (result.type == "success") {
 					applyAction(result);
 					closeCalendarPopup();
 					openHallPopup();
-				} else if (result.type == 'failure') {
+				} else if (result.type == "failure") {
 					errorCalendarMessage = result.data?.message;
 				}
 			};
 		}}
 	>
-		<Turnstile
-			on:turnstile-error={turnstileLoginError}
-			siteKey={PUBLIC_TURNSTILE_TOKEN}
-			appearance="interaction-only"
-		/>
+		<Turnstile on:turnstile-error={turnstileLoginError} siteKey={PUBLIC_TURNSTILE_TOKEN} appearance="interaction-only" />
 		<div class="w-80">
 			<h2 class="text-text-700 text-xl mb-2">Vytvorenie udalosti</h2>
 			<h3 class="text-text-500 mb-4">Výber dňa</h3>
@@ -540,12 +502,12 @@
 				bind:selectedDateString
 				tempBlockedDays={data.tempReservations}
 				blockedDays={data.reservations}
-				user={data.user?.id || ''}
+				user={data.user?.id || ""}
 			/>
 			<p class="text-text-700 my-2">
 				Vybraný deň:
 				{#if $selectedDate}
-					<span class="text-text-600">{$selectedDate?.toLocaleDateString('sk')}</span>
+					<span class="text-text-600">{$selectedDate?.toLocaleDateString("sk")}</span>
 				{:else}
 					<span class="text-text-600">Bez výberu</span>
 				{/if}
@@ -553,16 +515,10 @@
 			<input type="date" class="hidden" name="date" id="date" bind:value={selectedDateString} />
 		</div>
 		<div class="ml-auto mt-3 items-center flex flex-row flex-nowrap gap-2">
-			<button
-				type="reset"
-				on:click={closeCalendarPopup}
-				class="px-4 py-2 bg-background-100 hover:bg-background-200 rounded-md text-text-900"
+			<button type="reset" on:click={closeCalendarPopup} class="px-4 py-2 bg-background-100 hover:bg-background-200 rounded-md text-text-900"
 				>Zrušiť</button
 			>
-			<button
-				type="submit"
-				class="px-4 py-2 bg-background-700 hover:bg-primary-600 rounded-md text-text-50 w-[120px]"
-			>
+			<button type="submit" class="px-4 py-2 bg-background-700 hover:bg-primary-600 rounded-md text-text-50 w-[120px]">
 				{#if isLoadingCalendar}
 					<svg
 						xmlns="http://www.w3.org/2000/svg"
@@ -570,10 +526,7 @@
 						stroke="currentColor"
 						fill="none"
 						stroke-linecap="round"
-						stroke-linejoin="round"
-						><path stroke="none" d="M0 0h24v24H0z" fill="none" /><path
-							d="M12 3a9 9 0 1 0 9 9"
-						/></svg
+						stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none" /><path d="M12 3a9 9 0 1 0 9 9" /></svg
 					>
 				{:else}
 					Pokračovať
@@ -587,7 +540,7 @@
 	bind:openPopup={openHallPopup}
 	bind:closePopup={closeHallPopup}
 	onClose={() => {
-		errorHallMessage = '';
+		errorHallMessage = "";
 	}}
 >
 	<form
@@ -595,16 +548,16 @@
 		method="POST"
 		use:enhance={({ formData }) => {
 			console.log(selectedDateString);
-			if (selectedDateString) formData.append('date', selectedDateString);
+			if (selectedDateString) formData.append("date", selectedDateString);
 			isLoadingHall = true;
 			return ({ result }) => {
 				isLoadingHall = false;
 				console.log(result);
-				if (result.type == 'success') {
+				if (result.type == "success") {
 					applyAction(result);
 					closeCalendarPopup();
 					openHallPopup();
-				} else if (result.type == 'failure') {
+				} else if (result.type == "failure") {
 					errorHallMessage = result.data?.message;
 				}
 				applyAction(result);
@@ -668,20 +621,13 @@
 					>Počet osôb</label
 				>
 			</fieldset>
-			<Select
-				name="type"
-				bind:invalid={validateCategory}
-				options={data.categories}
-				defaultText="Typ udalosti"
-			/>
+			<Select name="type" bind:invalid={validateCategory} options={data.categories} defaultText="Typ udalosti" />
 			{#each data.addons as addon}
 				<fieldset class="mt-1 flex flex-row items-center gap-2">
 					<Checkbox name={addon.id} />
 					<label class="text-text-600" for={addon.id}
 						>{addon.name}
-						<span class="text-secondary-500 text-sm"
-							>{addon.price ? `${addon.price}€${addon.hourly ? '/hod.' : ''}` : ``}</span
-						></label
+						<span class="text-secondary-500 text-sm">{addon.price ? `${addon.price}€${addon.hourly ? "/hod." : ""}` : ``}</span></label
 					>
 				</fieldset>
 			{/each}
@@ -693,27 +639,21 @@
 					closeHallPopup();
 					openCalendarPopup();
 				}}
-				class="px-4 py-2 bg-background-100 hover:bg-background-200 rounded-md text-text-900"
-				>Zrušiť</button
+				class="px-4 py-2 bg-background-100 hover:bg-background-200 rounded-md text-text-900">Zrušiť</button
 			>
-			<button
-				type="submit"
-				class="px-4 py-2 bg-background-700 hover:bg-primary-600 rounded-md text-text-50 w-[120px]"
-			>
-				Potvrdiť
-			</button>
+			<button type="submit" class="px-4 py-2 bg-background-700 hover:bg-primary-600 rounded-md text-text-50 w-[120px]"> Potvrdiť </button>
 		</div>
 	</form>
 </Popup>
 
 <style lang="postcss">
-	input[type='number'] {
+	input[type="number"] {
 		-moz-appearance: textfield;
 		appearance: textfield;
 		@apply m-0;
 	}
-	input[type='number']::-webkit-inner-spin-button,
-	input[type='number']::-webkit-outer-spin-button {
+	input[type="number"]::-webkit-inner-spin-button,
+	input[type="number"]::-webkit-outer-spin-button {
 		@apply appearance-none m-0;
 	}
 </style>

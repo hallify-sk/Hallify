@@ -6,6 +6,9 @@ node_modules
 .env
 .env.*
 !.env.example
+/pb
+/pb/*
+/pb/**/*
 
 # Ignore files for PNPM, NPM and YARN
 pnpm-lock.yaml
