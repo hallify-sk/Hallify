@@ -1,5 +1,5 @@
 import { error, fail } from "@sveltejs/kit";
-
+import PocketBase from "pocketbase";
 export const actions: import("./$types").Actions = {
 	/**
 	 * Save changes to a hall's details.
@@ -49,3 +49,22 @@ export const actions: import("./$types").Actions = {
 		};
 	}
 };
+/**
+ * Loads user data based on the provided parameters.
+ *
+ * @type {import('@sveltejs/kit').PageServerLoad}
+ */
+export async function load({ locals, params }) {
+	let hall;
+	try {
+		hall = await (locals.pb as PocketBase).collection("stages").getOne(params.slug);
+	} catch (e) {
+		console.log(e);
+		return error(404, {
+			message: "Not found"
+		});
+	}
+	return {
+		hall
+	};
+}
