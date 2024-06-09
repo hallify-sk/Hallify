@@ -1,38 +1,13 @@
-# create-svelte
+# Hallify - Aplikácia
+![Hallify banner](https://raw.githubusercontent.com/hallify-sk/github-assets/main/Hallify-Banner.png)
+<p align="center">
+  <img src="https://img.shields.io/github/stars/hallify-sk/Hallify?style=for-the-badge" alt=""/>
+  <img src="https://img.shields.io/github/last-commit/hallify-sk/Hallify?style=for-the-badge" alt=""/>
+  <img src="https://img.shields.io/github/issues/hallify-sk/Hallify?style=for-the-badge" alt=""/>
+  <img src="https://img.shields.io/github/issues-pr/hallify-sk/Hallify?style=for-the-badge" alt=""/>
+  <img src="https://img.shields.io/github/license/hallify-sk/Hallify?style=for-the-badge" alt=""/>
+  <img src="https://img.shields.io/github/actions/workflow/status/hallify-sk/hallify/.github%2Fworkflows%2Fnode_js.yml?style=for-the-badge" alt=""/>
+</p>
 
-Everything you need to build a Svelte project, powered by [`create-svelte`](https://github.com/sveltejs/kit/tree/master/packages/create-svelte).
-
-## Creating a project
-
-If you're seeing this, you've probably already done this step. Congrats!
-
-```bash
-# create a new project in the current directory
-npm create svelte@latest
-
-# create a new project in my-app
-npm create svelte@latest my-app
-```
-
-## Developing
-
-Once you've created a project and installed dependencies with `npm install` (or `pnpm install` or `yarn`), start a development server:
-
-```bash
-npm run dev
-
-# or start the server and open the app in a new browser tab
-npm run dev -- --open
-```
-
-## Building
-
-To create a production version of your app:
-
-```bash
-npm run build
-```
-
-You can preview the production build with `npm run preview`.
-
-> To deploy your app, you may need to install an [adapter](https://kit.svelte.dev/docs/adapters) for your target environment.
+---
+Hallify je najmodernejší rezervačný systém pre spoločenské sály, ktorý podporuje vytváranie rozložení sál. Tento repozitár obsahuje samostatnú aplikáciu, ktorú vytvárame a distribujeme. 
