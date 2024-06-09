@@ -3,26 +3,23 @@
 	import Navbar from '$lib/Navbar.svelte';
 	import { getMinutesToDate } from '$lib/lib.js';
 
-    export let data;
-    console.log(data);
+	export let data;
 
-    let nameError: boolean = false;
-    let categoryError: boolean = false;
-    let dateError: boolean = false;
-    let guestError: boolean = false;
+	let nameError: boolean = false;
+	let categoryError: boolean = false;
+	let dateError: boolean = false;
+	let guestError: boolean = false;
 </script>
 
-<Navbar
-	user={data.user}
-/>
+<Navbar user={data.user} />
 
 <div class="flex flex-row flex-nowrap relative">
 	{#if data.reservation?.expires}
-	<p class="absolute w-full top-0 text-center bg-primary-500 text-text-800">Ponuka vyprší o: {Math.floor(getMinutesToDate(data.reservation.expires) / 60 / 1000)} minút</p>
+		<p class="absolute w-full top-0 text-center bg-primary-500 text-text-800">
+			Ponuka vyprší o: {Math.floor(getMinutesToDate(data.reservation.expires) / 60 / 1000)} minút
+		</p>
 	{/if}
-	<div
-		class="min-h-screen pt-24 px-14 w-full xl:w-3/4"
-	>
+	<div class="min-h-screen pt-24 px-14 w-full xl:w-3/4">
 		<div class="flex flex-row flex-nowrap items-center justify-between">
 			<h1 class="text-3xl font-bold text-text-600">Detaily udalosti</h1>
 			<div class="relative group">
@@ -58,7 +55,6 @@
 						Upraviť udalosť
 					</a>
 					<button
-						
 						type="button"
 						class="px-4 py-2 bg-background-700 hover:bg-primary-600 rounded-md text-text-50 w-full"
 					>
@@ -67,14 +63,16 @@
 				</div>
 			</div>
 		</div>
-		<h2 class="mt-7 text-text-500">Tu si môžete zobraziť detaily vašej udalosti, poprípade ich ešte upraviť.</h2>
+		<h2 class="mt-7 text-text-500">
+			Tu si môžete zobraziť detaily vašej udalosti, poprípade ich ešte upraviť.
+		</h2>
 		<form class="grid grid-cols-1 lg:grid-cols-2 mt-7 gap-3 w-full">
-            <fieldset class="relative text-input">
+			<fieldset class="relative text-input">
 				<input
 					on:change={() => (nameError = false)}
 					placeholder=""
-                    disabled={true}
-                    value={data.reservation.name || "Bez názvu"}
+					disabled={true}
+					value={data.reservation.name || 'Bez názvu'}
 					type="text"
 					required={true}
 					id="menoUdalosti"
@@ -91,12 +89,12 @@
 					>Názov udalosti</label
 				>
 			</fieldset>
-            <fieldset class="relative text-input">
+			<fieldset class="relative text-input">
 				<input
 					on:change={() => (categoryError = false)}
 					placeholder=""
-                    disabled={true}
-                    value={data.reservation.expand?.category?.name || "Bez kategórie"}
+					disabled={true}
+					value={data.reservation.expand?.category?.name || 'Bez kategórie'}
 					type="text"
 					required={true}
 					id="kategoriaUdalosti"
@@ -117,8 +115,8 @@
 				<input
 					on:change={() => (dateError = false)}
 					placeholder=""
-                    disabled={true}
-                    value={new Date(data.reservation.date).toLocaleDateString('sk')}
+					disabled={true}
+					value={new Date(data.reservation.date).toLocaleDateString('sk')}
 					type="text"
 					required={true}
 					id="datumUdalosti"
@@ -139,8 +137,8 @@
 				<input
 					on:change={() => (dateError = false)}
 					placeholder=""
-                    disabled={true}
-                    value={data.reservation.guestCount}
+					disabled={true}
+					value={data.reservation.guestCount}
 					type="text"
 					required={true}
 					id="pocetHosti"
@@ -159,7 +157,11 @@
 			</fieldset>
 			{#each data.addons as addon}
 				<fieldset class="mt-1 flex flex-row items-center gap-2">
-					<Checkbox name={addon.id} disabled={true} checked={data.reservation.addons.includes(addon.id)} />
+					<Checkbox
+						name={addon.id}
+						disabled={true}
+						checked={data.reservation.addons.includes(addon.id)}
+					/>
 					<label class="text-text-600" for={addon.id}
 						>{addon.name}
 						<span class="text-secondary-500 text-sm"
@@ -168,6 +170,6 @@
 					>
 				</fieldset>
 			{/each}
-        </form>
+		</form>
 	</div>
 </div>

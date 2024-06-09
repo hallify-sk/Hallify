@@ -1,17 +1,17 @@
 <script lang="ts">
 	import Checkbox from '$lib/Checkbox.svelte';
-	import { onDestroy, onMount } from 'svelte';
-	import { applyAction, enhance } from '$app/forms';
-	import { goto, invalidateAll } from '$app/navigation';
-	import { page } from '$app/stores';
-	import { fly } from 'svelte/transition';
-	import type { RecordModel, ListResult } from 'pocketbase';
-	import type { MouseEventHandler } from 'svelte/elements';
-	import { browser } from '$app/environment';
-	import type { ActionResult } from '@sveltejs/kit';
 	import AdminNav from '$lib/AdminNav.svelte';
 	import Search from '$lib/Search.svelte';
 	import Popup from '$lib/Popup.svelte';
+	import { browser } from '$app/environment';
+	import { fly } from 'svelte/transition';
+	import { page } from '$app/stores';
+	import { onDestroy, onMount } from 'svelte';
+	import { applyAction, enhance } from '$app/forms';
+	import { goto, invalidateAll } from '$app/navigation';
+	import type { ActionResult } from '@sveltejs/kit';
+	import type { RecordModel, ListResult } from 'pocketbase';
+	import type { MouseEventHandler } from 'svelte/elements';
 
 	export let data;
 

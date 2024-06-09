@@ -1,7 +1,18 @@
 import { error, fail } from '@sveltejs/kit';
 import PocketBase from 'pocketbase';
 
+/**
+ * Defines actions related to updating user data.
+ *
+ * @type {import('@sveltejs/kit').Actions}
+ */
 export const actions = {
+	/**
+	 * Handles updating user data based on the request parameters.
+	 *
+	 * @param options - The options object containing request, locals, and params.
+	 * @returns A promise resolving to either success or failure message.
+	 */
 	updateUser: async ({ request, locals, params }) => {
 		const data = await request.formData();
 		const name = data.get('name')?.toString();
@@ -13,12 +24,12 @@ export const actions = {
 		if (!email || email.trim() == '') {
 			return fail(400, { incorrect: true, message: 'Vyžaduje sa e-mail', type: 'email' });
 		}
-		//validate email with simple regex
+		// Validate email with simple regex
 		if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
 			return fail(400, { incorrect: true, message: 'E-mail nie je platný', type: 'email' });
 		}
 		try {
-			 console.log(params.slug);
+			console.log(params.slug);
 			await (locals.pb as PocketBase).collection('users').update(params.slug, {
 				name,
 				email,
@@ -36,7 +47,11 @@ export const actions = {
 	}
 };
 
-/** @type {import('./$types').PageServerLoad} */
+/**
+ * Loads user data based on the provided parameters.
+ *
+ * @type {import('@sveltejs/kit').PageServerLoad}
+ */
 export async function load({ locals, params }) {
 	let user;
 	try {

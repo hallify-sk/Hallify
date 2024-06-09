@@ -1,18 +1,18 @@
 <script lang="ts">
-	import { enhance, applyAction } from '$app/forms';
-	import { PUBLIC_TURNSTILE_TOKEN } from '$env/static/public';
-	import { Turnstile } from 'svelte-turnstile';
 	import Calendar from '$lib/Calendar.svelte';
 	import Select from '$lib/Select.svelte';
 	import Navbar from '$lib/Navbar.svelte';
 	import Popup from '$lib/Popup.svelte';
+	import Checkbox from '$lib/Checkbox.svelte';
+	import { enhance, applyAction } from '$app/forms';
+	import { PUBLIC_TURNSTILE_TOKEN } from '$env/static/public';
+	import { Turnstile } from 'svelte-turnstile';
 	import { invalidateAll } from '$app/navigation';
 	import { onMount, onDestroy } from 'svelte';
-	import Checkbox from '$lib/Checkbox.svelte';
 	import { getMinutesToDate } from '$lib/lib.js';
 	import type { Writable } from 'svelte/store';
+
 	export let data;
-	console.log(data);
 
 	let openCalendarPopup: () => void;
 	let closeCalendarPopup: () => void;
@@ -78,12 +78,14 @@
 />
 <div class="flex flex-row flex-nowrap pb-8">
 	<div class="min-h-screen pt-24 px-14 flex flex-col flex-nowrap gap-4">
-		<h1 class="text-2xl font-bold text-text-600">{data.user?.name ? `Dobrý deň, ${data.user?.name?.split(" ")[0]}` : "Vitajte"}</h1>
+		<h1 class="text-2xl font-bold text-text-600">
+			{data.user?.name ? `Dobrý deň, ${data.user?.name?.split(' ')[0]}` : 'Vitajte'}
+		</h1>
 		<h2 class="mt-7 text-text-500">
 			{#if data.user}
-			Tu si môžete naplánovať nové udalosti, alebo zobraziť svoje staršie udalosti.
+				Tu si môžete naplánovať nové udalosti, alebo zobraziť svoje staršie udalosti.
 			{:else}
-			Pre vytvorenie udalosti sa musíte prihlásiť alebo zaregistrovať.
+				Pre vytvorenie udalosti sa musíte prihlásiť alebo zaregistrovať.
 			{/if}
 		</h2>
 		<div class="grid gap-7 mt-7 grid-cols-1 md:grid-cols-2 lg:grid-cols-3 auto-rows-fr w-full">
@@ -331,7 +333,9 @@
 				</div>
 			{/each}
 		</div>
-		<h2 class="col-span-1 md:col-span-2 lg:col-span-3 text-text-600 text-lg flex flex-row gap-1 items-center">
+		<h2
+			class="col-span-1 md:col-span-2 lg:col-span-3 text-text-600 text-lg flex flex-row gap-1 items-center"
+		>
 			<svg
 				xmlns="http://www.w3.org/2000/svg"
 				width="24"

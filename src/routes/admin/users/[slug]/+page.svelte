@@ -1,77 +1,83 @@
 <script lang="ts">
+	import AdminNav from '$lib/AdminNav.svelte';
 	import { goto } from '$app/navigation';
 	import { enhance, applyAction } from '$app/forms';
-
-	import ImagePreview from '$lib/ImagePreview.svelte';
 	import type { RecordModel } from 'pocketbase';
-	import AdminNav from '$lib/AdminNav.svelte';
 
-    export let data;
-    console.log(data);
+	export let data;
 
-    let nameError: boolean = false;
-    let emailError: boolean = false;
-    let createdError: boolean = false;
-    let updatedError: boolean = false;
+	let nameError: boolean = false;
+	let emailError: boolean = false;
+	let createdError: boolean = false;
+	let updatedError: boolean = false;
 
 	let openImagePreview: boolean = false;
-	let imageSrc: string = "";
-	let imageAlt: string = "";
+	let imageSrc: string = '';
+	let imageAlt: string = '';
 	let reservationData: RecordModel;
 
-	function openImage(src: string, alt: string, template: RecordModel){
+	let error: string = '';
+	
+	/**
+	 * Opens an image preview with the provided source, alternate text, and template data.
+	 *
+	 * @param {string} src - The image source URL.
+	 * @param {string} alt - The alternate text for the image.
+	 * @param {RecordModel} template - The template data for the image.
+	 */
+	function openImage(src: string, alt: string, template: RecordModel) {
 		imageSrc = src;
 		imageAlt = alt;
 		openImagePreview = true;
 		reservationData = template;
 	}
-
-	let error: string = "";
 </script>
+
 <AdminNav />
 <div class="flex flex-row flex-nowrap relative ml-80">
-	<div
-		class="min-h-screen pt-24 px-14 w-full xl:w-3/4"
-	>
+	<div class="min-h-screen pt-24 px-14 w-full xl:w-3/4">
 		<div class="flex flex-row flex-nowrap items-center justify-between">
 			<h1 class="text-2xl font-bold text-text-600">Detaily používateľa</h1>
 		</div>
-		<form method="post" action="/admin/users/{data.slug}/?/updateUser"
-		use:enhance={() => {
-			return ({ result }) => {
-				console.log(result);
-				if(result.type == "success"){
-					goto(`/admin/users/`);
-				}else if(result.type == "failure"){
-					switch (result.data?.type){
-						case "name":
-							nameError = true;
-							break;
-						case "email":
-							emailError = true;
-							break;
-						case "created":
-							createdError = true;
-							break;
-						case "updated":
-							updatedError = true;
-							break;
-					};
-					error = `${result.data?.message}` || "";
-				}
-				applyAction(result);
-			};
-		}}
-		class="grid grid-cols-1 lg:grid-cols-2 mt-7 gap-3 w-full">
+		<form
+			method="post"
+			action="/admin/users/{data.slug}/?/updateUser"
+			use:enhance={() => {
+				return ({ result }) => {
+					console.log(result);
+					if (result.type == 'success') {
+						goto(`/admin/users/`);
+					} else if (result.type == 'failure') {
+						switch (result.data?.type) {
+							case 'name':
+								nameError = true;
+								break;
+							case 'email':
+								emailError = true;
+								break;
+							case 'created':
+								createdError = true;
+								break;
+							case 'updated':
+								updatedError = true;
+								break;
+						}
+						error = `${result.data?.message}` || '';
+					}
+					applyAction(result);
+				};
+			}}
+			class="grid grid-cols-1 lg:grid-cols-2 mt-7 gap-3 w-full"
+		>
 			{#if error}
 				<p class="text-red-500 col-span-1 lg:col-span-2">{error}</p>
 			{/if}
-            <fieldset class="relative text-input">
+			<fieldset class="relative text-input">
 				<!-- svelte-ignore missing-declaration -->
 				<input
 					on:change={() => (nameError = false)}
 					placeholder=""
-                    value={data.user.name || "Bez mena"}
+					value={data.user.name || 'Bez mena'}
 					type="text"
 					required={true}
 					id="name"
@@ -88,12 +94,12 @@
 					>Meno používateľa</label
 				>
 			</fieldset>
-            <fieldset class="relative text-input">
+			<fieldset class="relative text-input">
 				<!-- svelte-ignore missing-declaration -->
 				<input
 					on:change={() => (nameError = false)}
 					placeholder=""
-                    value={data.user.email || "Bez emailu"}
+					value={data.user.email || 'Bez emailu'}
 					type="text"
 					required={true}
 					id="email"
@@ -114,8 +120,8 @@
 				<input
 					on:change={() => (createdError = false)}
 					placeholder=""
-                    disabled={true}
-                    value={new Date(data.user.created).toLocaleDateString('sk')}
+					disabled={true}
+					value={new Date(data.user.created).toLocaleDateString('sk')}
 					type="text"
 					required={true}
 					id="datumVytvorenia"
@@ -136,8 +142,8 @@
 				<input
 					on:change={() => (updatedError = false)}
 					placeholder=""
-                    disabled={true}
-                    value={new Date(data.user.updated).toLocaleDateString('sk')}
+					disabled={true}
+					value={new Date(data.user.updated).toLocaleDateString('sk')}
 					type="text"
 					required={true}
 					id="datumVytvorenia"
@@ -154,11 +160,19 @@
 					>Naposledy zmenený</label
 				>
 			</fieldset>
-			<textarea placeholder="Komentár admina (neviditeľné pre používateľa) [max. 600 znakov]" maxlength="600" class="bg-background-100 resize-none rounded-md col-span-1 lg:col-span-2 min-h-40 p-2" name="adminComment" id="adminComment">{data.user.adminNotes || ""}</textarea>
-			<div class="ml-auto mt-3 items-center flex flex-row flex-nowrap gap-2 col-span-1 lg:col-span-2">
+			<textarea
+				placeholder="Komentár admina (neviditeľné pre používateľa) [max. 600 znakov]"
+				maxlength="600"
+				class="bg-background-100 resize-none rounded-md col-span-1 lg:col-span-2 min-h-40 p-2"
+				name="adminComment"
+				id="adminComment">{data.user.adminNotes || ''}</textarea
+			>
+			<div
+				class="ml-auto mt-3 items-center flex flex-row flex-nowrap gap-2 col-span-1 lg:col-span-2"
+			>
 				<button
 					type="reset"
-					on:click={()=>{
+					on:click={() => {
 						goto(`/admin/users`);
 					}}
 					class="px-4 py-2 bg-background-100 hover:bg-background-200 rounded-md text-text-900"
@@ -171,7 +185,7 @@
 					Zmeniť
 				</button>
 			</div>
-        </form>
+		</form>
 	</div>
 </div>
 

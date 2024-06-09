@@ -1,14 +1,28 @@
+import PocketBase, { type RecordModel } from 'pocketbase';
 import { SECRET_TURNSTILE_TOKEN } from '$env/static/private';
 import { PUBLIC_DEV, PUBLIC_TURNSTILE_URL, PUBLIC_CALENDAR_EXPIRE } from '$env/static/public';
 import { fail, redirect } from '@sveltejs/kit';
-import PocketBase, { type RecordModel } from 'pocketbase';
 
 export const actions = {
+
+	/**
+	 * Logout action.
+	 * @param {Object} locals - Local data.
+	 * @returns {Promise<Object>} Object containing success flag.
+	 */
 	logout: async ({ locals }) => {
 		if (!locals.user) return fail(400);
 		locals.pb.authStore.clear();
 		return { success: true };
 	},
+
+	/**
+	 * Login action.
+	 * @param {Object} request - HTTP request.
+	 * @param {Function} getClientAddress - Function to get client address.
+	 * @param {Object} locals - Local data.
+	 * @returns {Promise<Object>} Object containing success flag or failure details.
+	 */
 	login: async ({ request, getClientAddress, locals }) => {
 		const data = await request.formData();
 		const email = data.get('email')?.toString();
@@ -16,16 +30,19 @@ export const actions = {
 		const turnstile = data.get('cf-turnstile-response')?.toString();
 		console.log(data);
 		console.log(turnstile);
+
 		if (!email || email.trim() == '') {
 			return fail(400, { incorrect: true, message: 'Vyžaduje sa e-mail', type: 'email' });
-		}
-		//validate email with simple regex
-		if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-			return fail(400, { incorrect: true, message: 'E-mail nie je platný', type: 'email' });
 		}
 		if (!password || password.trim() == '') {
 			return fail(400, { incorrect: true, message: 'Vyžaduje sa heslo', type: 'password' });
 		}
+
+		// validate email with simple regex - pri logine staci vypisat nespravny mail ak sa nepodarí prihlásiť
+		if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+			return fail(400, { incorrect: true, message: 'E-mail nie je platný', type: 'email' });
+		}
+
 		const formData = new FormData();
 		if (PUBLIC_DEV != 'true') {
 			formData.append('secret', SECRET_TURNSTILE_TOKEN);
@@ -36,7 +53,6 @@ export const actions = {
 				method: 'POST'
 			});
 			const outcome = await result.json();
-			//console.log(outcome);
 			if (!outcome.success)
 				return fail(400, {
 					incorrect: true,
@@ -55,6 +71,14 @@ export const actions = {
 			});
 		}
 	},
+
+	/**
+	 * Register action.
+	 * @param {Object} request - HTTP request.
+	 * @param {Function} getClientAddress - Function to get client address.
+	 * @param {Object} locals - Local data.
+	 * @returns {Promise<Object>} Object containing success flag or failure details.
+	 */
 	register: async ({ request, getClientAddress, locals }) => {
 		const data = await request.formData();
 		const name = data.get('name')?.toString();
@@ -76,7 +100,7 @@ export const actions = {
 			return fail(400, { incorrect: true, message: 'Vyžaduje sa heslo', type: 'password' });
 		}
 
-		//Validate password with simple regex step by step.
+		// Validate password with simple regex step by step.
 		if (password.length < 8) {
 			return fail(400, {
 				incorrect: true,
@@ -142,6 +166,14 @@ export const actions = {
 			});
 		}
 	},
+
+	/**
+	 * Reserve date temporary action.
+	 * @param {Object} request - HTTP request.
+	 * @param {Function} getClientAddress - Function to get client address.
+	 * @param {Object} locals - Local data.
+	 * @returns {Promise<Object>} Object containing success flag or failure details.
+	 */
 	reserveDateTemp: async ({ request, getClientAddress, locals }) => {
 		const data = await request.formData();
 		const date = data.get('date')?.toString();
@@ -207,6 +239,12 @@ export const actions = {
 			}
 		}
 	},
+
+	/**
+	 * Add to date temporary action.
+	 * @param {Object} request - HTTP request.
+	 * @returns {Promise<Object>} Object containing success flag or redirect details.
+	 */
 	addToDateTemp: async ({ request, locals }) => {
 		const data = await request.formData();
 		console.log(data);
@@ -264,7 +302,7 @@ export const actions = {
 		const expires = new Date(new Date().getTime() + parseInt(PUBLIC_CALENDAR_EXPIRE) * 60000);
 
 		try {
-			//Fetch current reservation
+			// Fetch current reservation
 			toUpdate = await (locals.pb as PocketBase)
 				.collection('temp_reservations')
 				.getFirstListItem(`user="${locals.user.id}"`);
@@ -311,20 +349,24 @@ export const actions = {
 };
 
 /** @type {import('./$types').PageServerLoad} */
+/**
+ * Loads data for the server-side rendering of the layout.
+ * @returns {Promise<Object>} Object containing various reservation and addon data.
+ */
 export async function load({ locals }) {
 	return {
 		tempReservations: await (locals.pb as PocketBase)
 			.collection('temp_reservations')
-			.getFullList({fields: "id,expires,date,user"}),
+			.getFullList({ fields: "id,expires,date,user" }),
 		ownedTempReservations: await (locals.pb as PocketBase)
 			.collection('temp_reservations')
-			.getFullList({filter: `user="${locals?.user?.id}"`, expand: "category"}),
+			.getFullList({ filter: `user="${locals?.user?.id}"`, expand: "category" }),
 		reservations: await (locals.pb as PocketBase)
 			.collection('reservations')
 			.getFullList({ sort: 'created', fields: "id,expires,date,user" }),
 		ownedReservations: await (locals.pb as PocketBase)
 			.collection('reservations')
-			.getFullList({filter: `user="${locals?.user?.id}"`, expand: "category"}),
+			.getFullList({ filter: `user="${locals?.user?.id}"`, expand: "category" }),
 		addons: await (locals.pb as PocketBase).collection('addons').getFullList(),
 		stages: await (locals.pb as PocketBase).collection('stages').getFullList({ sort: 'created' }),
 		categories: (
