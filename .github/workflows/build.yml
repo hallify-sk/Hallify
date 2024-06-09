@@ -1,5 +1,4 @@
 name: Node.js Build
-
 on:
     push:
         branches: ["main"]
@@ -22,5 +21,6 @@ jobs:
               with:
                   node-version: ${{ matrix.node-version }}
                   cache: "npm"
+            - run: echo -e "PUBLIC_DEV=${{ secrets.PUBLIC_DEV }}\nPUBLIC_TURNSTILE_URL=${{ secrets.PUBLIC_TURNSTILE_URL }}" > ~/.env
             - run: npm ci
             - run: npm run build
