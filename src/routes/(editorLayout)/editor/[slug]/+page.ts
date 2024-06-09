@@ -1,6 +1,5 @@
 /**
  * Loads the initial data for the page.
- * @param params The parameters passed to the page
  * @param data The data object containing stage, stageCategories, and tables
  * @returns An object containing stage, slug, stageCategories, and tables
  */

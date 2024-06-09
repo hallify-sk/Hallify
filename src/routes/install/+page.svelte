@@ -1,17 +1,14 @@
 <script lang="ts">
 	import '../../app.css';
-
 	import { enhance, applyAction } from '$app/forms';
 
 	let pocketbasePrivateURL = false;
 	let pocketbaseAPIURL = false;
-
 	let loadingPBSetup = false;
 
 	let errorMessage: string = '';
 
 	export let data;
-	console.log(data);
 </script>
 
 <div class="bg-background-50">

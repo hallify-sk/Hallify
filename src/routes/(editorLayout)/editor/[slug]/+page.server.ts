@@ -3,8 +3,6 @@ import PocketBase from "pocketbase";
 /** @type {import('./$types').PageServerLoad} */
 /**
  * Loads data for the page server.
- * @param locals Local variables
- * @param params Parameters
  * @returns An object containing stage, stageCategories, and tables data
  */
 export async function load({ locals, params }: { locals: any; params: any }) {
@@ -17,8 +15,7 @@ export async function load({ locals, params }: { locals: any; params: any }) {
 
 /**
  * Actions for saving stage data.
- * @param request The HTTP request
- * @param locals Local variables
+ * @param request HTTP
  * @returns An object indicating success
  */
 export const actions = {

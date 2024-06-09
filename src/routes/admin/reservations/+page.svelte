@@ -1,17 +1,17 @@
 <script lang="ts">
 	import Checkbox from '$lib/Checkbox.svelte';
+	import AdminNav from '$lib/AdminNav.svelte';
+	import Search from '$lib/Search.svelte';
+	import Popup from '$lib/Popup.svelte';
 	import { onDestroy, onMount } from 'svelte';
 	import { applyAction, enhance } from '$app/forms';
 	import { goto, invalidateAll } from '$app/navigation';
+	import { browser } from '$app/environment';
 	import { page } from '$app/stores';
 	import { fly } from 'svelte/transition';
 	import type { RecordModel, ListResult } from 'pocketbase';
 	import type { MouseEventHandler } from 'svelte/elements';
-	import { browser } from '$app/environment';
 	import type { ActionResult } from '@sveltejs/kit';
-	import AdminNav from '$lib/AdminNav.svelte';
-	import Search from '$lib/Search.svelte';
-	import Popup from '$lib/Popup.svelte';
 
 	export let data;
 
@@ -25,12 +25,19 @@
 		pbPage: number = 1,
 		suggestions: RecordModel[] = [];
 
+	let errorConfirmMessage: string = '';
+	let query: string = $page.url.searchParams.get('query') || '';
+
+	let updateQuery: () => void = () => {};
+	let openConfirmModal = () => {};
+	let closeConfirmModal = () => {};
+
+	// Updates when data/suggestions change
 	$: if (data) {
 		const resultData: ListResult<RecordModel> = data.reservations;
 		reservations = resultData.items.sort(tableSort);
 		mapCheckboxes();
 	}
-
 	$: if (suggestions) {
 		mapCheckboxes();
 		handleCheckboxUpdate();
@@ -52,26 +59,40 @@
 			window.removeEventListener('resize', handleTableShadow);
 		}
 	});
-
+	/**
+	 * Sorts reservations based on a specified property. TODO: VERIFY tableSort "@RETURNS" COMMENT ci je spravna logic a dava to anglikansky zmysel :sob: - ref: src/admin/reservations/+page.svelte 56
+	 * @param {RecordModel} a - The first reservation object to compare.
+	 * @param {RecordModel} b - The second reservation object to compare.
+	 * @returns {number} - Returns a positive number if 'a' should come after 'b' in the sorted sequence, a negative number if 'a' should come before 'b', or zero if they are equal. asi - matematika 2 rocnik vyroky :sob:
+	 */
 	function tableSort(a: RecordModel, b: RecordModel) {
-		//Uses custom function because this allows for deep sort based on weight values of DB relation attributes
-		const sortBy = $page.url.searchParams.get('sortBy');
+		const sortBy = $page.url.searchParams.get('sortBy') || 'created';
+
 		let sortProperty = 'created';
 		let inverse = false;
+
+		// Check if sorting is in descending order
 		if (sortBy) {
 			inverse = sortBy.startsWith('-');
 			sortProperty = inverse ? sortBy.slice(1) : sortBy;
 		}
+
+		// Compare the values of the specified property for 'a' and 'b'
 		if (a.expand?.[sortProperty] && b.expand?.[sortProperty]) {
+			// If both 'a' and 'b' have the specified property in their 'expand' object, compare their 'weight' values
 			return (
 				(a.expand[sortProperty].weight < b.expand[sortProperty].weight ? 1 : -1) *
 				(inverse ? -1 : 1)
 			);
 		} else if (a.expand?.[sortProperty] && !b.expand?.[sortProperty]) {
+			// If only 'a' has the specified property in its 'expand' object
 			return (a.expand[sortProperty].weight < 0 ? 1 : -1) * (inverse ? -1 : 1);
 		} else if (!a.expand?.[sortProperty] && b.expand?.[sortProperty]) {
+			// If only 'b' has the specified property in its 'expand' object
 			return (0 < b.expand[sortProperty].weight ? 1 : -1) * (inverse ? -1 : 1);
 		} else {
+			// If neither 'a' nor 'b' have the specified property in their 'expand' object, or if 'expand' is undefined
+			// Compare the values of the specified property directly
 			return (
 				(a[sortProperty] > b[sortProperty] ? 1 : -1) *
 				(inverse ? -1 : 1) *
@@ -87,63 +108,106 @@
 		return;
 	}
 
-	async function handleSortProperty(filter: string) {
-		//This function puts the current sort property into the URL, and makes sure that this can be an inverse sort or normal sort by pre-pending a - to the sort property.
+	/**
+	 * Updates the sorting property in the URL query parameters and sorts reservations accordingly.
+	 * @param {string} filter - The sorting property to be applied.
+	 * @returns {Promise<void>} - A promise that resolves once the sorting is updated and the page navigates to the sorted URL.
+	 */
+	async function handleSortProperty(filter: string): Promise<void> {
+		// Check if the current sorting property in the URL is the same as the new filter, and whether it's already in ascending order
 		let modFilter = filter;
 		if (
 			$page.url.searchParams.get('sortBy') == filter &&
 			!$page.url.searchParams.get('sortBy')?.startsWith('-')
-		)
+		) {
 			modFilter = `-${filter}`;
+		}
+
 		$page.url.searchParams.set('sortBy', modFilter);
 		reservations = reservations.sort(tableSort);
+
 		return await goto(`?${$page.url.searchParams.toString()}`);
 	}
 
+	/**
+	 * Deletes the selected reservations.
+	 * - Reruns the load function to repopulate the data property.
+	 * - Closes the delete modal.
+	 * - Resets the selectAll flag to false.
+	 * - Remaps the checkboxes.
+	 * - Resets the query.
+	 */
 	async function deleteSelected() {
-		//Rerun the load function, repopulates the data property
 		await invalidateAll();
-		//Closes the modal
 		deleteModal = false;
 		selectAll = false;
-		//Remaps the checkboxes
 		mapCheckboxes();
-		//Resets the query
 		query = '';
 	}
 
-	function handleMassCheckboxUpdate() {
+	/**
+	 * Handles the mass checkbox update when the "select all" checkbox is toggled.
+	 * - Sets the deleteModal flag based on the checked status.
+	 * - Updates the checked status of all checkboxes.
+	 */
+	function handleMassCheckboxUpdate(): void {
 		const checked = !selectAll;
-		if (checked) {
-			deleteModal = true;
-		} else {
-			deleteModal = false;
-		}
+		deleteModal = checked;
 		checkboxes = checkboxes.map((checkbox) => {
 			return { id: checkbox.id, checked };
 		});
 	}
 
+	// function handleCheckboxUpdate() {
+	// 	// TODO: This function doesn't work without this timeout for some reason? Without timeout, the logic of this function is delayed by one checkbox update;
+	// 	// the function may execute before the browser has finished updating the checkbox states -> resulting in the logic being based on the previous state
+	// 	// timeout gives browser DOM to update the checkbox states prolly
+	//  // below is implementation using eventlistener so the handleCheckboxChange only happens after checkbox changes itself
+	// 	setTimeout(() => {
+	// 		if (checkboxes.length && checkboxes.every((v) => v.checked == true)) {
+	// 			selectAll = true;
+	// 			deleteModal = true;
+	// 		} else if (checkboxes.some((v) => v?.checked === true)) {
+	// 			selectAll = false;
+	// 			deleteModal = true;
+	// 		} else {
+	// 			selectAll = false;
+	// 			deleteModal = false;
+	// 		}
+	// 	}, 1);
+	// }
+
+	checkboxes.forEach((checkboxData) => {
+		const checkboxElement = document.getElementById(checkboxData.id);
+		if (checkboxElement) {
+			checkboxElement.addEventListener('change', handleCheckboxUpdate);
+		}
+	});
+
+	/**
+	 * Function to handle checkbox change event.
+	 * Updates the 'selectAll' and 'deleteModal' state based on the checkbox status.
+	 */
 	function handleCheckboxUpdate() {
-		// TODO: This function doesn't work without this timeout for some reason? Without timeout, the logic of this function is delayed by one checkbox update;
-		setTimeout(() => {
-			if (checkboxes.length && checkboxes.every((v) => v.checked == true)) {
-				selectAll = true;
-				deleteModal = true;
-			} else if (checkboxes.some((v) => v?.checked === true)) {
-				selectAll = false;
-				deleteModal = true;
-			} else {
-				selectAll = false;
-				deleteModal = false;
-			}
-		}, 1);
+		if (checkboxes.length && checkboxes.every((checkbox) => checkbox.checked === true)) {
+			selectAll = true;
+			deleteModal = true;
+		} else if (checkboxes.some((checkbox) => checkbox.checked === true)) {
+			selectAll = false;
+			deleteModal = true;
+		} else {
+			selectAll = false;
+			deleteModal = false;
+		}
 	}
 
+	/**
+	 * Function to map reservations or suggestions to checkbox data.
+	 * Resets the 'checkboxes' array and remaps checkboxes into it based on the current query status.
+	 */
 	function mapCheckboxes() {
-		//Reset checkbox array;
 		checkboxes = [];
-		//Remap checkboxes into array;
+
 		if (query) {
 			suggestions.map((reservation, i) => {
 				checkboxes[i] = { id: reservation.id, checked: false };
@@ -154,30 +218,31 @@
 			});
 		}
 	}
-	async function handleLoadingreservations(
-		result: ActionResult<
-			globalThis.Record<string, unknown> | undefined,
-			globalThis.Record<string, unknown> | undefined
-		>
-	) {
-		if (result.type != 'success') return;
+
+	/**
+	 * Handles the loading of reservations data from the server response.
+	 * Merges the newly loaded reservations into the existing reservations array
+	 * triggers an update of the query, updates checkboxes based on the updated reservations
+	 * and sorts the reservations based on the current sorting property.
+	 *
+	 * @param result - The result of the loading operation.
+	 * @returns A Promise that resolves once the loading operation is handled.
+	 */
+	async function handleLoadingReservations(
+		result: ActionResult<Record<string, unknown> | undefined, Record<string, unknown> | undefined>
+	): Promise<void> {
+		if (result.type !== 'success') return;
 		if (!result.data) return;
+
 		reservations = [...reservations, ...(result.data.reservations as any).items];
+
 		setTimeout(() => {
 			updateQuery();
 		}, 1);
+
 		mapCheckboxes();
 		reservations.sort(tableSort);
 	}
-
-	let openConfirmModal = () => {};
-	let closeConfirmModal = () => {};
-
-	let errorConfirmMessage: string = '';
-
-	let query: string = $page.url.searchParams.get('query') || '';
-
-	let updateQuery: () => void = () => {};
 </script>
 
 <AdminNav />
@@ -512,7 +577,7 @@
 										pbPage += 1;
 										formData.set('page', `${pbPage}`);
 										return async ({ result }) => {
-											handleLoadingreservations(result);
+											handleLoadingReservations(result);
 
 											await applyAction(result);
 										};

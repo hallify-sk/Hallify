@@ -4,10 +4,7 @@
 	import Toolbar from '$lib/Toolbar.svelte';
 	import { brush, modifyZones, rerender, stageData, tableList } from '$lib/stores/stage';
 	import { theme } from '$lib/stores/theme.js';
-	/**
-	 * Initializes the stage with data.
-	 * @param data The initial data for the stage
-	 */
+	
 	export let data: any;
 
 	let width = 36;
@@ -19,10 +16,8 @@
 	let color = '#fff';
 	let tablesDB = data.tables as any;
 
-	// Set theme to light
 	theme.set('light');
 
-	// Set stage data and table list
 	stageData.set(data.stage.stage);
 	tableList.set(data.stage.tables);
 
@@ -39,7 +34,6 @@
 		}
 	}
 
-	// Set brush properties
 	brush.set({ type: 'grab', snapCoefficient: 0.5 });
 </script>
 

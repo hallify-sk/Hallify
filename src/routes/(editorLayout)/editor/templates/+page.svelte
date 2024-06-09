@@ -1,14 +1,9 @@
 <script lang="ts">
-	// not used imports
-    // import Checkbox from '$lib/Checkbox.svelte';
-    // import Select from '$lib/Select.svelte';
-    // import { getMinutesToDate } from '$lib/lib.js';
-    // import { goto } from '$app/navigation';
-    // import { enhance, applyAction } from '$app/forms';
-
     import Navbar from '$lib/Navbar.svelte';
     import ImagePreview from '$lib/ImagePreview.svelte';
     import type { RecordModel } from 'pocketbase';
+
+    export let data: any;
 
     /**
      * Handles opening an image preview and storing reservation data.
@@ -23,15 +18,6 @@
         console.log(template);
         reservationData = template;
     }
-
-    export let data: any;
-    console.log(data);
-
-	// not used variables
-    // let nameError: boolean = false;
-    // let categoryError: boolean = false;
-    // let dateError: boolean = false;
-    // let guestError: boolean = false;
 
     let openImagePreview: boolean = false;
     let imageSrc: string = '';
