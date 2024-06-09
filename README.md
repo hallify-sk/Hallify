@@ -6,7 +6,6 @@
   <img src="https://img.shields.io/github/issues/hallify-sk/Hallify?style=for-the-badge" alt=""/>
   <img src="https://img.shields.io/github/issues-pr/hallify-sk/Hallify?style=for-the-badge" alt=""/>
   <img src="https://img.shields.io/github/license/hallify-sk/Hallify?style=for-the-badge" alt=""/>
-  <img src="https://img.shields.io/github/actions/workflow/status/hallify-sk/hallify/.github%2Fworkflows%2Fnode_js.yml?style=for-the-badge" alt=""/>
 </p>
 
 ---
