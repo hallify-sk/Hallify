@@ -1,18 +1,18 @@
-import { PUBLIC_DEV } from '$env/static/public';
-import PocketBase from 'pocketbase';
-import { promises as fs } from 'fs';
-import { error, redirect } from '@sveltejs/kit';
+import { PUBLIC_DEV } from "$env/static/public";
+import PocketBase from "pocketbase";
+import { promises as fs } from "fs";
+import { error, redirect } from "@sveltejs/kit";
 
 let pbIsset = false; // Flag indicating whether PocketBase is configured
-let pbSecretURL: string = ''; // PocketBase private URL
-let pbAPIURL: string = ''; // PocketBase API URL
+let pbSecretURL: string = ""; // PocketBase private URL
+let pbAPIURL: string = ""; // PocketBase API URL
 
 // Read PocketBase configuration from file and set URLs
-await fs.readFile('config/pocketbase.json').then((data) => {
+await fs.readFile("config/pocketbase.json").then((data) => {
 	const { POCKETBASE_URL, POCKETBASE_API_URL } = JSON.parse(data.toString());
 	pbSecretURL = POCKETBASE_URL;
 	pbAPIURL = POCKETBASE_API_URL;
-	if (POCKETBASE_URL != '') {
+	if (POCKETBASE_URL != "") {
 		pbIsset = true;
 	}
 });
@@ -20,17 +20,17 @@ await fs.readFile('config/pocketbase.json').then((data) => {
 export const handle = async ({ event, resolve }) => {
 	// If PocketBase is not configured, redirect to the installation page
 	if (!pbIsset) {
-		if (!event.route.id?.startsWith('/install')) {
-			throw redirect(307, '/install');
+		if (!event.route.id?.startsWith("/install")) {
+			throw redirect(307, "/install");
 		}
 		const response = await resolve(event);
 		return response;
 	} else {
 		// If PocketBase is configured, proceed with authentication and routing logic
-		if (event.route.id == '/install') throw error(404);
+		if (event.route.id == "/install") throw error(404);
 
 		// Initialize PocketBase with the private URL if available
-		if (pbSecretURL && pbSecretURL != '') {
+		if (pbSecretURL && pbSecretURL != "") {
 			event.locals.pb = new PocketBase(pbSecretURL);
 		}
 
@@ -38,10 +38,10 @@ export const handle = async ({ event, resolve }) => {
 		event.locals.pbApiURL = pbAPIURL;
 
 		// Check authentication status and load user data
-		event.locals.pb.authStore.loadFromCookie(event.request.headers.get('cookie') || '');
+		event.locals.pb.authStore.loadFromCookie(event.request.headers.get("cookie") || "");
 		if (event.locals.pb.authStore.isValid) {
 			try {
-				await event.locals.pb.collection('users').authRefresh();
+				await event.locals.pb.collection("users").authRefresh();
 			} catch (e) {
 				try {
 					await event.locals.pb.admins.authRefresh();
@@ -60,10 +60,7 @@ export const handle = async ({ event, resolve }) => {
 
 		// Set authentication cookie in the response headers
 		// SECURE BEFORE DEPLOYMENT!
-		response.headers.set(
-			'set-cookie',
-			event.locals.pb.authStore.exportToCookie({ secure: PUBLIC_DEV != 'true' })
-		);
+		response.headers.set("set-cookie", event.locals.pb.authStore.exportToCookie({ secure: PUBLIC_DEV != "true" }));
 
 		return response;
 	}

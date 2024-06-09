@@ -1,13 +1,12 @@
-import { SECRET_TURNSTILE_TOKEN } from '$env/static/private';
-import { PUBLIC_DEV, PUBLIC_TURNSTILE_URL } from '$env/static/public';
-import { fail } from '@sveltejs/kit';
-import type { RecordModel } from 'pocketbase';
+import { SECRET_TURNSTILE_TOKEN } from "$env/static/private";
+import { PUBLIC_DEV, PUBLIC_TURNSTILE_URL } from "$env/static/public";
+import { fail } from "@sveltejs/kit";
+import type { RecordModel } from "pocketbase";
 
 /**
  * Actions for user authentication.
  */
 export const actions = {
-
 	/**
 	 * Login action.
 	 * @async
@@ -19,33 +18,33 @@ export const actions = {
 	 */
 	login: async ({ request, getClientAddress, locals }) => {
 		const data = await request.formData();
-		const email = data.get('email')?.toString();
-		const password = data.get('password')?.toString();
-		const turnstile = data.get('cf-turnstile-response')?.toString();
-		if (!email || email.trim() == '') {
-			return fail(400, { incorrect: true, message: 'Vyžaduje sa e-mail', type: 'email' });
+		const email = data.get("email")?.toString();
+		const password = data.get("password")?.toString();
+		const turnstile = data.get("cf-turnstile-response")?.toString();
+		if (!email || email.trim() == "") {
+			return fail(400, { incorrect: true, message: "Vyžaduje sa e-mail", type: "email" });
 		}
-		if (!password || password.trim() == '') {
-			return fail(400, { incorrect: true, message: 'Vyžaduje sa heslo', type: 'password' });
+		if (!password || password.trim() == "") {
+			return fail(400, { incorrect: true, message: "Vyžaduje sa heslo", type: "password" });
 		}
 
 		// CAPTCHA validation
 		const formData = new FormData();
-		if (PUBLIC_DEV != 'true') {
-			formData.append('secret', SECRET_TURNSTILE_TOKEN);
-			formData.append('response', turnstile as string);
-			formData.append('remoteip', getClientAddress());
+		if (PUBLIC_DEV != "true") {
+			formData.append("secret", SECRET_TURNSTILE_TOKEN);
+			formData.append("response", turnstile as string);
+			formData.append("remoteip", getClientAddress());
 			const result: Response = await fetch(PUBLIC_TURNSTILE_URL, {
 				body: formData,
-				method: 'POST'
+				method: "POST"
 			});
 			const outcome = await result.json();
 			console.log(outcome);
 			if (!outcome.success)
 				return fail(400, {
 					incorrect: true,
-					message: 'CAPTCHA verifikácia zlyhala.',
-					type: 'auth'
+					message: "CAPTCHA verifikácia zlyhala.",
+					type: "auth"
 				});
 		}
 
@@ -55,11 +54,11 @@ export const actions = {
 		} catch (e) {
 			return fail(400, {
 				incorrect: true,
-				message: 'Nesprávna kombinácia e-mailu a hesla.',
-				type: 'auth'
+				message: "Nesprávna kombinácia e-mailu a hesla.",
+				type: "auth"
 			});
 		}
-	},
+	}
 };
 
 /**
@@ -74,7 +73,9 @@ export async function load({ locals }) {
 	} else {
 		return {
 			user: locals.user,
-			reservations: await locals.pb.collection('reservations').getFullList({ sort: 'created', expand: "user,addons,category" }) as RecordModel[],
+			reservations: (await locals.pb
+				.collection("reservations")
+				.getFullList({ sort: "created", expand: "user,addons,category" })) as RecordModel[],
 			apiUrl: locals.pbApiURL
 		};
 	}

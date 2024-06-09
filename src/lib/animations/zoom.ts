@@ -1,4 +1,4 @@
-import { sineInOut } from 'svelte/easing';
+import { sineInOut } from "svelte/easing";
 
 /**
  * Defines a zoom transition effect for an HTML element.
@@ -12,29 +12,29 @@ import { sineInOut } from 'svelte/easing';
  * @returns An object with transition properties.
  */
 export function zoom(
-  node: HTMLElement,
-  {
-    delay = 0,
-    duration = 1000,
-    easing = sineInOut,
-    opacity = 0,
-    scale = 0.5
-  }: {
-    delay?: number;
-    duration?: number;
-    easing?: (t: number) => number;
-    opacity?: number;
-    scale?: number;
-  } = {}
+	node: HTMLElement,
+	{
+		delay = 0,
+		duration = 1000,
+		easing = sineInOut,
+		opacity = 0,
+		scale = 0.5
+	}: {
+		delay?: number;
+		duration?: number;
+		easing?: (t: number) => number;
+		opacity?: number;
+		scale?: number;
+	} = {}
 ) {
-  // Return an object with the transition properties
-  return {
-    delay,
-    duration,
-    easing,
-    css: (t: number) => `
-      transform: scale(${100 * scale + (t * 100) * (1 - scale)}%);
+	// Return an object with the transition properties
+	return {
+		delay,
+		duration,
+		easing,
+		css: (t: number) => `
+      transform: scale(${100 * scale + t * 100 * (1 - scale)}%);
       opacity: ${t + opacity};
     `
-  };
+	};
 }

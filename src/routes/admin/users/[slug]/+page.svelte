@@ -1,8 +1,8 @@
 <script lang="ts">
-	import AdminNav from '$lib/AdminNav.svelte';
-	import { goto } from '$app/navigation';
-	import { enhance, applyAction } from '$app/forms';
-	import type { RecordModel } from 'pocketbase';
+	import AdminNav from "$lib/AdminNav.svelte";
+	import { goto } from "$app/navigation";
+	import { enhance, applyAction } from "$app/forms";
+	import type { RecordModel } from "pocketbase";
 
 	export let data;
 
@@ -12,12 +12,12 @@
 	let updatedError: boolean = false;
 
 	let openImagePreview: boolean = false;
-	let imageSrc: string = '';
-	let imageAlt: string = '';
+	let imageSrc: string = "";
+	let imageAlt: string = "";
 	let reservationData: RecordModel;
 
-	let error: string = '';
-	
+	let error: string = "";
+
 	/**
 	 * Opens an image preview with the provided source, alternate text, and template data.
 	 *
@@ -45,24 +45,24 @@
 			use:enhance={() => {
 				return ({ result }) => {
 					console.log(result);
-					if (result.type == 'success') {
+					if (result.type == "success") {
 						goto(`/admin/users/`);
-					} else if (result.type == 'failure') {
+					} else if (result.type == "failure") {
 						switch (result.data?.type) {
-							case 'name':
+							case "name":
 								nameError = true;
 								break;
-							case 'email':
+							case "email":
 								emailError = true;
 								break;
-							case 'created':
+							case "created":
 								createdError = true;
 								break;
-							case 'updated':
+							case "updated":
 								updatedError = true;
 								break;
 						}
-						error = `${result.data?.message}` || '';
+						error = `${result.data?.message}` || "";
 					}
 					applyAction(result);
 				};
@@ -77,7 +77,7 @@
 				<input
 					on:change={() => (nameError = false)}
 					placeholder=""
-					value={data.user.name || 'Bez mena'}
+					value={data.user.name || "Bez mena"}
 					type="text"
 					required={true}
 					id="name"
@@ -99,7 +99,7 @@
 				<input
 					on:change={() => (nameError = false)}
 					placeholder=""
-					value={data.user.email || 'Bez emailu'}
+					value={data.user.email || "Bez emailu"}
 					type="text"
 					required={true}
 					id="email"
@@ -121,7 +121,7 @@
 					on:change={() => (createdError = false)}
 					placeholder=""
 					disabled={true}
-					value={new Date(data.user.created).toLocaleDateString('sk')}
+					value={new Date(data.user.created).toLocaleDateString("sk")}
 					type="text"
 					required={true}
 					id="datumVytvorenia"
@@ -143,7 +143,7 @@
 					on:change={() => (updatedError = false)}
 					placeholder=""
 					disabled={true}
-					value={new Date(data.user.updated).toLocaleDateString('sk')}
+					value={new Date(data.user.updated).toLocaleDateString("sk")}
 					type="text"
 					required={true}
 					id="datumVytvorenia"
@@ -165,38 +165,30 @@
 				maxlength="600"
 				class="bg-background-100 resize-none rounded-md col-span-1 lg:col-span-2 min-h-40 p-2"
 				name="adminComment"
-				id="adminComment">{data.user.adminNotes || ''}</textarea
+				id="adminComment">{data.user.adminNotes || ""}</textarea
 			>
-			<div
-				class="ml-auto mt-3 items-center flex flex-row flex-nowrap gap-2 col-span-1 lg:col-span-2"
-			>
+			<div class="ml-auto mt-3 items-center flex flex-row flex-nowrap gap-2 col-span-1 lg:col-span-2">
 				<button
 					type="reset"
 					on:click={() => {
 						goto(`/admin/users`);
 					}}
-					class="px-4 py-2 bg-background-100 hover:bg-background-200 rounded-md text-text-900"
-					>Späť</button
+					class="px-4 py-2 bg-background-100 hover:bg-background-200 rounded-md text-text-900">Späť</button
 				>
-				<button
-					type="submit"
-					class="px-4 py-2 bg-background-700 hover:bg-primary-600 rounded-md text-text-50 w-[120px]"
-				>
-					Zmeniť
-				</button>
+				<button type="submit" class="px-4 py-2 bg-background-700 hover:bg-primary-600 rounded-md text-text-50 w-[120px]"> Zmeniť </button>
 			</div>
 		</form>
 	</div>
 </div>
 
 <style lang="postcss">
-	input[type='number'] {
+	input[type="number"] {
 		-moz-appearance: textfield;
 		appearance: textfield;
 		@apply m-0;
 	}
-	input[type='number']::-webkit-inner-spin-button,
-	input[type='number']::-webkit-outer-spin-button {
+	input[type="number"]::-webkit-inner-spin-button,
+	input[type="number"]::-webkit-outer-spin-button {
 		@apply appearance-none m-0;
 	}
 </style>

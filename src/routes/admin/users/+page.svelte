@@ -1,17 +1,17 @@
 <script lang="ts">
-	import Checkbox from '$lib/Checkbox.svelte';
-	import AdminNav from '$lib/AdminNav.svelte';
-	import Search from '$lib/Search.svelte';
-	import Popup from '$lib/Popup.svelte';
-	import { onDestroy, onMount } from 'svelte';
-	import { applyAction, enhance } from '$app/forms';
-	import { goto, invalidateAll } from '$app/navigation';
-	import { browser } from '$app/environment';
-	import { page } from '$app/stores';
-	import { fly } from 'svelte/transition';
-	import type { RecordModel, ListResult } from 'pocketbase';
-	import type { MouseEventHandler } from 'svelte/elements';
-	import type { ActionResult } from '@sveltejs/kit';
+	import Checkbox from "$lib/Checkbox.svelte";
+	import AdminNav from "$lib/AdminNav.svelte";
+	import Search from "$lib/Search.svelte";
+	import Popup from "$lib/Popup.svelte";
+	import { onDestroy, onMount } from "svelte";
+	import { applyAction, enhance } from "$app/forms";
+	import { goto, invalidateAll } from "$app/navigation";
+	import { browser } from "$app/environment";
+	import { page } from "$app/stores";
+	import { fly } from "svelte/transition";
+	import type { RecordModel, ListResult } from "pocketbase";
+	import type { MouseEventHandler } from "svelte/elements";
+	import type { ActionResult } from "@sveltejs/kit";
 
 	export let data;
 
@@ -25,8 +25,8 @@
 		pbPage: number = 1,
 		suggestions: RecordModel[] = [];
 
-	let errorConfirmMessage: string = '';
-	let query: string = $page.url.searchParams.get('query') || '';
+	let errorConfirmMessage: string = "";
+	let query: string = $page.url.searchParams.get("query") || "";
 
 	let updateQuery: () => void = () => {};
 	let openConfirmModal = () => {};
@@ -50,13 +50,13 @@
 	onMount(async () => {
 		handleTableShadow();
 		if (browser) {
-			window.addEventListener('resize', handleTableShadow);
+			window.addEventListener("resize", handleTableShadow);
 		}
 		updateQuery();
 	});
 	onDestroy(async () => {
 		if (browser) {
-			window.removeEventListener('resize', handleTableShadow);
+			window.removeEventListener("resize", handleTableShadow);
 		}
 	});
 	/**
@@ -67,24 +67,21 @@
 	 */
 	function tableSort(a: RecordModel, b: RecordModel) {
 		//Uses custom function because this allows for deep sort based on weight values of DB relation attributes
-		const sortBy = $page.url.searchParams.get('sortBy');
+		const sortBy = $page.url.searchParams.get("sortBy");
 
-		let sortProperty = 'created';
+		let sortProperty = "created";
 		let inverse = false;
 
 		// Check if sorting is in descending order
 		if (sortBy) {
-			inverse = sortBy.startsWith('-');
+			inverse = sortBy.startsWith("-");
 			sortProperty = inverse ? sortBy.slice(1) : sortBy;
 		}
 
 		// Compare the values of the specified property for 'a' and 'b'
 		if (a.expand?.[sortProperty] && b.expand?.[sortProperty]) {
 			// If both 'a' and 'b' have the specified property in their 'expand' object, compare their 'weight' values
-			return (
-				(a.expand[sortProperty].weight < b.expand[sortProperty].weight ? 1 : -1) *
-				(inverse ? -1 : 1)
-			);
+			return (a.expand[sortProperty].weight < b.expand[sortProperty].weight ? 1 : -1) * (inverse ? -1 : 1);
 		} else if (a.expand?.[sortProperty] && !b.expand?.[sortProperty]) {
 			// If only 'a' has the specified property in its 'expand' object
 			return (a.expand[sortProperty].weight < 0 ? 1 : -1) * (inverse ? -1 : 1);
@@ -102,9 +99,7 @@
 		}
 	}
 
-	async function redirectTouser(
-		id: string
-	): Promise<MouseEventHandler<HTMLTableRowElement> | null | undefined> {
+	async function redirectTouser(id: string): Promise<MouseEventHandler<HTMLTableRowElement> | null | undefined> {
 		await goto(`/admin/users/${id}`);
 		return;
 	}
@@ -117,12 +112,8 @@
 	async function handleSortProperty(filter: string) {
 		//This function puts the current sort property into the URL, and makes sure that this can be an inverse sort or normal sort by pre-pending a - to the sort property.
 		let modFilter = filter;
-		if (
-			$page.url.searchParams.get('sortBy') == filter &&
-			!$page.url.searchParams.get('sortBy')?.startsWith('-')
-		)
-			modFilter = `-${filter}`;
-		$page.url.searchParams.set('sortBy', modFilter);
+		if ($page.url.searchParams.get("sortBy") == filter && !$page.url.searchParams.get("sortBy")?.startsWith("-")) modFilter = `-${filter}`;
+		$page.url.searchParams.set("sortBy", modFilter);
 		users = users.sort(tableSort);
 		return await goto(`?${$page.url.searchParams.toString()}`);
 	}
@@ -140,7 +131,7 @@
 		deleteModal = false;
 		selectAll = false;
 		mapCheckboxes();
-		query = '';
+		query = "";
 	}
 
 	/**
@@ -178,7 +169,7 @@
 	checkboxes.forEach((checkboxData) => {
 		const checkboxElement = document.getElementById(checkboxData.id);
 		if (checkboxElement) {
-			checkboxElement.addEventListener('change', handleCheckboxUpdate);
+			checkboxElement.addEventListener("change", handleCheckboxUpdate);
 		}
 	});
 
@@ -222,10 +213,8 @@
 	 *
 	 * @param {ActionResult<Object | undefined, Object | undefined>} result - The result object from the server response.
 	 */
-	async function handleLoadingUsers(
-		result: ActionResult<Record<string, unknown> | undefined, Record<string, unknown> | undefined>
-	) {
-		if (result.type !== 'success') return;
+	async function handleLoadingUsers(result: ActionResult<Record<string, unknown> | undefined, Record<string, unknown> | undefined>) {
+		if (result.type !== "success") return;
 		if (!result.data) return;
 		users = [...users, ...(result.data.users as any).items];
 		setTimeout(() => {
@@ -267,8 +256,7 @@
 				<tr>
 					<th class="flex items-center px-8 whitespace-nowrap h-[3rem] mt-1">
 						<Checkbox
-							disabled={!Boolean(users?.length) ||
-								(!Boolean(suggestions?.length) && Boolean(query))}
+							disabled={!Boolean(users?.length) || (!Boolean(suggestions?.length) && Boolean(query))}
 							bind:checked={selectAll}
 							onCheck={handleMassCheckboxUpdate}
 							name="select-all"
@@ -276,31 +264,27 @@
 					</th>
 					<th
 						on:click={() => {
-							handleSortProperty('name');
+							handleSortProperty("name");
 						}}
-						class="text-left hover:bg-background-100 px-2 cursor-pointer hover:text-text-600 rounded-t"
-						>Názov</th
+						class="text-left hover:bg-background-100 px-2 cursor-pointer hover:text-text-600 rounded-t">Názov</th
 					>
 					<th
 						on:click={() => {
-							handleSortProperty('email');
+							handleSortProperty("email");
 						}}
-						class="text-left hover:bg-background-100 px-2 cursor-pointer hover:text-text-600 rounded-t"
-						>E-mail</th
+						class="text-left hover:bg-background-100 px-2 cursor-pointer hover:text-text-600 rounded-t">E-mail</th
 					>
 					<th
 						on:click={() => {
-							handleSortProperty('created');
+							handleSortProperty("created");
 						}}
-						class="text-left hover:bg-background-100 px-2 cursor-pointer hover:text-text-600 rounded-t"
-						>Vytvorený</th
+						class="text-left hover:bg-background-100 px-2 cursor-pointer hover:text-text-600 rounded-t">Vytvorený</th
 					>
 					<th
 						on:click={() => {
-							handleSortProperty('edited');
+							handleSortProperty("edited");
 						}}
-						class="text-left hover:bg-background-100 px-2 cursor-pointer hover:text-text-600 rounded-t"
-						>Posledná zmena</th
+						class="text-left hover:bg-background-100 px-2 cursor-pointer hover:text-text-600 rounded-t">Posledná zmena</th
 					>
 					<th
 						class="px-4 right-0 sticky bg-background-50 {displayShadow
@@ -312,28 +296,19 @@
 			<tbody>
 				{#if query}
 					{#if suggestions.filter((i) => suggestions.some((o) => o.id == i.id)).length}
-						{#each suggestions.filter( (i) => suggestions.some((o) => o.id == i.id) ) as suggestion, index}
+						{#each suggestions.filter((i) => suggestions.some((o) => o.id == i.id)) as suggestion, index}
 							<tr
 								on:click={async () => {
 									await redirectTouser(suggestion.id);
 								}}
 								class="hover:bg-background-100 cursor-pointer duration-100 border-b border-slate-400/40 group"
 							>
-								<td
-									on:click|stopPropagation
-									class="flex items-center px-8 whitespace-nowrap h-[3rem] mt-1"
-								>
-									<Checkbox
-										onCheck={handleCheckboxUpdate}
-										bind:checked={checkboxes[index].checked}
-										name={suggestion.id}
-									/>
+								<td on:click|stopPropagation class="flex items-center px-8 whitespace-nowrap h-[3rem] mt-1">
+									<Checkbox onCheck={handleCheckboxUpdate} bind:checked={checkboxes[index].checked} name={suggestion.id} />
 								</td>
 								<td class="px-2">
 									<div class="flex flex-col gap-0">
-										<p
-											class="leading-5 whitespace-nowrap overflow-ellipsis overflow-hidden max-w-60"
-										>
+										<p class="leading-5 whitespace-nowrap overflow-ellipsis overflow-hidden max-w-60">
 											{suggestion.name}
 										</p>
 										<p class="leading-5 text-sm text-slate-400">
@@ -341,26 +316,24 @@
 										</p>
 									</div>
 								</td>
-								<td class="px-2 whitespace-nowrap overflow-ellipsis overflow-hidden"
-									>{suggestion.email}</td
-								>
+								<td class="px-2 whitespace-nowrap overflow-ellipsis overflow-hidden">{suggestion.email}</td>
 								<td class="px-2">
 									<div class="flex flex-col gap-0">
 										<p class="leading-5">
-											{new Date(suggestion.created).toLocaleDateString('sk')}
+											{new Date(suggestion.created).toLocaleDateString("sk")}
 										</p>
 										<p class="leading-5 text-sm text-slate-400">
-											{new Date(suggestion.created).toLocaleTimeString('sk')}
+											{new Date(suggestion.created).toLocaleTimeString("sk")}
 										</p>
 									</div>
 								</td>
 								<td class="px-2">
 									<div class="flex flex-col gap-0">
 										<p class="leading-5">
-											{new Date(suggestion.updated).toLocaleDateString('sk')}
+											{new Date(suggestion.updated).toLocaleDateString("sk")}
 										</p>
 										<p class="leading-5 text-sm text-slate-400">
-											{new Date(suggestion.updated).toLocaleTimeString('sk')}
+											{new Date(suggestion.updated).toLocaleTimeString("sk")}
 										</p>
 									</div>
 								</td>
@@ -369,12 +342,7 @@
 										? 'arrow'
 										: ''} transition-colors border-b border-slate-400/400 group-hover:bg-background-100 duration-100"
 								>
-									<svg
-										xmlns="http://www.w3.org/2000/svg"
-										viewBox="0 0 20 20"
-										fill="currentColor"
-										class="w-5 h-5"
-									>
+									<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-5 h-5">
 										<path
 											fill-rule="evenodd"
 											d="M3 10a.75.75 0 01.75-.75h10.638L10.23 5.29a.75.75 0 111.04-1.08l5.5 5.25a.75.75 0 010 1.08l-5.5 5.25a.75.75 0 11-1.04-1.08l4.158-3.96H3.75A.75.75 0 013 10z"
@@ -416,15 +384,8 @@
 							}}
 							class="hover:bg-background-100 cursor-pointer duration-100 border-b border-slate-400/40 group"
 						>
-							<td
-								on:click|stopPropagation
-								class="flex items-center px-8 whitespace-nowrap h-[3rem] mt-1"
-							>
-								<Checkbox
-									onCheck={handleCheckboxUpdate}
-									bind:checked={checkboxes[index].checked}
-									name={user.id}
-								/>
+							<td on:click|stopPropagation class="flex items-center px-8 whitespace-nowrap h-[3rem] mt-1">
+								<Checkbox onCheck={handleCheckboxUpdate} bind:checked={checkboxes[index].checked} name={user.id} />
 							</td>
 							<td class="px-2">
 								<div class="flex flex-col gap-0">
@@ -440,20 +401,20 @@
 							<td class="px-2">
 								<div class="flex flex-col gap-0">
 									<p class="leading-5">
-										{new Date(user.created).toLocaleDateString('sk')}
+										{new Date(user.created).toLocaleDateString("sk")}
 									</p>
 									<p class="leading-5 text-sm text-slate-400">
-										{new Date(user.created).toLocaleTimeString('sk')}
+										{new Date(user.created).toLocaleTimeString("sk")}
 									</p>
 								</div>
 							</td>
 							<td class="px-2">
 								<div class="flex flex-col gap-0">
 									<p class="leading-5">
-										{new Date(user.updated).toLocaleDateString('sk')}
+										{new Date(user.updated).toLocaleDateString("sk")}
 									</p>
 									<p class="leading-5 text-sm text-slate-400">
-										{new Date(user.updated).toLocaleTimeString('sk')}
+										{new Date(user.updated).toLocaleTimeString("sk")}
 									</p>
 								</div>
 							</td>
@@ -462,12 +423,7 @@
 									? 'arrow'
 									: ''} transition-colors border-b border-slate-400/400 group-hover:bg-background-100 duration-100"
 							>
-								<svg
-									xmlns="http://www.w3.org/2000/svg"
-									viewBox="0 0 20 20"
-									fill="currentColor"
-									class="w-5 h-5"
-								>
+								<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-5 h-5">
 									<path
 										fill-rule="evenodd"
 										d="M3 10a.75.75 0 01.75-.75h10.638L10.23 5.29a.75.75 0 111.04-1.08l5.5 5.25a.75.75 0 010 1.08l-5.5 5.25a.75.75 0 11-1.04-1.08l4.158-3.96H3.75A.75.75 0 013 10z"
@@ -525,7 +481,7 @@
 									method="post"
 									use:enhance={({ formData }) => {
 										pbPage += 1;
-										formData.set('page', `${pbPage}`);
+										formData.set("page", `${pbPage}`);
 										return async ({ result }) => {
 											handleLoadingUsers(result);
 
@@ -533,10 +489,7 @@
 										};
 									}}
 								>
-									<button
-										class="px-4 bg-background-100 hover:bg-background-200 rounded-md text-text-900"
-										type="submit"
-									>
+									<button class="px-4 bg-background-100 hover:bg-background-200 rounded-md text-text-900" type="submit">
 										Načítať ďalšie ({data.users.totalItems - users.length})
 									</button>
 								</form>
@@ -556,16 +509,12 @@
 		class="shadow fixed bottom-20 left-1/2 -translate-x-1/2 justify-between border border-background-200 bg-background-100 rounded-full w-[28rem] flex items-center px-6 py-2"
 	>
 		<p class="text-text-600">
-			Označen{checkboxes.filter((t) => t?.checked === true).length > 1 ? 'í' : 'ý'}
+			Označen{checkboxes.filter((t) => t?.checked === true).length > 1 ? "í" : "ý"}
 			<b>{checkboxes.filter((t) => t?.checked === true).length}</b>
-			používate{checkboxes.filter((t) => t?.checked === true).length > 1 ? 'lia' : 'ľ'}
+			používate{checkboxes.filter((t) => t?.checked === true).length > 1 ? "lia" : "ľ"}
 		</p>
-		<button
-			type="button"
-			on:click={openConfirmModal}
-			class="flex py-2 px-2 rounded-md text-text-100 gap-4 bg-accent-700 hover:bg-accent-600"
-		>
-			Vymazať používateľ{checkboxes.filter((t) => t?.checked === true).length > 1 ? 'ov' : 'a'}
+		<button type="button" on:click={openConfirmModal} class="flex py-2 px-2 rounded-md text-text-100 gap-4 bg-accent-700 hover:bg-accent-600">
+			Vymazať používateľ{checkboxes.filter((t) => t?.checked === true).length > 1 ? "ov" : "a"}
 		</button>
 	</div>
 {/if}
@@ -573,10 +522,10 @@
 <Popup bind:openPopup={openConfirmModal} bind:closePopup={closeConfirmModal}>
 	<div class="w-80">
 		<h2 class="text-text-700 text-xl mb-2">
-			Vymazať používateľ{checkboxes.filter((t) => t?.checked === true).length > 1 ? 'ov' : 'a'}
+			Vymazať používateľ{checkboxes.filter((t) => t?.checked === true).length > 1 ? "ov" : "a"}
 		</h2>
 		<p class="text-text-500 mb-4">
-			Na vymazanie používateľ{checkboxes.filter((t) => t?.checked === true).length > 1 ? 'ov' : 'a'}
+			Na vymazanie používateľ{checkboxes.filter((t) => t?.checked === true).length > 1 ? "ov" : "a"}
 			potrebujete zadať dôvod, ktorý im bude poslaný cez E-Mail. Táto akcia je nevratná.
 		</p>
 		{#if errorConfirmMessage}
@@ -587,14 +536,10 @@
 			method="POST"
 			class="flex flex-col"
 			use:enhance={({ formData }) => {
-				formData.set(
-					'checkboxes',
-					JSON.stringify(checkboxes.filter((t) => t?.checked === true).map((t) => t.id))
-				);
+				formData.set("checkboxes", JSON.stringify(checkboxes.filter((t) => t?.checked === true).map((t) => t.id)));
 				return async ({ result }) => {
-					if (result.type === 'failure') {
-						errorConfirmMessage =
-							typeof result.data?.message == 'string' ? result.data.message : '';
+					if (result.type === "failure") {
+						errorConfirmMessage = typeof result.data?.message == "string" ? result.data.message : "";
 					} else {
 						await deleteSelected();
 						closeConfirmModal();
@@ -603,10 +548,7 @@
 			}}
 		>
 			<textarea
-				placeholder="Dôvod na vymazanie používateľ{checkboxes.filter((t) => t?.checked === true)
-					.length > 1
-					? 'ov'
-					: 'a'}"
+				placeholder="Dôvod na vymazanie používateľ{checkboxes.filter((t) => t?.checked === true).length > 1 ? 'ov' : 'a'}"
 				maxlength="600"
 				minlength="30"
 				class="bg-background-100 resize-none rounded-md col-span-1 lg:col-span-2 min-h-40 p-2 text-text-600"
@@ -614,17 +556,11 @@
 				id="reason"
 			></textarea>
 			<div class="ml-auto mt-3 items-center flex flex-row flex-nowrap gap-2">
-				<button
-					type="reset"
-					on:click={closeConfirmModal}
-					class="px-4 py-2 bg-background-100 hover:bg-background-200 rounded-md text-text-900"
+				<button type="reset" on:click={closeConfirmModal} class="px-4 py-2 bg-background-100 hover:bg-background-200 rounded-md text-text-900"
 					>Zrušiť</button
 				>
-				<button
-					type="submit"
-					class="px-4 py-2 bg-background-700 hover:bg-primary-600 rounded-md text-text-50"
-				>
-					Vymazať používateľ{checkboxes.filter((t) => t?.checked === true).length > 1 ? 'ov' : 'a'}
+				<button type="submit" class="px-4 py-2 bg-background-700 hover:bg-primary-600 rounded-md text-text-50">
+					Vymazať používateľ{checkboxes.filter((t) => t?.checked === true).length > 1 ? "ov" : "a"}
 				</button>
 			</div>
 		</form>

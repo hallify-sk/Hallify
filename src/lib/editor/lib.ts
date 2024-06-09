@@ -1,4 +1,4 @@
-import Konva from 'konva'; // 2D canvas JS framework
+import Konva from "konva"; // 2D canvas JS framework
 
 export type Grid = {
 	/**
@@ -62,12 +62,15 @@ export function pointsToRealPosition(points: number[], position: { x: number; y:
  * @returns An array of objects with x and y properties.
  */
 export function pointsToObjectArray(points: number[]) {
-	return points.reduce((acc, curr, i, a) => {
-		if (i % 2 === 0 && a[i + 1] !== undefined) {
-			acc.push({ x: curr, y: a[i + 1] });
-		}
-		return acc;
-	}, [] as { x: number; y: number }[]);
+	return points.reduce(
+		(acc, curr, i, a) => {
+			if (i % 2 === 0 && a[i + 1] !== undefined) {
+				acc.push({ x: curr, y: a[i + 1] });
+			}
+			return acc;
+		},
+		[] as { x: number; y: number }[]
+	);
 }
 
 /**
@@ -104,17 +107,11 @@ export function addChairHitbox(
  * @param angle - The rotation angle in degrees.
  * @returns The rotated points.
  */
-export function rotatePoints(
-	points: { x: number; y: number }[],
-	originObject: { x: number; y: number },
-	angle: number
-) {
+export function rotatePoints(points: { x: number; y: number }[], originObject: { x: number; y: number }, angle: number) {
 	const radians = (angle * Math.PI) / 180;
 	return points.map((point) => {
-		const rotatedX =
-			Math.cos(radians) * (point.x - originObject.x) - Math.sin(radians) * (point.y - originObject.y) + originObject.x;
-		const rotatedY =
-			Math.sin(radians) * (point.x - originObject.x) + Math.cos(radians) * (point.y - originObject.y) + originObject.y;
+		const rotatedX = Math.cos(radians) * (point.x - originObject.x) - Math.sin(radians) * (point.y - originObject.y) + originObject.x;
+		const rotatedY = Math.sin(radians) * (point.x - originObject.x) + Math.cos(radians) * (point.y - originObject.y) + originObject.y;
 		return { x: Math.round(rotatedX), y: Math.round(rotatedY) };
 	});
 }
@@ -220,10 +217,7 @@ export function checkCircleCollision(circleOne: { x: number; y: number; radius: 
  * @param circle - The circle.
  * @returns True if the polygon collides with the circle, otherwise false.
  */
-export function checkPolygonCircleCollision(
-	polygon: { x: number; y: number }[],
-	circle: { x: number; y: number; radius: number }
-) {
+export function checkPolygonCircleCollision(polygon: { x: number; y: number }[], circle: { x: number; y: number; radius: number }) {
 	// check if any polygon vertex is inside the circle
 	if (
 		polygon.some((_, i) => {
@@ -266,10 +260,7 @@ export function checkPolygonCircleCollision(
  * @param polygon2 - The points of the second polygon.
  * @returns True if the polygons collide, otherwise false.
  */
-export function checkPolygonCollision(
-	polygon1: { x: number; y: number }[],
-	polygon2: { x: number; y: number }[]
-) {
+export function checkPolygonCollision(polygon1: { x: number; y: number }[], polygon2: { x: number; y: number }[]) {
 	for (let i = 0; i < polygon1.length; i++) {
 		const nextIndex = (i + 1) % polygon1.length;
 		const pointOne = polygon1[i];
@@ -316,10 +307,10 @@ function polyPoint(vertices: { x: number; y: number }[], px: number, py: number)
 		const next = (current + 1) % vertices.length;
 		const vn = vertices[next];
 
-		if (((vc.y > py && vn.y < py) || (vc.y < py && vn.y > py)) && (px < (vn.x - vc.x) * (py - vc.y) / (vn.y - vc.y) + vc.x)) {
+		if (((vc.y > py && vn.y < py) || (vc.y < py && vn.y > py)) && px < ((vn.x - vc.x) * (py - vc.y)) / (vn.y - vc.y) + vc.x) {
 			collision = !collision;
-			}
-		});
+		}
+	});
 	return collision;
 }
 
@@ -329,9 +320,7 @@ function polyPoint(vertices: { x: number; y: number }[], px: number, py: number)
  * @returns An array of draggable polygons.
  */
 export function getMovablePolygons(layer: Konva.Layer) {
-	return layer.getChildren(
-		(node) => node instanceof Konva.Group && node.draggable()
-	) as Konva.Group[];
+	return layer.getChildren((node) => node instanceof Konva.Group && node.draggable()) as Konva.Group[];
 }
 
 /**
@@ -341,11 +330,7 @@ export function getMovablePolygons(layer: Konva.Layer) {
  */
 export function getCollisionPolygons(layer: Konva.Layer) {
 	return layer.getChildren(
-		(node) =>
-			node instanceof Konva.Group &&
-			!node.draggable() &&
-			!(node instanceof Konva.Transformer) &&
-			node.name() !== 'preview'
+		(node) => node instanceof Konva.Group && !node.draggable() && !(node instanceof Konva.Transformer) && node.name() !== "preview"
 	) as Konva.Group[];
 }
 
@@ -358,13 +343,7 @@ export function getCollisionPolygons(layer: Konva.Layer) {
  * @param grid - The grid configuration.
  * @returns The closest viable position.
  */
-export function getClosestViablePosition(
-	x: number,
-	y: number,
-	shape: Konva.Line,
-	objects: Konva.Line[],
-	grid: Grid
-) {
+export function getClosestViablePosition(x: number, y: number, shape: Konva.Line, objects: Konva.Line[], grid: Grid) {
 	const gridCells: Map<string, Konva.Line[]> = new Map();
 
 	// Group objects by their grid cell
@@ -405,8 +384,16 @@ export function getClosestViablePosition(
 					(object) =>
 						object !== shape &&
 						checkPolygonCollision(
-							rotatePoints(pointsToObjectArray(pointsToRealPosition(shape.points(), shape.position())), { x: shape.x(), y: shape.y() }, shape.rotation()),
-							rotatePoints(pointsToObjectArray(pointsToRealPosition(object.points(), object.position())), { x: object.x(), y: object.y() }, object.rotation())
+							rotatePoints(
+								pointsToObjectArray(pointsToRealPosition(shape.points(), shape.position())),
+								{ x: shape.x(), y: shape.y() },
+								shape.rotation()
+							),
+							rotatePoints(
+								pointsToObjectArray(pointsToRealPosition(object.points(), object.position())),
+								{ x: object.x(), y: object.y() },
+								object.rotation()
+							)
 						)
 				);
 
@@ -425,8 +412,8 @@ export function getClosestViablePosition(
  * @returns The Blob object.
  */
 export function dataURItoBlob(dataURI: string) {
-	const byteString = atob(dataURI.split(',')[1]);
-	const mimeString = dataURI.split(',')[0].split(':')[1].split(';')[0];
+	const byteString = atob(dataURI.split(",")[1]);
+	const mimeString = dataURI.split(",")[0].split(":")[1].split(";")[0];
 	const ab = new ArrayBuffer(byteString.length);
 	const ia = new Uint8Array(ab);
 

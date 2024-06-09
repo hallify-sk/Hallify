@@ -1,13 +1,13 @@
 <script lang="ts">
-	import Checkbox from '$lib/Checkbox.svelte';
-	import Select from '$lib/Select.svelte';
-	import ImagePreview from '$lib/ImagePreview.svelte';
-	import AdminNav from '$lib/AdminNav.svelte';
-	import { PUBLIC_API_URL } from '$env/static/public';
-	import { getMinutesToDate } from '$lib/lib.js';
-	import { goto } from '$app/navigation';
-	import { enhance, applyAction } from '$app/forms';
-	import type { RecordModel } from 'pocketbase';
+	import Checkbox from "$lib/Checkbox.svelte";
+	import Select from "$lib/Select.svelte";
+	import ImagePreview from "$lib/ImagePreview.svelte";
+	import AdminNav from "$lib/AdminNav.svelte";
+	import { PUBLIC_API_URL } from "$env/static/public";
+	import { getMinutesToDate } from "$lib/lib.js";
+	import { goto } from "$app/navigation";
+	import { enhance, applyAction } from "$app/forms";
+	import type { RecordModel } from "pocketbase";
 
 	export let data;
 
@@ -17,8 +17,8 @@
 	let guestError: boolean = false;
 
 	let openImagePreview: boolean = false;
-	let imageSrc: string = '';
-	let imageAlt: string = '';
+	let imageSrc: string = "";
+	let imageAlt: string = "";
 	let reservationData: RecordModel;
 
 	function openImage(src: string, alt: string, template: RecordModel) {
@@ -28,7 +28,7 @@
 		reservationData = template;
 	}
 
-	let error: string = '';
+	let error: string = "";
 </script>
 
 <AdminNav />
@@ -48,28 +48,28 @@
 				? `/admin/reservations/${data.slug}/?/confirmReservation`
 				: `/admin/reservations/${data.slug}/?/updateReservation`}
 			use:enhance={({ formData }) => {
-				formData.append('date', data.reservation.date);
+				formData.append("date", data.reservation.date);
 				return ({ result }) => {
 					console.log(result);
-					if (result.type == 'success') {
-						console.log('got here');
+					if (result.type == "success") {
+						console.log("got here");
 						goto(`/admin/reservations/`);
-					} else if (result.type == 'failure') {
+					} else if (result.type == "failure") {
 						switch (result.data?.type) {
-							case 'name':
+							case "name":
 								nameError = true;
 								break;
-							case 'type':
+							case "type":
 								categoryError = true;
 								break;
-							case 'date':
+							case "date":
 								dateError = true;
 								break;
-							case 'personCount':
+							case "personCount":
 								guestError = true;
 								break;
 						}
-						error = `${result.data?.message}` || '';
+						error = `${result.data?.message}` || "";
 					}
 					applyAction(result);
 				};
@@ -93,7 +93,7 @@
 				<input
 					on:change={() => (nameError = false)}
 					placeholder=""
-					value={data.reservation.name || 'Bez názvu'}
+					value={data.reservation.name || "Bez názvu"}
 					type="text"
 					required={true}
 					id="menoUdalosti"
@@ -124,7 +124,7 @@
 					on:change={() => (dateError = false)}
 					placeholder=""
 					disabled={true}
-					value={new Date(data.reservation.date).toLocaleDateString('sk')}
+					value={new Date(data.reservation.date).toLocaleDateString("sk")}
 					type="text"
 					required={true}
 					id="datumUdalosti"
@@ -169,9 +169,7 @@
 					<Checkbox name={addon.id} checked={data.reservation.addons.includes(addon.id)} />
 					<label class="text-text-600" for={addon.id}
 						>{addon.name}
-						<span class="text-secondary-500 text-sm"
-							>{addon.price ? `${addon.price}€${addon.hourly ? '/hod.' : ''}` : ``}</span
-						></label
+						<span class="text-secondary-500 text-sm">{addon.price ? `${addon.price}€${addon.hourly ? "/hod." : ""}` : ``}</span></label
 					>
 				</fieldset>
 			{/each}
@@ -183,37 +181,18 @@
 						<button
 							type="button"
 							on:click={() => {
-								openImage(
-									`${PUBLIC_API_URL}/files/${template.collectionId}/${template.id}/${template.image}`,
-									template.id,
-									template
-								);
+								openImage(`${PUBLIC_API_URL}/files/${template.collectionId}/${template.id}/${template.image}`, template.id, template);
 							}}
 							class="mt-1 flex flex-row items-center gap-2 hover:brightness-90"
 						>
-							<img
-								src="{PUBLIC_API_URL}/files/{template.collectionId}/{template.id}/{template.image}"
-								alt=""
-							/>
+							<img src="{PUBLIC_API_URL}/files/{template.collectionId}/{template.id}/{template.image}" alt="" />
 						</button>
 					{/each}
 				{:else}
-					<div
-						class="col-span-4 bg-background-100 rounded-md p-4 flex justify-center items-center flex-col flex-nowrap gap-2"
-					>
-						<p
-							class="p-4 rounded-full aspect-square text-center text-3xl pointer-events-none text-text-400"
-						>
-							:(
-						</p>
-						<p class="text-center text-text-600">
-							Bohužiaľ, nepodarilo sa nám nájsť vhodné rozloženie sály.
-						</p>
-						<a
-							href="/editor"
-							class="px-4 py-2 bg-accent-700 hover:bg-accent-600 rounded-md text-text-50"
-							>Vytvoriť rozloženie sály</a
-						>
+					<div class="col-span-4 bg-background-100 rounded-md p-4 flex justify-center items-center flex-col flex-nowrap gap-2">
+						<p class="p-4 rounded-full aspect-square text-center text-3xl pointer-events-none text-text-400">:(</p>
+						<p class="text-center text-text-600">Bohužiaľ, nepodarilo sa nám nájsť vhodné rozloženie sály.</p>
+						<a href="/editor" class="px-4 py-2 bg-accent-700 hover:bg-accent-600 rounded-md text-text-50">Vytvoriť rozloženie sály</a>
 					</div>
 				{/if}
 			</div>
@@ -222,25 +201,17 @@
 				maxlength="600"
 				class="bg-background-100 resize-none rounded-md col-span-1 lg:col-span-2 min-h-40 p-2"
 				name="adminComment"
-				id="adminComment">{data.reservation.adminNotes || ''}</textarea
+				id="adminComment">{data.reservation.adminNotes || ""}</textarea
 			>
-			<div
-				class="ml-auto mt-3 items-center flex flex-row flex-nowrap gap-2 col-span-1 lg:col-span-2"
-			>
+			<div class="ml-auto mt-3 items-center flex flex-row flex-nowrap gap-2 col-span-1 lg:col-span-2">
 				<button
 					type="reset"
 					on:click={() => {
 						goto(`/admin/reservations`);
 					}}
-					class="px-4 py-2 bg-background-100 hover:bg-background-200 rounded-md text-text-900"
-					>Späť</button
+					class="px-4 py-2 bg-background-100 hover:bg-background-200 rounded-md text-text-900">Späť</button
 				>
-				<button
-					type="submit"
-					class="px-4 py-2 bg-background-700 hover:bg-primary-600 rounded-md text-text-50 w-[120px]"
-				>
-					Zmeniť
-				</button>
+				<button type="submit" class="px-4 py-2 bg-background-700 hover:bg-primary-600 rounded-md text-text-50 w-[120px]"> Zmeniť </button>
 			</div>
 		</form>
 	</div>
@@ -249,13 +220,13 @@
 <ImagePreview bind:isOpen={openImagePreview} bind:imageSrc bind:imageAlt bind:reservationData />
 
 <style lang="postcss">
-	input[type='number'] {
+	input[type="number"] {
 		-moz-appearance: textfield;
 		appearance: textfield;
 		@apply m-0;
 	}
-	input[type='number']::-webkit-inner-spin-button,
-	input[type='number']::-webkit-outer-spin-button {
+	input[type="number"]::-webkit-inner-spin-button,
+	input[type="number"]::-webkit-outer-spin-button {
 		@apply appearance-none m-0;
 	}
 </style>

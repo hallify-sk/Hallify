@@ -4,10 +4,10 @@
  * @returns An object containing stage, slug, stageCategories, and tables
  */
 export const load = ({ params, data }: { params: any; data: any }) => {
-    return {
-        stage: data.stage,
-        slug: params.slug,
-        stageCategories: data.stageCategories,
-        tables: data.tables
-    };
+	return {
+		stage: data.stage,
+		slug: params.slug,
+		stageCategories: data.stageCategories,
+		tables: data.tables
+	};
 };

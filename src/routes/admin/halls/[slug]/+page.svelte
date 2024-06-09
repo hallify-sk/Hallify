@@ -1,9 +1,9 @@
 <script lang="ts">
-	import Popup from '$lib/Popup.svelte';
-	import AdminNav from '$lib/AdminNav.svelte';
-	import Toggle from '$lib/Toggle.svelte';
-	import { Toaster, toast } from 'svelte-sonner';
-	import { enhance } from '$app/forms';
+	import Popup from "$lib/Popup.svelte";
+	import AdminNav from "$lib/AdminNav.svelte";
+	import Toggle from "$lib/Toggle.svelte";
+	import { Toaster, toast } from "svelte-sonner";
+	import { enhance } from "$app/forms";
 
 	export let data;
 
@@ -16,7 +16,7 @@
 
 	let form: HTMLFormElement;
 
-	let hallModuleEnabled: boolean = hall?.config?.toggleModule == 'on';
+	let hallModuleEnabled: boolean = hall?.config?.toggleModule == "on";
 
 	async function saveChanges(event: any) {
 		event.preventDefault();
@@ -24,17 +24,17 @@
 		// for example, you might want to send a fetch request to your server with the form data
 		const formData = new FormData(form);
 		try {
-			const response = await fetch('?/saveChanges', {
-				method: 'POST',
+			const response = await fetch("?/saveChanges", {
+				method: "POST",
 				body: formData
 			});
 			if (!response.ok) {
 				console.log(response);
-				toast.error('Nastala chyba pri ukladaní zmien');
+				toast.error("Nastala chyba pri ukladaní zmien");
 				data.hall.config = startingData;
 			}
 		} catch (e) {
-			toast.error('Nastala chyba pri ukladaní zmien');
+			toast.error("Nastala chyba pri ukladaní zmien");
 		}
 	}
 </script>
@@ -45,25 +45,13 @@
 	<div class="max-w-md flex flex-col">
 		<h2 class="text-lg text-text-600 font-semibold mb-2">Základný plán sály</h2>
 		<div class="w-full max-w-sm gap-2">
-			<img
-				class="w-full"
-				src="http://127.0.0.1:8090/api/files/5yw1wmo1kh08q5p/n8xdtsssczsxas4/stage_FoCdQfevMX.png"
-				alt=""
-			/>
+			<img class="w-full" src="http://127.0.0.1:8090/api/files/5yw1wmo1kh08q5p/n8xdtsssczsxas4/stage_FoCdQfevMX.png" alt="" />
 		</div>
 		<div class="ml-auto mt-3 items-center flex flex-row flex-nowrap gap-2">
-			<button
-				type="reset"
-				on:click={closePopup}
-				class="px-4 py-2 bg-background-100 hover:bg-background-200 rounded-md text-text-900"
+			<button type="reset" on:click={closePopup} class="px-4 py-2 bg-background-100 hover:bg-background-200 rounded-md text-text-900"
 				>Zrušiť</button
 			>
-			<a
-				href="/admin/halls/{hall.id}/editor"
-				class="px-4 py-2 bg-background-700 hover:bg-primary-600 rounded-md text-text-50"
-			>
-				Zmeniť plán
-			</a>
+			<a href="/admin/halls/{hall.id}/editor" class="px-4 py-2 bg-background-700 hover:bg-primary-600 rounded-md text-text-50"> Zmeniť plán </a>
 		</div>
 	</div>
 </Popup>
@@ -105,9 +93,7 @@
 				<div class="grid grid-cols-12 items-center py-2">
 					<div class="flex flex-col col-span-11">
 						<p class="text-text-800">Prijímať rezervácie</p>
-						<p class="text-text-600 max-w-4xl text-xs">
-							Ak je táto možnosť zapnutá, uživatelia si môžu rezervovať dátum v tejto sále.
-						</p>
+						<p class="text-text-600 max-w-4xl text-xs">Ak je táto možnosť zapnutá, uživatelia si môžu rezervovať dátum v tejto sále.</p>
 					</div>
 					<div class="col-span-1 grid place-items-center">
 						<Toggle name="enabled" disabled={false} bind:checked={hall.enabled} />
@@ -118,9 +104,8 @@
 					<div class="flex flex-col col-span-11">
 						<p class="text-text-800">Zapnúť modul</p>
 						<p class="text-text-600 max-w-4xl text-xs">
-							Zapnutie tohto modulu umožní plánovanie rozloženia sály priamo v Hallify. Pri vypnutí
-							modulu sa existujúce rezervácie nezmenia, avšak všetky nové rezervácie tento modul
-							nebudu môcť použiť.
+							Zapnutie tohto modulu umožní plánovanie rozloženia sály priamo v Hallify. Pri vypnutí modulu sa existujúce rezervácie
+							nezmenia, avšak všetky nové rezervácie tento modul nebudu môcť použiť.
 						</p>
 					</div>
 					<div class="col-span-1 grid place-items-center">
@@ -131,46 +116,33 @@
 					<div class="flex flex-col col-span-11">
 						<p class="text-text-800">Povoliť vlastné rozloženia</p>
 						<p class="text-sm text-text-600 max-w-4xl">
-							Zapnutím tejto možnosti si uživatelia môžu vytvárať vlastné rozloženia stolov vo Vašej
-							sále. Ak je táto možnosť vypnutá, používatelia si môžu vyberať iba z vašich
-							pred-tvorených rozložení.
+							Zapnutím tejto možnosti si uživatelia môžu vytvárať vlastné rozloženia stolov vo Vašej sále. Ak je táto možnosť vypnutá,
+							používatelia si môžu vyberať iba z vašich pred-tvorených rozložení.
 						</p>
 					</div>
 					<div class="col-span-1 grid place-items-center">
-						<Toggle
-							name="ownLayouts"
-							checked={hall?.config?.ownLayouts}
-							disabled={!hallModuleEnabled}
-						/>
+						<Toggle name="ownLayouts" checked={hall?.config?.ownLayouts} disabled={!hallModuleEnabled} />
 					</div>
 				</div>
 				<div class="grid grid-cols-12 items-center py-2 {hallModuleEnabled ? '' : 'disabled'}">
 					<div class="flex flex-col col-span-11">
 						<p class="text-text-800">Vynútiť rozloženie sály pri rezervácií</p>
 						<p class="text-sm text-text-600 max-w-4xl">
-							Ak je táto možnosť zapnutá, uživatelia si musia vybrať/vytvoriť rozloženie stolov
-							predtým, ako sa im umožní vytvoriť rezerváciu. Ak je táto možnosť vypnutá, uživatelia
-							si môžu rozloženie stolov dodatočne vyplniť neskôr.
+							Ak je táto možnosť zapnutá, uživatelia si musia vybrať/vytvoriť rozloženie stolov predtým, ako sa im umožní vytvoriť
+							rezerváciu. Ak je táto možnosť vypnutá, uživatelia si môžu rozloženie stolov dodatočne vyplniť neskôr.
 						</p>
 					</div>
 					<div class="col-span-1 grid place-items-center">
-						<Toggle
-							name="forceLayoutOnReservation"
-							checked={hall?.config?.forceLayoutOnReservation}
-							disabled={!hallModuleEnabled}
-						/>
+						<Toggle name="forceLayoutOnReservation" checked={hall?.config?.forceLayoutOnReservation} disabled={!hallModuleEnabled} />
 					</div>
 				</div>
 				<h2 class="py-2 text-text-300 text-sm select-none">Rozloženia</h2>
-				<div
-					class="grid grid-cols-12 gap-2 items-center py-2 {hallModuleEnabled ? '' : 'disabled'}"
-				>
+				<div class="grid grid-cols-12 gap-2 items-center py-2 {hallModuleEnabled ? '' : 'disabled'}">
 					<div class="flex flex-col col-span-10">
 						<p class="text-text-800">Základný plán sály - nenastavený</p>
 						<p class="text-sm text-text-600 max-w-3xl">
-							Toto je základné rozloženie sály, na ktoré viete následne vytvárať rozloženia. Ak
-							zmeníte plán, existujúce rozloženia môžu byť ovplyvnené. Kým není nastavený základný
-							plán, uživateľom sa neumožní vytvárať vlastné rozloženia sály.
+							Toto je základné rozloženie sály, na ktoré viete následne vytvárať rozloženia. Ak zmeníte plán, existujúce rozloženia môžu
+							byť ovplyvnené. Kým není nastavený základný plán, uživateľom sa neumožní vytvárať vlastné rozloženia sály.
 						</p>
 					</div>
 					<div class="grid col-span-2 place-items-center">

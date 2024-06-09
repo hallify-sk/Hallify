@@ -1,10 +1,10 @@
 <script lang="ts">
-	import Brushes from '$lib/Brushes.svelte';
-	import Stage from '$lib/Stage.svelte';
-	import TableList from '$lib/TableList.svelte';
-	import Toolbar from '$lib/Toolbar.svelte';
-	import { theme } from '$lib/stores/theme.js';
-	import { brush, modifyZones, rerender } from '$lib/stores/stage';
+	import Brushes from "$lib/Brushes.svelte";
+	import Stage from "$lib/Stage.svelte";
+	import TableList from "$lib/TableList.svelte";
+	import Toolbar from "$lib/Toolbar.svelte";
+	import { theme } from "$lib/stores/theme.js";
+	import { brush, modifyZones, rerender } from "$lib/stores/stage";
 
 	export let data;
 
@@ -14,11 +14,11 @@
 	let snapSize = 1;
 	let borderThickness = 10;
 	let squaresPerMeter = 2;
-	let color = '#fff';
+	let color = "#fff";
 
 	let tablesDB = data.tables as any;
 
-	theme.set('light');
+	theme.set("light");
 
 	/** Function to download the stage. */
 	let downloadStage: () => Promise<string>;
@@ -32,7 +32,7 @@
 		modifyZones.set(zoneEditing);
 	}
 
-	brush.set({ type: 'grab', snapCoefficient: 1 });
+	brush.set({ type: "grab", snapCoefficient: 1 });
 
 	/** Calculate positions for stage elements. */
 	for (let i = 0; i < 8 + 1; i++) {
@@ -44,15 +44,9 @@
 	}
 </script>
 
-<div
-	class="grid place-items-center h-screen bg-background-200 ml-12"
-	style="width: calc(100vw - 18rem)"
->
+<div class="grid place-items-center h-screen bg-background-200 ml-12" style="width: calc(100vw - 18rem)">
 	{#key $rerender}
-		<Stage
-			bind:downloadStage
-			grid={{ width, height, squareSize, borderThickness, squaresPerMeter }}
-		/>
+		<Stage bind:downloadStage grid={{ width, height, squareSize, borderThickness, squaresPerMeter }} />
 	{/key}
 </div>
 <TableList bind:tables={tablesDB} />

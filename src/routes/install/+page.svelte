@@ -1,12 +1,12 @@
 <script lang="ts">
-	import '../../app.css';
-	import { enhance, applyAction } from '$app/forms';
+	import "../../app.css";
+	import { enhance, applyAction } from "$app/forms";
 
 	let pocketbasePrivateURL = false;
 	let pocketbaseAPIURL = false;
 	let loadingPBSetup = false;
 
-	let errorMessage: string = '';
+	let errorMessage: string = "";
 
 	export let data;
 </script>
@@ -25,25 +25,23 @@
 						loadingPBSetup = false;
 						pocketbasePrivateURL = false;
 						pocketbaseAPIURL = false;
-						errorMessage = '';
-						if (result.type == 'failure') {
+						errorMessage = "";
+						if (result.type == "failure") {
 							switch (result.data?.type) {
-								case 'private':
+								case "private":
 									pocketbasePrivateURL = true;
 									break;
-								case 'api':
+								case "api":
 									pocketbaseAPIURL = true;
 									break;
 							}
-							errorMessage = typeof result.data?.message == 'string' ? result.data.message : '';
+							errorMessage = typeof result.data?.message == "string" ? result.data.message : "";
 						}
 						await applyAction(result);
 					};
 				}}
 			>
-				<div
-					class="bg-secondary-100 border border-secondary-200 rounded-md p-4 text-text-600 flex flex-col flex-nowrap max-w-[30rem] gap-2"
-				>
+				<div class="bg-secondary-100 border border-secondary-200 rounded-md p-4 text-text-600 flex flex-col flex-nowrap max-w-[30rem] gap-2">
 					<h3 class="flex flex-row gap-2 items-center">
 						<svg
 							data-slot="icon"
@@ -65,12 +63,13 @@
 					</h3>
 					<ul class="list-disc ml-6">
 						<li>
-							Pocketbase URL should be accessible by this application's backend only. It should
-							point to the root of your Pocketbase instance.
+							Pocketbase URL should be accessible by this application's backend only. It should point to the root of your Pocketbase
+							instance.
 						</li>
 						<li>
-							API URL should be accessible by anyone, but you should still secure some endpoints. It
-							should point to <code class="bg-secondary-200 p-1 rounded-md">/api</code>
+							API URL should be accessible by anyone, but you should still secure some endpoints. It should point to <code
+								class="bg-secondary-200 p-1 rounded-md">/api</code
+							>
 						</li>
 					</ul>
 					<a href="/" class="text-text-600 hover:text-text-400 mt-2 font-semibold">View guide</a>
@@ -80,7 +79,7 @@
 				{/if}
 				<fieldset class="relative text-input mt-2">
 					<input
-						value={data.POCKETBASE_URL ? data.POCKETBASE_URL : ''}
+						value={data.POCKETBASE_URL ? data.POCKETBASE_URL : ""}
 						on:change={() => (pocketbasePrivateURL = false)}
 						placeholder=""
 						type="text"
@@ -101,7 +100,7 @@
 				</fieldset>
 				<fieldset class="relative text-input mt-2">
 					<input
-						value={data.POCKETBASE_API_URL ? data.POCKETBASE_API_URL : ''}
+						value={data.POCKETBASE_API_URL ? data.POCKETBASE_API_URL : ""}
 						on:change={() => (pocketbaseAPIURL = false)}
 						placeholder=""
 						type="text"
@@ -121,10 +120,7 @@
 					>
 				</fieldset>
 				<div class="ml-auto mt-3 items-center flex flex-row flex-nowrap gap-2">
-					<button
-						type="submit"
-						class="px-4 py-2 bg-background-700 hover:bg-primary-600 rounded-md text-text-50 w-[120px]"
-					>
+					<button type="submit" class="px-4 py-2 bg-background-700 hover:bg-primary-600 rounded-md text-text-50 w-[120px]">
 						{#if loadingPBSetup}
 							<svg
 								xmlns="http://www.w3.org/2000/svg"
@@ -132,10 +128,7 @@
 								stroke="currentColor"
 								fill="none"
 								stroke-linecap="round"
-								stroke-linejoin="round"
-								><path stroke="none" d="M0 0h24v24H0z" fill="none" /><path
-									d="M12 3a9 9 0 1 0 9 9"
-								/></svg
+								stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none" /><path d="M12 3a9 9 0 1 0 9 9" /></svg
 							>
 						{:else}
 							Continue

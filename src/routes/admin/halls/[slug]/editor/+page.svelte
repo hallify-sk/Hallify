@@ -1,12 +1,12 @@
 <script lang="ts">
-	import Brushes from '$lib/Brushes.svelte';
-	import Stage from '$lib/Stage.svelte';
-	import Toolbar from '$lib/Toolbar.svelte';
-	import StageSettings from '$lib/StageSettings.svelte';
-	import TableList from '$lib/TableList.svelte';
-	import { theme } from '$lib/stores/theme.js';
-	import { brush, modifyZones, rerender } from '$lib/stores/stage';
-	import { onMount, tick } from 'svelte';
+	import Brushes from "$lib/Brushes.svelte";
+	import Stage from "$lib/Stage.svelte";
+	import Toolbar from "$lib/Toolbar.svelte";
+	import StageSettings from "$lib/StageSettings.svelte";
+	import TableList from "$lib/TableList.svelte";
+	import { theme } from "$lib/stores/theme.js";
+	import { brush, modifyZones, rerender } from "$lib/stores/stage";
+	import { onMount, tick } from "svelte";
 
 	export let data;
 
@@ -18,7 +18,7 @@
 	let canvasHeight: number;
 	let canvasWidth: number;
 
-	theme.set('light');
+	theme.set("light");
 
 	/** Function to download the stage as a string */
 	let downloadStage: () => Promise<string>;
@@ -32,7 +32,7 @@
 		modifyZones.set(zoneEditing);
 	}
 
-	brush.set({ type: 'grab', snapCoefficient: 1 });
+	brush.set({ type: "grab", snapCoefficient: 1 });
 
 	let borderThicknessX: number = 10;
 	let borderThicknessY: number = 10;
@@ -53,11 +53,7 @@
 </script>
 
 <div class="h-screen bg-background-200 w-screen flex justify-stretch items-stretch">
-	<div
-		class="mt-12 w-full px-12 grid place-items-center"
-		bind:clientWidth={canvasWidth}
-		bind:clientHeight={canvasHeight}
-	>
+	<div class="mt-12 w-full px-12 grid place-items-center" bind:clientWidth={canvasWidth} bind:clientHeight={canvasHeight}>
 		{#key $rerender}
 			<Stage
 				bind:downloadStage

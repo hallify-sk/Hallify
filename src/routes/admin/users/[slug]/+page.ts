@@ -6,8 +6,8 @@
  * @returns {Object} - An object containing user data and slug information.
  */
 export const load = ({ params, data }) => {
-    return {
-        user: data.user,
-        slug: params.slug,
-    }
-}
+	return {
+		user: data.user,
+		slug: params.slug
+	};
+};

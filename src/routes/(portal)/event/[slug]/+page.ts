@@ -4,9 +4,9 @@
  * @returns An object containing reservation, addons and slug
  */
 export const load = ({ params, data }) => {
-    return {
-        reservation: data.reservation,
-        addons: data.addons,
-        slug: params.slug
-    }
-}
+	return {
+		reservation: data.reservation,
+		addons: data.addons,
+		slug: params.slug
+	};
+};
