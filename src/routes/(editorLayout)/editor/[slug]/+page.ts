@@ -3,7 +3,7 @@
  * @param data The data object containing stage, stageCategories, and tables
  * @returns An object containing stage, slug, stageCategories, and tables
  */
-export const load = ({ params, data }: { params: any; data: any }) => {
+export const load = ({ params, data }) => {
 	return {
 		stage: data.stage,
 		slug: params.slug,

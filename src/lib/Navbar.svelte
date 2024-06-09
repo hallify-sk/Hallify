@@ -25,7 +25,7 @@
 	let nameRegisterError: boolean = false;
 	let errorRegisterMessage: string = "";
 
-	function turnstileLoginError(e: any) {
+	function turnstileLoginError(e: CustomEvent) {
 		errorLoginMessage = "Skúste obnoviť stránku (zlyhala CAPTCHA)";
 		console.log(e);
 	}

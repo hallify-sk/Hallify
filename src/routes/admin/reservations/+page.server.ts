@@ -16,7 +16,7 @@ export const actions: import("./$types").Actions = {
 		const page = data.get("page")?.toString();
 		if (!page) return fail(400);
 		if (isNaN(parseInt(page))) return fail(400);
-		const halls = await locals.pb.collection("halls").getList(parseInt(page), 50, { sort: "created", expand: "user,addons,category" });
+		const halls = await locals.pb.collection("reservations").getList(parseInt(page), 50, { sort: "created", expand: "user,addons,category" });
 		if (!halls.items.length) return fail(404);
 
 		return {
@@ -52,7 +52,7 @@ export const actions: import("./$types").Actions = {
 	 * @param {Object} request - The HTTP request object.
 	 * @returns {Object} - The created hall.
 	 */
-	createHall: async ({ locals, request }) => {
+	createHall: async ({ locals }) => {
 		const hall = await locals.pb.collection("halls").create({ name: "Nová sála", config: {} });
 		return { hall };
 	}
@@ -68,6 +68,7 @@ export async function load({ locals }) {
 	return {
 		user: locals.user,
 		halls: await locals.pb.collection("halls").getList(0, 50, { sort: "created" }),
+		reservations: await locals.pb.collection("reservations").getList(0, 50, { sort: "created" }),
 		apiUrl: locals.pbApiURL
 	};
 }

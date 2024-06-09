@@ -216,7 +216,7 @@
 	async function handleLoadingUsers(result: ActionResult<Record<string, unknown> | undefined, Record<string, unknown> | undefined>) {
 		if (result.type !== "success") return;
 		if (!result.data) return;
-		users = [...users, ...(result.data.users as any).items];
+		users = [...users, ...(result.data.users as ListResult<RecordModel>).items];
 		setTimeout(() => {
 			updateQuery();
 		}, 1);

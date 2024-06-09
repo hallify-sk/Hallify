@@ -1,130 +1,28 @@
 <script lang="ts">
 	import "chart.js/auto";
-	import themes from "$lib/themes.json";
 	import AdminNav from "$lib/AdminNav.svelte";
 	import Popup from "$lib/Popup.svelte";
-	import { writable, type Unsubscriber, type Writable } from "svelte/store";
-	import { onDestroy, onMount } from "svelte";
+	import { onDestroy } from "svelte";
 	import { enhance, applyAction } from "$app/forms";
 	import { invalidateAll } from "$app/navigation";
-	import { theme } from "$lib/stores/theme.js";
-	import { Calendar as calendar } from "headless-calendar";
 	import { Turnstile } from "svelte-turnstile";
 	import { PUBLIC_TURNSTILE_TOKEN } from "$env/static/public";
-	import type { RecordModel } from "pocketbase";
 
 	export let data;
 
-	let openEventPopup: () => {};
-	let closeEventPopup: () => {};
+	let openEventPopup: () => void;
+	let closeEventPopup: () => void;
 
 	let emailRegisterError: boolean = false;
 	let passwordRegisterError: boolean = false;
 	let loadingAdmin = false;
 
 	let errorMessage: string = "";
-	let counts: Array<number> = [];
 	let pollingInterval: NodeJS.Timeout;
-
-	const reservations = writable("week");
-
-	onMount(() => {
-		pollingInterval = setInterval(async () => {
-			await invalidateAll();
-			reservationData.labels = [];
-			counts = [];
-			recalculateData();
-		}, 5000);
-
-		unsubscribe = selectedDate.subscribe(() => {
-			selectedEvent = data.reservations?.find((i) => new Date(i.date).setUTCHours(0, 0, 0, 0) == $selectedDate?.getTime());
-		});
-	});
 
 	onDestroy(() => {
 		clearInterval(pollingInterval);
-		unsubscribe?.();
 	});
-
-	let reservationData: {
-		labels: Array<string>;
-		datasets: Array<{
-			label: string;
-			data: Array<number>;
-			backgroundColor: Array<string> | string;
-			borderWidth: number;
-			borderColor: Array<string> | string;
-			borderRadius: number;
-		}>;
-	} = {
-		labels: [],
-		datasets: [
-			{
-				backgroundColor: themes?.[$theme]?.primary?.[100],
-				data: [],
-				borderWidth: 2,
-				borderColor: themes?.[$theme]?.primary?.[300],
-				label: "Vytvorené rezervácie",
-				borderRadius: 5
-			}
-		]
-	};
-
-	let reservationDataCache: {
-		labels: Array<string>;
-		datasets: Array<{
-			label: string;
-			data: Array<number>;
-			backgroundColor: Array<string> | string;
-			borderWidth: number;
-			borderColor: Array<string> | string;
-			borderRadius: number;
-		}>;
-	};
-
-	/**
-	 * Recalculates reservation data for the last specified number of days.
-	 * @param {number} days - The number of days to recalculate data for. Defaults to 7 days.
-	 */
-	function recalculateData(days: number = 7) {
-		// Clone the original reservation data to avoid modifying it directly
-		reservationDataCache = structuredClone(reservationData);
-
-		let lastxDays = Array.from({ length: days }, (_, i) => {
-			const d = new Date().setUTCHours(0, 0, 0, 0) - i * 86400000; // Calculate the date for each day in milliseconds
-			reservationData.labels.unshift(new Date(d).toLocaleDateString("sk"));
-			return d;
-		});
-
-		reservationData.datasets[0].data = lastxDays
-			.map((day) => {
-				return (
-					// Count the number of reservations for each day
-					data.reservations?.reduce((acc, reservation) => {
-						// Check if the reservation was created on the current day
-						return new Date(reservation.created).setUTCHours(0, 0, 0, 0) === day ? acc + 1 : acc;
-					}, 0) || 0 // If there are no reservations for the day, default to 0
-				);
-			})
-			.reverse(); // Reverse the array to match the order of dates
-	}
-
-	const nextWeek = calendar.custom(
-		new Date().toISOString().slice(0, 10),
-		new Date(Date.now() + 1000 * 60 * 60 * 24 * 7).toISOString().slice(0, 10)
-	);
-
-	if ($reservations === "week" && data.reservations) {
-		recalculateData();
-	}
-
-	let selectedDate: Writable<Date | null> = writable(null);
-	let selectedEvent: RecordModel | undefined;
-	let unsubscribe: Unsubscriber;
-
-	$: if (data.user) {
-		console.log("CHANGE");
-	}
 
 	function turnstileLoginError() {
 		errorMessage = "Skúste obnoviť stránku (zlyhala CAPTCHA)";
@@ -142,6 +40,7 @@
 					<a href="/admin/reservations" class="text-accent-600 hover:text-accent-400 text-sm">Zobraziť všetky rezervácie</a>
 				</p>
 				<div class="grid grid-rows-7 m-2 mt-0">
+					<!-- eslint-disable-next-line @typescript-eslint/no-unused-vars-->
 					{#each Array(7) as _, i}
 						{#if data.reservations?.find((e) => new Date(e.date).setUTCHours(0, 0, 0, 0) == new Date(Date.now() + 1000 * 60 * 60 * 24 * i).setUTCHours(0, 0, 0, 0))}
 							<a
@@ -206,63 +105,6 @@
 					{/each}
 				</div>
 			</div>
-			<!--<div class="col-span-12 md:col-span-5 lg:col-span-4 xl:col-span-3">
-				<Calendar
-					highlightedDays={data.reservations}
-					blockPastDays={false}
-					onSelect={() => {
-						openEventPopup();
-					}}
-					bind:selectedDate
-				/>
-			</div>
-			<div class="col-span-12 md:col-span-7 lg:col-span-8 xl:col-span-9">
-				{#key reservationDataCache !== reservationData}
-					<Bar
-						options={{
-							maintainAspectRatio: false,
-							scales: {
-								y: {
-									ticks: {
-										precision: 0
-									}
-								}
-							}
-						}}
-						data={reservationData}
-					/>
-				{/key}
-			</div>
-			<div class="col-span-6">
-				<Bar
-					data={{
-						labels: ['Red', 'Blue', 'Yellow', 'Green', 'Purple', 'Orange'],
-						datasets: [
-							{
-								label: '% of Votes',
-								data: [12, 19, 3, 5, 2, 3],
-								backgroundColor: [
-									'rgba(255, 134,159,0.4)',
-									'rgba(98,  182, 239,0.4)',
-									'rgba(255, 218, 128,0.4)',
-									'rgba(113, 205, 205,0.4)',
-									'rgba(170, 128, 252,0.4)',
-									'rgba(255, 177, 101,0.4)'
-								],
-								borderWidth: 2,
-								borderColor: [
-									'rgba(255, 134, 159, 1)',
-									'rgba(98,  182, 239, 1)',
-									'rgba(255, 218, 128, 1)',
-									'rgba(113, 205, 205, 1)',
-									'rgba(170, 128, 252, 1)',
-									'rgba(255, 177, 101, 1)'
-								]
-							}
-						]
-					}}
-				/>
-			</div>-->
 		</div>
 	</div>
 

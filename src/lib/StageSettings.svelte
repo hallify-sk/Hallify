@@ -1,6 +1,4 @@
 <script lang="ts">
-	import { rerender } from '$lib/stores/stage';
-
     export let stageWidth: number = 30;
     export let stageHeight: number = 30;
     //export let squaresPerMeter: number = 2;

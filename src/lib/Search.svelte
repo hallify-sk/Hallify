@@ -18,13 +18,16 @@
 		goto(`?${$page.url.searchParams.toString()}`);
 	}
 	//Run this function recursively if the value is an object, return the keys
-	function deepSearch(obj: { [any: string]: any }, value: string) {
+	function deepSearch(obj: { [any: string]: string | number | object }, value: string) {
 		for (let key in obj) {
-			if (typeof obj[key] === "string" && obj[key].toLowerCase().includes(value.toLowerCase())) {
-				return true;
+			let k = obj[key];
+			if (typeof k === "string") {
+				if(k.toLowerCase().includes(value.toLowerCase())){
+					return true;
+				}
 			}
-			if (typeof obj[key] === "object" && obj[key] !== null) {
-				if (deepSearch(obj[key], value)) {
+			if (typeof k === "object" && k !== null) {
+				if (deepSearch(k as { [any: string]: string | number | object }, value)) {
 					return true;
 				}
 			}
@@ -43,7 +46,7 @@
 		if (value.startsWith("#")) {
 			value = value.slice(1);
 		}
-		const result = data.filter((v, i, a) => {
+		const result = data.filter((v) => {
 			const keys = Object.keys(v);
 			return keys.some((key) => {
 				switch (typeof v[key]) {

@@ -146,11 +146,11 @@
 		}
 	}
 	async function handleLoadinghalls(
-		result: ActionResult<globalThis.Record<string, unknown> | undefined, globalThis.Record<string, unknown> | undefined>
+		result: ActionResult<Record<string, unknown> | undefined, Record<string, unknown> | undefined>
 	) {
 		if (result.type != "success") return;
 		if (!result.data) return;
-		halls = [...halls, ...(result.data.halls as any).items];
+		halls = [...halls, ...(result.data.halls as ListResult<RecordModel>).items];
 		setTimeout(() => {
 			updateQuery();
 		}, 1);

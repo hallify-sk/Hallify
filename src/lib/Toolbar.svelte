@@ -5,10 +5,11 @@
 	import { applyAction, enhance } from "$app/forms";
 	import { countTotalChairs, dataURItoBlob } from "./editor/lib";
 	import Popup from "./Popup.svelte";
+	import type { RecordModel } from "pocketbase";
 
 	// Exported functions and variables
 	export let downloadStage: () => Promise<string>;
-	export let stageCategories: Array<any> = [];
+	export let stageCategories: Array<RecordModel> = [];
 
 	// Local variables
 	let openPopup: () => void;

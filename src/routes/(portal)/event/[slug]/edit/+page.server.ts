@@ -1,4 +1,4 @@
-import PocketBase from "pocketbase";
+import PocketBase, { ClientResponseError } from "pocketbase";
 import { error, fail } from "@sveltejs/kit";
 
 export const actions = {
@@ -69,20 +69,24 @@ export const actions = {
 
 			// Return success response with reservation ID
 			return { success: true, reservationId: res.id };
-		} catch (e: any) {
-			if (e?.data?.data?.date) {
-				// Handle error if reservation date is not available
-				return fail(401, {
-					incorrect: true,
-					message: "Vaša rezervácia prepadla a dátum si už rezervoval niekto iný."
-				});
+		} catch (e) {
+			if (e instanceof ClientResponseError) {
+				if (e?.data?.data?.date) {
+					// Handle error if reservation date is not available
+					return fail(401, {
+						incorrect: true,
+						message: "Vaša rezervácia prepadla a dátum si už rezervoval niekto iný."
+					});
+				} else {
+					// Handle other server errors
+					console.log(e);
+					return fail(500, {
+						incorrect: true,
+						message: "Nastala serverová chyba. Skúste to prosím neskôr."
+					});
+				}
 			} else {
-				// Handle other server errors
-				console.log(e);
-				return fail(500, {
-					incorrect: true,
-					message: "Nastala serverová chyba. Skúste to prosím neskôr."
-				});
+				throw e;
 			}
 		}
 	},
@@ -147,19 +151,23 @@ export const actions = {
 			});
 			// Return success response
 			return { success: true };
-		} catch (e: any) {
-			if (e?.data?.data?.date) {
-				// Handle error if reservation date is not available
-				return fail(401, {
-					incorrect: true,
-					message: "Vaša rezervácia prepadla a dátum si už rezervoval niekto iný."
-				});
+		} catch (e) {
+			if (e instanceof ClientResponseError) {
+				if (e?.data?.data?.date) {
+					// Handle error if reservation date is not available
+					return fail(401, {
+						incorrect: true,
+						message: "Vaša rezervácia prepadla a dátum si už rezervoval niekto iný."
+					});
+				} else {
+					// Handle other server errors
+					return fail(500, {
+						incorrect: true,
+						message: "Nastala serverová chyba. Skúste to prosím neskôr."
+					});
+				}
 			} else {
-				// Handle other server errors
-				return fail(500, {
-					incorrect: true,
-					message: "Nastala serverová chyba. Skúste to prosím neskôr."
-				});
+				throw e;
 			}
 		}
 	}

@@ -3,8 +3,8 @@
 	import { dateToInputString, getMonthName, getMonthNameFromIndex, getNumberOfDaysInMonth, isToday } from "./lib";
 	import { writable, type Writable } from "svelte/store";
 	import { onDestroy } from "svelte";
-	import { crossfade, fly } from "svelte/transition";
-	import { sineIn, sineInOut, sineOut } from "svelte/easing";
+	import { fly } from "svelte/transition";
+	import { sineIn, sineOut } from "svelte/easing";
 	import { zoom } from "./animations/zoom";
 	import type { RecordModel } from "pocketbase";
 	const month = writable(new Date().getMonth() + 1);
@@ -144,6 +144,7 @@
 						out:fly={{ duration: 300, y: $action * -50, opacity: 0 }}
 					>
 						<!--Last Month-->
+						<!-- eslint-disable-next-line @typescript-eslint/no-unused-vars -->
 						{#each Array([...monthData][0].weekdayIndex) as _, i}
 							<p
 								class="
@@ -186,6 +187,7 @@
 							</button>
 						{/each}
 						<!--Next Month-->
+						<!-- eslint-disable-next-line @typescript-eslint/no-unused-vars -->
 						{#each Array(42 - Array([...monthData][0].weekdayIndex).length - [...monthData].length) as _, i}
 							<!--
             +2 because 
@@ -210,6 +212,7 @@
 				in:zoom={{ delay: 200, duration: 200, scale: 0.8 }}
 				out:zoom={{ duration: 200, scale: 0.8 }}
 			>
+				<!-- eslint-disable-next-line @typescript-eslint/no-unused-vars -->
 				{#each Array(12) as _, i}
 					<button
 						type="button"
@@ -226,7 +229,7 @@
 					>
 				{/each}
 			</div>
-		{:else}{/if}
+		{/if}
 	</div>
 </div>
 

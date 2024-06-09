@@ -5,7 +5,7 @@ import PocketBase from "pocketbase";
  * Loads data for the page server.
  * @returns An object containing stage, stageCategories, and tables data
  */
-export async function load({ locals, params }: { locals: any; params: any }) {
+export async function load({ locals, params }) {
 	return {
 		stage: await (locals.pb as PocketBase).collection("stage_templates").getOne(params.slug, { expand: "categories" }),
 		stageCategories: await locals.pb.collection("stage_categories").getFullList(),
@@ -19,7 +19,7 @@ export async function load({ locals, params }: { locals: any; params: any }) {
  * @returns An object indicating success
  */
 export const actions = {
-	saveStage: async ({ request, locals }: { request: any; locals: any }) => {
+	saveStage: async ({ request, locals }) => {
 		const formData = await request.formData();
 		const name = formData.get("name")?.toString();
 		const stage = formData.get("stage")?.toString();

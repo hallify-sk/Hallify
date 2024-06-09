@@ -89,7 +89,6 @@
 				{data.reservation.expand?.user?.name}
 			</a>
 			<fieldset class="relative text-input">
-				<!-- svelte-ignore missing-declaration -->
 				<input
 					on:change={() => (nameError = false)}
 					placeholder=""

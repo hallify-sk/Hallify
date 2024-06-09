@@ -57,7 +57,6 @@
 	let personCountError = false;
 
 	let pocetLudi: number;
-	let isLoadingHall: boolean = false;
 
 	let openDeletePopup: () => void = () => {};
 	let closeDeletePopup: () => void = () => {};
@@ -113,7 +112,7 @@
 				<p class="text-lg font-bold text-text-600">Vytvoriť novú udalosť</p>
 				<p class="text-text-500">Vytvorte novú udalosť teraz a začnite svoju cestu k dokonálemu podujatiu.</p>
 			</button>
-			{#each data.ownedTempReservations as reservation, i}
+			{#each data.ownedTempReservations as reservation}
 				<div class="relative">
 					<div class="flex flex-row flex-nowrap justify-end absolute w-full top-8 right-2 items-center z-20">
 						<div class="relative group">
@@ -217,7 +216,7 @@
 					</a>
 				</div>
 			{/each}
-			{#each data.ownedReservations.filter((i) => new Date(i.date).getTime() > new Date().getTime()) as reservation, i}
+			{#each data.ownedReservations.filter((i) => new Date(i.date).getTime() > new Date().getTime()) as reservation}
 				<div class="relative">
 					<div class="flex flex-row flex-nowrap justify-end absolute top-2 right-2 items-center z-20 float-right">
 						<div class="relative group">
@@ -333,7 +332,7 @@
 			Archív udalostí
 		</h2>
 		<div class="grid gap-7 grid-cols-1 md:grid-cols-2 lg:grid-cols-3 auto-rows-fr w-full">
-			{#each data.ownedReservations.filter((i) => new Date(i.date).getTime() < new Date().getTime()) as reservation, i}
+			{#each data.ownedReservations.filter((i) => new Date(i.date).getTime() < new Date().getTime()) as reservation}
 				<div class="relative">
 					<div class="flex flex-row flex-nowrap justify-end absolute top-2 right-2 items-center z-20 float-right">
 						<div class="relative group">
@@ -549,9 +548,7 @@
 		use:enhance={({ formData }) => {
 			console.log(selectedDateString);
 			if (selectedDateString) formData.append("date", selectedDateString);
-			isLoadingHall = true;
 			return ({ result }) => {
-				isLoadingHall = false;
 				console.log(result);
 				if (result.type == "success") {
 					applyAction(result);

@@ -226,7 +226,7 @@
 		if (result.type !== "success") return;
 		if (!result.data) return;
 
-		reservations = [...reservations, ...(result.data.reservations as any).items];
+		reservations = [...reservations, ...(result.data.reservations as ListResult<RecordModel>).items];
 
 		setTimeout(() => {
 			updateQuery();

@@ -56,7 +56,7 @@ export const actions: import("./$types").Actions = {
 	 * @param {Object} context.request - The HTTP request object.
 	 * @returns {Object} - The created hall.
 	 */
-	createHall: async ({ locals, request }) => {
+	createHall: async ({ locals }) => {
 		const hall = await locals.pb.collection("halls").create({ name: "Nová sála", config: {} });
 		return { hall };
 	}

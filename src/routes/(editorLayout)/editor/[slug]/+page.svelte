@@ -5,16 +5,14 @@
 	import { brush, modifyZones, rerender, stageData, tableList } from "$lib/stores/stage";
 	import { theme } from "$lib/stores/theme.js";
 
-	export let data: any;
+	export let data;
 
 	let width = 36;
 	let height = 46;
 	let squareSize = 30;
-	let snapSize = 1;
 	let borderThickness = 10;
 	let squaresPerMeter = 2;
-	let color = "#fff";
-	let tablesDB = data.tables as any;
+	let tablesDB = data.tables;
 
 	theme.set("light");
 
@@ -39,7 +37,7 @@
 
 <div class="grid place-items-center h-screen bg-background-200 ml-12" style="width: calc(100vw - 18rem)">
 	{#key $rerender}
-		<Stage bind:downloadStage grid={{ width, height, squareSize, snapSize, color, borderThickness, squaresPerMeter }} />
+		<Stage bind:downloadStage grid={{ width, height, squareSize, squaresPerMeter, borderThicknessX: borderThickness, borderThicknessY: borderThickness }} />
 	{/key}
 </div>
 

@@ -89,7 +89,6 @@
 				<p class="text-red-500 col-span-1 lg:col-span-2">{error}</p>
 			{/if}
 			<fieldset class="relative text-input">
-				<!-- svelte-ignore missing-declaration -->
 				<input
 					on:change={() => (nameError = false)}
 					placeholder=""

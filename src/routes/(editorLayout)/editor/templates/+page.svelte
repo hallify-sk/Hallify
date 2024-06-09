@@ -3,7 +3,7 @@
 	import ImagePreview from "$lib/ImagePreview.svelte";
 	import type { RecordModel } from "pocketbase";
 
-	export let data: any;
+	export let data;
 
 	/**
 	 * Handles opening an image preview and storing reservation data.

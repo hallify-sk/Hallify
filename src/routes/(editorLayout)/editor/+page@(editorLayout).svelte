@@ -11,12 +11,10 @@
 	let width = 36;
 	let height = 46;
 	let squareSize = 30;
-	let snapSize = 1;
 	let borderThickness = 10;
 	let squaresPerMeter = 2;
-	let color = "#fff";
 
-	let tablesDB = data.tables as any;
+	let tablesDB = data.tables;
 
 	theme.set("light");
 
@@ -33,20 +31,11 @@
 	}
 
 	brush.set({ type: "grab", snapCoefficient: 1 });
-
-	/** Calculate positions for stage elements. */
-	for (let i = 0; i < 8 + 1; i++) {
-		//+1 because we want it to return to the original position;
-		const alphaRad = ((2 * Math.PI) / 8) * i;
-		const a = Math.sqrt(2 - 2 * Math.cos(alphaRad)) * 30;
-		const height = (a / 30) * Math.sqrt(Math.pow(30, 2) - Math.pow(a, 2) / 4);
-		const b = Math.sqrt(Math.pow(a, 2) - Math.pow(height, 2));
-	}
 </script>
 
 <div class="grid place-items-center h-screen bg-background-200 ml-12" style="width: calc(100vw - 18rem)">
 	{#key $rerender}
-		<Stage bind:downloadStage grid={{ width, height, squareSize, borderThickness, squaresPerMeter }} />
+		<Stage bind:downloadStage grid={{ width, height, squareSize, borderThicknessY: borderThickness, borderThicknessX: borderThickness, squaresPerMeter }} />
 	{/key}
 </div>
 <TableList bind:tables={tablesDB} />

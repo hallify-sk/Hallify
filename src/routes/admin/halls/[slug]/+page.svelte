@@ -18,7 +18,7 @@
 
 	let hallModuleEnabled: boolean = hall?.config?.toggleModule == "on";
 
-	async function saveChanges(event: any) {
+	async function saveChanges(event: Event) {
 		event.preventDefault();
 		// add your form handling logic here
 		// for example, you might want to send a fetch request to your server with the form data
@@ -87,15 +87,11 @@
 							required={true}
 							id="hallName"
 							name="hallName"
-							class="w-full appearance-none bg-background-100 text-text-600 text-left rounded-md pb-0.5 pt-5 px-2 peer border {false
-								? 'border-red-500'
-								: ''}"
+							class="w-full appearance-none bg-background-100 text-text-600 text-left rounded-md pb-0.5 pt-5 px-2 peer border"
 						/>
 						<label
 							for="hallName"
-							class="absolute top-0.5 left-1 {false
-								? 'text-red-500'
-								: 'text-text-400'} text-sm peer-focus:top-0.5 peer-focus:left-1 peer-focus:text-text-400 peer-focus:text-sm peer-placeholder-shown:top-3 peer-placeholder-shown:left-1 peer-placeholder-shown:text-text-500 peer-placeholder-shown:text-base pointer-events-none ml-1 duration-75"
+							class="absolute top-0.5 left-1 text-sm peer-focus:top-0.5 peer-focus:left-1 peer-focus:text-text-400 peer-focus:text-sm peer-placeholder-shown:top-3 peer-placeholder-shown:left-1 peer-placeholder-shown:text-text-500 peer-placeholder-shown:text-base pointer-events-none ml-1 duration-75"
 							>Názov sály</label
 						>
 					</fieldset>

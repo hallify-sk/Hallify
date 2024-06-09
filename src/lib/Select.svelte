@@ -26,7 +26,7 @@
 	}
 
 	// Function to change the selected option
-	function changeText(event: any) {
+	function changeText(event: MouseEvent) {
 		selected = (event.currentTarget as HTMLElement).parentElement?.getAttribute("data-text");
 		value = (event.currentTarget as HTMLElement).parentElement?.parentElement?.querySelector("input")?.value;
 		toggleSelect();
