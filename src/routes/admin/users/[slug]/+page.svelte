@@ -11,26 +11,7 @@
 	let createdError: boolean = false;
 	let updatedError: boolean = false;
 
-	let openImagePreview: boolean = false;
-	let imageSrc: string = "";
-	let imageAlt: string = "";
-	let reservationData: RecordModel;
-
 	let error: string = "";
-
-	/**
-	 * Opens an image preview with the provided source, alternate text, and template data.
-	 *
-	 * @param {string} src - The image source URL.
-	 * @param {string} alt - The alternate text for the image.
-	 * @param {RecordModel} template - The template data for the image.
-	 */
-	function openImage(src: string, alt: string, template: RecordModel) {
-		imageSrc = src;
-		imageAlt = alt;
-		openImagePreview = true;
-		reservationData = template;
-	}
 </script>
 
 <AdminNav />

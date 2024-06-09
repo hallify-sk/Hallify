@@ -157,7 +157,6 @@
 						{/each}
 						<!--Month-->
 						{#each [...monthData] as day}
-							<!--
 							<button
 								type="button"
 								data-selected={dateToInputString(day.JSDate) == selectedDateString}
@@ -175,9 +174,9 @@
 								{isToday(day.JSDate) ? 'text-accent-500 bg-secondary-200 hover:bg-secondary-300' : 'text-text-600 hover:bg-background-200 disabled:text-text-400'}
 								col-start-{day.weekdayIndex + 1}
 								text-center grid place-items-center text-lg aspect-square rounded-full relative
-								data-[highlighted="true"]:hover:bg-secondary-500 data-[highlighted="true"]:hover:text-secondary-600 data-[highlighted="true"]:bg-secondary-400 data-[highlighted="true"]:text-secondary-600
-								data-[blocked="true"]:hover:bg-accent-500 data-[blocked="true"]:hover:text-accent-600 data-[blocked="true"]:bg-accent-400 data-[blocked="true"]:text-accent-600
-								data-[selected="true"]:!bg-primary-500 data-[selected="true"]:!text-text-100
+								data-[highlighted='true']:hover:bg-secondary-500 data-[highlighted='true']:hover:text-secondary-600 data-[highlighted='true']:bg-secondary-400 data-[highlighted='true']:text-secondary-600
+								data-[blocked='true']:hover:bg-accent-500 data-[blocked='true']:hover:text-accent-600 data-[blocked='true']:bg-accent-400 data-[blocked='true']:text-accent-600
+								data-[selected='true']:!bg-primary-500 data-[selected='true']:!text-text-100
 								"
 							>
 								{day.day}
@@ -185,7 +184,6 @@
 									<div class="absolute block top-1 right-1 bg-accent-500 rounded-full w-1.5 h-1.5"></div>
 								{/if}
 							</button>
-							-->
 						{/each}
 						<!--Next Month-->
 						{#each Array(42 - Array([...monthData][0].weekdayIndex).length - [...monthData].length) as _, i}

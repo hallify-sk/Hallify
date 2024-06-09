@@ -1,4 +1,4 @@
-import PocketBase from "pocketbase";
+import PocketBase, { ClientResponseError } from "pocketbase";
 import { error, fail } from "@sveltejs/kit";
 
 /**
@@ -45,17 +45,21 @@ export const actions = {
 			// Delete temporary reservation
 			await (locals.pb as PocketBase).collection("temp_reservations").delete(params.slug);
 			return { success: true, reservationId: res.id };
-		} catch (e: any) {
-			if (e?.data?.data?.date) {
-				return fail(401, {
-					incorrect: true,
-					message: "Vaša rezervácia prepadla a dátum si už rezervoval niekto iný."
-				});
+		} catch (e) {
+			if (e instanceof ClientResponseError) {
+				if (e?.data?.data?.date) {
+					return fail(401, {
+						incorrect: true,
+						message: "Vaša rezervácia prepadla a dátum si už rezervoval niekto iný."
+					});
+				} else {
+					return fail(500, {
+						incorrect: true,
+						message: "Nastala serverová chyba. Skúste to prosím neskôr."
+					});
+				}
 			} else {
-				return fail(500, {
-					incorrect: true,
-					message: "Nastala serverová chyba. Skúste to prosím neskôr."
-				});
+				throw e;
 			}
 		}
 	},
@@ -96,17 +100,21 @@ export const actions = {
 				addons: selectedAddons
 			});
 			return { success: true };
-		} catch (e: any) {
-			if (e?.data?.data?.date) {
-				return fail(401, {
-					incorrect: true,
-					message: "Vaša rezervácia prepadla a dátum si už rezervoval niekto iný."
-				});
-			} else {
-				return fail(500, {
-					incorrect: true,
-					message: "Nastala serverová chyba. Skúste to prosím neskôr."
-				});
+		} catch (e) {
+			if (e instanceof ClientResponseError) {
+				if (e?.data?.data?.date) {
+					return fail(401, {
+						incorrect: true,
+						message: "Vaša rezervácia prepadla a dátum si už rezervoval niekto iný."
+					});
+				} else {
+					return fail(500, {
+						incorrect: true,
+						message: "Nastala serverová chyba. Skúste to prosím neskôr."
+					});
+				}
+			}else{
+				throw e;
 			}
 		}
 	}
