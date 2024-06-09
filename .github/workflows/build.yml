@@ -21,6 +21,6 @@ jobs:
               with:
                   node-version: ${{ matrix.node-version }}
                   cache: "npm"
-            - run: echo -e "PUBLIC_DEV=${{ secrets.PUBLIC_DEV }}\nPUBLIC_TURNSTILE_URL=${{ secrets.PUBLIC_TURNSTILE_URL }}" > ~/.env
+            - run: echo -e "PUBLIC_DEV=${{ secrets.PUBLIC_DEV }}\nPUBLIC_TURNSTILE_URL=${{ secrets.PUBLIC_TURNSTILE_URL }}\nPUBLIC_TURNSTILE_TOKEN=${{ secrets.PUBLIC_TURNSTILE_TOKEN }}\nSECRET_TURNSTILE_TOKEN=${{ secrets.SECRET_TURNSTILE_TOKEN }}" > ~/.env
             - run: npm ci
             - run: npm run build
