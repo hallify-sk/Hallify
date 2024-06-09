@@ -961,14 +961,14 @@
 		});
 		//If there was no collision, continue in calculating new viable position
 		if (!isColliding) {
-			let position = {x: newX, y: newY};
+			let position = { x: newX, y: newY };
 
 			// Update the preview shape's position
 
 			previewShape.x(position?.x || 0);
 			previewShape.y(position?.y || 0);
 
-			if(shape instanceof Konva.Shape){
+			if (shape instanceof Konva.Shape) {
 				shape.fill(themes?.[$theme]?.primary?.[500]);
 			}
 			shape.parent
@@ -977,7 +977,7 @@
 					(child as Konva.Rect | Konva.Line).fill(themes?.[$theme]?.primary?.[400]);
 				});
 		} else {
-			if(shape instanceof Konva.Shape){
+			if (shape instanceof Konva.Shape) {
 				shape.fill("#9f6060");
 			}
 			shape.parent
@@ -1031,15 +1031,15 @@
 			) *
 			(grid.squareSize * $brush.snapCoefficient * grid.squaresPerMeter);
 		//If there was no collision, continue in calculating new viable position
-		let position = {x: newX, y: newY};
+		let position = { x: newX, y: newY };
 
 		// Update the preview shape's position
 
 		previewShape.x(position?.x || 0);
 		previewShape.y(position?.y || 0);
 
-		if(shape instanceof Konva.Shape){
-		shape.fill(themes?.[$theme]?.primary?.[500]);
+		if (shape instanceof Konva.Shape) {
+			shape.fill(themes?.[$theme]?.primary?.[500]);
 		}
 
 		shape.parent

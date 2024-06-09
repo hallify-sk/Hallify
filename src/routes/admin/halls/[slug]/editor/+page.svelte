@@ -4,9 +4,9 @@
 	import { onMount, tick } from "svelte";
 
 	export let data;
-	import Brushes from '$lib/Brushes.svelte';
-	import Stage from '$lib/Stage.svelte';
-	import Toolbar from '$lib/Toolbar.svelte';
+	import Brushes from "$lib/Brushes.svelte";
+	import Stage from "$lib/Stage.svelte";
+	import Toolbar from "$lib/Toolbar.svelte";
 	import StageSettings from "$lib/StageSettings.svelte";
 	let width = 20;
 	let height = 20;
@@ -61,7 +61,7 @@
 		{/key}
 	</div>
 </div>
-<StageSettings bind:stageWidth={width} bind:stageHeight={height}/>
+<StageSettings bind:stageWidth={width} bind:stageHeight={height} />
 <Toolbar {downloadStage} bind:stageCategories={data.stageCategories} />
 <Brushes />
 

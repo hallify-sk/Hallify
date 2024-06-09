@@ -22,7 +22,7 @@
 		for (let key in obj) {
 			let k = obj[key];
 			if (typeof k === "string") {
-				if(k.toLowerCase().includes(value.toLowerCase())){
+				if (k.toLowerCase().includes(value.toLowerCase())) {
 					return true;
 				}
 			}

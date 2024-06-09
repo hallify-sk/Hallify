@@ -37,7 +37,10 @@
 
 <div class="grid place-items-center h-screen bg-background-200 ml-12" style="width: calc(100vw - 18rem)">
 	{#key $rerender}
-		<Stage bind:downloadStage grid={{ width, height, squareSize, squaresPerMeter, borderThicknessX: borderThickness, borderThicknessY: borderThickness }} />
+		<Stage
+			bind:downloadStage
+			grid={{ width, height, squareSize, squaresPerMeter, borderThicknessX: borderThickness, borderThicknessY: borderThickness }}
+		/>
 	{/key}
 </div>
 

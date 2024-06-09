@@ -6,7 +6,7 @@
 	import { enhance } from "$app/forms";
 
 	export let data;
-	
+
 	let startingData = structuredClone(data?.hall.config);
 
 	let openPopup: () => void = () => {};
@@ -37,33 +37,31 @@
 			toast.error("Nastala chyba pri ukladaní zmien");
 		}
 	}
-
 </script>
 
 <AdminNav pageName="Nastavenia sály" />
 <Toaster position="bottom-right" visibleToasts={3} />
 <Popup bind:openPopup bind:closePopup>
-<div class="flex flex-col">
-	<h2 class="text-text-600 font-bold mb-3">
-		Základný plán sály
-	</h2>
-	<img src={data.apiUrl+"/files/"+hall.collectionId+"/"+hall.id+"/"+hall.render} class="max-h-[24rem] overflow-auto" alt="Hall preview">
-	<div class="ml-auto mt-3 items-center flex flex-row flex-nowrap gap-2">
-		<button
-			type="button"
-			on:click={closePopup}
-			class="px-4 py-2 bg-background-100 hover:bg-background-200 rounded-md text-text-900"
-			>Zrušiť</button
-		>
-		<a
-			href="/admin/halls/{data.hall.id}/editor"
-			type="button"
-			class="px-4 py-2 bg-background-700 hover:bg-primary-600 rounded-md text-text-50"
-		>
-			Upraviť
-	</a>
+	<div class="flex flex-col">
+		<h2 class="text-text-600 font-bold mb-3">Základný plán sály</h2>
+		<img
+			src={data.apiUrl + "/files/" + hall.collectionId + "/" + hall.id + "/" + hall.render}
+			class="max-h-[24rem] overflow-auto"
+			alt="Hall preview"
+		/>
+		<div class="ml-auto mt-3 items-center flex flex-row flex-nowrap gap-2">
+			<button type="button" on:click={closePopup} class="px-4 py-2 bg-background-100 hover:bg-background-200 rounded-md text-text-900"
+				>Zrušiť</button
+			>
+			<a
+				href="/admin/halls/{data.hall.id}/editor"
+				type="button"
+				class="px-4 py-2 bg-background-700 hover:bg-primary-600 rounded-md text-text-50"
+			>
+				Upraviť
+			</a>
+		</div>
 	</div>
-</div>
 </Popup>
 <div class="flex flex-row flex-nowrap justify-stretch h-screen pl-64">
 	<div class="w-full px-2 pt-24 gap-8 flex justify-stretch pb-6">

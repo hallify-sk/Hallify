@@ -25,11 +25,7 @@
 		on:click={closePopup}
 	>
 		<!-- Popup content -->
-		<button
-			type="button"
-			class="bg-background-50 p-6 rounded-md block cursor-default text-left max-w-2xl"
-			on:click|stopPropagation
-		>
+		<button type="button" class="bg-background-50 p-6 rounded-md block cursor-default text-left max-w-2xl" on:click|stopPropagation>
 			<slot />
 		</button>
 	</button>

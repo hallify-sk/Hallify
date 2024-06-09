@@ -113,7 +113,7 @@ export const actions = {
 						message: "Nastala serverová chyba. Skúste to prosím neskôr."
 					});
 				}
-			}else{
+			} else {
 				throw e;
 			}
 		}

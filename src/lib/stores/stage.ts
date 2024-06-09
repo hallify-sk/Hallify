@@ -72,17 +72,18 @@ export const stageData: Writable<{
 		strokeWidth?: number;
 		dash?: Array<number>;
 	}>;
-}> = writable({
-  squareSize: 30,
-  scale: 0.75,
-  width: 20,
-  height: 20,
-  x: 0,
-  y: 0,
-  "collisionObjects": [],
-  "zones": []
-}
-  /*{
+}> = writable(
+	{
+		squareSize: 30,
+		scale: 0.75,
+		width: 20,
+		height: 20,
+		x: 0,
+		y: 0,
+		collisionObjects: [],
+		zones: []
+	}
+	/*{
   "width": 750,
   "height": 1110,
   "squareSize": 30,

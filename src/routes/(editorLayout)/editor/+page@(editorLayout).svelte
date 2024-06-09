@@ -35,7 +35,10 @@
 
 <div class="grid place-items-center h-screen bg-background-200 ml-12" style="width: calc(100vw - 18rem)">
 	{#key $rerender}
-		<Stage bind:downloadStage grid={{ width, height, squareSize, borderThicknessY: borderThickness, borderThicknessX: borderThickness, squaresPerMeter }} />
+		<Stage
+			bind:downloadStage
+			grid={{ width, height, squareSize, borderThicknessY: borderThickness, borderThicknessX: borderThickness, squaresPerMeter }}
+		/>
 	{/key}
 </div>
 <TableList bind:tables={tablesDB} />

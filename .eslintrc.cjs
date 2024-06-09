@@ -22,7 +22,7 @@ module.exports = {
 				parser: "@typescript-eslint/parser"
 			},
 			rules: {
-				"no-undef": "off",
+				"no-undef": "off"
 			}
 		},
 		{
@@ -31,5 +31,5 @@ module.exports = {
 				"no-undef": "off"
 			}
 		}
-	],
+	]
 };

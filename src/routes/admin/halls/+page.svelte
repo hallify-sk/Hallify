@@ -145,9 +145,7 @@
 			});
 		}
 	}
-	async function handleLoadinghalls(
-		result: ActionResult<Record<string, unknown> | undefined, Record<string, unknown> | undefined>
-	) {
+	async function handleLoadinghalls(result: ActionResult<Record<string, unknown> | undefined, Record<string, unknown> | undefined>) {
 		if (result.type != "success") return;
 		if (!result.data) return;
 		halls = [...halls, ...(result.data.halls as ListResult<RecordModel>).items];
@@ -156,7 +154,7 @@
 		}, 1);
 		mapCheckboxes();
 		halls.sort(tableSort);
-	};
+	}
 
 	let openImageModal = () => {};
 	let closeImageModal = () => {};
@@ -353,12 +351,20 @@
 										<td class="px-2">
 											<div class="w-full h-full flex items-center">
 												{#if hall.render}
-												<button class="hover:brightness-75 aspect-square overflow-hidden" on:click|stopPropagation={()=>{
-													imagePreview = data.apiUrl+"/files/"+hall.collectionId+"/"+hall.id+"/"+hall.render;
-													openImageModal();
-												}}>
-													<img src={data.apiUrl+"/files/"+hall.collectionId+"/"+hall.id+"/"+hall.render} alt="Náhľad" class="w-10 rounded"/>
-												</button>
+													<button
+														class="hover:brightness-75 aspect-square overflow-hidden"
+														on:click|stopPropagation={() => {
+															imagePreview =
+																data.apiUrl + "/files/" + hall.collectionId + "/" + hall.id + "/" + hall.render;
+															openImageModal();
+														}}
+													>
+														<img
+															src={data.apiUrl + "/files/" + hall.collectionId + "/" + hall.id + "/" + hall.render}
+															alt="Náhľad"
+															class="w-10 rounded"
+														/>
+													</button>
 												{:else}
 													<p>Bez náhľadu</p>
 												{/if}
@@ -464,12 +470,9 @@
 
 <Popup bind:openPopup={openImageModal} bind:closePopup={closeImageModal}>
 	<div class="flex flex-col">
-		<img src={imagePreview} class="max-h-[24rem] overflow-auto" alt="Hall preview">
+		<img src={imagePreview} class="max-h-[24rem] overflow-auto" alt="Hall preview" />
 		<div class="ml-auto mt-3 items-center flex flex-row flex-nowrap gap-2">
-			<button
-				type="button"
-				on:click={closeImageModal}
-				class="px-4 py-2 bg-background-100 hover:bg-background-200 rounded-md text-text-900"
+			<button type="button" on:click={closeImageModal} class="px-4 py-2 bg-background-100 hover:bg-background-200 rounded-md text-text-900"
 				>Zrušiť</button
 			>
 		</div>
