@@ -168,7 +168,10 @@
 		}, 1);
 		mapCheckboxes();
 		halls.sort(tableSort);
-	}
+	};
+
+	let openImageModal = () => {};
+	let closeImageModal = () => {};
 
 	let openConfirmModal = () => {};
 	let closeConfirmModal = () => {};
@@ -178,6 +181,8 @@
 	let query: string = $page.url.searchParams.get('query') || '';
 
 	let updateQuery: () => void = () => {};
+
+	let imagePreview: string = "";
 </script>
 
 <AdminNav pageName="Zoznam sál" />
@@ -394,11 +399,18 @@
 											>{hall.enabled ? 'Zapnuté' : 'Vypnuté'}</td
 										>
 										<td class="px-2">
-											{#if hall.render}
-												{hall.render}
-											{:else}
-												Bez náhľadu
-											{/if}
+											<div class="w-full h-full flex items-center">
+												{#if hall.render}
+												<button class="hover:brightness-75 aspect-square overflow-hidden" on:click|stopPropagation={()=>{
+													imagePreview = data.apiUrl+"/files/"+hall.collectionId+"/"+hall.id+"/"+hall.render;
+													openImageModal();
+												}}>
+													<img src={data.apiUrl+"/files/"+hall.collectionId+"/"+hall.id+"/"+hall.render} alt="Náhľad" class="w-10 rounded"/>
+												</button>
+												{:else}
+													<p>Bez náhľadu</p>
+												{/if}
+											</div>
 										</td>
 										<td class="px-2">
 											<div class="flex flex-col gap-0">
@@ -505,6 +517,20 @@
 		</div>
 	</div>
 </div>
+
+<Popup bind:openPopup={openImageModal} bind:closePopup={closeImageModal}>
+	<div class="flex flex-col">
+		<img src={imagePreview} class="max-h-[24rem] overflow-auto" alt="Hall preview">
+		<div class="ml-auto mt-3 items-center flex flex-row flex-nowrap gap-2">
+			<button
+				type="button"
+				on:click={closeImageModal}
+				class="px-4 py-2 bg-background-100 hover:bg-background-200 rounded-md text-text-900"
+				>Zrušiť</button
+			>
+		</div>
+	</div>
+</Popup>
 
 {#if deleteModal}
 	<div

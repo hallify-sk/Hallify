@@ -38,33 +38,33 @@
 			toast.error('Nastala chyba pri ukladaní zmien');
 		}
 	}
+
 </script>
 
 <AdminNav pageName="Nastavenia sály" />
 <Toaster position="bottom-right" visibleToasts={3} />
 <Popup bind:openPopup bind:closePopup>
-	<div class="max-w-md flex flex-col">
-		<h2 class="text-lg text-text-600 font-semibold mb-2">
-			Základný plán sály
-		</h2>
-		<div class="w-full max-w-sm gap-2">
-			<img class="w-full" src="http://127.0.0.1:8090/api/files/5yw1wmo1kh08q5p/n8xdtsssczsxas4/stage_FoCdQfevMX.png" alt="">
-		</div>
-		<div class="ml-auto mt-3 items-center flex flex-row flex-nowrap gap-2">
-			<button
-				type="reset"
-				on:click={closePopup}
-				class="px-4 py-2 bg-background-100 hover:bg-background-200 rounded-md text-text-900"
-				>Zrušiť</button
-			>
-			<a
-				href="/admin/halls/{hall.id}/editor"
-				class="px-4 py-2 bg-background-700 hover:bg-primary-600 rounded-md text-text-50"
-			>
-				Zmeniť plán
-		</a>
-		</div>
+<div class="flex flex-col">
+	<h2 class="text-text-600 font-bold mb-3">
+		Základný plán sály
+	</h2>
+	<img src={data.apiUrl+"/files/"+hall.collectionId+"/"+hall.id+"/"+hall.render} class="max-h-[24rem] overflow-auto" alt="Hall preview">
+	<div class="ml-auto mt-3 items-center flex flex-row flex-nowrap gap-2">
+		<button
+			type="button"
+			on:click={closePopup}
+			class="px-4 py-2 bg-background-100 hover:bg-background-200 rounded-md text-text-900"
+			>Zrušiť</button
+		>
+		<a
+			href="/admin/halls/{data.hall.id}/editor"
+			type="button"
+			class="px-4 py-2 bg-background-700 hover:bg-primary-600 rounded-md text-text-50"
+		>
+			Upraviť
+	</a>
 	</div>
+</div>
 </Popup>
 <div class="flex flex-row flex-nowrap justify-stretch h-screen pl-64">
 	<div class="w-full px-2 pt-24 gap-8 flex justify-stretch pb-6">
@@ -163,7 +163,7 @@
 				<h2 class="py-2 text-text-300 text-sm select-none">Rozloženia</h2>
 				<div class="grid grid-cols-12 gap-2 items-center py-2 {hallModuleEnabled ? '' : 'disabled'}">
 					<div class="flex flex-col col-span-10">
-						<p class="text-text-800">Základný plán sály - nenastavený</p>
+						<p class="text-text-800">Základný plán sály{data.hall.render ? "" : "- nenastavený"}</p>
 						<p class="text-sm text-text-600 max-w-3xl">
 							Toto je základné rozloženie sály, na ktoré viete následne vytvárať rozloženia. Ak
 							zmeníte plán, existujúce rozloženia môžu byť ovplyvnené. Kým není nastavený základný plán, uživateľom sa neumožní vytvárať vlastné rozloženia sály.

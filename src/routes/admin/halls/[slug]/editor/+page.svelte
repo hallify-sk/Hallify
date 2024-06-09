@@ -3,8 +3,8 @@
 	import Brushes from '$lib/Brushes.svelte';
 	import Stage from '$lib/Stage.svelte';
 	import Toolbar from '$lib/Toolbar.svelte';
-	let width = 36;
-	let height = 46;
+	let width = 20;
+	let height = 20;
 	let squareSize = 30;
 	let squaresPerMeter = 2;
 	import { theme } from '$lib/stores/theme.js';
@@ -60,8 +60,7 @@
 {/key}
 	</div>
 </div>
-<StageSettings bind:stageWidth={width} bind:stageHeight={height} bind:square={squareSize}/>
-<TableList tables={data.tables}/>
+<StageSettings bind:stageWidth={width} bind:stageHeight={height}/>
 <Toolbar {downloadStage} bind:stageCategories={data.stageCategories} />
 <Brushes />
 
