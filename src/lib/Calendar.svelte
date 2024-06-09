@@ -157,6 +157,7 @@
 						{/each}
 						<!--Month-->
 						{#each [...monthData] as day}
+						<!--
 							<button
 								type="button"
 								data-selected={dateToInputString(day.JSDate) == selectedDateString}
@@ -184,6 +185,7 @@
 									<div class="absolute block top-1 right-1 bg-accent-500 rounded-full w-1.5 h-1.5"></div>
 								{/if}
 							</button>
+							-->
 						{/each}
 						<!--Next Month-->
 						{#each Array(42 - Array([...monthData][0].weekdayIndex).length - [...monthData].length) as _, i}

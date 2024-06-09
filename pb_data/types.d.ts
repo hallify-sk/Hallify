@@ -119,7 +119,7 @@ declare function routerPre(...middlewares: Array<string | echo.MiddlewareFunc>):
  *
  * @group PocketBase
  */
-declare var __hooks: string;
+declare let __hooks: string;
 
 // Utility type to exclude the on* hook methods from a type
 // (hooks are separately generated as global methods).
@@ -144,7 +144,7 @@ type PocketBase = excludeHooks<pocketbase.PocketBase>;
  * @namespace
  * @group PocketBase
  */
-declare var $app: PocketBase;
+declare let $app: PocketBase;
 
 /**
  * `$template` is a global helper to load and cache HTML templates on the fly.
@@ -166,7 +166,7 @@ declare var $app: PocketBase;
  * @namespace
  * @group PocketBase
  */
-declare var $template: template.Registry;
+declare let $template: template.Registry;
 
 /**
  * readerToString reads the content of the specified io.Reader until
@@ -1238,7 +1238,7 @@ type _TygojaAny = any;
  * performance or cause other issues.
  */
 namespace os {
-	interface readdirMode extends Number {}
+	interface readdirMode extends number {}
 	interface File {
 		/**
 		 * Readdir reads the contents of the directory associated with file and
@@ -2023,7 +2023,7 @@ namespace os {
 		 */
 		(dir: string): fs.FS;
 	}
-	interface dirFS extends String {}
+	interface dirFS extends string {}
 	interface dirFS {
 		open(name: string): fs.File;
 	}
@@ -2184,7 +2184,7 @@ namespace os {
 	/**
 	 * newFileKind describes the kind of file to newFile.
 	 */
-	interface newFileKind extends Number {}
+	interface newFileKind extends number {}
 	interface truncate {
 		/**
 		 * Truncate changes the size of the named file.
@@ -4969,7 +4969,7 @@ namespace dbx {
 	/**
 	 * VarTypeError indicates a variable type error when trying to populating a variable with DB result.
 	 */
-	interface VarTypeError extends String {}
+	interface VarTypeError extends string {}
 	interface VarTypeError {
 		/**
 		 * Error returns the error message.
@@ -7203,7 +7203,7 @@ namespace syscall {
 	 * 	if errors.Is(err, fs.ErrNotExist) ...
 	 * ```
 	 */
-	interface Errno extends Number {}
+	interface Errno extends number {}
 	interface Errno {
 		error(): string;
 	}
@@ -7510,7 +7510,7 @@ namespace time {
 	 * as an int64 nanosecond count. The representation limits the
 	 * largest representable duration to approximately 290 years.
 	 */
-	interface Duration extends Number {}
+	interface Duration extends number {}
 	interface Duration {
 		/**
 		 * String returns a string representing the duration in the form "72h3m0.5s".
@@ -7890,7 +7890,7 @@ namespace fs {
 	 * to another portably. Not all bits apply to all systems.
 	 * The only required bit is [ModeDir] for directories.
 	 */
-	interface FileMode extends Number {}
+	interface FileMode extends number {}
 	interface FileMode {
 		string(): string;
 	}
@@ -14638,7 +14638,7 @@ namespace syscall {
 	 * A Signal is a number describing a process signal.
 	 * It implements the os.Signal interface.
 	 */
-	interface Signal extends Number {}
+	interface Signal extends number {}
 	interface Signal {
 		signal(): void;
 	}
@@ -14737,7 +14737,7 @@ namespace time {
 	/**
 	 * A Month specifies a month of the year (January = 1, ...).
 	 */
-	interface Month extends Number {}
+	interface Month extends number {}
 	interface Month {
 		/**
 		 * String returns the English name of the month ("January", "February", ...).
@@ -14747,7 +14747,7 @@ namespace time {
 	/**
 	 * A Weekday specifies a day of the week (Sunday = 0, ...).
 	 */
-	interface Weekday extends Number {}
+	interface Weekday extends number {}
 	interface Weekday {
 		/**
 		 * String returns the English name of the day ("Sunday", "Monday", ...).
@@ -15273,7 +15273,7 @@ namespace sql {
 	/**
 	 * IsolationLevel is the transaction isolation level used in [TxOptions].
 	 */
-	interface IsolationLevel extends Number {}
+	interface IsolationLevel extends number {}
 	interface IsolationLevel {
 		/**
 		 * String returns the name of the transaction isolation level.
@@ -16056,7 +16056,7 @@ namespace http {
 	 * A ConnState represents the state of a client connection to a server.
 	 * It's used by the optional [Server.ConnState] hook.
 	 */
-	interface ConnState extends Number {}
+	interface ConnState extends number {}
 	interface ConnState {
 		string(): string;
 	}
@@ -18060,7 +18060,7 @@ namespace cobra {
 	 * ShellCompDirective is a bit map representing the different behaviors the shell
 	 * can be instructed to have once completions have been provided.
 	 */
-	interface ShellCompDirective extends Number {}
+	interface ShellCompDirective extends number {}
 	/**
 	 * CompletionOptions are the options to control shell completion
 	 */
@@ -18475,7 +18475,7 @@ namespace http {
 	 *
 	 * See https://tools.ietf.org/html/draft-ietf-httpbis-cookie-same-site-00 for details.
 	 */
-	interface SameSite extends Number {}
+	interface SameSite extends number {}
 	// @ts-ignore
 	import mathrand = rand;
 	// @ts-ignore
@@ -19207,7 +19207,7 @@ namespace slog {
 	 * A Level is the importance or severity of a log event.
 	 * The higher the level, the more important or severe the event.
 	 */
-	interface Level extends Number {}
+	interface Level extends number {}
 	interface Level {
 		/**
 		 * String returns a name for the level.
@@ -20531,7 +20531,7 @@ namespace slog {
 	/**
 	 * Kind is the kind of a [Value].
 	 */
-	interface Kind extends Number {}
+	interface Kind extends number {}
 	interface Kind {
 		string(): string;
 	}

@@ -353,7 +353,6 @@ export async function load({ locals }) {
 			.collection("reservations")
 			.getFullList({ filter: `user="${locals?.user?.id}"`, expand: "category" }),
 		addons: await (locals.pb as PocketBase).collection("addons").getFullList(),
-		stages: await (locals.pb as PocketBase).collection("stages").getFullList({ sort: "created" }),
 		categories: (await (locals.pb as PocketBase).collection("stage_categories").getFullList({ sort: "created" })).map((i) => {
 			return { id: i.id, name: i.name };
 		})
