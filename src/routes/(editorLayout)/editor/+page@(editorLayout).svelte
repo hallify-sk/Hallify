@@ -1,9 +1,13 @@
 <script lang="ts">
-	export let data;
 	import Brushes from '$lib/Brushes.svelte';
 	import Stage from '$lib/Stage.svelte';
 	import TableList from '$lib/TableList.svelte';
 	import Toolbar from '$lib/Toolbar.svelte';
+	import { theme } from '$lib/stores/theme.js';
+	import { brush, modifyZones, rerender } from '$lib/stores/stage';
+
+	export let data;
+
 	let width = 36;
 	let height = 46;
 	let squareSize = 30;
@@ -11,26 +15,28 @@
 	let borderThickness = 10;
 	let squaresPerMeter = 2;
 	let color = '#fff';
+
 	let tablesDB = data.tables as any;
-	import { theme } from '$lib/stores/theme.js';
 
 	theme.set('light');
 
-	import { brush, modifyZones, rerender } from '$lib/stores/stage';
-	import StageOop from '$lib/StageOOP.svelte';
-
+	/** Function to download the stage. */
 	let downloadStage: () => Promise<string>;
 
 	let zoneEditing: boolean = false;
+
+	/** Update zone modification status based on zoneEditing flag. */
 	$: if (zoneEditing) {
 		modifyZones.set(zoneEditing);
 	} else {
 		modifyZones.set(zoneEditing);
 	}
+
 	brush.set({ type: 'grab', snapCoefficient: 1 });
 
-	for (let i = 0; i < 8+1; i++) {
-		//+1 because we want it to return to original position;
+	/** Calculate positions for stage elements. */
+	for (let i = 0; i < 8 + 1; i++) {
+		//+1 because we want it to return to the original position;
 		const alphaRad = ((2 * Math.PI) / 8) * i;
 		const a = Math.sqrt(2 - 2 * Math.cos(alphaRad)) * 30;
 		const height = (a / 30) * Math.sqrt(Math.pow(30, 2) - Math.pow(a, 2) / 4);

@@ -1,23 +1,22 @@
 <script lang="ts">
+	import Popup from '$lib/Popup.svelte';
+	import AdminNav from '$lib/AdminNav.svelte';
+	import Toggle from '$lib/Toggle.svelte';
+	import { Toaster, toast } from 'svelte-sonner';
+	import { enhance } from '$app/forms';
+
 	export let data;
 
 	let startingData = structuredClone(data?.hall.config);
 
-	import AdminNav from '$lib/AdminNav.svelte';
-	import Toggle from '$lib/Toggle.svelte';
-	import { Toaster, toast } from 'svelte-sonner';
-
 	let openPopup: () => void = () => {};
 	let closePopup: () => void = () => {};
-
-	import { enhance } from '$app/forms';
-	import Popup from '$lib/Popup.svelte';
 
 	const hall = data.hall;
 
 	let form: HTMLFormElement;
 
-	let hallModuleEnabled: boolean = hall?.config?.toggleModule == "on";
+	let hallModuleEnabled: boolean = hall?.config?.toggleModule == 'on';
 
 	async function saveChanges(event: any) {
 		event.preventDefault();
@@ -44,11 +43,13 @@
 <Toaster position="bottom-right" visibleToasts={3} />
 <Popup bind:openPopup bind:closePopup>
 	<div class="max-w-md flex flex-col">
-		<h2 class="text-lg text-text-600 font-semibold mb-2">
-			Základný plán sály
-		</h2>
+		<h2 class="text-lg text-text-600 font-semibold mb-2">Základný plán sály</h2>
 		<div class="w-full max-w-sm gap-2">
-			<img class="w-full" src="http://127.0.0.1:8090/api/files/5yw1wmo1kh08q5p/n8xdtsssczsxas4/stage_FoCdQfevMX.png" alt="">
+			<img
+				class="w-full"
+				src="http://127.0.0.1:8090/api/files/5yw1wmo1kh08q5p/n8xdtsssczsxas4/stage_FoCdQfevMX.png"
+				alt=""
+			/>
 		</div>
 		<div class="ml-auto mt-3 items-center flex flex-row flex-nowrap gap-2">
 			<button
@@ -62,7 +63,7 @@
 				class="px-4 py-2 bg-background-700 hover:bg-primary-600 rounded-md text-text-50"
 			>
 				Zmeniť plán
-		</a>
+			</a>
 		</div>
 	</div>
 </Popup>
@@ -79,27 +80,27 @@
 			{#key data?.hall.config}
 				<h2 class="py-2 text-text-300 text-sm select-none">Nastavenie sály</h2>
 				<div class="py-2">
-				<fieldset class="relative text-input w-full">
-					<input
-						value={hall?.name}
-						on:change={() => (false)}
-						placeholder=""
-						type="text"
-						required={true}
-						id="hallName"
-						name="hallName"
-						class="w-full appearance-none bg-background-100 text-text-600 text-left rounded-md pb-0.5 pt-5 px-2 peer border {false
-							? 'border-red-500'
-							: ''}"
-					/>
-					<label
-						for="hallName"
-						class="absolute top-0.5 left-1 {false
-							? 'text-red-500'
-							: 'text-text-400'} text-sm peer-focus:top-0.5 peer-focus:left-1 peer-focus:text-text-400 peer-focus:text-sm peer-placeholder-shown:top-3 peer-placeholder-shown:left-1 peer-placeholder-shown:text-text-500 peer-placeholder-shown:text-base pointer-events-none ml-1 duration-75"
-						>Názov sály</label
-					>
-				</fieldset>
+					<fieldset class="relative text-input w-full">
+						<input
+							value={hall?.name}
+							on:change={() => false}
+							placeholder=""
+							type="text"
+							required={true}
+							id="hallName"
+							name="hallName"
+							class="w-full appearance-none bg-background-100 text-text-600 text-left rounded-md pb-0.5 pt-5 px-2 peer border {false
+								? 'border-red-500'
+								: ''}"
+						/>
+						<label
+							for="hallName"
+							class="absolute top-0.5 left-1 {false
+								? 'text-red-500'
+								: 'text-text-400'} text-sm peer-focus:top-0.5 peer-focus:left-1 peer-focus:text-text-400 peer-focus:text-sm peer-placeholder-shown:top-3 peer-placeholder-shown:left-1 peer-placeholder-shown:text-text-500 peer-placeholder-shown:text-base pointer-events-none ml-1 duration-75"
+							>Názov sály</label
+						>
+					</fieldset>
 				</div>
 				<div class="grid grid-cols-12 items-center py-2">
 					<div class="flex flex-col col-span-11">
@@ -161,12 +162,15 @@
 					</div>
 				</div>
 				<h2 class="py-2 text-text-300 text-sm select-none">Rozloženia</h2>
-				<div class="grid grid-cols-12 gap-2 items-center py-2 {hallModuleEnabled ? '' : 'disabled'}">
+				<div
+					class="grid grid-cols-12 gap-2 items-center py-2 {hallModuleEnabled ? '' : 'disabled'}"
+				>
 					<div class="flex flex-col col-span-10">
 						<p class="text-text-800">Základný plán sály - nenastavený</p>
 						<p class="text-sm text-text-600 max-w-3xl">
 							Toto je základné rozloženie sály, na ktoré viete následne vytvárať rozloženia. Ak
-							zmeníte plán, existujúce rozloženia môžu byť ovplyvnené. Kým není nastavený základný plán, uživateľom sa neumožní vytvárať vlastné rozloženia sály.
+							zmeníte plán, existujúce rozloženia môžu byť ovplyvnené. Kým není nastavený základný
+							plán, uživateľom sa neumožní vytvárať vlastné rozloženia sály.
 						</p>
 					</div>
 					<div class="grid col-span-2 place-items-center">
