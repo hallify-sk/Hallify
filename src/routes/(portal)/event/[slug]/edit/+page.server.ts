@@ -207,6 +207,7 @@ export async function load({ locals, params }) {
 				filter: `categories.id?="${reservation.category}"&&chairCount>=${reservation.guestCount}`,
 				expand: "tags,categories"
 			})
-		).items
+		).items,
+		apiUrl: locals.pbApiURL
 	};
 }
