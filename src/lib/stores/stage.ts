@@ -16,6 +16,8 @@ export const rerender: Writable<boolean> = writable(false);
  */
 export const modifyZones: Writable<boolean> = writable(false);
 
+export const isAdminEditor: Writable<boolean> = writable(false);
+
 /**
  * Defines a writable store for the list of tables.
  */

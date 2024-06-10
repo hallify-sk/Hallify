@@ -6,12 +6,23 @@
  * @param {Object} context.locals - Local data available for the server-side rendering.
  * @returns {Promise<Object>} Object containing tables and stage categories data.
  */
-export async function load({ locals }) {
+
+import { error } from "@sveltejs/kit";
+
+/** @type {import('./$types.d.ts').ServerLoad} */
+export async function load({ locals, params }) {
+	let hall;
+	try {
+		hall = await locals.pb.collection("halls").getOne(params.slug);
+	} catch (e) {
+		throw error(404, { message: "Not found" });
+	}
+
 	return {
-		/** List of tables. */
+		user: locals.user,
 		tables: await locals.pb.collection("tables").getFullList(),
-		/** List of stage categories. */
-		stageCategories: await locals.pb.collection("stage_categories").getFullList()
+		hall: hall,
+		apiUrl: locals.pbApiURL
 	};
 }
 

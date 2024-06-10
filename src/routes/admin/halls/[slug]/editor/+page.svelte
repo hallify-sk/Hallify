@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { theme } from "$lib/stores/theme.js";
-	import { brush, modifyZones, rerender } from "$lib/stores/stage";
+	import { brush, isAdminEditor, modifyZones, rerender, stageData } from "$lib/stores/stage";
 	import { onMount, tick } from "svelte";
 
 	export let data;
@@ -8,6 +8,7 @@
 	import Stage from "$lib/Stage.svelte";
 	import Toolbar from "$lib/Toolbar.svelte";
 	import StageSettings from "$lib/StageSettings.svelte";
+	import TableList from "$lib/TableList.svelte";
 	let width = 20;
 	let height = 20;
 	let squareSize = 30;
@@ -48,6 +49,10 @@
 			rerender.set(!$rerender);
 		};
 	});
+
+	stageData.set(data.hall.data);
+
+	isAdminEditor.set(false);
 </script>
 
 <div class="h-screen bg-background-200 w-screen flex justify-stretch items-stretch">
@@ -62,7 +67,8 @@
 	</div>
 </div>
 <StageSettings bind:stageWidth={width} bind:stageHeight={height} />
-<Toolbar {downloadStage} bind:stageCategories={data.stageCategories} />
+<Toolbar {downloadStage} />
+<TableList tables={data.tables} />
 <Brushes />
 
 <style lang="postcss">
