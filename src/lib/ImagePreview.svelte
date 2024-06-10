@@ -8,9 +8,8 @@
 	}
 
 	interface ReservationData extends RecordModel {
-		chairCount: number;
 		expand?: {
-			categories: Category[];
+			[key: string]: RecordModel[];
 		};
 	}
 	//
