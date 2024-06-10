@@ -14,7 +14,7 @@
 		};
 	}
 	//
-	
+
 	export let isOpen: boolean = false;
 	export let imageSrc: string = "";
 	export let imageAlt: string = "";
