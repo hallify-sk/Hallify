@@ -1,18 +1,11 @@
 <script lang="ts">
 	import type { RecordModel } from "pocketbase";
 
-	// hot fix pre Parameter 'i' implicitly has an 'any' type. (ts) v {reservationData?.expand?.categories.map((i) => i.name).join(", ")}
-	interface Category {
-		id: string;
-		name: string;
-	}
-
 	interface ReservationData extends RecordModel {
 		expand?: {
 			[key: string]: RecordModel[];
 		};
 	}
-	//
 
 	export let isOpen: boolean = false;
 	export let imageSrc: string = "";
