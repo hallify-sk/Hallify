@@ -90,27 +90,27 @@ export const actions = {
 		}
 
 		// Additional validation checks
-		if (!name || name == '') {
+		if (!name || name == "") {
 			return fail(401, {
 				incorrect: true,
-				message: 'Pre vytvorenie rezervácie musíte zadať jej názov.',
-				type: 'name'
+				message: "Pre vytvorenie rezervácie musíte zadať jej názov.",
+				type: "name"
 			});
 		}
 
-		if (!type || type == '') {
+		if (!type || type == "") {
 			return fail(401, {
 				incorrect: true,
-				message: 'Pre vytvorenie rezervácie musíte zadať typ udalosti.',
-				type: 'type'
+				message: "Pre vytvorenie rezervácie musíte zadať typ udalosti.",
+				type: "type"
 			});
 		}
 
-		if (!peopleCount || peopleCount == '' || isNaN(parseInt(peopleCount)) || parseInt(peopleCount) <= 0 || parseInt(peopleCount) > 120) {
+		if (!peopleCount || peopleCount == "" || isNaN(parseInt(peopleCount)) || parseInt(peopleCount) <= 0 || parseInt(peopleCount) > 120) {
 			return fail(401, {
 				incorrect: true,
-				message: 'Pre vytvorenie rezervácie musíte zadať počet ľudí.',
-				type: 'personCount'
+				message: "Pre vytvorenie rezervácie musíte zadať počet ľudí.",
+				type: "personCount"
 			});
 		}
 		try {

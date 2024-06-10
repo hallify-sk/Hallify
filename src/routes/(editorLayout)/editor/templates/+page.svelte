@@ -42,6 +42,7 @@
 <ImagePreview bind:isOpen={openImagePreview} bind:imageSrc bind:imageAlt bind:reservationData />
 
 <style lang="postcss">
+	/*
 	input[type="number"] {
 		-moz-appearance: textfield;
 		appearance: textfield;
@@ -51,4 +52,5 @@
 	input[type="number"]::-webkit-outer-spin-button {
 		@apply appearance-none m-0;
 	}
+	*/
 </style>

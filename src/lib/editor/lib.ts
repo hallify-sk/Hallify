@@ -1,7 +1,6 @@
 import Konva from "konva"; // 2D canvas JS framework
 
 export type Grid = {
-
 	width: number;
 	height: number;
 	squareSize: number;
@@ -50,7 +49,7 @@ export function pointsToObjectArray(points: Array<number>) {
 			return { x: a[i], y: a[i + 1] };
 		})
 		.filter((v, i, a) => {
-			if (!(i % 2) && typeof a[i + 1] !== 'undefined') return true;
+			if (!(i % 2) && typeof a[i + 1] !== "undefined") return true;
 		});
 }
 
@@ -200,39 +199,41 @@ export function checkCircleCollision(circleOne: { x: number; y: number; radius: 
  */
 export function checkPolygonCircleCollision(polygon: { x: number; y: number }[], circle: { x: number; y: number; radius: number }) {
 	// check if any polygon vertex is inside the circle
-	if (polygon.some((_, i) => {
-		let nextIndex = i + 1;
-		if (nextIndex === polygon.length) nextIndex = 0;
+	if (
+		polygon.some((_, i) => {
+			let nextIndex = i + 1;
+			if (nextIndex === polygon.length) nextIndex = 0;
 
-		const pointOne = polygon[i];
-		const pointTwo = polygon[nextIndex];
+			const pointOne = polygon[i];
+			const pointTwo = polygon[nextIndex];
 
-		const insideOne = pointCircle(pointOne.x, pointOne.y, circle.x, circle.y, circle.radius);
-		const insideTwo = pointCircle(pointTwo.x, pointTwo.y, circle.x, circle.y, circle.radius);
-		if (insideOne || insideTwo) return true;
+			const insideOne = pointCircle(pointOne.x, pointOne.y, circle.x, circle.y, circle.radius);
+			const insideTwo = pointCircle(pointTwo.x, pointTwo.y, circle.x, circle.y, circle.radius);
+			if (insideOne || insideTwo) return true;
 
-		let distX = pointOne.x - pointTwo.x;
-		let distY = pointOne.y - pointTwo.y;
-		const len = Math.sqrt(distX ** 2 + distY ** 2);
+			let distX = pointOne.x - pointTwo.x;
+			let distY = pointOne.y - pointTwo.y;
+			const len = Math.sqrt(distX ** 2 + distY ** 2);
 
-		const dot = (((circle.x - pointOne.x) * (pointTwo.x - pointOne.x)) + ((circle.y - pointOne.y) * (pointTwo.y - pointOne.y))) / len ** 2;
+			const dot = ((circle.x - pointOne.x) * (pointTwo.x - pointOne.x) + (circle.y - pointOne.y) * (pointTwo.y - pointOne.y)) / len ** 2;
 
-		const closestX = pointOne.x + (dot * (pointTwo.x - pointOne.x));
-		const closestY = pointOne.y + (dot * (pointTwo.y - pointOne.y));
+			const closestX = pointOne.x + dot * (pointTwo.x - pointOne.x);
+			const closestY = pointOne.y + dot * (pointTwo.y - pointOne.y);
 
-		const onSegment = linePoint(pointOne.x, pointOne.y, pointTwo.x, pointTwo.y, closestX, closestY);
-		if (!onSegment) return false;
+			const onSegment = linePoint(pointOne.x, pointOne.y, pointTwo.x, pointTwo.y, closestX, closestY);
+			if (!onSegment) return false;
 
-		distX = closestX - circle.x;
-		distY = closestY - circle.y;
+			distX = closestX - circle.x;
+			distY = closestY - circle.y;
 
-		const distance = Math.sqrt(distX ** 2 + distY ** 2);
+			const distance = Math.sqrt(distX ** 2 + distY ** 2);
 
-		if (distance <= circle.radius) {
-			return true;
-		}
-		return false;
-	})) {
+			if (distance <= circle.radius) {
+				return true;
+			}
+			return false;
+		})
+	) {
 		return true;
 	}
 
@@ -299,18 +300,16 @@ function polyPoint(vertices: { x: number; y: number }[], px: number, py: number)
 	// go through each of the vertices, plus the next vertex in the list
 	let next = 0;
 	for (let current = 0; current < vertices.length; current++) {
-
 		// get next vertex in list, if we've hit the end, wrap around to 0
 		next = current + 1;
 		if (next == vertices.length) next = 0;
 
 		// get the PVectors at our current position
-		const vc = vertices[current];    // c for "current"
-		const vn = vertices[next];       // n for "next"
+		const vc = vertices[current]; // c for "current"
+		const vn = vertices[next]; // n for "next"
 
 		// compare position, flip 'collision' variable back and forth
-		if (((vc.y > py && vn.y < py) || (vc.y < py && vn.y > py)) &&
-			(px < (vn.x - vc.x) * (py - vc.y) / (vn.y - vc.y) + vc.x)) {
+		if (((vc.y > py && vn.y < py) || (vc.y < py && vn.y > py)) && px < ((vn.x - vc.x) * (py - vc.y)) / (vn.y - vc.y) + vc.x) {
 			collision = !collision;
 		}
 	}
@@ -360,7 +359,7 @@ export function getClosestViablePosition(x: number, y: number, shape: Konva.Line
 		}
 
 		gridCells.get(key)!.push(object);
-	};
+	}
 
 	let step = 1;
 

@@ -1,6 +1,13 @@
 <script lang="ts">
 	import { rerender, tableList, stageData } from "$lib/stores/stage";
 	import { v4 as uuidv4 } from "uuid";
+	import { get } from "svelte/store";
+
+	// hot fix
+	const currentStageData = get(stageData);
+	const stageWidth = currentStageData?.width ?? 0;
+	const stageHeight = currentStageData?.height ?? 0;
+	const squareSize = currentStageData?.squareSize ?? 1;
 
 	// Function to add a table
 	function addTable(
@@ -14,8 +21,8 @@
 			{
 				name,
 				rotation,
-				x: $stageData.width / $stageData.squareSize / 2,
-				y: $stageData.height / $stageData.squareSize / 2,
+				x: stageWidth / squareSize / 2,
+				y: stageHeight / squareSize / 2,
 				chairs,
 				table
 			}

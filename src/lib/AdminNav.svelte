@@ -118,9 +118,6 @@
 </aside>
 
 <style lang="postcss">
-	.nav-group {
-		@apply pl-4 mb-8;
-	}
 	.nav-link {
 		@apply flex py-2 px-2 rounded-md text-text-200 hover:text-text-50 gap-4 items-center w-full;
 	}

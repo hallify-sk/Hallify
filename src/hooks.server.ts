@@ -47,18 +47,18 @@ await fs.readFile("config/pocketbase.json").then((data) => {
 
 export const handle = async ({ event, resolve }) => {
 	if (!pbIsset) {
-		const data = await fs.readFile('config/pocketbase.json');
+		const data = await fs.readFile("config/pocketbase.json");
 		const { POCKETBASE_URL, POCKETBASE_API_URL } = JSON.parse(data.toString());
 		pbSecretURL = POCKETBASE_URL;
 		pbAPIURL = POCKETBASE_API_URL;
 
-		if (POCKETBASE_URL != '') {
+		if (POCKETBASE_URL != "") {
 			pbIsset = true;
 		}
 	}
 	event.locals.authExpired = false;
 
-	if (pbSecretURL && pbSecretURL != '') {
+	if (pbSecretURL && pbSecretURL != "") {
 		event.locals.pb = new PocketBase(pbSecretURL);
 	}
 
