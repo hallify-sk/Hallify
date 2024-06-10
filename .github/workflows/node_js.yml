@@ -23,9 +23,9 @@ jobs:
                   node-version: ${{ matrix.node-version }}
                   cache: "npm"
             - name: Install dependencies
-            - run: npm ci
+              run: npm ci
             - name: Check formatting
-            - run: npm run format:check
+              run: npm run format:check
     Eslint:
         runs-on: ubuntu-latest
 
@@ -42,9 +42,9 @@ jobs:
                   node-version: ${{ matrix.node-version }}
                   cache: "npm"
             - name: Install dependencies
-            - run: npm ci
+              run: npm ci
             - name: Run Eslint
-            - run: npm run lint
+              run: npm run lint
     SvelteKit:
         runs-on: ubuntu-latest
         env:
@@ -67,6 +67,6 @@ jobs:
                   node-version: ${{ matrix.node-version }}
                   cache: "npm"
             - name: Install dependencies
-            - run: npm ci
+              run: npm ci
             - name: Check SvelteKit codebase
-            - run: npm run check
+              run: npm run check
