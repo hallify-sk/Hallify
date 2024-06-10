@@ -9,8 +9,8 @@
 	import Toolbar from "$lib/Toolbar.svelte";
 	import StageSettings from "$lib/StageSettings.svelte";
 	import TableList from "$lib/TableList.svelte";
-	let width = 20;
-	let height = 20;
+	let width = data?.hall?.data?.width || 20;
+	let height = data?.hall?.data?.height || 20;
 	let squareSize = 30;
 	let squaresPerMeter = 2;
 
@@ -49,8 +49,10 @@
 			rerender.set(!$rerender);
 		};
 	});
-
-	stageData.set(data.hall.data);
+	if (data.hall.data?.width) {
+		stageData.set(data.hall.data);
+	}
+	rerender.set(!$rerender);
 
 	isAdminEditor.set(false);
 </script>
@@ -67,8 +69,8 @@
 	</div>
 </div>
 <StageSettings bind:stageWidth={width} bind:stageHeight={height} />
-<Toolbar {downloadStage} />
-<TableList tables={data.tables} />
+<Toolbar {downloadStage} fastSave={true} />
+
 <Brushes />
 
 <style lang="postcss">

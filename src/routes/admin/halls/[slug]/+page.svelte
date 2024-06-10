@@ -97,7 +97,7 @@
 				<div class="grid grid-cols-12 items-center py-2">
 					<div class="flex flex-col col-span-11">
 						<p class="text-text-800">Prijímať rezervácie</p>
-						<p class="text-text-600 max-w-4xl text-xs">Ak je táto možnosť zapnutá, uživatelia si môžu rezervovať dátum v tejto sále.</p>
+						<p class="text-text-600 max-w-4xl text-sm">Ak je táto možnosť zapnutá, uživatelia si môžu rezervovať dátum v tejto sále.</p>
 					</div>
 					<div class="col-span-1 grid place-items-center">
 						<Toggle name="enabled" disabled={false} bind:checked={hall.enabled} />
@@ -107,7 +107,7 @@
 				<div class="grid grid-cols-12 items-center py-2">
 					<div class="flex flex-col col-span-11">
 						<p class="text-text-800">Zapnúť modul</p>
-						<p class="text-text-600 max-w-4xl text-xs">
+						<p class="text-text-600 max-w-4xl text-sm">
 							Zapnutie tohto modulu umožní plánovanie rozloženia sály priamo v Hallify. Pri vypnutí modulu sa existujúce rezervácie
 							nezmenia, avšak všetky nové rezervácie tento modul nebudu môcť použiť.
 						</p>

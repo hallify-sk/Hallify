@@ -57,7 +57,7 @@ export const actions: import("./$types").Actions = {
 	 * @returns {Object} - The created hall.
 	 */
 	createHall: async ({ locals }) => {
-		const hall = await locals.pb.collection("halls").create({ name: "Nová sála", config: {} });
+		const hall = await locals.pb.collection("halls").create({ name: "Nová sála", config: {}, data: {} });
 		return { hall };
 	}
 };
