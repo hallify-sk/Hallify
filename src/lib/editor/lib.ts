@@ -1,29 +1,11 @@
 import Konva from "konva"; // 2D canvas JS framework
 
 export type Grid = {
-	/**
-	 * Width of the grid.
-	 */
 	width: number;
-	/**
-	 * Height of the grid.
-	 */
 	height: number;
-	/**
-	 * Size of each square in the grid.
-	 */
 	squareSize: number;
-	/**
-	 * Thickness of the border along the X axis.
-	 */
 	borderThicknessX: number;
-	/**
-	 * Thickness of the border along the Y axis.
-	 */
 	borderThicknessY: number;
-	/**
-	 * Number of squares per meter for scaling purposes.
-	 */
 	squaresPerMeter: number;
 };
 
@@ -61,16 +43,14 @@ export function pointsToRealPosition(points: number[], position: { x: number; y:
  * @param points - The array of points.
  * @returns An array of objects with x and y properties.
  */
-export function pointsToObjectArray(points: number[]) {
-	return points.reduce(
-		(acc, curr, i, a) => {
-			if (i % 2 === 0 && a[i + 1] !== undefined) {
-				acc.push({ x: curr, y: a[i + 1] });
-			}
-			return acc;
-		},
-		[] as { x: number; y: number }[]
-	);
+export function pointsToObjectArray(points: Array<number>) {
+	return points
+		.map((_, i, a) => {
+			return { x: a[i], y: a[i + 1] };
+		})
+		.filter((v, i, a) => {
+			if (!(i % 2) && typeof a[i + 1] !== "undefined") return true;
+		});
 }
 
 /**
@@ -221,17 +201,20 @@ export function checkPolygonCircleCollision(polygon: { x: number; y: number }[],
 	// check if any polygon vertex is inside the circle
 	if (
 		polygon.some((_, i) => {
-			const nextIndex = (i + 1) % polygon.length;
+			let nextIndex = i + 1;
+			if (nextIndex === polygon.length) nextIndex = 0;
+
 			const pointOne = polygon[i];
 			const pointTwo = polygon[nextIndex];
+
 			const insideOne = pointCircle(pointOne.x, pointOne.y, circle.x, circle.y, circle.radius);
 			const insideTwo = pointCircle(pointTwo.x, pointTwo.y, circle.x, circle.y, circle.radius);
 			if (insideOne || insideTwo) return true;
 
-			// check if circle is inside the polygon
-			const distX = pointOne.x - pointTwo.x;
-			const distY = pointOne.y - pointTwo.y;
+			let distX = pointOne.x - pointTwo.x;
+			let distY = pointOne.y - pointTwo.y;
 			const len = Math.sqrt(distX ** 2 + distY ** 2);
+
 			const dot = ((circle.x - pointOne.x) * (pointTwo.x - pointOne.x) + (circle.y - pointOne.y) * (pointTwo.y - pointOne.y)) / len ** 2;
 
 			const closestX = pointOne.x + dot * (pointTwo.x - pointOne.x);
@@ -240,11 +223,15 @@ export function checkPolygonCircleCollision(polygon: { x: number; y: number }[],
 			const onSegment = linePoint(pointOne.x, pointOne.y, pointTwo.x, pointTwo.y, closestX, closestY);
 			if (!onSegment) return false;
 
-			const distToClosestX = closestX - circle.x;
-			const distToClosestY = closestY - circle.y;
-			const distance = Math.sqrt(distToClosestX ** 2 + distToClosestY ** 2);
+			distX = closestX - circle.x;
+			distY = closestY - circle.y;
 
-			return distance <= circle.radius;
+			const distance = Math.sqrt(distX ** 2 + distY ** 2);
+
+			if (distance <= circle.radius) {
+				return true;
+			}
+			return false;
 		})
 	) {
 		return true;
@@ -261,8 +248,12 @@ export function checkPolygonCircleCollision(polygon: { x: number; y: number }[],
  * @returns True if the polygons collide, otherwise false.
  */
 export function checkPolygonCollision(polygon1: { x: number; y: number }[], polygon2: { x: number; y: number }[]) {
+	let nextIndex: number = 0;
 	for (let i = 0; i < polygon1.length; i++) {
-		const nextIndex = (i + 1) % polygon1.length;
+		nextIndex = i + 1;
+		if (nextIndex === polygon1.length) nextIndex = 0;
+
+		let nextUIndex: number = 0;
 		const pointOne = polygon1[i];
 		const pointTwo = polygon1[nextIndex];
 
@@ -273,9 +264,11 @@ export function checkPolygonCollision(polygon1: { x: number; y: number }[], poly
 
 		// check if any edges intersect
 		if (
-			polygon2.some((_, j, a) => {
-				const nextUIndex = (j + 1) % a.length;
-				const pointThree = a[j];
+			polygon2.some((_, i, a) => {
+				// http://www.jeffreythompson.org/collision-detection/line-line.php
+				nextUIndex = i + 1;
+				if (nextUIndex === a.length) nextUIndex = 0;
+				const pointThree = a[i];
 				const pointFour = a[nextUIndex];
 
 				const uA =
@@ -303,14 +296,23 @@ export function checkPolygonCollision(polygon1: { x: number; y: number }[], poly
  */
 function polyPoint(vertices: { x: number; y: number }[], px: number, py: number): boolean {
 	let collision = false;
-	vertices.forEach((vc, current) => {
-		const next = (current + 1) % vertices.length;
-		const vn = vertices[next];
 
+	// go through each of the vertices, plus the next vertex in the list
+	let next = 0;
+	for (let current = 0; current < vertices.length; current++) {
+		// get next vertex in list, if we've hit the end, wrap around to 0
+		next = current + 1;
+		if (next == vertices.length) next = 0;
+
+		// get the PVectors at our current position
+		const vc = vertices[current]; // c for "current"
+		const vn = vertices[next]; // n for "next"
+
+		// compare position, flip 'collision' variable back and forth
 		if (((vc.y > py && vn.y < py) || (vc.y < py && vn.y > py)) && px < ((vn.x - vc.x) * (py - vc.y)) / (vn.y - vc.y) + vc.x) {
 			collision = !collision;
 		}
-	});
+	}
 	return collision;
 }
 
@@ -346,8 +348,8 @@ export function getCollisionPolygons(layer: Konva.Layer) {
 export function getClosestViablePosition(x: number, y: number, shape: Konva.Line, objects: Konva.Line[], grid: Grid) {
 	const gridCells: Map<string, Konva.Line[]> = new Map();
 
-	// Group objects by their grid cell
-	objects.forEach((object) => {
+	// Add each object to the grid cells
+	for (const object of objects) {
 		const cellX = Math.floor(object.x() / grid.squareSize);
 		const cellY = Math.floor(object.y() / grid.squareSize);
 		const key = `${cellX},${cellY}`;
@@ -357,7 +359,7 @@ export function getClosestViablePosition(x: number, y: number, shape: Konva.Line
 		}
 
 		gridCells.get(key)!.push(object);
-	});
+	}
 
 	let step = 1;
 
@@ -381,7 +383,7 @@ export function getClosestViablePosition(x: number, y: number, shape: Konva.Line
 				const cellObjects = gridCells.get(key) || [];
 
 				const collision = cellObjects.some(
-					(object) =>
+					(object: Konva.Line) =>
 						object !== shape &&
 						checkPolygonCollision(
 							rotatePoints(

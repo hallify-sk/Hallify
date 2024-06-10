@@ -6,7 +6,6 @@
 	import { getMinutesToDate } from "$lib/lib.js";
 	import { goto } from "$app/navigation";
 	import { enhance, applyAction } from "$app/forms";
-	import { PUBLIC_API_URL } from "$env/static/public";
 	import type { RecordModel } from "pocketbase";
 
 	export let data;
@@ -180,11 +179,11 @@
 						<button
 							type="button"
 							on:click={() => {
-								openImage(`${PUBLIC_API_URL}/files/${template.collectionId}/${template.id}/${template.image}`, template.id, template);
+								openImage(`${data.apiUrl}/files/${template.collectionId}/${template.id}/${template.image}`, template.id, template);
 							}}
 							class="mt-1 flex flex-row items-center gap-2 hover:brightness-90"
 						>
-							<img src="{PUBLIC_API_URL}/files/{template.collectionId}/{template.id}/{template.image}" alt="" />
+							<img src="{data.apiUrl}/files/{template.collectionId}/{template.id}/{template.image}" alt="" />
 						</button>
 					{/each}
 				{:else}

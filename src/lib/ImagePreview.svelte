@@ -1,14 +1,21 @@
 <script lang="ts">
 	import type { RecordModel } from "pocketbase";
 
+	interface ReservationData extends RecordModel {
+		expand?: {
+			[key: string]: RecordModel[];
+		};
+	}
+
 	export let isOpen: boolean = false;
 	export let imageSrc: string = "";
 	export let imageAlt: string = "";
-	export let reservationData: RecordModel;
+	export let reservationData: ReservationData;
 
 	function closeImage() {
 		isOpen = false;
 	}
+
 	console.log(reservationData);
 </script>
 
