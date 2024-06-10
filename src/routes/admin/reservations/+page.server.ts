@@ -16,12 +16,12 @@ export const actions: import("./$types").Actions = {
 		const page = data.get("page")?.toString();
 		if (!page) return fail(400);
 		if (isNaN(parseInt(page))) return fail(400);
-		const halls = await locals.pb.collection("reservations").getList(parseInt(page), 50, { sort: "created", expand: "user,addons,category" });
-		if (!halls.items.length) return fail(404);
+		const reservations = await locals.pb.collection("reservations").getList(parseInt(page), 50, { sort: 'created', expand: 'user,addons,category' });
+		if (!reservations.items.length) return fail(404);
 
 		return {
-			halls: serializeNonPOJOs(halls)
-		};
+			reservations: serializeNonPOJOs(reservations)
+		}
 	},
 
 	/**
@@ -40,7 +40,7 @@ export const actions: import("./$types").Actions = {
 		const parsedCheckboxes = JSON.parse(checkboxes || "[]");
 		if (!parsedCheckboxes.length || !reason) return fail(400);
 		for (let i = 0; i < parsedCheckboxes.length; i++) {
-			await locals.pb.collection("halls").delete(parsedCheckboxes[i]);
+			await locals.pb.collection("reservations").delete(parsedCheckboxes[i]);
 		}
 		return { success: true };
 	},
@@ -62,13 +62,14 @@ export const actions: import("./$types").Actions = {
  * Load initial hall details.
  *
  * @param {Object} locals - Local variables including PocketBase client instance and user information.
- * @returns {Object} - An object containing user information, halls, and API URL.
+ * @returns {Object} - An object containing user information, reservations, and API URL.
  */
 export async function load({ locals }) {
 	return {
 		user: locals.user,
-		halls: await locals.pb.collection("halls").getList(0, 50, { sort: "created" }),
-		reservations: await locals.pb.collection("reservations").getList(0, 50, { sort: "created" }),
+		reservations: await locals.pb
+			.collection('reservations')
+			.getList(0, 50, { sort: 'created', expand: 'user,addons,category' }),
 		apiUrl: locals.pbApiURL
 	};
 }
