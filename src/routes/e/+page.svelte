@@ -1,7 +1,4 @@
-<script lang="ts">
-	import Editor from "$lib/Editor.svelte";
 
-
-</script>
-
-<Editor />
+{#await import('$lib/Editor.svelte') then app}
+  <svelte:component this={app.default} />
+{/await}
