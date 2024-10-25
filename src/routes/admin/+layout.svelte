@@ -1,10 +1,8 @@
 <script>
-	import { theme } from "$lib/stores/theme";
-	import "../../app.css";
+	import NavbarAdmin from "$lib/components/NavbarAdmin.svelte";
 
-	theme.set("light");
 </script>
 
-<div class="bg-background-100 min-h-screen pr-4">
-	<slot />
-</div>
+<NavbarAdmin/>
+
+<slot/>

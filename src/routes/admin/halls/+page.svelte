@@ -1,555 +1,240 @@
 <script lang="ts">
-	import Checkbox from "$lib/Checkbox.svelte";
-	import AdminNav from "$lib/AdminNav.svelte";
-	import Search from "$lib/Search.svelte";
-	import Popup from "$lib/Popup.svelte";
-	import { browser } from "$app/environment";
-	import { fly } from "svelte/transition";
-	import { page } from "$app/stores";
-	import { onDestroy, onMount } from "svelte";
-	import { applyAction, enhance } from "$app/forms";
-	import { goto, invalidateAll } from "$app/navigation";
-	import type { ActionResult } from "@sveltejs/kit";
-	import type { RecordModel, ListResult } from "pocketbase";
-	import type { MouseEventHandler } from "svelte/elements";
+	import { barGraphStyle } from '$lib/charts';
+	import Dialog from '$lib/components/Dialog.svelte';
+	import TextInput from '$lib/components/inputs/TextInput.svelte';
+	import Icon from '$lib/icons/Icon.svelte';
+	import Plus from '$lib/icons/Plus.svelte';
 
-	export let data;
+	import * as echarts from 'echarts';
+	import { onMount } from 'svelte';
+	import Switch from '$lib/components/inputs/Switch.svelte';
+	import Tooltip from '$lib/components/Tooltip.svelte';
+	import Combobox from '$lib/components/inputs/Combobox.svelte';
 
-	let selectAll: boolean,
-		checkboxes: Array<{ id: string; checked: boolean }> = [],
-		halls: RecordModel[],
-		displayShadow: boolean = false,
-		tableWrapper: HTMLElement,
-		loadinghall: boolean = false,
-		deleteModal: boolean = false,
-		pbPage: number = 1,
-		suggestions: RecordModel[] = [];
+	// Create the echarts instance
+	onMount(() => {
+		var myChart = echarts.init(document.getElementById('chartWrapper'));
+		// Draw the chart
 
-	$: if (data) {
-		const resultData: ListResult<RecordModel> = data.halls;
-		halls = resultData.items.sort(tableSort);
-		mapCheckboxes();
-	}
+		const styleOptions = barGraphStyle([
+			'Sála 1',
+			'Sála 2',
+		]);
 
-	$: if (suggestions) {
-		mapCheckboxes();
-		handleCheckboxUpdate();
-	}
-
-	function handleTableShadow() {
-		displayShadow = tableWrapper?.scrollWidth > tableWrapper?.clientWidth;
-	}
-
-	onMount(async () => {
-		handleTableShadow();
-		if (browser) {
-			window.addEventListener("resize", handleTableShadow);
-		}
-		updateQuery();
-	});
-	onDestroy(async () => {
-		if (browser) {
-			window.removeEventListener("resize", handleTableShadow);
-		}
-	});
-
-	function tableSort(a: RecordModel, b: RecordModel) {
-		//Uses custom function because this allows for deep sort based on weight values of DB relation attributes
-		const sortBy = $page.url.searchParams.get("sortBy");
-		let sortProperty = "created";
-		let inverse = false;
-		if (sortBy) {
-			inverse = sortBy.startsWith("-");
-			sortProperty = inverse ? sortBy.slice(1) : sortBy;
-		}
-		if (a.expand?.[sortProperty] && b.expand?.[sortProperty]) {
-			return (a.expand[sortProperty].weight < b.expand[sortProperty].weight ? 1 : -1) * (inverse ? -1 : 1);
-		} else if (a.expand?.[sortProperty] && !b.expand?.[sortProperty]) {
-			return (a.expand[sortProperty].weight < 0 ? 1 : -1) * (inverse ? -1 : 1);
-		} else if (!a.expand?.[sortProperty] && b.expand?.[sortProperty]) {
-			return (0 < b.expand[sortProperty].weight ? 1 : -1) * (inverse ? -1 : 1);
-		} else {
-			return (
-				(a[sortProperty] > b[sortProperty] ? 1 : -1) *
-				(inverse ? -1 : 1) *
-				(isNaN(parseInt(a[sortProperty])) && isNaN(parseInt(b[sortProperty])) ? 1 : -1)
-			);
-		}
-	}
-
-	async function redirectTohall(id: string): Promise<MouseEventHandler<HTMLTableRowElement> | null | undefined> {
-		await goto(`/admin/halls/${id}`);
-		return;
-	}
-
-	async function handleSortProperty(filter: string) {
-		//This function puts the current sort property into the URL, and makes sure that this can be an inverse sort or normal sort by pre-pending a - to the sort property.
-		let modFilter = filter;
-		if ($page.url.searchParams.get("sortBy") == filter && !$page.url.searchParams.get("sortBy")?.startsWith("-")) modFilter = `-${filter}`;
-		$page.url.searchParams.set("sortBy", modFilter);
-		halls = halls.sort(tableSort);
-		return await goto(`?${$page.url.searchParams.toString()}`);
-	}
-
-	async function deleteSelected() {
-		//Rerun the load function, repopulates the data property
-		await invalidateAll();
-		//Closes the modal
-		deleteModal = false;
-		selectAll = false;
-		//Remaps the checkboxes
-		mapCheckboxes();
-		//Resets the query
-		query = "";
-	}
-
-	function handleMassCheckboxUpdate() {
-		const checked = !selectAll;
-		if (checked) {
-			deleteModal = true;
-		} else {
-			deleteModal = false;
-		}
-		checkboxes = checkboxes.map((checkbox) => {
-			return { id: checkbox.id, checked };
+		myChart.setOption({
+			...styleOptions,
+			series: [
+				{
+					name: 'Rezervované udalosti',
+					type: 'bar',
+					data: [
+						{
+							value: 10,
+							itemStyle: {
+								color: '#3b82f6'
+							}
+						},
+						{
+							value: 17,
+							itemStyle: {
+								color: '#eab308'
+							}
+						}
+					]
+				}
+			]
 		});
+
+		new ResizeObserver(() => myChart.resize()).observe(
+			document.getElementById('chartWrapper') as HTMLElement
+		);
+	});
+
+	let colorValue: string;
+
+	$: if (colorValue) {
+		console.log(colorValue);
 	}
 
-	function handleCheckboxUpdate() {
-		// TODO: This function doesn't work without this timeout for some reason? Without timeout, the logic of this function is delayed by one checkbox update;
-		setTimeout(() => {
-			if (checkboxes.length && checkboxes.every((v) => v.checked == true)) {
-				selectAll = true;
-				deleteModal = true;
-			} else if (checkboxes.some((v) => v?.checked === true)) {
-				selectAll = false;
-				deleteModal = true;
-			} else {
-				selectAll = false;
-				deleteModal = false;
-			}
-		}, 1);
-	}
+	let openEventDialog: () => void;
+	let closeEventDialog: () => void;
+	onMount(()=>{
+		openEventDialog();
+	})
 
-	function mapCheckboxes() {
-		//Reset checkbox array;
-		checkboxes = [];
-		//Remap checkboxes into array;
-		if (query) {
-			suggestions.map((hall, i) => {
-				checkboxes[i] = { id: hall.id, checked: false };
-			});
-		} else {
-			halls.map((hall, i) => {
-				checkboxes[i] = { id: hall.id, checked: false };
-			});
-		}
-	}
-	async function handleLoadinghalls(result: ActionResult<Record<string, unknown> | undefined, Record<string, unknown> | undefined>) {
-		if (result.type != "success") return;
-		if (!result.data) return;
-		halls = [...halls, ...(result.data.halls as ListResult<RecordModel>).items];
-		setTimeout(() => {
-			updateQuery();
-		}, 1);
-		mapCheckboxes();
-		halls.sort(tableSort);
-	}
+	let hallError: {
+		type: string,
+		message: string
+	} = {type: "", message: ""};
 
-	let openImageModal = () => {};
-	let closeImageModal = () => {};
-
-	let openConfirmModal = () => {};
-	let closeConfirmModal = () => {};
-
-	let errorConfirmMessage: string = "";
-
-	let query: string = $page.url.searchParams.get("query") || "";
-
-	let updateQuery: () => void = () => {};
-
-	let imagePreview: string = "";
 </script>
 
-<AdminNav pageName="Zoznam sál" />
-<div class="flex flex-row flex-nowrap justify-stretch h-screen pl-64">
-	<div class="flex flex-col flex-nowrap h-full w-full">
-		<div class="w-full px-2 gap-8 flex justify-stretch pb-6 h-full">
-			<div class="bg-background-50 mt-24 py-6 col-span-12 rounded-md self-stretch w-full px-10 flex flex-col max-h-full">
-				<div class="grid-cols-12 grid gap-2">
-					<div class="col-span-10">
-						<Search bind:suggestions data={halls} bind:updateSuggestions={updateQuery} bind:value={query} />
-					</div>
-					<form class="col-span-2" method="post" action="?/createHall">
-						<button
-							type="submit"
-							class="grid place-items-center h-full py-2 px-2 rounded-md w-full text-text-100 gap-4 bg-primary-700 hover:bg-primary-600"
-						>
-							Vytvoriť sálu
-						</button>
-					</form>
+<div class="w-full min-h-screen bg-slate-200 py-6 px-4 md:px-24">
+	<div class="max-w-7xl w-full mx-auto flex flex-row flex-wrap justify-between items-center">
+		<div class="flex flex-col flex-nowrap">
+			<p class="uppercase text-[0.65rem] text-slate-400">Prehľad</p>
+			<p class="text-slate-700">Manažment sál</p>
+		</div>
+		<div class="flex flex-row flex-nowrap items-center">
+			<button
+				on:click={openEventDialog}
+				class="flex flex-row gap-2 items-center bg-blue-500 hover:bg-blue-400 duration-150 text-slate-100 px-4 py-2 rounded border border-blue-600/30 text-sm"
+			>
+				<Icon scale="small">
+					<Plus />
+				</Icon>
+				<p>Pridať sálu</p>
+			</button>
+		</div>
+	</div>
+	<div class="max-w-7xl w-full mx-auto flex flex-col gap-4 mt-4 items-start">
+		<div class="flex flex-col sm:flex-row gap-4 w-full">
+			<div
+				class="border border-slate-400/30 w-full h-96 bg-slate-100 relative overflow-y-auto rounded flex flex-col"
+			>
+				<div class="p-4 border-b border-slate-400/30 bg-slate-100">
+					<h2>Prehľad udalostí v sálach</h2>
 				</div>
-				<div bind:this={tableWrapper} class="overflow-auto w-full">
-					<table class="w-full mt-8 rounded-md overflow-hidden leading-[3rem] text-text-500 border-separate" cellspacing="0">
-						<colgroup>
-							<col class="w-10" />
-							<col class="w-auto min-w-[200px]" />
-							<col class="w-auto min-w-[200px]" />
-							<col class="w-auto min-w-[160px]" />
-							<col class="w-auto min-w-[160px]" />
-							<col class="w-12" />
-						</colgroup>
-						<thead>
-							<tr>
-								<th class="flex items-center px-8 whitespace-nowrap h-[3rem] mt-1">
-									<Checkbox
-										disabled={!halls?.length || (!suggestions?.length && Boolean(query))}
-										bind:checked={selectAll}
-										onCheck={handleMassCheckboxUpdate}
-										name="select-all"
-									/>
-								</th>
-								<th
-									on:click={() => {
-										handleSortProperty("name");
-									}}
-									class="text-left hover:bg-background-100 px-2 cursor-pointer hover:text-text-600 rounded-t">Názov</th
-								>
-								<th
-									on:click={() => {
-										handleSortProperty("user");
-									}}
-									class="text-left hover:bg-background-100 px-2 cursor-pointer hover:text-text-600 rounded-t">Rezervácie</th
-								>
-								<th
-									on:click={() => {
-										handleSortProperty("category");
-									}}
-									class="text-left hover:bg-background-100 px-2 cursor-pointer hover:text-text-600 rounded-t">Náhľad</th
-								>
-								<th
-									on:click={() => {
-										handleSortProperty("created");
-									}}
-									class="text-left hover:bg-background-100 px-2 cursor-pointer hover:text-text-600 rounded-t">Vytvorené</th
-								>
-								<th
-									class="px-4 right-0 sticky bg-background-50 {displayShadow
-										? 'arrow'
-										: ''} transition-colors border-b border-slate-400/40 group-hover:bg-background-100 duration-100"
-								/>
-							</tr>
-						</thead>
-						<tbody>
-							{#if query}
-								{#if suggestions.filter((i) => suggestions.some((o) => o.id == i.id)).length}
-									{#each suggestions.filter((i) => suggestions.some((o) => o.id == i.id)) as suggestion, index}
-										<tr
-											on:click={async () => {
-												await redirectTohall(suggestion.id);
-											}}
-											class="hover:bg-background-100 cursor-pointer duration-100 border-b border-slate-400/40 group"
-										>
-											<td on:click|stopPropagation class="flex items-center px-8 whitespace-nowrap h-[3rem] mt-1">
-												<Checkbox
-													onCheck={handleCheckboxUpdate}
-													bind:checked={checkboxes[index].checked}
-													name={suggestion.id}
-												/>
-											</td>
-											<td class="px-2">
-												<div class="flex flex-col gap-0">
-													<p class="leading-5 whitespace-nowrap overflow-ellipsis overflow-hidden max-w-60">
-														{suggestion.name}
-													</p>
-													<p class="leading-5 text-sm text-slate-400">
-														{suggestion.id}
-													</p>
-												</div>
-											</td>
-											<td class="px-2 whitespace-nowrap overflow-ellipsis overflow-hidden">{suggestion.disabled}</td>
-											<td class="px-2">
-												{#if suggestion.expand?.category?.name}
-													{suggestion.expand.category.name}
-												{:else}
-													Nenastavené
-												{/if}
-											</td>
-											<td class="px-2">
-												<div class="flex flex-col gap-0">
-													<p class="leading-5">
-														{new Date(suggestion.created).toLocaleDateString("sk")}
-													</p>
-													<p class="leading-5 text-sm text-slate-400">
-														{new Date(suggestion.created).toLocaleTimeString("sk")}
-													</p>
-												</div>
-											</td>
-											<td
-												class="px-4 right-0 sticky bg-background-50 {displayShadow
-													? 'arrow'
-													: ''} transition-colors border-b border-slate-400/400 group-hover:bg-background-100 duration-100"
-											>
-												<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-5 h-5">
-													<path
-														fill-rule="evenodd"
-														d="M3 10a.75.75 0 01.75-.75h10.638L10.23 5.29a.75.75 0 111.04-1.08l5.5 5.25a.75.75 0 010 1.08l-5.5 5.25a.75.75 0 11-1.04-1.08l4.158-3.96H3.75A.75.75 0 013 10z"
-														clip-rule="evenodd"
-													/>
-												</svg>
-											</td>
-										</tr>
-									{/each}
-								{:else}
-									<tr>
-										<td class="text-center leading-10 py-6" colspan="7">
-											{#if !suggestions.length}
-												<p>Nenašli sa žiadne sály vyhovujúce vyhľadávaniu</p>
-											{:else}
-												<svg
-													xmlns="http://www.w3.org/2000/svg"
-													fill="none"
-													viewBox="0 0 24 24"
-													stroke-width="1.5"
-													stroke="currentColor"
-													class="w-6 h-6 mx-auto animate-spin"
-												>
-													<path
-														stroke-linecap="round"
-														stroke-linejoin="round"
-														d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99"
-													/>
-												</svg>
-											{/if}
-										</td>
-									</tr>
-								{/if}
-							{:else if halls.length}
-								{#each halls as hall, index}
-									<tr
-										on:click={async () => {
-											await redirectTohall(hall.id);
-										}}
-										class="hover:bg-background-100 cursor-pointer duration-100 border-b border-slate-400/40 group"
-									>
-										<td on:click|stopPropagation class="flex items-center px-8 whitespace-nowrap h-[3rem] mt-1">
-											<Checkbox onCheck={handleCheckboxUpdate} bind:checked={checkboxes[index].checked} name={hall.id} />
-										</td>
-										<td class="px-2">
-											<div class="flex flex-col gap-0">
-												<p class="leading-5 whitespace-nowrap overflow-ellipsis overflow-hidden max-w-60">
-													{hall.name}
-												</p>
-												<p class="leading-5 text-sm text-slate-400">
-													{hall.id}
-												</p>
-											</div>
-										</td>
-										<td class="px-2 whitespace-nowrap overflow-ellipsis overflow-hidden"
-											>{hall.enabled ? "Zapnuté" : "Vypnuté"}</td
-										>
-										<td class="px-2">
-											<div class="w-full h-full flex items-center">
-												{#if hall.render}
-													<button
-														class="hover:brightness-75 aspect-square overflow-hidden"
-														on:click|stopPropagation={() => {
-															imagePreview =
-																data.apiUrl + "/files/" + hall.collectionId + "/" + hall.id + "/" + hall.render;
-															openImageModal();
-														}}
-													>
-														<img
-															src={data.apiUrl + "/files/" + hall.collectionId + "/" + hall.id + "/" + hall.render}
-															alt="Náhľad"
-															class="w-10 rounded"
-														/>
-													</button>
-												{:else}
-													<p>Bez náhľadu</p>
-												{/if}
-											</div>
-										</td>
-										<td class="px-2">
-											<div class="flex flex-col gap-0">
-												<p class="leading-5">
-													{new Date(hall.created).toLocaleDateString("sk")}
-												</p>
-												<p class="leading-5 text-sm text-slate-400">
-													{new Date(hall.created).toLocaleTimeString("sk")}
-												</p>
-											</div>
-										</td>
-										<td
-											class="px-4 right-0 sticky bg-background-50 {displayShadow
-												? 'arrow'
-												: ''} transition-colors border-b border-slate-400/400 group-hover:bg-background-100 duration-100"
-										>
-											<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-5 h-5">
-												<path
-													fill-rule="evenodd"
-													d="M3 10a.75.75 0 01.75-.75h10.638L10.23 5.29a.75.75 0 111.04-1.08l5.5 5.25a.75.75 0 010 1.08l-5.5 5.25a.75.75 0 11-1.04-1.08l4.158-3.96H3.75A.75.75 0 013 10z"
-													clip-rule="evenodd"
-												/>
-											</svg>
-										</td>
-									</tr>
-								{/each}
-							{:else}
-								<tr>
-									<td class="text-center leading-10 py-6" colspan="7">
-										{#if !halls.length}
-											<p>Nenašli sa žiadne sály</p>
-										{:else}
-											<svg
-												xmlns="http://www.w3.org/2000/svg"
-												fill="none"
-												viewBox="0 0 24 24"
-												stroke-width="1.5"
-												stroke="currentColor"
-												class="w-6 h-6 mx-auto animate-spin"
-											>
-												<path
-													stroke-linecap="round"
-													stroke-linejoin="round"
-													d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99"
-												/>
-											</svg>
-										{/if}
-									</td>
-								</tr>
-							{/if}
-							{#if halls.length < data.halls.totalItems}
-								<tr>
-									<td class="text-center leading-10 py-2" colspan="7">
-										{#if loadinghall}
-											<svg
-												xmlns="http://www.w3.org/2000/svg"
-												fill="none"
-												viewBox="0 0 24 24"
-												stroke-width="1.5"
-												stroke="currentColor"
-												class="w-6 h-6 mx-auto animate-spin"
-											>
-												<path
-													stroke-linecap="round"
-													stroke-linejoin="round"
-													d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99"
-												/>
-											</svg>
-										{:else}
-											<form
-												action="?/getMoreHalls"
-												method="post"
-												use:enhance={({ formData }) => {
-													pbPage += 1;
-													formData.set("page", `${pbPage}`);
-													return async ({ result }) => {
-														handleLoadinghalls(result);
-
-														await applyAction(result);
-													};
-												}}
-											>
-												<button class="px-4 bg-background-100 hover:bg-background-200 rounded-md text-text-900" type="submit">
-													Načítať ďalšie ({data.halls.totalItems - halls.length})
-												</button>
-											</form>
-										{/if}
-									</td>
-								</tr>
-							{/if}
-						</tbody>
-					</table>
+				<div class="overflow-y-auto h-full" id="chartWrapper"></div>
+			</div>
+			<div
+				class="border border-slate-400/30 min-w-72 w-full sm:w-72 sm:h-96 bg-slate-100 flex flex-col rounded"
+			>
+				<div class="p-4 border-b border-slate-400/30">
+					<h2>Naplánované udalosti</h2>
+				</div>
+				<div class="h-full block">
+					
 				</div>
 			</div>
-			<!--</form>-->
+		</div>
+		<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 w-full">
+			<div class="border border-slate-400/30 w-full bg-slate-100 p-4 flex flex-col">
+				<h2 class="text-slate-500 text-sm">Počet sál</h2>
+				<p class="text-3xl font-bold">2</p>
+			</div>
+			<div class="border border-slate-400/30 w-full bg-slate-100 p-4 flex flex-col">
+				<h2 class="text-slate-500 text-sm">Naplánované udalosti</h2>
+				<p class="text-3xl font-bold">24</p>
+			</div>
+			<div class="border border-slate-400/30 w-full bg-slate-100 p-4 flex flex-col">
+				<h2 class="text-slate-500 text-sm">Udalosti</h2>
+				<p class="text-3xl font-bold">24</p>
+			</div>
+			<div class="border border-slate-400/30 w-full bg-slate-100 p-4 flex flex-col">
+				<h2 class="text-slate-500 text-sm">Udalosti</h2>
+				<p class="text-3xl font-bold">24</p>
+			</div>
 		</div>
 	</div>
 </div>
 
-<Popup bind:openPopup={openImageModal} bind:closePopup={closeImageModal}>
-	<div class="flex flex-col">
-		<img src={imagePreview} class="max-h-[24rem] overflow-auto" alt="Hall preview" />
-		<div class="ml-auto mt-3 items-center flex flex-row flex-nowrap gap-2">
-			<button type="button" on:click={closeImageModal} class="px-4 py-2 bg-background-100 hover:bg-background-200 rounded-md text-text-900"
-				>Zrušiť</button
-			>
-		</div>
-	</div>
-</Popup>
-
-{#if deleteModal}
-	<div
-		transition:fly={{ duration: 200, y: 10 }}
-		class="shadow fixed bottom-20 left-1/2 -translate-x-1/2 justify-between border border-background-200 bg-background-100 rounded-full w-[28rem] flex items-center px-6 py-2"
-	>
-		<p class="text-text-600">
-			Označen{checkboxes.filter((t) => t?.checked === true).length > 1 ? "é" : "á"}
-			<b>{checkboxes.filter((t) => t?.checked === true).length}</b>
-			sál{checkboxes.filter((t) => t?.checked === true).length > 1 ? "y" : "a"}
-		</p>
-		<button type="button" on:click={openConfirmModal} class="flex py-2 px-2 rounded-md text-text-100 gap-4 bg-accent-700 hover:bg-accent-600">
-			Vymazať sál{checkboxes.filter((t) => t?.checked === true).length > 1 ? "y" : "u"}
-		</button>
-	</div>
-{/if}
-
-<Popup bind:openPopup={openConfirmModal} bind:closePopup={closeConfirmModal}>
-	<div class="w-80">
-		<h2 class="text-text-700 text-xl mb-2">
-			Vymazať sál{checkboxes.filter((t) => t?.checked === true).length > 1 ? "y" : "u"}
-		</h2>
-		<p class="text-text-500 mb-4">
-			Na vymazanie sál{checkboxes.filter((t) => t?.checked === true).length > 1 ? "" : "y"} potrebujete zadať dôvod, ktorý bude poslaný uživateľom
-			cez E-Mail. Každá rezervácia v tejto sále sa ihneď vymaže. Táto akcia je nevratná.
-		</p>
-		{#if errorConfirmMessage}
-			<p class="text-red-500 mb-2 max-w-xs">{errorConfirmMessage}</p>
-		{/if}
-		<form
-			action="?/removeHalls"
-			method="POST"
-			class="flex flex-col"
-			use:enhance={({ formData }) => {
-				formData.set("checkboxes", JSON.stringify(checkboxes.filter((t) => t?.checked === true).map((t) => t.id)));
-				return async ({ result }) => {
-					if (result.type === "failure") {
-						errorConfirmMessage = typeof result.data?.message == "string" ? result.data.message : "";
-					} else {
-						await deleteSelected();
-						closeConfirmModal();
-					}
-				};
-			}}
-		>
-			<textarea
-				placeholder="Dôvod na zrušenie sál{checkboxes.filter((t) => t?.checked === true).length > 1 ? '' : 'y'}"
-				maxlength="600"
-				minlength="30"
-				class="bg-background-100 resize-none rounded-md col-span-1 lg:col-span-2 min-h-40 p-2 text-text-600"
-				name="reason"
-				id="reason"
-			></textarea>
-			<div class="ml-auto mt-3 items-center flex flex-row flex-nowrap gap-2">
-				<button type="reset" on:click={closeConfirmModal} class="px-4 py-2 bg-background-100 hover:bg-background-200 rounded-md text-text-900"
-					>Zrušiť</button
-				>
-				<button type="submit" class="px-4 py-2 bg-background-700 hover:bg-primary-600 rounded-md text-text-50">
-					Vymazať sál{checkboxes.filter((t) => t?.checked === true).length > 1 ? "y" : "u"}
-				</button>
+<Dialog title="Nová sála" bind:handleOpen={openEventDialog} bind:handleClose={closeEventDialog}>
+	<form class="w-full flex flex-col" action="">
+		<div class="p-4 flex flex-col">
+			<label for="name" class="text-sm text-slate-800">Názov</label>
+			<TextInput name="name" id="name"/>
+			<div class="w-full grid grid-cols-1 sm:grid-cols-2 gap-4 mt-2">
+				<div class="flex flex-col gap-2">
+					<p class="text-sm text-slate-800">Plán sály</p>
+					<div class="flex flex-row w-full gap-2">
+						<button
+							class="flex flex-row gap-2 items-center hover:bg-slate-200/50 duration-150 text-slate-500 px-4 py-2 rounded text-sm border border-slate-400/30 w-full"
+						>
+							<p>Použiť existujúci</p>
+						</button>
+						<button
+							class="flex flex-row gap-2 items-center bg-blue-500 hover:bg-blue-400 duration-150 text-slate-100 px-4 py-2 rounded border border-blue-600/30 text-sm w-full"
+						>
+							<Icon scale="small">
+								<Plus />
+							</Icon>
+							<p>Vytvoriť nový</p>
+						</button>
+					</div>
+					<img src="https://placehold.co/1080x1080" class="rounded-md" alt="Plán sály" />
+				</div>
+				
+				<div class="flex flex-col gap-2">
+					<label for="color" class="text-sm text-slate-800">Farba v grafoch</label>
+					<div class="flex flex-row flex-nowrap gap-2">
+						<div
+							class="border border-slate-400/30 aspect-square rounded"
+							style="background: {colorValue};"
+						></div>
+						<Combobox
+							bind:value={colorValue}
+							placeholder="Názov farby / HEX kód"
+							options={[
+								{ value: '#3b82f6', name: 'Modrá' },
+								{ value: '#8b5cf6', name: 'Fialová' }
+							]}
+						/>
+					</div>
+					<div class="flex flex-row gap-2 items-center">
+						<Switch name="allow_reservations" id="allow_reservations" checked={true}/>
+						<label for="allow_reservations" class="text-sm text-slate-800">Povoliť rezervácie v sále</label>
+					</div>
+					<div class="flex flex-row gap-2 items-center">
+						<Switch name="allow_custom_placement" id="allow_custom_placement"/>
+						<label for="allow_custom_placement" class="text-sm text-slate-800 flex flex-row items-center gap-2">Povoliť vlastné rozloženia
+							<Tooltip>
+								<p>Zapnutím tejto možnosti si uživatelia môžu vytvárať vlastné rozloženia stolov vo vašej sále. Ak je táto možnosť vypnutá, používatelia si môžu vyberať iba z vašich predom vytvorených rozložení.</p>
+							</Tooltip>
+						</label>
+					</div>
+					<div class="flex flex-row gap-2 items-center">
+						<Switch name="force_placement" id="force_placement"/>
+						<label for="force_placement" class="text-sm text-slate-800 flex flex-row items-center gap-2">
+							Vynútiť rozloženie sály
+							<Tooltip>
+								<p>Ak je táto možnosť vypnutá, uživatelia si môžu rozloženie stolov dodatočne vyplniť neskôr, po vytvorení rezervácie.</p>
+							</Tooltip>
+						</label>
+					</div>
+				</div>
 			</div>
-		</form>
-	</div>
-</Popup>
+		</div>
+		<div class="bg-slate-200 p-4 w-full border-t border-slate-400/30 flex justify-between">
+			<button
+				on:click={closeEventDialog}
+				class="flex flex-row gap-2 items-center hover:bg-slate-100/50 duration-150 text-slate-500 px-4 py-2 rounded text-sm"
+			>
+				<p>Zrušiť</p>
+			</button>
+			<button
+				on:click={openEventDialog}
+				class="flex flex-row gap-2 items-center bg-blue-500 hover:bg-blue-400 duration-150 text-slate-100 px-4 py-2 rounded border border-blue-600/30 text-sm"
+			>
+				<Icon scale="small">
+					<Plus />
+				</Icon>
+				<p>Pridať sálu</p>
+			</button>
+		</div>
+	</form>
+</Dialog>
 
 <style lang="postcss">
-	th,
-	td:not(.ignoreBorder) {
-		@apply border-b border-background-100;
+	.color-picker-radio {
+		@apply w-full h-full rounded block p-1 border border-slate-400/30 cursor-pointer relative hover:bg-slate-200;
 	}
-	.arrow {
-		box-shadow: 0 0 5px 2px rgba(0, 0, 0, 0.1);
-		clip-path: inset(0px -15px 0px -15px);
+	.color-picker-radio div {
+		@apply w-full h-full rounded block;
+	}
+	:global(input[type='radio'] + .color-picker-radio svg) {
+		@apply hidden;
+	}
+	:global(input[type='radio']:checked + .color-picker-radio svg) {
+		@apply block absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-white;
+	}
+	.event-table-row {
+		@apply border-t border-slate-400/30 hover:bg-slate-200;
+	}
+	.event-table-row-modify {
+		@apply mx-2 border-slate-400/30 border w-8 h-8 flex justify-center items-center rounded duration-150 hover:bg-slate-300;
+	}
+	.event-table-long-text {
+		@apply text-sm px-4 py-3 text-slate-600 max-w-40 overflow-ellipsis overflow-hidden whitespace-nowrap text-nowrap h-12;
 	}
 </style>

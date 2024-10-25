@@ -1,23 +1,16 @@
-import PocketBase, { Record, Admin } from "pocketbase";
-
 // See https://kit.svelte.dev/docs/types#app
+
+import type { Permission, User, UserSession } from "$lib/server/models";
+
 // for information about these interfaces
 declare global {
 	namespace App {
 		interface Locals {
-			authExpired: boolean; //True when token was invalidated on request.
-			pb: PocketBase;
-			user: Record | Admin | null;
-			pbSecretURL: string;
-			pbApiURL: string;
+			user: User | null;
+			session: UserSession | null;
+			permission: Permission;
 		}
-		interface LayoutData {
-			isValid: boolean;
-		}
-		// interface Error {}
-		// interface Locals {}
-		// interface PageData {}
-		// interface Platform {}
+
 	}
 }
 
