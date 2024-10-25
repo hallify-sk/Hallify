@@ -7,9 +7,7 @@ import type { Permission } from '$lib/server/models';
 export const load: LayoutServerLoad = async ({locals, request, depends}) => {
 
     depends("/");
-
-    console.log("RAN LOAD FUNCTION");
-
+    
     const currentRoute = new URL(request.url).pathname;
 
     const canAccess = await checkPermission(locals.permission, currentRoute);

@@ -5,17 +5,6 @@
 		invalidate('/');
 	});
 
-	export let data;
-
-	import { userStore, permissionStore } from '$lib/components/authStore';
-
-  $: user = data.user;
-
-  console.log(user);
-
-	userStore.set(data.user);
-	permissionStore.set(data.permission);
-
 	import '../app.postcss';
 
 	import { Toaster } from 'svelte-french-toast';

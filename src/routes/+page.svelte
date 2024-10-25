@@ -11,11 +11,9 @@
 	let closeEventDialog: () => void;
 
 	export let data;
-
-	console.log(data);
 </script>
 
-<Navbar/>
+<Navbar user={data.user} permission={data.permission}/>
 
 <div class="w-full min-h-screen bg-slate-200 py-6 px-4 md:px-24">
 	<div class="max-w-7xl w-full mx-auto flex flex-row flex-wrap justify-between items-center">

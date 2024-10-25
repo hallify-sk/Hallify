@@ -20,20 +20,20 @@ export const actions = {
         const formData = await request.formData();
         let email = formData.get('email');
         if (!email || typeof email !== 'string' || !isValidEmail(email)) {
-            return fail(400, { message: 'E-Mail je neplatný.' });
+            return fail(400, { message: 'E-Mail je neplatný.', validate: ["email"] });
         };
         email = email.toLowerCase();
         const user = await User.findOne({ where: { email } });
         if(!user){
-            return fail(404, { message: 'Účet s týmto e-mailom neexistuje.' });
+            return fail(404, { message: 'Účet s týmto e-mailom neexistuje.', validate: ["email"] });
         };
         const password = formData.get('password');
         if (!password || typeof password !== 'string') {
-            return fail(400, { message: 'Neplatné heslo.' });
+            return fail(400, { message: 'Neplatné heslo.', validate: ["password"] });
         };
     
         if(!(await validatePassword(password, user.password_hash))){
-            return fail(404, { message: 'Kombinácia užívateľa a hesla nebola nájdená.' });
+            return fail(404, { message: 'Kombinácia užívateľa a hesla nebola nájdená.', validate: ["password"] });
         };
     
         const token = generateSessionToken();

@@ -10,20 +10,21 @@
 	import BulletList from '$lib/icons/BulletList.svelte';
 	import Plus from '$lib/icons/Plus.svelte';
 	import Chat from '$lib/icons/Chat.svelte';
-
 	import { createAvatar } from '@dicebear/core';
 	import { initials } from '@dicebear/collection';
 	import NavCollapsibleNoButton from './NavCollapsibleNoButton.svelte';
 	import UserIcon from '$lib/icons/User.svelte';
 	import Logout from '$lib/icons/Logout.svelte';
 	import ArrowRight from '$lib/icons/ArrowRight.svelte';
-	import { userStore, permissionStore } from './authStore';
 	import AuthDialog from './AuthDialog.svelte';
 	import { applyAction, enhance } from '$app/forms';
 	import { invalidateAll } from '$app/navigation';
+	import type { UserSanitized } from '$lib/types/auth';
+	import type { Permission } from '$lib/server/models';
 
-	console.log($userStore, $permissionStore);
-	//If click outside of collapsible, close collapsible
+	export let user: UserSanitized | null = null;
+	export let permission: Permission | null = null;
+
 	onMount(() => {
 		document.addEventListener('click', (e) => {
 			if (!(e.target as HTMLDivElement).closest('.dropdown')) {
@@ -32,17 +33,21 @@
 		});
 	});
 
-	const avatar = $userStore
-		? createAvatar(initials, {
-				seed: `${$userStore.first_name} ${$userStore.last_name}`
-				// ... other options
-			}).toDataUri()
-		: '/User.svg';
+	let avatar: string;
+
+	$: user,
+		() => {
+			avatar = user
+				? createAvatar(initials, {
+						seed: `${user.first_name} ${user.last_name}`
+					}).toDataUri()
+				: '/User.svg';
+		};
 
 	export let openLoginDialog: () => void = () => {};
 	export let closeLoginDialog: () => void = () => {};
 
-	let toggleUserDropdown: any;
+	let toggleUserDropdown: () => void;
 </script>
 
 <div class="bg-slate-50 w-full sticky -top-[61px] left-0 z-30">
@@ -55,20 +60,44 @@
 			<div class="flex items-center">
 				<NavCollapsibleNoButton bind:toggleCollapsible={toggleUserDropdown} id="user">
 					<button
-						on:click={$userStore ? toggleUserDropdown : openLoginDialog}
+						on:click={user ? toggleUserDropdown : openLoginDialog}
 						class="flex flex-row flex-nowrap gap-2 items-center"
 					>
-						<img src={avatar} alt="avatar" class="h-8 w-8 rounded border border-slate-500/30" />
+						{#if user}
+							<img
+								src={createAvatar(initials, {
+									seed: `${user.first_name} ${user.last_name}`
+								}).toDataUri()}
+								alt="avatar"
+								class="h-8 w-8 rounded border border-slate-500/30"
+							/>
+						{:else}
+							<img
+								src="/User.svg"
+								alt="avatar"
+								class="h-8 w-8 rounded border border-slate-500/30"
+							/>
+						{/if}
 						<div class="flex flex-col flex-nowrap text-left justify-center">
 							<p
 								class="text-slate-700 poppins-regular text-sm max-w-32 overflow-ellipsis overflow-hidden whitespace-nowrap text-nowrap"
 							>
-								Richard Marcinčák
+								{#if user}
+									{user?.first_name} {user?.last_name}
+								{:else}
+									Neprihlásený používateľ
+								{/if}
 							</p>
-							<p class="text-slate-500 poppins-light text-xs">Administrator</p>
+							<p class="text-slate-500 poppins-light text-xs">
+								{#if user}
+									{permission?.name}
+								{:else}
+									Prihlásiť sa
+								{/if}
+							</p>
 						</div>
 					</button>
-					{#if $collapsibleOpen == 'user'}
+					{#if $collapsibleOpen == 'user' && user}
 						<div
 							class="flex flex-col absolute top-[48px] right-0 bg-slate-50 border border-slate-400/30 rounded-b overflow-hidden py-1"
 						>
@@ -87,19 +116,23 @@
 								</Icon>
 								<p class="text-slate-600">Manažment sál</p>
 							</a>
-							<form class="w-full flex flex-col" action="/api/auth/signout" method="post"
-							use:enhance={() => {
-								return async ({ result }) => {
-									// `result` is an `ActionResult` object
-									if (result.type === "failure") {
-										console.error(result);
-									} else {
-										await invalidateAll();
-										closeLoginDialog();
-										await applyAction(result);
-									}
-								};
-							}}>
+							<form
+								class="w-full flex flex-col"
+								action="/api/auth/signout"
+								method="post"
+								use:enhance={() => {
+									return async ({ result }) => {
+										// `result` is an `ActionResult` object
+										if (result.type === 'failure') {
+											console.error(result);
+										} else {
+											await invalidateAll();
+											closeLoginDialog();
+											await applyAction(result);
+										}
+									};
+								}}
+							>
 								<button
 									type="submit"
 									class="py-2 px-3 text-sm flex items-center gap-2 w-44 hover:bg-slate-100"
