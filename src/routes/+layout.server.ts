@@ -1,8 +1,7 @@
 import { checkPermission } from '$lib/server/auth';
 import { error } from '@sveltejs/kit';
 import type { LayoutServerLoad } from './$types';
-import type { UserSanitized } from '$lib/types/auth';
-import type { Permission } from '$lib/server/models';
+import type { Permission, User } from '$lib/server/models';
 
 export const load: LayoutServerLoad = async ({locals, request, depends}) => {
 
@@ -16,18 +15,8 @@ export const load: LayoutServerLoad = async ({locals, request, depends}) => {
         throw error(403, "You do not have permission to access this page");
     };
 
-    const user: UserSanitized | null = locals.user ? {
-        id: locals.user.id,
-        email: locals.user.email,
-        first_name: locals.user.first_name,
-        last_name: locals.user.last_name,
-        created_at: locals.user.created_at,
-        updated_at: locals.user.updated_at
-
-    } : null;
-
     return {
-        user,
+        user: JSON.parse(JSON.stringify(locals.user)) as User,
         permission: JSON.parse(JSON.stringify(locals.permission)) as Permission
     };
 }

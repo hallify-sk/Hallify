@@ -40,7 +40,7 @@
 					<h2>Prehľad udalostí</h2>
 				</div>
 				<div class="overflow-y-auto">
-					<table class="w-full border-collapse">
+					<table class="w-full border-collapse border-b border-slate-400/30">
 						<colgroup>
 							<col span="1" style="width: 5%;" />
 							<col span="2" style="width: 70%;" />
@@ -62,6 +62,104 @@
 							</tr>
 						</thead>
 						<tbody>
+							<tr class="event-table-row">
+								<td>
+									<a href="/" class="event-table-row-modify">
+										<Icon scale="small">
+											<Adjustments />
+										</Icon>
+									</a>
+								</td>
+								<td class="event-table-long-text">Maturitný ples SSOSTA 2024 - 4.B</td>
+								<td class="text-sm px-4 py-3 text-slate-600">12.12.2021</td>
+								<td class="text-sm px-4 py-3">
+									<span class="bg-blue-300/40 px-2 py-1 rounded text-blue-600">Plánovaná</span>
+								</td>
+							</tr>
+							<tr class="event-table-row">
+								<td>
+									<a href="/" class="event-table-row-modify">
+										<Icon scale="small">
+											<Adjustments />
+										</Icon>
+									</a>
+								</td>
+								<td class="event-table-long-text">Maturitný ples SSOSTA 2024 - 4.B</td>
+								<td class="text-sm px-4 py-3 text-slate-600">12.12.2021</td>
+								<td class="text-sm px-4 py-3">
+									<span class="bg-blue-300/40 px-2 py-1 rounded text-blue-600">Plánovaná</span>
+								</td>
+							</tr>
+							<tr class="event-table-row">
+								<td>
+									<a href="/" class="event-table-row-modify">
+										<Icon scale="small">
+											<Adjustments />
+										</Icon>
+									</a>
+								</td>
+								<td class="event-table-long-text">Maturitný ples SSOSTA 2024 - 4.B</td>
+								<td class="text-sm px-4 py-3 text-slate-600">12.12.2021</td>
+								<td class="text-sm px-4 py-3">
+									<span class="bg-blue-300/40 px-2 py-1 rounded text-blue-600">Plánovaná</span>
+								</td>
+							</tr>
+							<tr class="event-table-row">
+								<td>
+									<a href="/" class="event-table-row-modify">
+										<Icon scale="small">
+											<Adjustments />
+										</Icon>
+									</a>
+								</td>
+								<td class="event-table-long-text">Maturitný ples SSOSTA 2024 - 4.B</td>
+								<td class="text-sm px-4 py-3 text-slate-600">12.12.2021</td>
+								<td class="text-sm px-4 py-3">
+									<span class="bg-blue-300/40 px-2 py-1 rounded text-blue-600">Plánovaná</span>
+								</td>
+							</tr>
+							<tr class="event-table-row">
+								<td>
+									<a href="/" class="event-table-row-modify">
+										<Icon scale="small">
+											<Adjustments />
+										</Icon>
+									</a>
+								</td>
+								<td class="event-table-long-text">Maturitný ples SSOSTA 2024 - 4.B</td>
+								<td class="text-sm px-4 py-3 text-slate-600">12.12.2021</td>
+								<td class="text-sm px-4 py-3">
+									<span class="bg-blue-300/40 px-2 py-1 rounded text-blue-600">Plánovaná</span>
+								</td>
+							</tr>
+							<tr class="event-table-row">
+								<td>
+									<a href="/" class="event-table-row-modify">
+										<Icon scale="small">
+											<Adjustments />
+										</Icon>
+									</a>
+								</td>
+								<td class="event-table-long-text">Maturitný ples SSOSTA 2024 - 4.B</td>
+								<td class="text-sm px-4 py-3 text-slate-600">12.12.2021</td>
+								<td class="text-sm px-4 py-3">
+									<span class="bg-blue-300/40 px-2 py-1 rounded text-blue-600">Plánovaná</span>
+								</td>
+							</tr>
+							<tr class="event-table-row">
+								<td>
+									<a href="/" class="event-table-row-modify">
+										<Icon scale="small">
+											<Adjustments />
+										</Icon>
+									</a>
+								</td>
+								<td class="event-table-long-text">Maturitný ples SSOSTA 2024 - 4.B</td>
+								<td class="text-sm px-4 py-3 text-slate-600">12.12.2021</td>
+								<td class="text-sm px-4 py-3">
+									<span class="bg-blue-300/40 px-2 py-1 rounded text-blue-600">Plánovaná</span>
+								</td>
+							</tr>
 							<tr class="event-table-row">
 								<td>
 									<a href="/" class="event-table-row-modify">

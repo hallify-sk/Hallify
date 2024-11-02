@@ -19,6 +19,6 @@ export const actions = {
         await invalidateSession(locals.session.id);
         deleteSessionTokenCookie(cookies);
         
-        return { success: true }
+        return {}
     }
 };

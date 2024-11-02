@@ -71,6 +71,9 @@ export async function validateSessionToken(token: string): Promise<SessionValida
 	}
 
 	const user = await User.findOne({
+		attributes: {
+			exclude: ["password_hash"]
+		},
 		where: {
 			id: session.user_id
 		}

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { validateHex } from '$lib/util';
 	import { onMount } from 'svelte';
 
 	export let options: Array<{ value: string; name: string }> = [];
@@ -28,9 +29,11 @@
 		showOptions = false;
 	}
 
-	function validateHex(v: string) {
-		return /^#([0-9A-F]{3}){1,2}$/i.test(v);
-	}
+	export let id: string;
+
+	function removeValidation(){
+        (document.getElementById(id) as HTMLInputElement).setCustomValidity("");
+    }
 </script>
 
 <div class="relative combobox w-full">
@@ -38,9 +41,12 @@
 		bind:value={name}
 		on:input={() => {value = name}}
 		on:focus={focusIn}
+		on:change={removeValidation}
+		{id}
+		name={id}
 		type="text"
 		{placeholder}
-		class="w-full bg-slate-100 border border-slate-400/30 rounded text-sm p-2 text-slate-500 focus:text-slate-700 shadow-sm"
+		class="w-full invalid:border-red-400 bg-slate-100 border border-slate-400/30 rounded text-sm p-2 text-slate-500 focus:text-slate-700 shadow-sm"
 	/>
 	{#if showOptions}
 		<div

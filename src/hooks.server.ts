@@ -50,7 +50,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 	let response = await resolve(event);
 
 	if (!canAccess) {
-		response = error(403, "Nemáte dostatočné oprávnenia na prístup na túto stránku.");
+		response = error(403, "Nemáte dostatočné oprávnenia pre prístup na túto stránku.");
 	}
 	return response;
 };

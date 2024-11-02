@@ -19,7 +19,7 @@
 	onMount(() => {
 		destroy = validate.subscribe((value) => {
 			$validate.forEach((i) => {
-				(document.getElementById(i) as HTMLInputElement).setCustomValidity("Toto pole je povinné");
+				(document.getElementById(i) as HTMLInputElement).setCustomValidity("Chybné pole");
 			})
 		});
 	});

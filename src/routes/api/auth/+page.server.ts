@@ -40,6 +40,6 @@ export const actions = {
         const session = await createSession(token, user.id);
         setSessionTokenCookie(cookies, token, session.expires_at);
     
-        return {success: true};
+        return {};
     }
 };

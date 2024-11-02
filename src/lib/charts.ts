@@ -11,6 +11,12 @@ export function barGraphStyle(xAxisData: string[]) {
 			top: '10%',
 			bottom: '10%'
 		},
+		legend: {
+			// Try 'horizontal'
+			orient: 'horizontal',
+			top: 0,
+			left: 'center'
+		  },
 		tooltip: {},
 		xAxis: {
 			axisTick: {
@@ -41,7 +47,8 @@ export function barGraphStyle(xAxisData: string[]) {
 					type: 'dashed',
 					width: 1
 				}
-			}
+			},
+			minInterval: 1
 		}
 	};
 }

@@ -1,7 +1,7 @@
 <script lang="ts">
 	import Calendar from '$lib/icons/CalendarIcon.svelte';
 	import Home from '$lib/icons/Home.svelte';
-	import { collapsibleOpen } from '$lib/util';
+	import { checkPathPermission, collapsibleOpen } from '$lib/util';
 	import { onMount } from 'svelte';
 	import Collapsible from './NavCollapsible.svelte';
 	import Icon from '$lib/icons/Icon.svelte';
@@ -23,7 +23,7 @@
 	import type { Permission } from '$lib/server/models';
 
 	export let user: UserSanitized | null = null;
-	export let permission: Permission | null = null;
+	export let permission: Permission;
 
 	onMount(() => {
 		document.addEventListener('click', (e) => {
@@ -101,12 +101,15 @@
 						<div
 							class="flex flex-col absolute top-[48px] right-0 bg-slate-50 border border-slate-400/30 rounded-b overflow-hidden py-1"
 						>
-							<a href="#" class="py-2 px-3 text-sm flex items-center gap-2 w-44 hover:bg-slate-100">
+							{#if checkPathPermission("/profile", permission)}
+							<a href="/profile" class="py-2 px-3 text-sm flex items-center gap-2 w-44 hover:bg-slate-100">
 								<Icon scale="small">
 									<UserIcon />
 								</Icon>
 								<p class="text-slate-600">Zobraziť profil</p>
 							</a>
+							{/if}
+							{#if checkPathPermission("/admin", permission)}
 							<a
 								href="/admin"
 								class="py-2 px-3 text-sm flex items-center gap-2 w-44 hover:bg-slate-100"
@@ -114,8 +117,10 @@
 								<Icon scale="small">
 									<ArrowRight />
 								</Icon>
-								<p class="text-slate-600">Manažment sál</p>
+								<p class="text-slate-600">Admin režím</p>
 							</a>
+							{/if}
+							{#if checkPathPermission("/api/auth/signout", permission)}
 							<form
 								class="w-full flex flex-col"
 								action="/api/auth/signout"
@@ -143,6 +148,7 @@
 									<p class="text-slate-600">Odhlásiť sa</p>
 								</button>
 							</form>
+							{/if}
 						</div>
 					{/if}
 				</NavCollapsibleNoButton>
@@ -152,7 +158,7 @@
 	<div class="border-b border-slate-400/30 w-full px-4 md:px-24">
 		<div class="max-w-7xl mx-auto flex text-sm text-slate-400">
 			<a
-				href="#"
+				href="/"
 				class="py-3 px-3 text-sm border-b-2 border-b-transparent hover:border-b-blue-500 flex items-center gap-2"
 			>
 				<Icon scale="small">
@@ -160,6 +166,7 @@
 				</Icon>
 				<p class="text-slate-600">Domov</p>
 			</a>
+			{#if checkPathPermission("/events", permission) || checkPathPermission("/events/create", permission)}
 			<Collapsible id="event">
 				<Icon scale="small">
 					<Calendar />
@@ -176,13 +183,17 @@
 					<div
 						class="flex flex-col absolute top-[46px] left-0 bg-slate-50 border border-slate-400/30 rounded-b overflow-hidden py-1"
 					>
-						<a href="#" class="py-2 px-3 text-sm flex items-center gap-2 w-44 hover:bg-slate-100">
+						{#if checkPathPermission("/events", permission)}
+						<a href="/events" class="py-2 px-3 text-sm flex items-center gap-2 w-44 hover:bg-slate-100">
 							<Icon scale="small">
 								<BulletList />
 							</Icon>
 							<p class="text-slate-600">Zobraziť udalosti</p>
-						</a><a
-							href="#"
+						</a>
+						{/if}
+						{#if checkPathPermission("/events/create", permission)}
+						<a
+							href="/events/create"
 							class="py-2 px-3 text-sm flex items-center gap-2 w-44 hover:bg-slate-100"
 						>
 							<Icon scale="small">
@@ -190,11 +201,14 @@
 							</Icon>
 							<p class="text-slate-600">Vytvoriť udalosť</p>
 						</a>
+						{/if}
 					</div>
 				{/if}
 			</Collapsible>
+			{/if}
+			{#if checkPathPermission("/contact", permission)}
 			<a
-				href="#"
+				href="/contact"
 				class="py-3 px-3 text-sm border-b-2 border-b-transparent hover:border-b-blue-500 flex items-center gap-2"
 			>
 				<Icon scale="small">
@@ -202,6 +216,7 @@
 				</Icon>
 				<p class="text-slate-600">Kontakt</p>
 			</a>
+			{/if}
 		</div>
 	</div>
 </div>
