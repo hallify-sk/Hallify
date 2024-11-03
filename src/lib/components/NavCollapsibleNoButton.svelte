@@ -1,17 +1,19 @@
 <script lang="ts">
-	import { collapsibleOpen } from "$lib/util";
+	import type { Snippet } from 'svelte';
+	import { collapsibleOpen } from '$lib/util';
 
-	export let id: string;
+	let { id, children, open = $bindable() }: { id: string; children: Snippet, open: boolean } = $props();
 
-	export function toggleCollapsible(){
-		if($collapsibleOpen == id) {
-			collapsibleOpen.set("");
-			return;
+	$effect(() => {
+		if (open) {
+			collapsibleOpen.set(id);
+		}else{
+			collapsibleOpen.set('');
 		}
-		collapsibleOpen.set(id);
-	}
+	});
+
 </script>
 
 <div class="relative dropdown">
-	<slot />
+	{@render children?.()}
 </div>

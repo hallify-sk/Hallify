@@ -12,8 +12,8 @@ export const handle: Handle = async ({ event, resolve }) => {
 
 	if (token === null) {
 		const permission = await Permission.findByPk(`1`);
-		if(!permission) {
-			throw new Error("Permission table is missing default permission (ID = 1).");
+		if (!permission) {
+			throw new Error('Permission table is missing default permission (ID = 1).');
 		}
 		event.locals.user = null;
 		event.locals.session = null;
@@ -23,7 +23,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 		let response = await resolve(event);
 
 		if (!canAccess) {
-			response = error(401, "Pre prístup na túto stránku musíte byť prihlásený.");
+			response = error(401, 'Pre prístup na túto stránku musíte byť prihlásený.');
 		}
 		return response;
 	}
@@ -35,10 +35,12 @@ export const handle: Handle = async ({ event, resolve }) => {
 		deleteSessionTokenCookie(event.cookies);
 	}
 
-	const permission = user ? await Permission.findByPk(`${user.permission_id}`) : await Permission.findByPk(`1`);
+	const permission = user
+		? await Permission.findByPk(`${user.permission_id}`)
+		: await Permission.findByPk(`1`);
 
-	if(!permission) {
-		throw new Error("Permission table is missing default permission (ID = 1).");
+	if (!permission) {
+		throw new Error('Permission table is missing default permission (ID = 1).');
 	}
 
 	event.locals.session = session;
@@ -50,7 +52,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 	let response = await resolve(event);
 
 	if (!canAccess) {
-		response = error(403, "Nemáte dostatočné oprávnenia pre prístup na túto stránku.");
+		response = error(403, 'Nemáte dostatočné oprávnenia pre prístup na túto stránku.');
 	}
 	return response;
 };

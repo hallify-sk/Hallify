@@ -1,26 +1,31 @@
 <script lang="ts">
+	//Icon
+	import Icon from '$lib/icons/Icon.svelte';
+	import LogIn from '$lib/icons/LogIn.svelte';
+
+	//Svelte
 	import { applyAction, enhance } from '$app/forms';
 	import { invalidateAll } from '$app/navigation';
-	import Icon from '$lib/icons/Icon.svelte';
-	import Plus from '$lib/icons/Plus.svelte';
 	import { fly } from 'svelte/transition';
+	import { writable, type Writable } from 'svelte/store';
+	import { onDestroy, onMount, type Snippet } from 'svelte';
+
+	//Components
 	import Dialog from './Dialog.svelte';
 	import TextInput from './inputs/TextInput.svelte';
-	import LogIn from '$lib/icons/LogIn.svelte';
-	import { writable, type Writable } from 'svelte/store';
-	import { onDestroy, onMount } from 'svelte';
-	export let openLoginDialog: () => void = () => {};
-	export let closeLoginDialog: () => void = () => {};
 
-	let loginError: string | unknown = '';
+	let { open = $bindable(false), header }: { open: boolean, header: Snippet } =
+		$props();
+
+	let loginError: string | unknown = $state('');
 	let validate: Writable<string[]> = writable([]);
 
 	let destroy: (() => void) | undefined;
 	onMount(() => {
 		destroy = validate.subscribe((value) => {
 			$validate.forEach((i) => {
-				(document.getElementById(i) as HTMLInputElement).setCustomValidity("Chybné pole");
-			})
+				(document.getElementById(i) as HTMLInputElement).setCustomValidity('Chybné pole');
+			});
 		});
 	});
 
@@ -29,7 +34,10 @@
 	});
 </script>
 
-<Dialog title="Prihlásiť sa" bind:handleOpen={openLoginDialog} bind:handleClose={closeLoginDialog}>
+<Dialog bind:open>
+	{#snippet header()}
+		<p>Prihlásiť sa</p>
+	{/snippet}
 	<form
 		class="w-full flex flex-col"
 		action="/api/auth"
@@ -43,7 +51,7 @@
 					console.error(result);
 				} else {
 					await invalidateAll();
-					closeLoginDialog();
+					open = false;
 					await applyAction(result);
 				}
 			};
@@ -61,7 +69,7 @@
 		<div class="bg-slate-200 p-4 w-full border-t border-slate-400/30 flex justify-between">
 			<button
 				type="button"
-				on:click={closeLoginDialog}
+				onclick={() => (open = false)}
 				class="flex flex-row gap-2 items-center hover:bg-slate-100/50 duration-150 text-slate-500 px-4 py-2 rounded text-sm"
 			>
 				<p>Zrušiť</p>

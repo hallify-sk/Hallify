@@ -1,211 +1,202 @@
+<!-- @migration-task Error while migrating Svelte code: Cannot use `export let` in runes mode — use `$props()` instead -->
 <script lang="ts">
-	import { barGraphStyle } from '$lib/charts';
-	import Dialog from '$lib/components/Dialog.svelte';
-	import TextInput from '$lib/components/inputs/TextInput.svelte';
+	//Icons
 	import Icon from '$lib/icons/Icon.svelte';
 	import Plus from '$lib/icons/Plus.svelte';
+	import Adjustments from '$lib/icons/Adjustments.svelte';
 
-	import * as echarts from 'echarts';
+	//Svelte
 	import { onDestroy, onMount } from 'svelte';
-	import Switch from '$lib/components/inputs/Switch.svelte';
-	import Tooltip from '$lib/components/Tooltip.svelte';
-	import Combobox from '$lib/components/inputs/Combobox.svelte';
-	import Calendar from '$lib/components/Calendar.svelte';
 	import { applyAction, enhance } from '$app/forms';
 	import { writable, type Writable } from 'svelte/store';
 	import { invalidateAll } from '$app/navigation';
 	import { fly } from 'svelte/transition';
-	import Adjustments from '$lib/icons/Adjustments.svelte';
 
-	export let data;
-	console.log(data);
+	//Internal Libraries
+	import { barGraphStyle } from '$lib/charts';
+	import Dialog from '$lib/components/Dialog.svelte';
+	import TextInput from '$lib/components/inputs/TextInput.svelte';
 
-	let colorValue: string;
+	//External Libraries
+	import * as echarts from 'echarts';
 
-	let openEventDialog: () => void;
-	let closeEventDialog: () => void;
+	//Components
+	import Switch from '$lib/components/inputs/Switch.svelte';
+	import Tooltip from '$lib/components/Tooltip.svelte';
+	import Combobox from '$lib/components/inputs/Combobox.svelte';
+	import Calendar from '$lib/components/Calendar.svelte';
 
-	let openEventEditDialog: () => void;
-	let closeEventEditDialog: () => void;
+	const { data } = $props();
 
-	let hallCreateError: string | unknown = '';
-	let validate: Writable<string[]> = writable([]);
+	let colorValue: string = $state('');
 
-	const timeFrame: Writable<0 | 1 | 2> = writable(0);
+	let showHall = $state(false);
+	let showEditHall = $state(false);
 
-	let destroy: (() => void) | undefined;
-	let unsubscribeTimeFrame: () => void;
+	let hallCreateError: string | unknown = $state('');
+	let validate: string[] = $state([]);
 
-	onMount(() => {
-		destroy = validate.subscribe((value) => {
-			$validate.forEach((i) => {
-				(document.getElementById(i) as HTMLInputElement).setCustomValidity('Chybné pole');
-			});
+	$effect(() => {
+		validate.forEach((i) => {
+			(document.getElementById(i) as HTMLInputElement).setCustomValidity('Chybné pole');
 		});
+	});
 
-		var myChart = echarts.init(document.getElementById('chartWrapper'));
+	let timeFrame: 0 | 1 | 2 = $state(0);
 
-		unsubscribeTimeFrame = timeFrame.subscribe((v) => {
-			switch (v) {
-				case 1:
-					{
-						const getLast6Months = () => {
-							const dates = [];
-							const now = new Date();
-							for (let i = 5; i >= 0; i--) {
-								const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
-								dates.push(date.toLocaleDateString('sk', { year: 'numeric', month: 'long' }));
-							}
-							return dates;
+	$effect(() => {
+		const myChart = echarts.init(document.getElementById('chartWrapper'));
+
+		switch (timeFrame) {
+			case 1:
+				{
+					const getLast6Months = () => {
+						const dates = [];
+						const now = new Date();
+						for (let i = 5; i >= 0; i--) {
+							const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
+							dates.push(date.toLocaleDateString('sk', { year: 'numeric', month: 'long' }));
+						}
+						return dates;
+					};
+
+					const months = getLast6Months();
+					const hallData = data.halls.map((hall) => {
+						return {
+							name: hall.name,
+							data: months.map((month) => {
+								const reservations = data.reservations.filter((reservation) => {
+									const reservationDate = new Date(reservation.date);
+									return (
+										reservationDate.toLocaleDateString('sk', {
+											year: 'numeric',
+											month: 'long'
+										}) === month && reservation.hall_id === hall.id
+									);
+								});
+								return reservations.length;
+							}),
+							color: hall.color
 						};
+					});
 
-						const months = getLast6Months();
-						const hallData = data.halls.map((hall) => {
-							return {
-								name: hall.name,
-								data: months.map((month) => {
-									const reservations = data.reservations.filter((reservation) => {
-										const reservationDate = new Date(reservation.date);
-										return (
-											reservationDate.toLocaleDateString('sk', {
-												year: 'numeric',
-												month: 'long'
-											}) === month && reservation.hall_id === hall.id
-										);
-									});
-									return reservations.length;
-								}),
+					const styleOptions = barGraphStyle(months);
+
+					myChart.setOption({
+						...styleOptions,
+						series: hallData.map((hall) => ({
+							type: 'bar',
+							name: hall.name,
+							data: hall.data,
+							stack: 'total',
+							itemStyle: {
 								color: hall.color
-							};
-						});
-
-						const styleOptions = barGraphStyle(months);
-
-						myChart.setOption({
-							...styleOptions,
-							series: hallData.map((hall) => ({
-								type: 'bar',
-								name: hall.name,
-								data: hall.data,
-								stack: 'total',
-								itemStyle: {
-									color: hall.color
-								}
-							}))
-						});
-					}
-					break;
-				case 2:
-					{
-						const getLast12Months = () => {
-							const dates = [];
-							const now = new Date();
-							for (let i = 11; i >= 0; i--) {
-								const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
-								dates.push(date.toLocaleDateString('sk', { year: 'numeric', month: 'long' }));
 							}
-							return dates;
+						}))
+					});
+				}
+				break;
+			case 2:
+				{
+					const getLast12Months = () => {
+						const dates = [];
+						const now = new Date();
+						for (let i = 11; i >= 0; i--) {
+							const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
+							dates.push(date.toLocaleDateString('sk', { year: 'numeric', month: 'long' }));
+						}
+						return dates;
+					};
+
+					const months = getLast12Months();
+
+					const hallData = data.halls.map((hall) => {
+						return {
+							name: hall.name,
+							data: months.map((month) => {
+								const reservations = data.reservations.filter((reservation) => {
+									const reservationDate = new Date(reservation.date);
+									return (
+										reservationDate.toLocaleDateString('sk', {
+											year: 'numeric',
+											month: 'long'
+										}) === month && reservation.hall_id === hall.id
+									);
+								});
+								return reservations.length;
+							}),
+							color: hall.color
 						};
+					});
 
-						const months = getLast12Months();
+					const styleOptions = barGraphStyle(months);
 
-						const hallData = data.halls.map((hall) => {
-							return {
-								name: hall.name,
-								data: months.map((month) => {
-									const reservations = data.reservations.filter((reservation) => {
-										const reservationDate = new Date(reservation.date);
-										return (
-											reservationDate.toLocaleDateString('sk', {
-												year: 'numeric',
-												month: 'long'
-											}) === month && reservation.hall_id === hall.id
-										);
-									});
-									return reservations.length;
-								}),
+					myChart.setOption({
+						...styleOptions,
+						series: hallData.map((hall) => ({
+							type: 'bar',
+							name: hall.name,
+							data: hall.data,
+							stack: 'total',
+							itemStyle: {
 								color: hall.color
-							};
-						});
-
-						const styleOptions = barGraphStyle(months);
-
-						myChart.setOption({
-							...styleOptions,
-							series: hallData.map((hall) => ({
-								type: 'bar',
-								name: hall.name,
-								data: hall.data,
-								stack: 'total',
-								itemStyle: {
-									color: hall.color
-								}
-							}))
-						});
-					}
-					break;
-				default:
-					{
-						const getLast30Days = () => {
-							const dates = [];
-							for (let i = 29; i >= 0; i--) {
-								const date = new Date();
-								date.setDate(date.getDate() - i);
-								dates.push(date.toLocaleDateString('sk'));
 							}
-							return dates;
+						}))
+					});
+				}
+				break;
+			default:
+				{
+					const getLast30Days = () => {
+						const dates = [];
+						for (let i = 29; i >= 0; i--) {
+							const date = new Date();
+							date.setDate(date.getDate() - i);
+							dates.push(date.toLocaleDateString('sk'));
+						}
+						return dates;
+					};
+
+					const days = getLast30Days();
+
+					const hallData = data.halls.map((hall) => {
+						return {
+							name: hall.name,
+							data: days.map((day) => {
+								const reservations = data.reservations.filter((reservation) => {
+									const reservationDate = new Date(reservation.date);
+									return (
+										reservationDate.toLocaleDateString('sk') === day &&
+										reservation.hall_id === hall.id
+									);
+								});
+								return reservations.length;
+							}),
+							color: hall.color
 						};
+					});
 
-						const days = getLast30Days();
+					const styleOptions = barGraphStyle(days);
 
-						const hallData = data.halls.map((hall) => {
-							return {
-								name: hall.name,
-								data: days.map((day) => {
-									const reservations = data.reservations.filter((reservation) => {
-										const reservationDate = new Date(reservation.date);
-										return (
-											reservationDate.toLocaleDateString('sk') === day &&
-											reservation.hall_id === hall.id
-										);
-									});
-									return reservations.length;
-								}),
+					myChart.setOption({
+						...styleOptions,
+						series: hallData.map((hall) => ({
+							type: 'bar',
+							name: hall.name,
+							data: hall.data,
+							stack: 'total',
+							itemStyle: {
 								color: hall.color
-							};
-						});
-
-						const styleOptions = barGraphStyle(days);
-
-						myChart.setOption({
-							...styleOptions,
-							series: hallData.map((hall) => ({
-								type: 'bar',
-								name: hall.name,
-								data: hall.data,
-								stack: 'total',
-								itemStyle: {
-									color: hall.color
-								}
-							}))
-						});
-					}
-					break;
-			}
-			console.log(v);
-		});
-
+							}
+						}))
+					});
+				}
+				break;
+		}
 		new ResizeObserver(() => myChart.resize()).observe(
 			document.getElementById('chartWrapper') as HTMLElement
 		);
 	});
-
-	onDestroy(() => {
-		destroy?.();
-		unsubscribeTimeFrame?.();
-	});
-
-	$state("hello");
 </script>
 
 <div class="w-full min-h-screen bg-slate-200 py-6 px-4 md:px-24">
@@ -216,7 +207,7 @@
 		</div>
 		<div class="flex flex-row flex-nowrap items-center">
 			<button
-				on:click={openEventDialog}
+				onclick={() => (showHall = true)}
 				class="flex flex-row gap-2 items-center bg-blue-500 hover:bg-blue-400 duration-150 text-slate-100 px-4 py-2 rounded border border-blue-600/30 text-sm"
 			>
 				<Icon scale="small">
@@ -280,9 +271,7 @@
 							{#each data.halls as hall}
 								<tr class="event-table-row">
 									<td>
-										<button on:click={() => {
-											openEventEditDialog();
-										}} class="event-table-row-modify">
+										<button onclick={() => (showEditHall = true)} class="event-table-row-modify">
 											<Icon scale="small">
 												<Adjustments />
 											</Icon>
@@ -349,26 +338,26 @@
 					<div class="flex flex-row gap-2 items-center justify-evenly">
 						<p class="text-slate-400 text-sm">Obdobie:</p>
 						<button
-							on:click={() => {
-								timeFrame.set(0);
+							onclick={() => {
+								timeFrame = 0;
 							}}
-							class="{$timeFrame == 0
+							class="{timeFrame == 0
 								? 'text-slate-800'
 								: 'text-slate-400'} text-sm hover:underline">30 dni</button
 						>
 						<button
-							on:click={() => {
-								timeFrame.set(1);
+							onclick={() => {
+								timeFrame = 1;
 							}}
-							class="{$timeFrame == 1
+							class="{timeFrame == 1
 								? 'text-slate-800'
 								: 'text-slate-400'} text-sm text-slate-400 hover:underline">Polrok</button
 						>
 						<button
-							on:click={() => {
-								timeFrame.set(2);
+							onclick={() => {
+								timeFrame = 2;
 							}}
-							class="{$timeFrame == 2
+							class="{timeFrame == 2
 								? 'text-slate-800'
 								: 'text-slate-400'} text-sm text-slate-400 hover:underline">Rok</button
 						>
@@ -408,7 +397,10 @@
 	</div>
 </div>
 
-<Dialog title="Nová sála" bind:handleOpen={openEventDialog} bind:handleClose={closeEventDialog}>
+<Dialog bind:open={showHall}>
+	{#snippet header()}
+		<p>Nová sála</p>
+	{/snippet}
 	<form
 		class="w-full flex flex-col"
 		action="/admin/halls/?/create"
@@ -418,11 +410,11 @@
 			return async ({ result }) => {
 				if (result.type === 'failure') {
 					hallCreateError = result.data?.message;
-					Array.isArray(result.data?.validate) && validate.set(result.data?.validate);
+					if(Array.isArray(result.data?.validate)) validate = result.data?.validate;
 					console.error(result);
 				} else {
 					await invalidateAll();
-					closeEventDialog();
+					showHall = false;
 					await applyAction(result);
 				}
 			};
@@ -520,13 +512,13 @@
 		</div>
 		<div class="bg-slate-200 p-4 w-full border-t border-slate-400/30 flex justify-between">
 			<button
-				on:click={closeEventDialog}
+				onclick={() => (showHall = false)}
 				class="flex flex-row gap-2 items-center hover:bg-slate-100/50 duration-150 text-slate-500 px-4 py-2 rounded text-sm"
 			>
 				<p>Zrušiť</p>
 			</button>
 			<button
-				on:click={openEventDialog}
+				onclick={() => (showHall = true)}
 				class="flex flex-row gap-2 items-center bg-blue-500 hover:bg-blue-400 duration-150 text-slate-100 px-4 py-2 rounded border border-blue-600/30 text-sm"
 			>
 				<Icon scale="small">
@@ -538,7 +530,10 @@
 	</form>
 </Dialog>
 
-<Dialog title="Úprava parametrov sály" bind:handleOpen={openEventEditDialog} bind:handleClose={closeEventEditDialog}>
+<Dialog bind:open={showEditHall}>
+	{#snippet header()}
+		<p>Upraviť sálu</p>
+	{/snippet}
 	<form
 		class="w-full flex flex-col"
 		action="/admin/halls/?/create"
@@ -548,11 +543,11 @@
 			return async ({ result }) => {
 				if (result.type === 'failure') {
 					hallCreateError = result.data?.message;
-					Array.isArray(result.data?.validate) && validate.set(result.data?.validate);
+					if(Array.isArray(result.data?.validate)) validate = result.data?.validate;
 					console.error(result);
 				} else {
 					await invalidateAll();
-					closeEventDialog();
+					showEditHall = false;
 					await applyAction(result);
 				}
 			};
@@ -650,13 +645,13 @@
 		</div>
 		<div class="bg-slate-200 p-4 w-full border-t border-slate-400/30 flex justify-between">
 			<button
-				on:click={closeEventDialog}
+				onclick={() => (showEditHall = false)}
 				class="flex flex-row gap-2 items-center hover:bg-slate-100/50 duration-150 text-slate-500 px-4 py-2 rounded text-sm"
 			>
 				<p>Zrušiť</p>
 			</button>
 			<button
-				on:click={openEventDialog}
+				onclick={() => (showEditHall = true)}
 				class="flex flex-row gap-2 items-center bg-blue-500 hover:bg-blue-400 duration-150 text-slate-100 px-4 py-2 rounded border border-blue-600/30 text-sm"
 			>
 				<Icon scale="small">

@@ -1,6 +1,6 @@
 // See https://kit.svelte.dev/docs/types#app
 
-import type { Permission, User, UserSession } from "$lib/server/models";
+import type { Permission, User, UserSession } from '$lib/server/models';
 
 // for information about these interfaces
 declare global {
@@ -10,7 +10,6 @@ declare global {
 			session: UserSession | null;
 			permission: Permission;
 		}
-
 	}
 }
 

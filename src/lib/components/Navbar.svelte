@@ -1,29 +1,35 @@
 <script lang="ts">
+	//Icons
+	import Icon from '$lib/icons/Icon.svelte';
 	import Calendar from '$lib/icons/CalendarIcon.svelte';
 	import Home from '$lib/icons/Home.svelte';
-	import { checkPathPermission, collapsibleOpen } from '$lib/util';
-	import { onMount } from 'svelte';
-	import Collapsible from './NavCollapsible.svelte';
-	import Icon from '$lib/icons/Icon.svelte';
 	import ChevronUp from '$lib/icons/ChevronUp.svelte';
 	import ChevronDown from '$lib/icons/ChevronDown.svelte';
 	import BulletList from '$lib/icons/BulletList.svelte';
 	import Plus from '$lib/icons/Plus.svelte';
 	import Chat from '$lib/icons/Chat.svelte';
-	import { createAvatar } from '@dicebear/core';
-	import { initials } from '@dicebear/collection';
-	import NavCollapsibleNoButton from './NavCollapsibleNoButton.svelte';
 	import UserIcon from '$lib/icons/User.svelte';
 	import Logout from '$lib/icons/Logout.svelte';
 	import ArrowRight from '$lib/icons/ArrowRight.svelte';
-	import AuthDialog from './AuthDialog.svelte';
+
+	//Svelte
+	import { onMount } from 'svelte';
 	import { applyAction, enhance } from '$app/forms';
 	import { invalidateAll } from '$app/navigation';
+
+	//Dicebear
+	import { createAvatar } from '@dicebear/core';
+	import { initials } from '@dicebear/collection';
+
+	//Utils
+	import { checkPathPermission, collapsibleOpen } from '$lib/util';
 	import type { UserSanitized } from '$lib/types/auth';
 	import type { Permission } from '$lib/server/models';
 
-	export let user: UserSanitized | null = null;
-	export let permission: Permission;
+	//Components
+	import Collapsible from './NavCollapsible.svelte';
+	import NavCollapsibleNoButton from './NavCollapsibleNoButton.svelte';
+	import AuthDialog from './AuthDialog.svelte';
 
 	onMount(() => {
 		document.addEventListener('click', (e) => {
@@ -33,21 +39,24 @@
 		});
 	});
 
-	let avatar: string;
+	let {
+		user = undefined,
+		permission,
+	}: {
+		user?: UserSanitized;
+		permission: Permission;
+	} = $props();
 
-	$: user,
-		() => {
-			avatar = user
-				? createAvatar(initials, {
-						seed: `${user.first_name} ${user.last_name}`
-					}).toDataUri()
-				: '/User.svg';
-		};
+	let openLogin = $state(false);
 
-	export let openLoginDialog: () => void = () => {};
-	export let closeLoginDialog: () => void = () => {};
+	let openUserDropdown: boolean = $state(false);
 
-	let toggleUserDropdown: () => void;
+	let avatar: string = $state(`/User.svg`);
+	if (user) {
+		avatar = createAvatar(initials, {
+			seed: `${user.first_name} ${user.last_name}`
+		}).toDataUri();
+	}
 </script>
 
 <div class="bg-slate-50 w-full sticky -top-[61px] left-0 z-30">
@@ -58,26 +67,18 @@
 				<p class="font-bold text-slate-700 poppins-black-italic">Hallify</p>
 			</a>
 			<div class="flex items-center">
-				<NavCollapsibleNoButton bind:toggleCollapsible={toggleUserDropdown} id="user">
+				<NavCollapsibleNoButton bind:open={openUserDropdown} id="user">
 					<button
-						on:click={user ? toggleUserDropdown : openLoginDialog}
+						onclick={user
+							? () => {
+									openUserDropdown = !openUserDropdown;
+								}
+							: () => {
+									openLogin = true;
+								}}
 						class="flex flex-row flex-nowrap gap-2 items-center"
 					>
-						{#if user}
-							<img
-								src={createAvatar(initials, {
-									seed: `${user.first_name} ${user.last_name}`
-								}).toDataUri()}
-								alt="avatar"
-								class="h-8 w-8 rounded border border-slate-500/30"
-							/>
-						{:else}
-							<img
-								src="/User.svg"
-								alt="avatar"
-								class="h-8 w-8 rounded border border-slate-500/30"
-							/>
-						{/if}
+						<img src={avatar} alt="avatar" class="h-8 w-8 rounded border border-slate-500/30" />
 						<div class="flex flex-col flex-nowrap text-left justify-center">
 							<p
 								class="text-slate-700 poppins-regular text-sm max-w-32 overflow-ellipsis overflow-hidden whitespace-nowrap text-nowrap"
@@ -101,53 +102,56 @@
 						<div
 							class="flex flex-col absolute top-[48px] right-0 bg-slate-50 border border-slate-400/30 rounded-b overflow-hidden py-1"
 						>
-							{#if checkPathPermission("/profile", permission)}
-							<a href="/profile" class="py-2 px-3 text-sm flex items-center gap-2 w-44 hover:bg-slate-100">
-								<Icon scale="small">
-									<UserIcon />
-								</Icon>
-								<p class="text-slate-600">Zobraziť profil</p>
-							</a>
-							{/if}
-							{#if checkPathPermission("/admin", permission)}
-							<a
-								href="/admin"
-								class="py-2 px-3 text-sm flex items-center gap-2 w-44 hover:bg-slate-100"
-							>
-								<Icon scale="small">
-									<ArrowRight />
-								</Icon>
-								<p class="text-slate-600">Admin režím</p>
-							</a>
-							{/if}
-							{#if checkPathPermission("/api/auth/signout", permission)}
-							<form
-								class="w-full flex flex-col"
-								action="/api/auth/signout"
-								method="post"
-								use:enhance={() => {
-									return async ({ result }) => {
-										// `result` is an `ActionResult` object
-										if (result.type === 'failure') {
-											console.error(result);
-										} else {
-											await invalidateAll();
-											closeLoginDialog();
-											await applyAction(result);
-										}
-									};
-								}}
-							>
-								<button
-									type="submit"
+							{#if checkPathPermission('/profile', permission)}
+								<a
+									href="/profile"
 									class="py-2 px-3 text-sm flex items-center gap-2 w-44 hover:bg-slate-100"
 								>
 									<Icon scale="small">
-										<Logout />
+										<UserIcon />
 									</Icon>
-									<p class="text-slate-600">Odhlásiť sa</p>
-								</button>
-							</form>
+									<p class="text-slate-600">Zobraziť profil</p>
+								</a>
+							{/if}
+							{#if checkPathPermission('/admin', permission)}
+								<a
+									href="/admin"
+									class="py-2 px-3 text-sm flex items-center gap-2 w-44 hover:bg-slate-100"
+								>
+									<Icon scale="small">
+										<ArrowRight />
+									</Icon>
+									<p class="text-slate-600">Admin režím</p>
+								</a>
+							{/if}
+							{#if checkPathPermission('/api/auth/signout', permission)}
+								<form
+									class="w-full flex flex-col"
+									action="/api/auth/signout"
+									method="post"
+									use:enhance={() => {
+										return async ({ result }) => {
+											// `result` is an `ActionResult` object
+											if (result.type === 'failure') {
+												console.error(result);
+											} else {
+												await invalidateAll();
+												openLogin = false;
+												await applyAction(result);
+											}
+										};
+									}}
+								>
+									<button
+										type="submit"
+										class="py-2 px-3 text-sm flex items-center gap-2 w-44 hover:bg-slate-100"
+									>
+										<Icon scale="small">
+											<Logout />
+										</Icon>
+										<p class="text-slate-600">Odhlásiť sa</p>
+									</button>
+								</form>
 							{/if}
 						</div>
 					{/if}
@@ -166,59 +170,66 @@
 				</Icon>
 				<p class="text-slate-600">Domov</p>
 			</a>
-			{#if checkPathPermission("/events", permission) || checkPathPermission("/events/create", permission)}
-			<Collapsible id="event">
-				<Icon scale="small">
-					<Calendar />
-				</Icon>
-				<p class="text-slate-600">Moje udalosti</p>
-				<Icon scale="tiny">
+			{#if checkPathPermission('/events', permission) || checkPathPermission('/events/create', permission)}
+				<Collapsible id="event">
+					<Icon scale="small">
+						<Calendar />
+					</Icon>
+					<p class="text-slate-600">Moje udalosti</p>
+					<Icon scale="tiny">
+						{#if $collapsibleOpen == 'event'}
+							<ChevronUp />
+						{:else}
+							<ChevronDown />
+						{/if}
+					</Icon>
 					{#if $collapsibleOpen == 'event'}
-						<ChevronUp />
-					{:else}
-						<ChevronDown />
-					{/if}
-				</Icon>
-				{#if $collapsibleOpen == 'event'}
-					<div
-						class="flex flex-col absolute top-[46px] left-0 bg-slate-50 border border-slate-400/30 rounded-b overflow-hidden py-1"
-					>
-						{#if checkPathPermission("/events", permission)}
-						<a href="/events" class="py-2 px-3 text-sm flex items-center gap-2 w-44 hover:bg-slate-100">
-							<Icon scale="small">
-								<BulletList />
-							</Icon>
-							<p class="text-slate-600">Zobraziť udalosti</p>
-						</a>
-						{/if}
-						{#if checkPathPermission("/events/create", permission)}
-						<a
-							href="/events/create"
-							class="py-2 px-3 text-sm flex items-center gap-2 w-44 hover:bg-slate-100"
+						<div
+							class="flex flex-col absolute top-[46px] left-0 bg-slate-50 border border-slate-400/30 rounded-b overflow-hidden py-1"
 						>
-							<Icon scale="small">
-								<Plus />
-							</Icon>
-							<p class="text-slate-600">Vytvoriť udalosť</p>
-						</a>
-						{/if}
-					</div>
-				{/if}
-			</Collapsible>
+							{#if checkPathPermission('/events', permission)}
+								<a
+									href="/events"
+									class="py-2 px-3 text-sm flex items-center gap-2 w-44 hover:bg-slate-100"
+								>
+									<Icon scale="small">
+										<BulletList />
+									</Icon>
+									<p class="text-slate-600">Zobraziť udalosti</p>
+								</a>
+							{/if}
+							{#if checkPathPermission('/events/create', permission)}
+								<a
+									href="/events/create"
+									class="py-2 px-3 text-sm flex items-center gap-2 w-44 hover:bg-slate-100"
+								>
+									<Icon scale="small">
+										<Plus />
+									</Icon>
+									<p class="text-slate-600">Vytvoriť udalosť</p>
+								</a>
+							{/if}
+						</div>
+					{/if}
+				</Collapsible>
 			{/if}
-			{#if checkPathPermission("/contact", permission)}
-			<a
-				href="/contact"
-				class="py-3 px-3 text-sm border-b-2 border-b-transparent hover:border-b-blue-500 flex items-center gap-2"
-			>
-				<Icon scale="small">
-					<Chat />
-				</Icon>
-				<p class="text-slate-600">Kontakt</p>
-			</a>
+			{#if checkPathPermission('/contact', permission)}
+				<a
+					href="/contact"
+					class="py-3 px-3 text-sm border-b-2 border-b-transparent hover:border-b-blue-500 flex items-center gap-2"
+				>
+					<Icon scale="small">
+						<Chat />
+					</Icon>
+					<p class="text-slate-600">Kontakt</p>
+				</a>
 			{/if}
 		</div>
 	</div>
 </div>
 
-<AuthDialog bind:openLoginDialog bind:closeLoginDialog />
+<AuthDialog bind:open={openLogin}>
+	{#snippet header()}
+		<p>Prihlásiť sa</p>
+	{/snippet}
+</AuthDialog>

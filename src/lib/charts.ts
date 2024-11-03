@@ -16,7 +16,7 @@ export function barGraphStyle(xAxisData: string[]) {
 			orient: 'horizontal',
 			top: 0,
 			left: 'center'
-		  },
+		},
 		tooltip: {},
 		xAxis: {
 			axisTick: {

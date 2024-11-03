@@ -1,22 +1,27 @@
 <script lang="ts">
+	//Icons
 	import Calendar from '$lib/icons/CalendarIcon.svelte';
 	import Icon from '$lib/icons/Icon.svelte';
 	import Minus from '$lib/icons/Minus.svelte';
 	import Plus from '$lib/icons/Plus.svelte';
-	import { zoom } from '$lib/transitions/zoom';
-	import { toast } from 'svelte-french-toast';
 
+	//Libraries
+	import { toast } from 'svelte-french-toast';
 	import { CalendarOfMonth, type Month } from '@onsetsoftware/headless-calendar';
 
-	let selectedDate = new Date();
-	let currentYear = selectedDate.getFullYear();
-	let currentMonth = selectedDate.getMonth();
+	//Utils
+	import { zoom } from '$lib/transitions/zoom';
 
-	let prevMonth = new CalendarOfMonth(currentYear, currentMonth as Month, 0, 'sk');
-	let month = new CalendarOfMonth(currentYear, (currentMonth + 1) as Month, 0, 'sk');
-	let nextMonth = new CalendarOfMonth(currentYear, (currentMonth + 2) as Month, 0, 'sk');
 
-	let selectingDay = true;
+	let selectedDate = $state(new Date());
+	let currentYear = $state(selectedDate.getFullYear());
+	let currentMonth = $state(selectedDate.getMonth());
+
+	let prevMonth = $derived(new CalendarOfMonth(currentYear, currentMonth as Month, 0, 'sk'));
+	let month = $derived(new CalendarOfMonth(currentYear, (currentMonth + 1) as Month, 0, 'sk'));
+	let nextMonth = $derived(new CalendarOfMonth(currentYear, (currentMonth + 2) as Month, 0, 'sk'));
+
+	let selectingDay = $state(true);
 
 	const d = new Date();
 	const todayMidnight = Date.UTC(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0);
@@ -34,11 +39,6 @@
 	function regenerateDates() {
 		currentYear = selectedDate.getFullYear();
 		currentMonth = selectedDate.getMonth();
-
-		prevMonth = new CalendarOfMonth(currentYear, currentMonth as Month, 0, 'sk');
-		month = new CalendarOfMonth(currentYear, (currentMonth + 1) as Month, 0, 'sk');
-		nextMonth = new CalendarOfMonth(currentYear, (currentMonth + 2) as Month, 0, 'sk');
-		console.log(selectedDate);
 	}
 
 	function handleMinusCalendar() {
@@ -68,7 +68,7 @@
 	<!--Loop over month Sveltekit-->
 	<div class="col-span-7 border-b border-slate-400/30 flex flex-row flex-nowrap w-full p-1 gap-1">
 		<button
-			on:click={() => (selectingDay = !selectingDay)}
+			onclick={() => (selectingDay = !selectingDay)}
 			class="py-2 px-2 w-full border-slate-400/30 border rounded flex items-center hover:bg-slate-300 duration-150 gap-2 text-slate-500 text-sm"
 		>
 			<Icon scale="small">
@@ -82,7 +82,7 @@
 			{/if}
 		</button>
 		<button
-			on:click={handleMinusCalendar}
+			onclick={handleMinusCalendar}
 			class="py-2 px-2 w-10 aspect-square border-slate-400/30 border rounded flex items-center hover:bg-slate-300 duration-150 gap-2 text-slate-500"
 		>
 			<Icon scale="small">
@@ -90,7 +90,7 @@
 			</Icon>
 		</button>
 		<button
-			on:click={handlePlusCalendar}
+			onclick={handlePlusCalendar}
 			class="py-2 px-2 w-10 aspect-square border-slate-400/30 border rounded flex items-center hover:bg-slate-300 duration-150 gap-2 text-slate-500"
 		>
 			<Icon scale="small">
@@ -135,7 +135,12 @@
 						{#each [...month] as day, i}
 							{#key selectedDate.getMonth()}
 								<button
-								on:click={()=>{toast.error("Na tento dátum není žiadna udalosť.", {duration: 3000, position: "bottom-right"})}}
+									onclick={() => {
+										toast.error('Na tento dátum není žiadna udalosť.', {
+											duration: 3000,
+											position: 'bottom-right'
+										});
+									}}
 									class="calendarButton col-start-{day.value
 										.dayAxisIndex} w-full aspect-square rounded hover:bg-slate-200 duration-150 text-sm {todayMidnight ==
 									day.value.date.toJSDate().getTime()
@@ -173,7 +178,7 @@
 			>
 				{#each ['Jan', 'Feb', 'Mar', 'Apr', 'Máj', 'Jún', 'Júl', 'Aug', 'Sep', 'Okt', 'Nov', 'Dec'] as month, i}
 					<button
-						on:click={() => {
+						onclick={() => {
 							selectedDate.setMonth(i);
 							regenerateDates();
 							selectingDay = true;

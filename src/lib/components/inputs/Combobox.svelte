@@ -2,10 +2,7 @@
 	import { validateHex } from '$lib/util';
 	import { onMount } from 'svelte';
 
-	export let options: Array<{ value: string; name: string }> = [];
-	export let placeholder: string = '';
-
-	let showOptions = false;
+	let showOptions = $state(false);
 
 	function focusIn() {
 		showOptions = true;
@@ -20,28 +17,41 @@
 		});
 	});
 
-	export let name = '';
-	export let value = '';
-
 	function changeValue(newName: string, newValue: string) {
 		name = newName;
 		value = newValue;
 		showOptions = false;
 	}
 
-	export let id: string;
+	interface Props {
+		options?: Array<{ value: string; name: string }>;
+		placeholder?: string;
+		name?: string;
+		value?: string;
+		id: string;
+	}
 
-	function removeValidation(){
-        (document.getElementById(id) as HTMLInputElement).setCustomValidity("");
-    }
+	let {
+		options = [],
+		placeholder = '',
+		name = $bindable(''),
+		value = $bindable(''),
+		id
+	}: Props = $props();
+
+	function removeValidation() {
+		(document.getElementById(id) as HTMLInputElement).setCustomValidity('');
+	}
 </script>
 
 <div class="relative combobox w-full">
 	<input
 		bind:value={name}
-		on:input={() => {value = name}}
-		on:focus={focusIn}
-		on:change={removeValidation}
+		oninput={() => {
+			value = name;
+		}}
+		onfocus={focusIn}
+		onchange={removeValidation}
 		{id}
 		name={id}
 		type="text"
@@ -54,16 +64,16 @@
 		>
 			{#if validateHex(name)}
 				<button
-						on:click={() => changeValue(name, name)}
-						class="p-2 hover:bg-slate-200 cursor-pointer w-full flex flex-row flex-nowrap gap-2 items-center"
-					>
-						<div style="background: {name}" class="p-2 rounded block aspect-square"></div>
-						{name}
+					onclick={() => changeValue(name, name)}
+					class="p-2 hover:bg-slate-200 cursor-pointer w-full flex flex-row flex-nowrap gap-2 items-center"
+				>
+					<div style="background: {name}" class="p-2 rounded block aspect-square"></div>
+					{name}
 				</button>
 			{:else}
 				{#each options.filter((i) => i.name.toLowerCase().includes(name.toLowerCase())) as option}
 					<button
-						on:click={() => changeValue(option.name, option.value)}
+						onclick={() => changeValue(option.name, option.value)}
 						class="p-2 hover:bg-slate-200 cursor-pointer w-full flex flex-row flex-nowrap gap-2 items-center"
 					>
 						<div style="background: {option.value}" class="p-2 rounded block aspect-square"></div>

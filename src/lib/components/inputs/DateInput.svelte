@@ -1,1 +1,1 @@
-<input type="date">
+<input type="date" />

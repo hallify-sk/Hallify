@@ -1,12 +1,12 @@
 import { lucia } from '$lib/server/auth';
 import { isValidEmail } from '$lib/util';
-import { access } from "$lib/server/sql.js";
+import { access } from '$lib/server/sql.js';
 
 import { generateIdFromEntropySize } from 'lucia';
 import { hash } from '@node-rs/argon2';
 import mysql from 'mysql2/promise';
 
-export async function GET(event){
+export async function GET(event) {
 	if (!event.locals.user) {
 		return new Response(null, {
 			status: 401
@@ -15,11 +15,11 @@ export async function GET(event){
 	// ...
 }
 
-
 export async function POST({ request, locals }) {
-	if(!locals.user) return new Response(null, {
-		status: 401,
-	});
+	if (!locals.user)
+		return new Response(null, {
+			status: 401
+		});
 	console.log((await locals.user).permissions);
 	const db = await mysql.createConnection(access);
 	const formData = await request.formData();

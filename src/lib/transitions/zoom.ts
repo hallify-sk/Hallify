@@ -1,4 +1,4 @@
-import { sineInOut } from "svelte/easing";
+import { sineInOut } from 'svelte/easing';
 
 /**
  * Defines a zoom transition effect for an HTML element.

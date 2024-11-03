@@ -3,20 +3,19 @@ import { error } from '@sveltejs/kit';
 import type { LayoutServerLoad } from './$types';
 import type { Permission, User } from '$lib/server/models';
 
-export const load: LayoutServerLoad = async ({locals, request, depends}) => {
+export const load: LayoutServerLoad = async ({ locals, request, depends }) => {
+	depends('/');
 
-    depends("/");
-    
-    const currentRoute = new URL(request.url).pathname;
+	const currentRoute = new URL(request.url).pathname;
 
-    const canAccess = await checkPermission(locals.permission, currentRoute);
+	const canAccess = await checkPermission(locals.permission, currentRoute);
 
-    if (!canAccess) {
-        throw error(403, "You do not have permission to access this page");
-    };
+	if (!canAccess) {
+		throw error(403, 'You do not have permission to access this page');
+	}
 
-    return {
-        user: JSON.parse(JSON.stringify(locals.user)) as User,
-        permission: JSON.parse(JSON.stringify(locals.permission)) as Permission
-    };
-}
+	return {
+		user: JSON.parse(JSON.stringify(locals.user)) as User,
+		permission: JSON.parse(JSON.stringify(locals.permission)) as Permission
+	};
+};

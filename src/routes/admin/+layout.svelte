@@ -1,8 +1,8 @@
 <script>
-	import NavbarAdmin from "$lib/components/NavbarAdmin.svelte";
-	export let data;
+	import NavbarAdmin from '$lib/components/NavbarAdmin.svelte';
+	let { data, children } = $props();
 </script>
 
-<NavbarAdmin permission={data.permission} user={data.user}/>
+<NavbarAdmin permission={data.permission} user={data.user} />
 
-<slot/>
+{@render children?.()}

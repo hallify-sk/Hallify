@@ -8,6 +8,6 @@
 		"**/src/routes/**/+page.ts": "${dirname} - Page Script",
 		"**/src/routes/**/+error.svelte": "${dirname} - Error",
 		"**/src/routes/**/+layout.ts": "${dirname} - Layout Script",
-		"**/src/routes/**/+server.ts": "${dirname} - API endpoint",
+		"**/src/routes/**/+server.ts": "${dirname} - API endpoint"
 	}
 }

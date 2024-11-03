@@ -1,18 +1,14 @@
-<script>
-	import { invalidate, onNavigate } from '$app/navigation';
-
-	onNavigate(() => {
-		invalidate('/');
-	});
-
+<script lang="ts">
+	import type { Snippet } from 'svelte';
 	import '../app.postcss';
-
 	import { Toaster } from 'svelte-french-toast';
+
+	let { children }: { children: Snippet } = $props();
 </script>
 
 <Toaster toastOptions={{ className: 'toast', position: 'bottom-right' }} />
 
-<slot />
+{@render children?.()}
 
 <style lang="postcss">
 	:global(.toast) {

@@ -1,13 +1,29 @@
-import {type CreationOptional, type InferAttributes, type InferCreationAttributes, Model, DataTypes} from '@sequelize/core';
-import { AllowNull, Attribute, AutoIncrement, CreatedAt, Default, NotNull, PrimaryKey, Unique, UpdatedAt } from '@sequelize/core/decorators-legacy';
+import {
+	type CreationOptional,
+	type InferAttributes,
+	type InferCreationAttributes,
+	Model,
+	DataTypes
+} from '@sequelize/core';
+import {
+	AllowNull,
+	Attribute,
+	AutoIncrement,
+	CreatedAt,
+	Default,
+	NotNull,
+	PrimaryKey,
+	Unique,
+	UpdatedAt
+} from '@sequelize/core/decorators-legacy';
 
 export class User extends Model<InferAttributes<User>, InferCreationAttributes<User>> {
-    @Attribute(DataTypes.INTEGER)
+	@Attribute(DataTypes.INTEGER)
 	@PrimaryKey
 	@AutoIncrement
 	declare id: CreationOptional<number>;
 
-    @Attribute(DataTypes.STRING)
+	@Attribute(DataTypes.STRING)
 	@NotNull
 	@Unique
 	declare email: string;
@@ -20,47 +36,53 @@ export class User extends Model<InferAttributes<User>, InferCreationAttributes<U
 	@NotNull
 	declare last_name: string;
 
-    @Attribute(DataTypes.TEXT)
+	@Attribute(DataTypes.TEXT)
 	@NotNull
 	declare password_hash: string;
 
-    @Attribute(DataTypes.INTEGER)
+	@Attribute(DataTypes.INTEGER)
 	@NotNull
 	declare permission_id: number;
 
 	@CreatedAt
-    declare created_at: CreationOptional<Date>;
+	declare created_at: CreationOptional<Date>;
 
 	@UpdatedAt
-    declare updated_at: CreationOptional<Date>;
-};
+	declare updated_at: CreationOptional<Date>;
+}
 
-export class UserSession extends Model<InferAttributes<UserSession>, InferCreationAttributes<UserSession>> {
-    @Attribute(DataTypes.STRING)
-    @PrimaryKey
-    @AutoIncrement
-    declare id: CreationOptional<string>;
+export class UserSession extends Model<
+	InferAttributes<UserSession>,
+	InferCreationAttributes<UserSession>
+> {
+	@Attribute(DataTypes.STRING)
+	@PrimaryKey
+	@AutoIncrement
+	declare id: CreationOptional<string>;
 
-    @Attribute(DataTypes.DATE)
-    @NotNull
-    declare expires_at: Date;
+	@Attribute(DataTypes.DATE)
+	@NotNull
+	declare expires_at: Date;
 
-    @Attribute(DataTypes.INTEGER)
-    @NotNull
-    declare user_id: number;
+	@Attribute(DataTypes.INTEGER)
+	@NotNull
+	declare user_id: number;
 
 	@CreatedAt
-    declare created_at: CreationOptional<Date>;
+	declare created_at: CreationOptional<Date>;
 
 	@UpdatedAt
-    declare updated_at: CreationOptional<Date>;
-};
+	declare updated_at: CreationOptional<Date>;
+}
 
-export class Permission extends Model<InferAttributes<Permission>, InferCreationAttributes<Permission>> {
+export class Permission extends Model<
+	InferAttributes<Permission>,
+	InferCreationAttributes<Permission>
+> {
 	@Attribute(DataTypes.INTEGER)
-    @PrimaryKey
-    @AutoIncrement
-    declare id: CreationOptional<number>;
+	@PrimaryKey
+	@AutoIncrement
+	declare id: CreationOptional<number>;
 
 	@Attribute(DataTypes.STRING)
 	@NotNull
@@ -69,27 +91,27 @@ export class Permission extends Model<InferAttributes<Permission>, InferCreation
 	@Attribute(DataTypes.TEXT)
 	@NotNull
 	get allowed_paths(): Array<string> {
-		return JSON.parse(this.getDataValue("allowed_paths") as unknown as string);
+		return JSON.parse(this.getDataValue('allowed_paths') as unknown as string);
 	}
 
 	@Attribute(DataTypes.TEXT)
 	@NotNull
 	get disallowed_paths(): Array<string> {
-		return JSON.parse(this.getDataValue("disallowed_paths") as unknown as string);
+		return JSON.parse(this.getDataValue('disallowed_paths') as unknown as string);
 	}
-	
+
 	@CreatedAt
-    declare created_at: CreationOptional<Date>;
+	declare created_at: CreationOptional<Date>;
 
 	@UpdatedAt
-    declare updated_at: CreationOptional<Date>;
+	declare updated_at: CreationOptional<Date>;
 }
 
 export class Hall extends Model<InferAttributes<Hall>, InferCreationAttributes<Hall>> {
 	@Attribute(DataTypes.INTEGER)
-    @PrimaryKey
-    @AutoIncrement
-    declare id: CreationOptional<number>;
+	@PrimaryKey
+	@AutoIncrement
+	declare id: CreationOptional<number>;
 
 	@Attribute(DataTypes.STRING)
 	@NotNull
@@ -97,7 +119,7 @@ export class Hall extends Model<InferAttributes<Hall>, InferCreationAttributes<H
 
 	@Attribute(DataTypes.STRING)
 	@AllowNull
-    declare plan: CreationOptional<string> | null;
+	declare plan: CreationOptional<string> | null;
 
 	@Attribute(DataTypes.STRING)
 	@NotNull
@@ -117,19 +139,22 @@ export class Hall extends Model<InferAttributes<Hall>, InferCreationAttributes<H
 	@NotNull
 	@Default(false)
 	declare force_layouts: CreationOptional<boolean>;
-	
+
 	@CreatedAt
-    declare created_at: CreationOptional<Date>;
+	declare created_at: CreationOptional<Date>;
 
 	@UpdatedAt
-    declare updated_at: CreationOptional<Date>;
+	declare updated_at: CreationOptional<Date>;
 }
 
-export class Reservation extends Model<InferAttributes<Reservation>, InferCreationAttributes<Reservation>> {
+export class Reservation extends Model<
+	InferAttributes<Reservation>,
+	InferCreationAttributes<Reservation>
+> {
 	@Attribute(DataTypes.INTEGER)
-    @PrimaryKey
-    @AutoIncrement
-    declare id: CreationOptional<number>;
+	@PrimaryKey
+	@AutoIncrement
+	declare id: CreationOptional<number>;
 
 	@Attribute(DataTypes.INTEGER)
 	@NotNull
@@ -144,10 +169,10 @@ export class Reservation extends Model<InferAttributes<Reservation>, InferCreati
 	declare date: Date;
 
 	@CreatedAt
-    declare created_at: CreationOptional<Date>;
+	declare created_at: CreationOptional<Date>;
 
 	@UpdatedAt
-    declare updated_at: CreationOptional<Date>;
+	declare updated_at: CreationOptional<Date>;
 }
 
 import { Sequelize } from '@sequelize/core';
