@@ -31,7 +31,15 @@
 	let colorValue: string = $state('');
 
 	let showHall = $state(false);
+
 	let showEditHall = $state(false);
+	let editingId: number = $state(0);
+
+	$effect(() => {
+		if(editingId) {
+			colorValue = data.halls.find(i => i.id == editingId)?.color ?? '';
+		}
+	})
 
 	let hallCreateError: string | unknown = $state('');
 	let validate: string[] = $state([]);
@@ -197,6 +205,31 @@
 			document.getElementById('chartWrapper') as HTMLElement
 		);
 	});
+
+	async function handleEditSubmit(event: SubmitEvent){
+		event.preventDefault();
+
+		const formData = new FormData();
+		formData.set('name', event.target?.name?.value);
+		formData.set('color', colorValue);
+		formData.set('allow_reservations', event.target?.allow_reservations?.checked);
+		formData.set('custom_layouts', event.target?.custom_layouts?.checked);
+		formData.set('force_layouts', event.target?.force_layouts?.checked);
+
+		const res = await fetch(`/admin/halls/${editingId}`, {
+			method: 'PUT',
+			body: formData
+		});
+		if(res.status == 400 || res.status == 403 || res.status == 404){
+			const body = await res.json();
+			hallCreateError = body.message;
+			if(Array.isArray(body.validate)) validate = body.validate;
+			console.error(res);
+		}
+		
+		console.log(res);
+		return res;
+	}
 </script>
 
 <div class="w-full min-h-screen bg-slate-200 py-6 px-4 md:px-24">
@@ -271,7 +304,7 @@
 							{#each data.halls as hall}
 								<tr class="event-table-row">
 									<td>
-										<button onclick={() => (showEditHall = true)} class="event-table-row-modify">
+										<button onclick={() => {editingId = hall.id;showEditHall = true}} class="event-table-row-modify">
 											<Icon scale="small">
 												<Adjustments />
 											</Icon>
@@ -405,20 +438,6 @@
 		class="w-full flex flex-col"
 		action="/admin/halls/?/create"
 		method="post"
-		use:enhance={({ formData }) => {
-			formData.set('color', colorValue);
-			return async ({ result }) => {
-				if (result.type === 'failure') {
-					hallCreateError = result.data?.message;
-					if(Array.isArray(result.data?.validate)) validate = result.data?.validate;
-					console.error(result);
-				} else {
-					await invalidateAll();
-					showHall = false;
-					await applyAction(result);
-				}
-			};
-		}}
 	>
 		<div class="p-4 flex flex-col">
 			<label for="name" class="text-sm text-slate-800">Názov</label>
@@ -536,26 +555,11 @@
 	{/snippet}
 	<form
 		class="w-full flex flex-col"
-		action="/admin/halls/?/create"
-		method="post"
-		use:enhance={({ formData }) => {
-			formData.set('color', colorValue);
-			return async ({ result }) => {
-				if (result.type === 'failure') {
-					hallCreateError = result.data?.message;
-					if(Array.isArray(result.data?.validate)) validate = result.data?.validate;
-					console.error(result);
-				} else {
-					await invalidateAll();
-					showEditHall = false;
-					await applyAction(result);
-				}
-			};
-		}}
+		onsubmit={handleEditSubmit}
 	>
 		<div class="p-4 flex flex-col">
 			<label for="name" class="text-sm text-slate-800">Názov</label>
-			<TextInput name="name" id="name" />
+			<TextInput name="name" id="name" value={data.halls.find(i => i.id == editingId)?.name} />
 			<div class="w-full grid grid-cols-1 sm:grid-cols-2 gap-4 mt-2">
 				<div class="flex flex-col gap-2">
 					<p class="text-sm text-slate-800">Plán sály</p>
@@ -645,13 +649,15 @@
 		</div>
 		<div class="bg-slate-200 p-4 w-full border-t border-slate-400/30 flex justify-between">
 			<button
+				type="reset"
 				onclick={() => (showEditHall = false)}
 				class="flex flex-row gap-2 items-center hover:bg-slate-100/50 duration-150 text-slate-500 px-4 py-2 rounded text-sm"
 			>
 				<p>Zrušiť</p>
 			</button>
 			<button
-				onclick={() => (showEditHall = true)}
+				type="submit"
+				onclick={() => {showEditHall = true}}
 				class="flex flex-row gap-2 items-center bg-blue-500 hover:bg-blue-400 duration-150 text-slate-100 px-4 py-2 rounded border border-blue-600/30 text-sm"
 			>
 				<Icon scale="small">

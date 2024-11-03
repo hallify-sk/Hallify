@@ -1,5 +1,5 @@
 import { Hall } from '$lib/server/models.js';
-import { validateHex } from '$lib/util.js';
+import { serializeNonPOJOs, validateHex } from '$lib/util.js';
 
 export async function PUT({ request, params }) {
 	const id = params.id;
@@ -68,7 +68,18 @@ export async function PUT({ request, params }) {
 			}
 		);
 	}
-	const allow_reservations = formData.get('allow_reservations') == 'on';
-	const custom_layouts = formData.get('custom_layouts') == 'on';
-	const force_layouts = formData.get('force_layouts') == 'on';
+	const allow_reservations = formData.get('allow_reservations') == true;
+	const custom_layouts = formData.get('custom_layouts') == true;
+	const force_layouts = formData.get('force_layouts') == true;
+
+	// Update hall
+	await hall.update({
+		name,
+		plan,
+		color,
+		allow_reservations,
+		custom_layouts,
+		force_layouts
+	});
+	return new Response(serializeNonPOJOs(hall), {status: 200});
 }

@@ -23,6 +23,12 @@
 		showOptions = false;
 	}
 
+	$effect(() => {
+		if (value) {
+			name = value;
+		}
+	});
+
 	interface Props {
 		options?: Array<{ value: string; name: string }>;
 		placeholder?: string;
