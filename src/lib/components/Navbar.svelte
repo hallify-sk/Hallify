@@ -52,11 +52,15 @@
 	let openUserDropdown: boolean = $state(false);
 
 	let avatar: string = $state(`/User.svg`);
-	if (user) {
-		avatar = createAvatar(initials, {
-			seed: `${user.first_name} ${user.last_name}`
-		}).toDataUri();
-	}
+	$effect(() => {
+		if (user) {
+			avatar = createAvatar(initials, {
+				seed: `${user.first_name} ${user.last_name}`,
+			}).toDataUri();
+		}else{
+			avatar = `/User.svg`;
+		}
+	});
 </script>
 
 <div class="bg-slate-50 w-full sticky -top-[61px] left-0 z-30">
@@ -228,8 +232,4 @@
 	</div>
 </div>
 
-<AuthDialog bind:open={openLogin}>
-	{#snippet header()}
-		<p>Prihlásiť sa</p>
-	{/snippet}
-</AuthDialog>
+<AuthDialog bind:open={openLogin}/>

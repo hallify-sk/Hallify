@@ -7,30 +7,20 @@
 	import { applyAction, enhance } from '$app/forms';
 	import { invalidateAll } from '$app/navigation';
 	import { fly } from 'svelte/transition';
-	import { writable, type Writable } from 'svelte/store';
-	import { onDestroy, onMount, type Snippet } from 'svelte';
 
 	//Components
 	import Dialog from './Dialog.svelte';
 	import TextInput from './inputs/TextInput.svelte';
 
-	let { open = $bindable(false), header }: { open: boolean, header: Snippet } =
-		$props();
+	let { open = $bindable(false) }: { open: boolean; } = $props();
 
 	let loginError: string | unknown = $state('');
-	let validate: Writable<string[]> = writable([]);
+	let validate: string[] = $state([]);
 
-	let destroy: (() => void) | undefined;
-	onMount(() => {
-		destroy = validate.subscribe((value) => {
-			$validate.forEach((i) => {
-				(document.getElementById(i) as HTMLInputElement).setCustomValidity('Chybné pole');
-			});
+	$effect(() => {
+		validate.forEach((i) => {
+			(document.getElementById(i) as HTMLInputElement).setCustomValidity('Chybné pole');
 		});
-	});
-
-	onDestroy(() => {
-		destroy?.();
 	});
 </script>
 
@@ -47,7 +37,7 @@
 				// `result` is an `ActionResult` object
 				if (result.type === 'failure') {
 					loginError = result.data?.message;
-					Array.isArray(result.data?.validate) && validate.set(result.data?.validate);
+					if(Array.isArray(result.data?.validate)) validate = result.data.validate;
 					console.error(result);
 				} else {
 					await invalidateAll();
