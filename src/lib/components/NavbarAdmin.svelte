@@ -29,6 +29,7 @@
 	//Components
 	import Collapsible from './NavCollapsible.svelte';
 	import NavCollapsibleNoButton from './NavCollapsibleNoButton.svelte';
+	import Adjustments from '$lib/icons/Adjustments.svelte';
 
 	onMount(() => {
 		document.addEventListener('click', (e) => {
@@ -98,15 +99,15 @@
 									<p class="text-slate-600">Zobraziť profil</p>
 								</a>
 							{/if}
-							{#if checkPathPermission('/admin', permission)}
+							{#if checkPathPermission('/', permission)}
 								<a
-									href="/admin"
+									href="/"
 									class="py-2 px-3 text-sm flex items-center gap-2 w-44 hover:bg-slate-100"
 								>
 									<Icon scale="small">
 										<ArrowRight />
 									</Icon>
-									<p class="text-slate-600">Admin režím</p>
+									<p class="text-slate-600">Používateľský režím</p>
 								</a>
 							{/if}
 							{#if checkPathPermission('/api/auth/signout', permission)}
@@ -145,8 +146,9 @@
 	</div>
 	<div class="border-b border-slate-400/30 w-full px-4 md:px-24">
 		<div class="max-w-7xl mx-auto flex text-sm text-slate-400">
+			{#if checkPathPermission("/admin", permission)}
 			<a
-				href="/"
+				href="/admin"
 				class="py-3 px-3 text-sm border-b-2 border-b-transparent hover:border-b-blue-500 flex items-center gap-2"
 			>
 				<Icon scale="small">
@@ -154,12 +156,13 @@
 				</Icon>
 				<p class="text-slate-600">Domov</p>
 			</a>
-			{#if checkPathPermission('/events', permission) || checkPathPermission('/events/create', permission)}
+			{/if}
+			{#if checkPathPermission('/admin/events', permission) || checkPathPermission('/admin/events/create', permission)}
 				<Collapsible id="event">
 					<Icon scale="small">
 						<Calendar />
 					</Icon>
-					<p class="text-slate-600">Moje udalosti</p>
+					<p class="text-slate-600">Udalosti</p>
 					<Icon scale="tiny">
 						{#if $collapsibleOpen == 'event'}
 							<ChevronUp />
@@ -171,9 +174,9 @@
 						<div
 							class="flex flex-col absolute top-[46px] left-0 bg-slate-50 border border-slate-400/30 rounded-b overflow-hidden py-1"
 						>
-							{#if checkPathPermission('/events', permission)}
+							{#if checkPathPermission('/admin/events', permission)}
 								<a
-									href="/events"
+									href="/admin/events"
 									class="py-2 px-3 text-sm flex items-center gap-2 w-44 hover:bg-slate-100"
 								>
 									<Icon scale="small">
@@ -182,9 +185,9 @@
 									<p class="text-slate-600">Zobraziť udalosti</p>
 								</a>
 							{/if}
-							{#if checkPathPermission('/events/create', permission)}
+							{#if checkPathPermission('/admin/events/create', permission)}
 								<a
-									href="/events/create"
+									href="/admin/events/create"
 									class="py-2 px-3 text-sm flex items-center gap-2 w-44 hover:bg-slate-100"
 								>
 									<Icon scale="small">
@@ -197,15 +200,15 @@
 					{/if}
 				</Collapsible>
 			{/if}
-			{#if checkPathPermission('/contact', permission)}
+			{#if checkPathPermission('/admin/halls', permission)}
 				<a
-					href="/contact"
+					href="/admin/halls"
 					class="py-3 px-3 text-sm border-b-2 border-b-transparent hover:border-b-blue-500 flex items-center gap-2"
 				>
 					<Icon scale="small">
-						<Chat />
+						<Adjustments/>
 					</Icon>
-					<p class="text-slate-600">Kontakt</p>
+					<p class="text-slate-600">Spravovať sály</p>
 				</a>
 			{/if}
 		</div>

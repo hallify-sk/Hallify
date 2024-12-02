@@ -209,7 +209,7 @@
 		event.preventDefault();
 		const target = event.target as HTMLFormElement;
 		const formData = new FormData();
-		formData.set('name', target.name.valueOf().toString());
+		formData.set('name', (target.name as unknown as HTMLInputElement).value);
 		formData.set('color', colorValue);
 		formData.set('allow_reservations', target.allow_reservations?.checked);
 		formData.set('custom_layouts', target.custom_layouts?.checked);
@@ -225,8 +225,9 @@
 			if(Array.isArray(body.validate)) validate = body.validate;
 			console.error(res);
 		}
-		
-		console.log(res);
+
+		await invalidateAll();
+		showEditHall = false;
 		return res;
 	}
 </script>
@@ -610,13 +611,13 @@
 						/>
 					</div>
 					<div class="flex flex-row items-center gap-2">
-						<Switch name="allow_reservations" id="allow_reservations" checked={true} />
+						<Switch name="allow_reservations" id="allow_reservations" checked={data.halls.find(i => i.id == editingId)?.allow_reservations} />
 						<label for="allow_reservations" class="text-sm text-slate-800"
 							>Povoliť rezervácie v sále</label
 						>
 					</div>
 					<div class="flex flex-row items-center gap-2">
-						<Switch name="custom_layouts" id="custom_layouts" />
+						<Switch name="custom_layouts" id="custom_layouts" checked={data.halls.find(i => i.id == editingId)?.custom_layouts} />
 						<label
 							for="custom_layouts"
 							class="flex flex-row items-center gap-2 text-sm text-slate-800"
@@ -631,7 +632,7 @@
 						</label>
 					</div>
 					<div class="flex flex-row items-center gap-2">
-						<Switch name="force_layouts" id="force_layouts" />
+						<Switch name="force_layouts" id="force_layouts" checked={data.halls.find(i => i.id == editingId)?.force_layouts} />
 						<label
 							for="force_layouts"
 							class="flex flex-row items-center gap-2 text-sm text-slate-800"
@@ -667,7 +668,7 @@
 				<Icon scale="small">
 					<Plus />
 				</Icon>
-				<p>Pridať sálu</p>
+				<p>Upraviť sálu</p>
 			</button>
 		</div>
 	</form>

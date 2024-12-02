@@ -15,17 +15,6 @@
 			<p class="uppercase text-[0.65rem] text-slate-400">Prehľad</p>
 			<p class="text-slate-700">Panel informácií</p>
 		</div>
-		<div class="flex flex-row flex-nowrap items-center">
-			<button
-				onclick={() => (showEventDialog = true)}
-				class="flex flex-row gap-2 items-center bg-blue-500 hover:bg-blue-400 duration-150 text-slate-100 px-4 py-2 rounded border border-blue-600/30 text-sm"
-			>
-				<Icon scale="small">
-					<Plus />
-				</Icon>
-				<p>Vytvoriť udalosť</p>
-			</button>
-		</div>
 	</div>
 	<div class="max-w-7xl w-full mx-auto flex flex-col gap-4 mt-4 items-start">
 		<div class="flex flex-col sm:flex-row gap-4 w-full">
