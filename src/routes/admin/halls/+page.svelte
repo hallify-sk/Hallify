@@ -22,12 +22,13 @@
 	//Components
 	import Switch from '$lib/components/inputs/Switch.svelte';
 	import Tooltip from '$lib/components/Tooltip.svelte';
-	import Combobox from '$lib/components/inputs/Combobox.svelte';
+	import Combobox from '$lib/components/inputs/ComboboxColor.svelte';
 	import Calendar from '$lib/components/Calendar.svelte';
 
 	const { data } = $props();
 
 	let colorValue: string = $state('');
+	let colorName: string = $state('');
 
 	let showHall = $state(false);
 
@@ -36,7 +37,8 @@
 
 	$effect(() => {
 		if(editingId) {
-			colorValue = data.halls.find(i => i.id == editingId)?.color ?? '';
+			colorName = data.halls.find(i => i.id == editingId)?.color ?? '';
+			colorValue = colorName;
 		}
 	})
 
@@ -214,6 +216,7 @@
 		formData.set('allow_reservations', target.allow_reservations?.checked);
 		formData.set('custom_layouts', target.custom_layouts?.checked);
 		formData.set('force_layouts', target.force_layouts?.checked);
+		formData.set('allow_feedback', target.allow_feedback?.checked);
 
 		const res = await fetch(`/admin/halls/${editingId}`, {
 			method: 'PUT',
@@ -528,6 +531,20 @@
 							</Tooltip>
 						</label>
 					</div>
+					<div class="flex flex-row items-center gap-2">
+						<Switch name="allow_feedback" id="allow_feedback" />
+						<label
+							for="allow_feedback"
+							class="flex flex-row items-center gap-2 text-sm text-slate-800"
+						>
+							Povoliť spätnú väzbu
+							<Tooltip>
+								<p>
+									Ak je táto možnosť zapnutá, po udalosti môžu používatelia nechať spätnú väzbu pre personál alebo pre sálu.
+								</p>
+							</Tooltip>
+						</label>
+					</div>
 				</div>
 			</div>
 			{#if hallCreateError}
@@ -602,6 +619,7 @@
 						></div>
 						<Combobox
 							id="color"
+							name={colorName}
 							bind:value={colorValue}
 							placeholder="Názov farby / HEX kód"
 							options={[
@@ -642,6 +660,20 @@
 								<p>
 									Ak je táto možnosť vypnutá, uživatelia si môžu rozloženie stolov dodatočne vyplniť
 									neskôr, po vytvorení rezervácie.
+								</p>
+							</Tooltip>
+						</label>
+					</div>
+					<div class="flex flex-row items-center gap-2">
+						<Switch name="allow_feedback" id="allow_feedback" checked={data.halls.find(i => i.id == editingId)?.allow_feedback} />
+						<label
+							for="allow_feedback"
+							class="flex flex-row items-center gap-2 text-sm text-slate-800"
+						>
+							Povoliť spätnú väzbu
+							<Tooltip>
+								<p>
+									Ak je táto možnosť zapnutá, po udalosti môžu používatelia nechať spätnú väzbu pre personál alebo pre sálu.
 								</p>
 							</Tooltip>
 						</label>

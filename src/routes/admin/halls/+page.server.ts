@@ -32,6 +32,7 @@ export const actions = {
 		const allow_reservations = formData.get('allow_reservations') == 'on';
 		const custom_layouts = formData.get('custom_layouts') == 'on';
 		const force_layouts = formData.get('force_layouts') == 'on';
+		const allow_feedback = formData.get('allow_feedback') == 'on';
 
 		// Create hall
 		const hall = await Hall.create({
@@ -40,7 +41,8 @@ export const actions = {
 			color,
 			allow_reservations,
 			custom_layouts,
-			force_layouts
+			force_layouts,
+			allow_feedback
 		});
 		return { hall: serializeNonPOJOs(hall) };
 	}

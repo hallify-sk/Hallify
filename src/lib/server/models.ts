@@ -140,6 +140,11 @@ export class Hall extends Model<InferAttributes<Hall>, InferCreationAttributes<H
 	@Default(false)
 	declare force_layouts: CreationOptional<boolean>;
 
+	@Attribute(DataTypes.BOOLEAN)
+	@NotNull
+	@Default(false)
+	declare allow_feedback: CreationOptional<boolean>;
+
 	@CreatedAt
 	declare created_at: CreationOptional<Date>;
 

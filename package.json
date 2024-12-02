@@ -48,10 +48,12 @@
 		"@oslojs/encoding": "^1.1.0",
 		"@sequelize/core": "^7.0.0-alpha.42",
 		"@sequelize/mysql": "^7.0.0-alpha.43",
+		"canvas": "^2.11.2",
 		"echarts": "^5.5.1",
 		"minimatch": "^10.0.1",
 		"mysql2": "^3.11.0",
 		"oslo": "^1.2.1",
-		"svelte-french-toast": "^1.2.0"
+		"svelte-french-toast": "^1.2.0",
+		"svelte-konva": "^0.3.1"
 	}
 }

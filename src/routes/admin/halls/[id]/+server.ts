@@ -8,6 +8,7 @@ export async function PUT({ request, params }) {
 		return new Response(null, { status: 404, statusText: 'Nenašla sa sála s týmto ID.' });
 	}
 	const formData = await request.formData();
+	console.log(formData);
 	const name = formData.get('name')?.toString();
 	if (!name || typeof name !== 'string' || name.length < 1) {
 		return new Response(JSON.stringify({ message: 'Názov sály je povinný.', validate: ['name'] }), {
@@ -71,6 +72,7 @@ export async function PUT({ request, params }) {
 	const allow_reservations = formData.get('allow_reservations') == "true";
 	const custom_layouts = formData.get('custom_layouts') == "true";
 	const force_layouts = formData.get('force_layouts') == "true";
+	const allow_feedback = formData.get('allow_feedback') == "true";
 	// Update hall
 	await hall.update({
 		name,
@@ -78,7 +80,8 @@ export async function PUT({ request, params }) {
 		color,
 		allow_reservations,
 		custom_layouts,
-		force_layouts
+		force_layouts,
+		allow_feedback
 	});
 	return new Response(serializeNonPOJOs(hall), {status: 200});
 }
