@@ -145,12 +145,37 @@
 
     function drawCorners(){
         const group = tr?.nodes()[0];
+		const points: number[] = [];
         if (group && group instanceof Konva.Group) {
-            const box = group.getClientRect({ relativeTo: group });
-            console.log(box);
-            console.log(group.x());
-            console.log('Group width:', box.width);
-        }
+			group.children?.forEach((child: Konva.Node) => {
+				const box = child.getClientRect({ relativeTo: group });
+				points.push(box.x, box.y);
+			});
+			const line = new Konva.Line({
+				points,
+				stroke: 'red',
+				strokeWidth: 2,
+				closed: true
+			});
+			uiLayer?.add(line);
+			uiLayer?.draw();
+        }else if(group && group instanceof Konva.Line){
+			const points = group.points();
+			const corners = [];
+			for(let i = 0; i < points.length; i += 2){
+				corners.push([points[i], points[i + 1] ]);
+			}
+			const line = new Konva.Line({
+				points: corners.flat(),
+				stroke: 'red',
+				strokeWidth: 6,
+				closed: true
+			});
+			line.moveToTop();
+			console.log(corners);
+			uiLayer?.add(line);
+			uiLayer?.draw();
+		}
     }
 </script>
 <button onclick={drawCorners}>Draw corners</button>
@@ -261,5 +286,14 @@
 			/>
             {/each}
 		</Group>
+	</Layer>
+	<Layer>
+		<Line config={{
+			points: [150, 150, 180, 150, 210, 270, 150, 300],
+			stroke: 'black',
+			strokeWidth: 2,
+			closed: true,
+			fill: "black"
+		}}/>
 	</Layer>
 </Stage>
