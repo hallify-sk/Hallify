@@ -11,13 +11,21 @@
 	import Konva from 'konva';
 	import { registerWheelEvent } from './editor/events/wheel';
 	import type { Vector2d } from 'konva/lib/types';
-	import { constraintNumber, snapToGrid } from './editor/lib';
-	import type { KonvaEventObject, Node, NodeConfig } from 'konva/lib/Node';
+	import {
+		constraintNumber,
+		getCorners,
+		pointsToVector2D,
+		polyBounds,
+		polyPoly,
+		snapToGrid
+	} from './editor/lib';
+	import { registerClickEvent } from './editor/events/click';
 
-	let stage: Konva.Stage | null = $state(null);
+	let stage: Konva.Stage | undefined = $state();
 
 	let tr: Konva.Transformer | undefined = $state(undefined);
 
+	let gridLayer: Konva.Layer | undefined = $state(undefined);
 	let uiLayer: Konva.Layer | undefined = $state(undefined);
 	let collisionLayer: Konva.Layer | undefined = $state(undefined);
 
@@ -42,28 +50,7 @@
 	$effect(() => {
 		if (stage) {
 			registerWheelEvent(stage);
-			stage.on('click tap', function (e) {
-				//Default brush behaviour
-				if (!tr) return;
-				if (e.target === stage) {
-					tr.nodes([]);
-					return;
-				}
-
-				const isSelected = tr.nodes().indexOf(e.target) >= 0;
-
-				if (!isSelected) {
-					if (e.target.parent?.draggable()) {
-						tr.nodes([e.target.parent]);
-					} else {
-						tr.nodes([e.target]);
-					}
-				} else if (isSelected) {
-					const nodes = tr.nodes().slice();
-					nodes.splice(nodes.indexOf(e.target), 1);
-					tr.nodes(nodes);
-				}
-			});
+			registerClickEvent(stage, tr, { uiLayer, gridLayer });
 		}
 	});
 
@@ -87,7 +74,7 @@
 
 	const dragStart = async (e: KonvaDragTransformEvent) => {
 		const target = e.detail.target;
-        console.log(e, target);
+		console.log(e, target);
 		target.moveTo(uiLayer);
 		const tween = new Konva.Tween({
 			node: target,
@@ -102,7 +89,7 @@
 		//tween.play();
 
 		const clone = target.clone() as Konva.Group;
-        target.moveToTop();
+		target.moveToTop();
 		clone.name('DragPreview');
 		clone.position({
 			x: target.x(),
@@ -112,73 +99,94 @@
 		clone.opacity(0.5);
 		uiLayer?.add(clone);
 		clone.draw();
-		collisionLayer?.moveToTop();
 		return;
 	};
 
 	const dragMove = async (e: KonvaDragTransformEvent) => {
+		if (!stage) return;
 		const target = e.detail.target;
-        target.moveToTop();
-        console.log(target);
-        console.log(target.width());
+		target.moveTo(uiLayer);
+		target.moveToTop();
 		const clone = uiLayer?.findOne('.DragPreview');
 		if (!clone) return;
-		clone.position({
-			x: snapToGrid(target.x(), gridSize),
-			y: snapToGrid(target.y(), gridSize)
-		});
+		const objects = collisionLayer?.children ?? [];
+		const targetCorners = pointsToVector2D(getCorners(target, stage));
+
+		let isColliding = false;
+
+		const stageBounds = [
+			0,
+			0,
+			gridWidth * gridSize,
+			0,
+			gridWidth * gridSize,
+			gridHeight * gridSize,
+			0,
+			gridHeight * gridSize
+		];
+		isColliding = polyBounds(targetCorners, pointsToVector2D(stageBounds));
+
+		if (!isColliding) {
+			isColliding = objects
+				.filter((i) => i !== target)
+				.some((object) => {
+					if (!stage) return;
+					const objectCorners = pointsToVector2D(getCorners(object, stage));
+					//Draw the collision points
+					if (polyPoly(targetCorners, objectCorners)) {
+						return true;
+					} else {
+						return false;
+					}
+				});
+		}
+		if (isColliding) {
+			if (target instanceof Konva.Line || target instanceof Konva.Rect) {
+				target.fill('red');
+			} else if (target instanceof Konva.Group) {
+				target.children.forEach((child) => {
+					if (child instanceof Konva.Line || child instanceof Konva.Rect) child.fill('#ff0000');
+				});
+			}
+		} else {
+			if (target instanceof Konva.Line || target instanceof Konva.Rect) {
+				target.fill(target.attrs.defaultFill);
+			} else if (target instanceof Konva.Group) {
+				target.children.forEach((child) => {
+					if (child instanceof Konva.Line || child instanceof Konva.Rect)
+						child.fill(child.attrs.defaultFill);
+				});
+			}
+			clone.position({
+				x: snapToGrid(target.x(), gridSize),
+				y: snapToGrid(target.y(), gridSize)
+			});
+		}
 		return;
 	};
 
 	const dragEnd = async (e: KonvaDragTransformEvent) => {
 		const target = e.detail.target;
-        target.moveToTop();
+		target.moveToTop();
 		const clone = uiLayer?.findOne('.DragPreview');
-		currentTween?.reverse();
+		//currentTween?.reverse();
 		setTimeout(() => {
 			target.position(clone?.position() ?? { x: 0, y: 0 });
 		}, 0);
+		if (target instanceof Konva.Line || target instanceof Konva.Rect) {
+			target.fill(target.attrs.defaultFill);
+		} else if (target instanceof Konva.Group) {
+			target.children.forEach((child) => {
+				if (child instanceof Konva.Line || child instanceof Konva.Rect)
+					child.fill(child.attrs.defaultFill);
+			});
+		}
 		target.moveTo(collisionLayer);
 		clone?.destroy();
 		return;
 	};
-
-    function drawCorners(){
-        const group = tr?.nodes()[0];
-		const points: number[] = [];
-        if (group && group instanceof Konva.Group) {
-			group.children?.forEach((child: Konva.Node) => {
-				const box = child.getClientRect({ relativeTo: group });
-				points.push(box.x, box.y);
-			});
-			const line = new Konva.Line({
-				points,
-				stroke: 'red',
-				strokeWidth: 2,
-				closed: true
-			});
-			uiLayer?.add(line);
-			uiLayer?.draw();
-        }else if(group && group instanceof Konva.Line){
-			const points = group.points();
-			const corners = [];
-			for(let i = 0; i < points.length; i += 2){
-				corners.push([points[i], points[i + 1] ]);
-			}
-			const line = new Konva.Line({
-				points: corners.flat(),
-				stroke: 'red',
-				strokeWidth: 6,
-				closed: true
-			});
-			line.moveToTop();
-			console.log(corners);
-			uiLayer?.add(line);
-			uiLayer?.draw();
-		}
-    }
 </script>
-<button onclick={drawCorners}>Draw corners</button>
+
 <Stage
 	bind:handle={stage}
 	config={{
@@ -190,7 +198,7 @@
 	}}
 >
 	<!--Griddy-->
-	<Layer>
+	<Layer bind:handle={gridLayer}>
 		<Rect
 			config={{
 				x: 0,
@@ -202,13 +210,13 @@
 		/>
 		{#each Array(gridWidth + 1) as xGrid, index}
 			<Line
-				config={{   
+				config={{
 					points: [index * gridSize, 0, index * gridSize, gridHeight * gridSize],
 					stroke: '#e2e8f0',
 					strokeWidth: 1,
 					listening: false,
 					perfectDrawEnabled: false,
-                    id: `leftChair_${index}`
+					id: `leftChair_${index}`
 				}}
 			/>
 		{/each}
@@ -224,8 +232,7 @@
 			/>
 		{/each}
 	</Layer>
-	<Layer config={{ name: 'uiLayer' }} bind:handle={uiLayer} />
-	<Layer bind:handle={collisionLayer}>
+	<Layer config={{ name: 'uiLayer' }} bind:handle={uiLayer}>
 		<Transformer
 			bind:handle={tr}
 			config={{
@@ -234,6 +241,8 @@
 				rotationSnapTolerance: 30
 			}}
 		/>
+	</Layer>
+	<Layer bind:handle={collisionLayer}>
 		<Group
 			config={{
 				rotation: 0,
@@ -246,54 +255,97 @@
 			on:dragmove={dragMove}
 			on:dragend={dragEnd}
 		>
-            {#each Array(3) as _, i}
-            <Rect
-				config={{
-					x: gridSize * 0.1,
-                    y: i * gridSize + gridSize * 0.1,
-					width: 0.8 * gridSize,
-					height: 0.8 * gridSize,
-					fill: '#64748b',
-					cornerRadius: 4,
-                    perfectDrawEnabled: false,
-                    isChair: true,
-				}}
-			/>
-            {/each}
 			<Rect
 				config={{
 					x: gridSize,
 					width: 2 * gridSize,
 					height: 4 * gridSize,
 					fill: '#334155',
+					defaultFill: '#334155',
 					cornerRadius: 4,
-                    draggable: false,
-                    perfectDrawEnabled: false,
+					draggable: false,
+					perfectDrawEnabled: false
 				}}
 			/>
-            {#each Array(4) as _, i}
-            <Rect
-				config={{
-					x: gridSize * 2 + gridSize + gridSize * 0.1,
-                    y: i * gridSize + gridSize * 0.1,
-					width: 0.8 * gridSize,
-					height: 0.8 * gridSize,
-					fill: '#64748b',
-					cornerRadius: 4,
-                    perfectDrawEnabled: false,
-                    isChair: true,
-				}}
-			/>
-            {/each}
+			{#each Array(4) as _, i}
+				<Rect
+					config={{
+						x: gridSize * 2 + gridSize + gridSize * 0.1,
+						y: i * gridSize + gridSize * 0.1,
+						width: 0.8 * gridSize,
+						height: 0.8 * gridSize,
+						fill: '#64748b',
+						defaultFill: '#64748b',
+						cornerRadius: 4,
+						perfectDrawEnabled: false,
+						isChair: true
+					}}
+				/>
+			{/each}
 		</Group>
-	</Layer>
-	<Layer>
-		<Line config={{
-			points: [150, 150, 180, 150, 210, 270, 150, 300],
-			stroke: 'black',
-			strokeWidth: 2,
-			closed: true,
-			fill: "black"
-		}}/>
+		<Group
+			config={{
+				rotation: 0,
+				x: 200,
+				y: 200,
+				draggable: true,
+				rotatable: true
+			}}
+			on:dragstart={dragStart}
+			on:dragmove={dragMove}
+			on:dragend={dragEnd}
+		>
+			{#each Array(3) as _, i}
+				<Rect
+					config={{
+						x: gridSize * 0.1,
+						y: i * gridSize + gridSize * 0.1,
+						width: 0.8 * gridSize,
+						height: 0.8 * gridSize,
+						fill: '#64748b',
+						defaultFill: '#64748b',
+						cornerRadius: 4,
+						perfectDrawEnabled: false,
+						isChair: true
+					}}
+				/>
+			{/each}
+			<Rect
+				config={{
+					x: gridSize,
+					width: 2 * gridSize,
+					height: 4 * gridSize,
+					fill: '#334155',
+					defaultFill: '#334155',
+					cornerRadius: 4,
+					draggable: false,
+					perfectDrawEnabled: false
+				}}
+			/>
+			{#each Array(4) as _, i}
+				<Rect
+					config={{
+						x: gridSize * 2 + gridSize + gridSize * 0.1,
+						y: i * gridSize + gridSize * 0.1,
+						width: 0.8 * gridSize,
+						height: 0.8 * gridSize,
+						fill: '#64748b',
+						defaultFill: '#64748b',
+						cornerRadius: 4,
+						perfectDrawEnabled: false,
+						isChair: true
+					}}
+				/>
+			{/each}
+		</Group>
+		<Line
+			config={{
+				points: [150, 150, 180, 150, 210, 270, 150, 300],
+				stroke: 'black',
+				strokeWidth: 2,
+				closed: true,
+				fill: 'black'
+			}}
+		/>
 	</Layer>
 </Stage>
