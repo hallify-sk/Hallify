@@ -3,20 +3,31 @@ import Konva from 'konva';
 import { selectedBrush } from '../brushes';
 import { get } from 'svelte/store';
 import { v4 as uuidv4 } from 'uuid';
-import { snapToGrid } from '../lib';
+import { circleBounds, pointsToVector2D, snapToGrid } from '../lib';
 
 export function registerClickEvent(
 	stage: Konva.Stage,
 	tr: Konva.Transformer | undefined,
 	layers: { [key: string]: Konva.Layer | undefined }
 ) {
-	console.log(layers);
+	const stageBounds = [
+		0,
+		0,
+		stage.attrs.grid.gridWidth * stage.attrs.grid.gridSize,
+		0,
+		stage.attrs.grid.gridWidth * stage.attrs.grid.gridSize,
+		stage.attrs.grid.gridHeight * stage.attrs.grid.gridSize,
+		0,
+		stage.attrs.grid.gridHeight * stage.attrs.grid.gridSize
+	];
+
 	stage.on('click tap', function (e) {
 		switch (get(selectedBrush)) {
 			case 'wallPainter':
 				{
 					const pos = stage.getPointerPosition();
 					if (!pos) return;
+					if(circleBounds(pos, 0, pointsToVector2D(stageBounds))) return;
 					points.update((p) => {
 						const transform = stage.getAbsoluteTransform().copy();
 						transform.invert();
