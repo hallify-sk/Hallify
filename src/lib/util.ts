@@ -22,3 +22,5 @@ export function validateHex(v: string) {
 export const serializeNonPOJOs = (obj: object) => {
 	return JSON.parse(JSON.stringify(obj));
 };
+
+export const points: Writable<Array<{ x: number; y: number, name: string }>> = writable([]);

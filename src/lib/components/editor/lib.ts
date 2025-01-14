@@ -17,10 +17,10 @@ export function getCorners(element: Node<NodeConfig>, stage: Konva.Stage): numbe
     if (element && element instanceof Konva.Group) {
         const box = element.getClientRect({ relativeTo: element });
         const corners = [
-            { x: box.x, y: box.y },
-            { x: box.x + box.width, y: box.y },
-            { x: box.x + box.width, y: box.y + box.height },
-            { x: box.x, y: box.y + box.height }
+            { x: box.x+2, y: box.y+2 },
+            { x: box.x-2 + box.width, y: box.y+2 },
+            { x: box.x-2 + box.width, y: box.y + box.height-2 },
+            { x: box.x+2, y: box.y + box.height-2 }
         ];
         corners.forEach((corner) => {
             const transformedCorner = element.getAbsoluteTransform().point(corner);
@@ -43,6 +43,17 @@ export function pointsToVector2D(points: number[]): Vector2d[] {
         vectors.push({x: points[i], y: points[i + 1]});
     }
     return vectors;
+}
+
+export function circleBounds(p1: Vector2d, radius: number, bounds: Vector2d[]): boolean {
+    const minX = Math.min(...bounds.map(p => p.x));
+    const maxX = Math.max(...bounds.map(p => p.x));
+    const minY = Math.min(...bounds.map(p => p.y));
+    const maxY = Math.max(...bounds.map(p => p.y));
+
+    if(p1.x - radius < minX || p1.x - radius > maxX) return true;
+    if(p1.y - radius < minY || p1.y - radius > maxY) return true;
+    return false;
 }
 
 export function polyBounds(p1: Vector2d[], bounds: Vector2d[]): boolean {
@@ -125,4 +136,8 @@ export function polyPoint(vertices: Vector2d[], px: number, py: number): boolean
         }
     }
     return collision;
+}
+
+export function registerPlugin(plugin: (stage: Konva.Stage) => void, stage: Konva.Stage){
+    plugin(stage);
 }
