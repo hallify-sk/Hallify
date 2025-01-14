@@ -165,6 +165,32 @@
 				/>
 			{/each}
 		</Layer>
+		<Layer bind:handle={collisionLayer}>
+			{#each tables as table}
+				{@render tableRect(table.name, table.rotation, table.x, table.y, table.chairs)}
+			{/each}
+			<Line
+				config={{
+					points: [150, 150, 180, 150, 210, 270, 150, 300],
+					stroke: 'black',
+					strokeWidth: 2,
+					closed: true,
+					fill: 'black'
+				}}
+			/>
+			{#if $points.length}
+			<Line
+					config={{
+						points: $points.flatMap((point) => [point.x, point.y]),
+						stroke: 'black',
+						strokeWidth: 2,
+						closed: true,
+						fill: 'black',
+						physics: true
+					}}
+			/>
+			{/if}
+		</Layer>
 		<Layer config={{ name: 'uiLayer' }} bind:handle={uiLayer}>
 			<Transformer
 				bind:handle={tr}
@@ -197,30 +223,6 @@
 						: undefined}
 				/>
 			{/each}
-		</Layer>
-		<Layer bind:handle={collisionLayer}>
-			{#each tables as table}
-				{@render tableRect(table.name, table.rotation, table.x, table.y, table.chairs)}
-			{/each}
-			<Line
-				config={{
-					points: [150, 150, 180, 150, 210, 270, 150, 300],
-					stroke: 'black',
-					strokeWidth: 2,
-					closed: true,
-					fill: 'black'
-				}}
-			/>
-			<Line
-					config={{
-						points: $points.flatMap((point) => [point.x, point.y]),
-						stroke: 'black',
-						strokeWidth: 2,
-						closed: true,
-						fill: 'black',
-						physics: true
-					}}
-			/>
 		</Layer>
 	</Stage>
 </div>
