@@ -35,12 +35,13 @@ export function registerClickEvent(
 				}
 				break;
 			default: {
+                console.log("tippy tappy");
 				if (!tr) return;
 				//Default brush behaviour
 				if (e.target === stage || e.target.getLayer() == layers?.gridLayer)
 					return deselectNodes(tr);
 
-				if (e.target.getLayer() == layers?.uiLayer) return;
+                if(e.target.attrs.disableSelect) return;
 				const isSelected = tr.nodes().indexOf(e.target) >= 0;
 
 				if (!isSelected) {
