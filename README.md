@@ -1,38 +1,36 @@
-# create-svelte
+# Hallify - Aplikácia
 
-Everything you need to build a Svelte project, powered by [`create-svelte`](https://github.com/sveltejs/kit/tree/main/packages/create-svelte).
+![Hallify banner](https://raw.githubusercontent.com/hallify-sk/github-assets/main/Hallify-Banner.png)
 
-## Creating a project
+<p align="center">
+  <img src="https://img.shields.io/github/stars/hallify-sk/Hallify?style=for-the-badge" alt=""/>
+  <img src="https://img.shields.io/github/last-commit/hallify-sk/Hallify?style=for-the-badge" alt=""/>
+  <img src="https://img.shields.io/github/issues/hallify-sk/Hallify?style=for-the-badge" alt=""/>
+  <img src="https://img.shields.io/github/issues-pr/hallify-sk/Hallify?style=for-the-badge" alt=""/>
+  <img src="https://img.shields.io/github/license/hallify-sk/Hallify?style=for-the-badge" alt=""/>
+</p>
 
-If you're seeing this, you've probably already done this step. Congrats!
+---
 
-```bash
-# create a new project in the current directory
-npm create svelte@latest
+Hallify je najmodernejší rezervačný systém pre spoločenské sály, ktorý podporuje vytváranie rozložení sál. Tento repozitár obsahuje samostatnú aplikáciu, ktorú vytvárame a distribujeme.
 
-# create a new project in my-app
-npm create svelte@latest my-app
-```
+> [!NOTE]
+> **Hallify je v štádiu skorého vývoja** - veľa vecí sa bude ešte meniť a produkt je momentálne nepoužiteľný v reálnom prostredí.
 
-## Developing
+## Setup development prostredia
 
-Once you've created a project and installed dependencies with `npm install` (or `pnpm install` or `yarn`), start a development server:
-
-```bash
-npm run dev
-
-# or start the server and open the app in a new browser tab
-npm run dev -- --open
-```
-
-## Building
-
-To create a production version of your app:
-
-```bash
-npm run build
-```
-
-You can preview the production build with `npm run preview`.
-
-> To deploy your app, you may need to install an [adapter](https://kit.svelte.dev/docs/adapters) for your target environment.
+1. Naklónuj si [tento repozitár](https://github.com/hallify-sk/Hallify.git)
+2. Zo stránky [pocketbase](https://pocketbase.io/docs) si stiahni vhodnú verziu pre tvoj operačný systém
+3. Stiahnutý pocketbase vlož do priečinka `/pb`
+4. Ak nemáš, stiahni si [Node.JS](https://nodejs.org/en), po inštalácií reštartuj PC
+5. Otvor si prvý terminál v `/` a napíš doň `npm install`
+6. Otvor si druhý terminál v `/pb` a napíš doň `./pocketbase serve` (ak máš nejaký problém, obráť sa na [pocketbase dokumentáciu](https://pocketbase.io/docs))
+> [!WARNING]
+> Ak PocketBase spustíš na inom porte ako `8090`, je veľká šanca že budeš musieť zmeniť obsah súboru `/config/pocketbase.json` na
+>
+> ```json
+> { "POCKETBASE_URL": "", "POCKETBASE_API_URL": "" }
+> ```
+7. Otvor si pocketbase web editor, a vytvor si admin používateľa. Tento používateľ bude používaný aj na prístup do Hallify admin panelu
+8. V prvom termináli po ukončení inštalácie môžeš zapnúť vývojársky server príkazom `npm run dev`
+9. Hallify by mal byť spustený!
