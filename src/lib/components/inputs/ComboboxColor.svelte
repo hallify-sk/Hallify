@@ -6,7 +6,6 @@
 
 	function focusIn() {
 		showOptions = true;
-		//Test
 	}
 
 	//If click outside of collapsible, close collapsible
