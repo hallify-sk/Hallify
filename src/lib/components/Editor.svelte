@@ -24,7 +24,7 @@
 		gridWidth = $bindable(20),
 		gridHeight = $bindable(20),
 		windowWidth = $bindable(800),
-		windowHeight = $bindable(800),
+		windowHeight = $bindable(800)
 	}: {
 		gridSize?: number;
 		gridWidth?: number;

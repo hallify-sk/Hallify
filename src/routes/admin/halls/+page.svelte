@@ -726,12 +726,13 @@
 </Dialog>
 
 <style lang="postcss">
+	/*
 	.color-picker-radio {
 		@apply w-full h-full rounded block p-1 border border-slate-400/30 cursor-pointer relative hover:bg-slate-200;
 	}
 	.color-picker-radio div {
 		@apply w-full h-full rounded block;
-	}
+	}*/
 	:global(input[type='radio'] + .color-picker-radio svg) {
 		@apply hidden;
 	}
@@ -741,9 +742,10 @@
 	.event-table-row {
 		@apply border-t border-slate-400/30 hover:bg-slate-200 cursor-pointer;
 	}
+	/*
 	.event-table-row-modify {
 		@apply mx-2 border-slate-400/30 border w-8 h-8 flex justify-center items-center rounded duration-150 hover:bg-slate-300;
-	}
+	}*/
 	.event-table-long-text {
 		@apply text-sm px-4 py-3 text-slate-600 max-w-40 overflow-ellipsis overflow-hidden whitespace-nowrap text-nowrap h-12;
 	}
