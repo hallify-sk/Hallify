@@ -18,7 +18,7 @@
 </script>
 
 <div
-	class="fixed top-[108px] left-0 z-20 h-10 gap-1 w-full pl-[2.75rem] py-1 bg-slate-100 border-b border-slate-400/30 flex flex-row items-center"
+	class="fixed top-[108px] left-0 z-20 h-10 gap-0.5 w-full pl-[2.625rem] py-0.5 bg-slate-100 border-b border-slate-400/30 flex flex-row items-center"
 >
 	{#if $selectedBrush == 'cursor'}
 		<Icon scale="medium" stroke={1.5} fill="currentColor" forceCenter={true}>
