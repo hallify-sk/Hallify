@@ -1,28 +1,13 @@
 <script lang="ts">
-	import {
-		Stage,
-		Layer,
-		Rect,
-		Line,
-		Group,
-		Transformer,
-		Circle,
-		Label,
-		Tag,
-		Text,
-		Image
-	} from 'svelte-konva';
+	import { Stage, Layer, Rect, Line, Group, Transformer, Circle } from 'svelte-konva';
 	import Konva from 'konva';
 	import { registerWheelEvent } from './editor/events/wheel';
 	import type { Vector2d } from 'konva/lib/types';
 	import { constraintNumber, registerPlugin } from './editor/lib';
 	import { brushes } from './editor/brushes';
-	import { plugin } from 'postcss';
 	import Brushes from './editor/plugins/Brushes.svelte';
-	import { onMount } from 'svelte';
 	import { v4 as uuidv4 } from 'uuid';
 	import { points, walls } from '$lib/util';
-	import Check from '$lib/icons/Check.svelte';
 
 	let stage: Konva.Stage | undefined = $state();
 
@@ -32,7 +17,7 @@
 	let uiLayer: Konva.Layer | undefined = $state(undefined);
 	let collisionLayer: Konva.Layer | undefined = $state(undefined);
 
-	let currentTween: Konva.Tween | undefined = $state(undefined);
+	//let currentTween: Konva.Tween | undefined = $state(undefined);
 
 	let {
 		gridSize = $bindable(30),
@@ -40,7 +25,6 @@
 		gridHeight = $bindable(20),
 		windowWidth = $bindable(800),
 		windowHeight = $bindable(800),
-		zoomBy = $bindable(1.01)
 	}: {
 		gridSize?: number;
 		gridWidth?: number;
@@ -154,7 +138,7 @@
 					fill: '#f1f5f9'
 				}}
 			/>
-			{#each Array(gridWidth + 1) as xGrid, index}
+			{#each Array(gridWidth + 1), index}
 				<Line
 					config={{
 						points: [index * gridSize, 0, index * gridSize, gridHeight * gridSize],
@@ -166,7 +150,7 @@
 					}}
 				/>
 			{/each}
-			{#each Array(gridHeight + 1) as yGrid, index}
+			{#each Array(gridHeight + 1), index}
 				<Line
 					config={{
 						points: [0, index * gridSize, gridWidth * gridSize, index * gridSize],

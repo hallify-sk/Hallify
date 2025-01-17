@@ -25,16 +25,6 @@
 	const d = new Date();
 	const todayMidnight = Date.UTC(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0);
 
-	[
-		'col-start-1',
-		'col-start-2',
-		'col-start-3',
-		'col-start-4',
-		'col-start-5',
-		'col-start-6',
-		'col-start-7'
-	];
-
 	function regenerateDates() {
 		currentYear = selectedDate.getFullYear();
 		currentMonth = selectedDate.getMonth();
@@ -43,7 +33,7 @@
 	function handleMinusCalendar() {
 		if (selectingDay) {
 			selectedDate.setMonth(selectedDate.getMonth() - 1);
-			monthIncrement = -1;
+			//monthIncrement = -1;
 		} else {
 			selectedDate.setFullYear(selectedDate.getFullYear() - 1);
 		}
@@ -52,15 +42,12 @@
 	function handlePlusCalendar() {
 		if (selectingDay) {
 			selectedDate.setMonth(selectedDate.getMonth() + 1);
-			monthIncrement = +1;
+			//monthIncrement = +1;
 		} else {
 			selectedDate.setFullYear(selectedDate.getFullYear() + 1);
 		}
 		regenerateDates();
 	}
-
-	let monthIncrement: 1 | -1 = 1;
-	let flyIn: boolean = false;
 </script>
 
 <div class="flex flex-col h-full">
@@ -107,7 +94,7 @@
 				<div
 					class="p-1 bg-slate-200 grid place-items-center grid-cols-7 border-b border-slate-400/30 h-full"
 				>
-					{#each ['Po', 'Ut', 'St', 'Št', 'Pi', 'So', 'Ne'] as day, i}
+					{#each ['Po', 'Ut', 'St', 'Št', 'Pi', 'So', 'Ne'] as day}
 						<p class="text-slate-500 text-[0.65rem] uppercase">{day}</p>
 					{/each}
 				</div>
@@ -117,7 +104,7 @@
 					>
 						{#each [...prevMonth]
 							.filter((i) => i.value.weekAxisIndex == Math.max(...[...prevMonth].map((obj) => obj.value.weekAxisIndex)))
-							.slice(1) as prevMonthDay, i}
+							.slice(1) as prevMonthDay}
 							<button
 								disabled={true}
 								class="calendarButton col-start-{prevMonthDay.value
@@ -131,7 +118,7 @@
 								{prevMonthDay.value.dayNumber}
 							</button>
 						{/each}
-						{#each [...month] as day, i}
+						{#each [...month] as day}
 							{#key selectedDate.getMonth()}
 								<button
 									onclick={() => {
@@ -152,7 +139,7 @@
 								</button>
 							{/key}
 						{/each}
-						{#each [...nextMonth].slice(0, 43 - [...month].length - [...prevMonth].filter((i) => i.value.weekAxisIndex == Math.max(...[...prevMonth].map((obj) => obj.value.weekAxisIndex))).length) as nextMonthDay, i}
+						{#each [...nextMonth].slice(0, 43 - [...month].length - [...prevMonth].filter((i) => i.value.weekAxisIndex == Math.max(...[...prevMonth].map((obj) => obj.value.weekAxisIndex))).length) as nextMonthDay}
 							<button
 								disabled={true}
 								class="calendarButton col-start-{nextMonthDay.value

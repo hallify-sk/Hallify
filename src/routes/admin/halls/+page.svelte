@@ -2,12 +2,9 @@
 	//Icons
 	import Icon from '$lib/icons/Icon.svelte';
 	import Plus from '$lib/icons/Plus.svelte';
-	import Adjustments from '$lib/icons/Adjustments.svelte';
 
 	//Svelte
-	import { onDestroy, onMount } from 'svelte';
 	import { applyAction, enhance } from '$app/forms';
-	import { writable, type Writable } from 'svelte/store';
 	import { invalidateAll } from '$app/navigation';
 	import { fly } from 'svelte/transition';
 
@@ -439,7 +436,7 @@
 		method="post"
 		use:enhance={({ formData }) => {
 			formData.append('color', colorValue);
-			return async ({ result, update }) => {
+			return async ({ result }) => {
 				if (result.type === 'failure') {
 					hallCreateError = result.data?.message;
 					if (Array.isArray(result.data?.validate)) validate = result.data.validate;

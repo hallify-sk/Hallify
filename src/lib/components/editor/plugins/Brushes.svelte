@@ -5,6 +5,7 @@
 	import CursorArrowRays from '$lib/icons/CursorArrowRays.svelte';
 	import Icon from '$lib/icons/Icon.svelte';
 	import { points, walls } from '$lib/util';
+	import type { Component } from 'svelte';
 	import { selectedBrush } from '../brushes';
 	import { v4 as uuidv4 } from 'uuid';
 	let {
@@ -13,7 +14,7 @@
 			{ name: 'wallPainter', icon: Cube }
 		]
 	}: {
-		allowedBrushes?: { name: string; icon: any }[];
+		allowedBrushes?: { name: string; icon: Component }[];
 	} = $props();
 </script>
 
@@ -71,7 +72,7 @@
 					: ''}"
 			>
 				<Icon scale="medium" stroke={1.5} fill="currentColor" forceCenter={true}>
-					{@render brush.icon()}
+					<brush.icon />
 				</Icon>
 			</button>
 		{/each}

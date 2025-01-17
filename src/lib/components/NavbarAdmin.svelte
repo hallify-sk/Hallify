@@ -7,7 +7,6 @@
 	import ChevronDown from '$lib/icons/ChevronDown.svelte';
 	import BulletList from '$lib/icons/BulletList.svelte';
 	import Plus from '$lib/icons/Plus.svelte';
-	import Chat from '$lib/icons/Chat.svelte';
 	import UserIcon from '$lib/icons/User.svelte';
 	import Logout from '$lib/icons/Logout.svelte';
 	import ArrowRight from '$lib/icons/ArrowRight.svelte';
