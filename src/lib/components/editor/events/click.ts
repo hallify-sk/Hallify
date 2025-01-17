@@ -27,11 +27,12 @@ export function registerClickEvent(
 				{
 					const pos = stage.getPointerPosition();
 					if (!pos) return;
-					if(circleBounds(pos, 0, pointsToVector2D(stageBounds))) return;
+					const transform = stage.getAbsoluteTransform().copy();
+					transform.invert();
+					const posTransformed = transform.point(pos);
+					console.log(posTransformed);
+					if (circleBounds(posTransformed, 0, pointsToVector2D(stageBounds))) return;
 					points.update((p) => {
-						const transform = stage.getAbsoluteTransform().copy();
-						transform.invert();
-						const posTransformed = transform.point(pos);
 						p.push({
 							x: snapToGrid(posTransformed.x, stage.attrs.grid.gridSize),
 							y: snapToGrid(posTransformed.y, stage.attrs.grid.gridSize),
@@ -46,25 +47,25 @@ export function registerClickEvent(
 				}
 				break;
 			default: {
-                console.log("tippy tappy");
+				console.log('tippy tappy');
 				if (!tr) return;
 				//Default brush behaviour
 				if (e.target === stage || e.target.getLayer() == layers?.gridLayer)
 					return deselectNodes(tr);
 
-                if(e.target.attrs.disableSelect) return;
+				if (e.target.attrs.disableSelect) return;
 				const isSelected = tr.nodes().indexOf(e.target) >= 0;
 
 				if (!isSelected) {
 					if (e.target.attrs.isChair) {
 						tr.nodes([e.target]);
-						tr.rotateEnabled(false);
+						tr.rotateEnabled(e.target.attrs.rotateEnabled);
 					} else if (e.target.parent?.draggable()) {
 						tr.nodes([e.target.parent]);
-						tr.rotateEnabled(true);
+						tr.rotateEnabled(e.target.attrs.rotateEnabled);
 					} else {
 						tr.nodes([e.target]);
-						tr.rotateEnabled(true);
+						tr.rotateEnabled(e.target.attrs.rotateEnabled);
 					}
 				} else if (isSelected) {
 					const nodes = tr.nodes().slice();

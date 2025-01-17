@@ -1,5 +1,17 @@
 <script lang="ts">
-	import { Stage, Layer, Rect, Line, Group, Transformer, Circle } from 'svelte-konva';
+	import {
+		Stage,
+		Layer,
+		Rect,
+		Line,
+		Group,
+		Transformer,
+		Circle,
+		Label,
+		Tag,
+		Text,
+		Image
+	} from 'svelte-konva';
 	import Konva from 'konva';
 	import { registerWheelEvent } from './editor/events/wheel';
 	import type { Vector2d } from 'konva/lib/types';
@@ -9,7 +21,8 @@
 	import Brushes from './editor/plugins/Brushes.svelte';
 	import { onMount } from 'svelte';
 	import { v4 as uuidv4 } from 'uuid';
-	import { points } from '$lib/util';
+	import { points, walls } from '$lib/util';
+	import Check from '$lib/icons/Check.svelte';
 
 	let stage: Konva.Stage | undefined = $state();
 
@@ -169,6 +182,9 @@
 			{#each tables as table}
 				{@render tableRect(table.name, table.rotation, table.x, table.y, table.chairs)}
 			{/each}
+			{#each $walls as wall}
+				{@render wallPoly(wall.name, wall.points)}
+			{/each}
 			<Line
 				config={{
 					points: [150, 150, 180, 150, 210, 270, 150, 300],
@@ -179,7 +195,7 @@
 				}}
 			/>
 			{#if $points.length}
-			<Line
+				<Line
 					config={{
 						points: $points.flatMap((point) => [point.x, point.y]),
 						stroke: 'black',
@@ -188,7 +204,7 @@
 						fill: 'black',
 						physics: true
 					}}
-			/>
+				/>
 			{/if}
 		</Layer>
 		<Layer config={{ name: 'uiLayer' }} bind:handle={uiLayer}>
@@ -241,7 +257,8 @@
 			y,
 			draggable: stage?.attrs.plugins?.includes('brushes'),
 			physics: true,
-			keepInBounds: true
+			keepInBounds: true,
+			rotateEnabled: true
 		}}
 		on:dragstart={stage?.attrs.plugins?.includes('brushes')
 			? stage?.attrs.brushes.dragStart
@@ -274,7 +291,8 @@
 					defaultFill: '#64748b',
 					cornerRadius: 4,
 					perfectDrawEnabled: false,
-					isChair: true
+					isChair: true,
+					rotateEnabled: false
 				}}
 			/>
 		{/each}
@@ -302,9 +320,21 @@
 					defaultFill: '#64748b',
 					cornerRadius: 4,
 					perfectDrawEnabled: false,
-					isChair: true
+					isChair: true,
+					rotateEnabled: false
 				}}
 			/>
 		{/each}
 	</Group>
+{/snippet}
+{#snippet wallPoly(name: string, points: number[])}
+	<Line
+		config={{
+			points,
+			name,
+			closed: true,
+			fill: 'black',
+			rotateEnabled: false
+		}}
+	/>
 {/snippet}

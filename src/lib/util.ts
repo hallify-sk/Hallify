@@ -24,3 +24,5 @@ export const serializeNonPOJOs = (obj: object) => {
 };
 
 export const points: Writable<Array<{ x: number; y: number, name: string }>> = writable([]);
+
+export const walls: Writable<Array<{points: number[], name: string, }>> = writable([]);

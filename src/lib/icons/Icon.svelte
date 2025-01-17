@@ -8,7 +8,7 @@
 		stroke = 1.5,
 		fill = "none",
 		forceCenter = false
-	}: { scale: 'big' | 'medium' | 'small' | 'tiny'; isPeer?: boolean; children: Snippet, stroke?: 0 | 0.5 | 1 | 1.5, fill?: string, forceCenter?: boolean } = $props();
+	}: { scale: 'big' | 'medium' | 'small' | 'tiny'; isPeer?: boolean; children: Snippet, stroke?: number, fill?: string, forceCenter?: boolean } = $props();
 </script>
 
 <svg
