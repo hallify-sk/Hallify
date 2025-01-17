@@ -48,6 +48,7 @@ jobs:
     SvelteKit:
         runs-on: ubuntu-latest
         env:
+            SQLURI: ${{vars.SQLURI}}
             PUBLIC_CALENDAR_EXPIRE: ${{vars.PUBLIC_CALENDAR_EXPIRE}}
             PUBLIC_DEV: ${{vars.PUBLIC_DEV}}
             PUBLIC_TURNSTILE_TOKEN: ${{vars.PUBLIC_TURNSTILE_TOKEN}}
