@@ -41,7 +41,7 @@
 
 	let {
 		user = undefined,
-		permission,
+		permission
 	}: {
 		user?: UserSanitized;
 		permission: Permission;
@@ -55,9 +55,9 @@
 	$effect(() => {
 		if (user) {
 			avatar = createAvatar(initials, {
-				seed: `${user.first_name} ${user.last_name}`,
+				seed: `${user.first_name} ${user.last_name}`
 			}).toDataUri();
-		}else{
+		} else {
 			avatar = `/User.svg`;
 		}
 	});
@@ -232,4 +232,4 @@
 	</div>
 </div>
 
-<AuthDialog bind:open={openLogin}/>
+<AuthDialog bind:open={openLogin} />

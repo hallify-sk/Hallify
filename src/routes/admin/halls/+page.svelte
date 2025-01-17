@@ -36,11 +36,11 @@
 	let editingId: number = $state(0);
 
 	$effect(() => {
-		if(editingId) {
-			colorName = data.halls.find(i => i.id == editingId)?.color ?? '';
+		if (editingId) {
+			colorName = data.halls.find((i) => i.id == editingId)?.color ?? '';
 			colorValue = colorName;
 		}
-	})
+	});
 
 	let hallCreateError: string | unknown = $state('');
 	let validate: string[] = $state([]);
@@ -207,7 +207,7 @@
 		);
 	});
 
-	async function handleEditSubmit(event: SubmitEvent){
+	async function handleEditSubmit(event: SubmitEvent) {
 		event.preventDefault();
 		const target = event.target as HTMLFormElement;
 		const formData = new FormData();
@@ -222,10 +222,10 @@
 			method: 'PUT',
 			body: formData
 		});
-		if(res.status == 400 || res.status == 403 || res.status == 404){
+		if (res.status == 400 || res.status == 403 || res.status == 404) {
 			const body = await res.json();
 			hallCreateError = body.message;
-			if(Array.isArray(body.validate)) validate = body.validate;
+			if (Array.isArray(body.validate)) validate = body.validate;
 			console.error(res);
 		}
 
@@ -303,7 +303,13 @@
 						</thead>
 						<tbody>
 							{#each data.halls as hall}
-								<tr class="event-table-row" onclick={() => {editingId = hall.id;showEditHall = true}}>
+								<tr
+									class="event-table-row"
+									onclick={() => {
+										editingId = hall.id;
+										showEditHall = true;
+									}}
+								>
 									<td class="event-table-long-text">{hall.name}</td>
 									<td class="px-4 py-3 text-sm">
 										{#if hall.plan}
@@ -368,9 +374,8 @@
 							onclick={() => {
 								timeFrame = 0;
 							}}
-							class="{timeFrame == 0
-								? 'text-slate-800'
-								: 'text-slate-400'} text-sm hover:underline">30 dni</button
+							class="{timeFrame == 0 ? 'text-slate-800' : 'text-slate-400'} text-sm hover:underline"
+							>30 dni</button
 						>
 						<button
 							onclick={() => {
@@ -432,12 +437,12 @@
 		class="flex flex-col w-full"
 		action="/admin/halls/?/create"
 		method="post"
-		use:enhance={({formData}) => {
-			formData.append("color", colorValue);
+		use:enhance={({ formData }) => {
+			formData.append('color', colorValue);
 			return async ({ result, update }) => {
 				if (result.type === 'failure') {
 					hallCreateError = result.data?.message;
-					if(Array.isArray(result.data?.validate)) validate = result.data.validate;
+					if (Array.isArray(result.data?.validate)) validate = result.data.validate;
 					console.error(result);
 				} else {
 					await invalidateAll();
@@ -540,7 +545,8 @@
 							Povoliť spätnú väzbu
 							<Tooltip>
 								<p>
-									Ak je táto možnosť zapnutá, po udalosti môžu používatelia nechať spätnú väzbu pre personál alebo pre sálu.
+									Ak je táto možnosť zapnutá, po udalosti môžu používatelia nechať spätnú väzbu pre
+									personál alebo pre sálu.
 								</p>
 							</Tooltip>
 						</label>
@@ -575,13 +581,10 @@
 	{#snippet header()}
 		<p>Upraviť sálu</p>
 	{/snippet}
-	<form
-		class="flex flex-col w-full"
-		onsubmit={handleEditSubmit}
-	>
+	<form class="flex flex-col w-full" onsubmit={handleEditSubmit}>
 		<div class="flex flex-col p-4">
 			<label for="name" class="text-sm text-slate-800">Názov</label>
-			<TextInput name="name" id="name" value={data.halls.find(i => i.id == editingId)?.name} />
+			<TextInput name="name" id="name" value={data.halls.find((i) => i.id == editingId)?.name} />
 			<div class="grid w-full grid-cols-1 gap-4 mt-2 sm:grid-cols-2">
 				<div class="flex flex-col gap-2">
 					<p class="text-sm text-slate-800">Plán sály</p>
@@ -629,13 +632,21 @@
 						/>
 					</div>
 					<div class="flex flex-row items-center gap-2">
-						<Switch name="allow_reservations" id="allow_reservations" checked={data.halls.find(i => i.id == editingId)?.allow_reservations} />
+						<Switch
+							name="allow_reservations"
+							id="allow_reservations"
+							checked={data.halls.find((i) => i.id == editingId)?.allow_reservations}
+						/>
 						<label for="allow_reservations" class="text-sm text-slate-800"
 							>Povoliť rezervácie v sále</label
 						>
 					</div>
 					<div class="flex flex-row items-center gap-2">
-						<Switch name="custom_layouts" id="custom_layouts" checked={data.halls.find(i => i.id == editingId)?.custom_layouts} />
+						<Switch
+							name="custom_layouts"
+							id="custom_layouts"
+							checked={data.halls.find((i) => i.id == editingId)?.custom_layouts}
+						/>
 						<label
 							for="custom_layouts"
 							class="flex flex-row items-center gap-2 text-sm text-slate-800"
@@ -650,7 +661,11 @@
 						</label>
 					</div>
 					<div class="flex flex-row items-center gap-2">
-						<Switch name="force_layouts" id="force_layouts" checked={data.halls.find(i => i.id == editingId)?.force_layouts} />
+						<Switch
+							name="force_layouts"
+							id="force_layouts"
+							checked={data.halls.find((i) => i.id == editingId)?.force_layouts}
+						/>
 						<label
 							for="force_layouts"
 							class="flex flex-row items-center gap-2 text-sm text-slate-800"
@@ -665,7 +680,11 @@
 						</label>
 					</div>
 					<div class="flex flex-row items-center gap-2">
-						<Switch name="allow_feedback" id="allow_feedback" checked={data.halls.find(i => i.id == editingId)?.allow_feedback} />
+						<Switch
+							name="allow_feedback"
+							id="allow_feedback"
+							checked={data.halls.find((i) => i.id == editingId)?.allow_feedback}
+						/>
 						<label
 							for="allow_feedback"
 							class="flex flex-row items-center gap-2 text-sm text-slate-800"
@@ -673,7 +692,8 @@
 							Povoliť spätnú väzbu
 							<Tooltip>
 								<p>
-									Ak je táto možnosť zapnutá, po udalosti môžu používatelia nechať spätnú väzbu pre personál alebo pre sálu.
+									Ak je táto možnosť zapnutá, po udalosti môžu používatelia nechať spätnú väzbu pre
+									personál alebo pre sálu.
 								</p>
 							</Tooltip>
 						</label>
@@ -694,7 +714,9 @@
 			</button>
 			<button
 				type="submit"
-				onclick={() => {showEditHall = true}}
+				onclick={() => {
+					showEditHall = true;
+				}}
 				class="flex flex-row items-center gap-2 px-4 py-2 text-sm duration-150 bg-blue-500 border rounded hover:bg-blue-400 text-slate-100 border-blue-600/30"
 			>
 				<Icon scale="small">

@@ -51,7 +51,7 @@
 </script>
 
 <div class="relative w-full combobox">
-	<input id="{id}_value" bind:value class="hidden" type="text">
+	<input id="{id}_value" bind:value class="hidden" type="text" />
 	<input
 		bind:value={name}
 		oninput={() => {

@@ -1,6 +1,11 @@
 <script lang="ts">
-	let { name, id, type = 'text', value }: {name: string, id: string, type?: 'text' | 'password' | 'email', value?: string} = $props();
-	
+	let {
+		name,
+		id,
+		type = 'text',
+		value
+	}: { name: string; id: string; type?: 'text' | 'password' | 'email'; value?: string } = $props();
+
 	function removeValidation() {
 		(document.getElementById(id) as HTMLInputElement).setCustomValidity('');
 	}

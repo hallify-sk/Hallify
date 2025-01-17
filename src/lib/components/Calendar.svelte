@@ -12,7 +12,6 @@
 	//Utils
 	import { zoom } from '$lib/transitions/zoom';
 
-
 	let selectedDate = $state(new Date());
 	let currentYear = $state(selectedDate.getFullYear());
 	let currentMonth = $state(selectedDate.getMonth());

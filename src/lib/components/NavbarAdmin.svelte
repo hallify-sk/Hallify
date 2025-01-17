@@ -146,16 +146,16 @@
 	</div>
 	<div class="border-b border-slate-400/30 w-full px-4 md:px-24">
 		<div class="max-w-7xl mx-auto flex text-sm text-slate-400">
-			{#if checkPathPermission("/admin", permission)}
-			<a
-				href="/admin"
-				class="py-3 px-3 text-sm border-b-2 border-b-transparent hover:border-b-blue-500 flex items-center gap-2"
-			>
-				<Icon scale="small">
-					<Home />
-				</Icon>
-				<p class="text-slate-600">Domov</p>
-			</a>
+			{#if checkPathPermission('/admin', permission)}
+				<a
+					href="/admin"
+					class="py-3 px-3 text-sm border-b-2 border-b-transparent hover:border-b-blue-500 flex items-center gap-2"
+				>
+					<Icon scale="small">
+						<Home />
+					</Icon>
+					<p class="text-slate-600">Domov</p>
+				</a>
 			{/if}
 			{#if checkPathPermission('/admin/events', permission) || checkPathPermission('/admin/events/create', permission)}
 				<Collapsible id="event">
@@ -206,7 +206,7 @@
 					class="py-3 px-3 text-sm border-b-2 border-b-transparent hover:border-b-blue-500 flex items-center gap-2"
 				>
 					<Icon scale="small">
-						<Adjustments/>
+						<Adjustments />
 					</Icon>
 					<p class="text-slate-600">Spravovať sály</p>
 				</a>

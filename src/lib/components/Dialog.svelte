@@ -1,10 +1,10 @@
 <script lang="ts">
-    //Icons
+	//Icons
 	import Cross from '$lib/icons/Cross.svelte';
 	import Icon from '$lib/icons/Icon.svelte';
-	
-    //Svelte
-    import { onMount, type Snippet } from 'svelte';
+
+	//Svelte
+	import { onMount, type Snippet } from 'svelte';
 	import { fly, fade } from 'svelte/transition';
 
 	let {

@@ -2,16 +2,19 @@
 	import type { Snippet } from 'svelte';
 	import { collapsibleOpen } from '$lib/util';
 
-	let { id, children, open = $bindable() }: { id: string; children: Snippet, open: boolean } = $props();
+	let {
+		id,
+		children,
+		open = $bindable()
+	}: { id: string; children: Snippet; open: boolean } = $props();
 
 	$effect(() => {
 		if (open) {
 			collapsibleOpen.set(id);
-		}else{
+		} else {
 			collapsibleOpen.set('');
 		}
 	});
-
 </script>
 
 <div class="relative dropdown">

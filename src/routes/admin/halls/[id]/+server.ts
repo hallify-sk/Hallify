@@ -69,10 +69,10 @@ export async function PUT({ request, params }) {
 			}
 		);
 	}
-	const allow_reservations = formData.get('allow_reservations') == "true";
-	const custom_layouts = formData.get('custom_layouts') == "true";
-	const force_layouts = formData.get('force_layouts') == "true";
-	const allow_feedback = formData.get('allow_feedback') == "true";
+	const allow_reservations = formData.get('allow_reservations') == 'true';
+	const custom_layouts = formData.get('custom_layouts') == 'true';
+	const force_layouts = formData.get('force_layouts') == 'true';
+	const allow_feedback = formData.get('allow_feedback') == 'true';
 	// Update hall
 	await hall.update({
 		name,
@@ -83,5 +83,5 @@ export async function PUT({ request, params }) {
 		force_layouts,
 		allow_feedback
 	});
-	return new Response(serializeNonPOJOs(hall), {status: 200});
+	return new Response(serializeNonPOJOs(hall), { status: 200 });
 }

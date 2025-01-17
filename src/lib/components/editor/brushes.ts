@@ -131,7 +131,7 @@ const dragMove = async (e: KonvaDragTransformEvent) => {
 			x: snapToGrid(target.x(), stage.attrs.grid.gridSize),
 			y: snapToGrid(target.y(), stage.attrs.grid.gridSize)
 		});
-		if(get(points).some((point) => point.name === target.name())) {
+		if (get(points).some((point) => point.name === target.name())) {
 			points.update((p) => {
 				const index = p.findIndex((point) => point.name === target.name());
 				p[index] = {

@@ -12,7 +12,7 @@
 	import Dialog from './Dialog.svelte';
 	import TextInput from './inputs/TextInput.svelte';
 
-	let { open = $bindable(false) }: { open: boolean; } = $props();
+	let { open = $bindable(false) }: { open: boolean } = $props();
 
 	let loginError: string | unknown = $state('');
 	let validate: string[] = $state([]);
@@ -37,7 +37,7 @@
 				// `result` is an `ActionResult` object
 				if (result.type === 'failure') {
 					loginError = result.data?.message;
-					if(Array.isArray(result.data?.validate)) validate = result.data.validate;
+					if (Array.isArray(result.data?.validate)) validate = result.data.validate;
 					console.error(result);
 				} else {
 					await invalidateAll();
