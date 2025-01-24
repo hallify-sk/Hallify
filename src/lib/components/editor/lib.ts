@@ -168,3 +168,21 @@ export function polyPoint(vertices: Vector2d[], px: number, py: number): boolean
 export function registerPlugin(plugin: (stage: Konva.Stage) => void, stage: Konva.Stage) {
 	plugin(stage);
 }
+
+export interface StageAttrs {
+	//Undefined only before mounting; After mounting it's safe to assume everything is defined.
+	tr?: Konva.Transformer;
+	layers: {
+		[key: string]: Konva.Layer | undefined;
+		uiLayer?: Konva.Layer;
+		gridLayer?: Konva.Layer;
+		collisionLayer?: Konva.Layer;
+	};
+	grid: {
+		gridSize: number;
+		gridWidth: number;
+		gridHeight: number;
+	};
+	plugins: string[];
+	[key: string]: unknown;
+}

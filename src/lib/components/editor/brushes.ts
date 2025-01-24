@@ -13,6 +13,7 @@ import { registerClickEvent } from './events/click';
 import type { Node, NodeConfig } from 'konva/lib/Node';
 import { get, writable } from 'svelte/store';
 import { points } from '$lib/util';
+import type { Layer } from 'konva/lib/Layer';
 
 export interface BrushPlugin {
 	readonly dragStart: (e: KonvaDragTransformEvent) => void;
@@ -47,8 +48,10 @@ export function brushes(stageRef: Konva.Stage) {
 }
 
 const dragStart = async (e: KonvaDragTransformEvent) => {
-	const target = e.detail.target;
-	console.log(e, target);
+	console.log("START MOVING")
+
+	const target = e.target;
+	console.log((stage.attrs.layers.uiLayer as Layer));
 	target.moveTo(stage.attrs.layers.uiLayer);
 	const clone = target.clone() as Konva.Group;
 	target.moveToTop();
@@ -65,9 +68,10 @@ const dragStart = async (e: KonvaDragTransformEvent) => {
 };
 
 const dragMove = async (e: KonvaDragTransformEvent) => {
+
 	if (!stage) return;
 	console.log(e);
-	const target = e.detail.target;
+	const target = e.target;
 	target.moveTo(stage.attrs.layers.uiLayer);
 	target.moveToTop();
 	const clone = stage.attrs.layers.uiLayer?.findOne('.DragPreview');
@@ -147,7 +151,7 @@ const dragMove = async (e: KonvaDragTransformEvent) => {
 };
 
 const dragEnd = async (e: KonvaDragTransformEvent) => {
-	const target = e.detail.target;
+	const target = e.target;
 	target.moveToTop();
 	const clone = stage.attrs.layers.uiLayer?.findOne('.DragPreview');
 	setTimeout(() => {
@@ -167,7 +171,7 @@ const dragEnd = async (e: KonvaDragTransformEvent) => {
 };
 
 const transformRotateStart = async (e: KonvaDragTransformEvent) => {
-	const target = e.detail.target;
+	const target = e.target;
 	target.moveTo(stage.attrs.layers.uiLayer);
 	const clone = target.clone() as Konva.Group;
 	target.moveToTop();
@@ -182,7 +186,7 @@ const transformRotateStart = async (e: KonvaDragTransformEvent) => {
 
 const transformRotate = async (e: KonvaDragTransformEvent) => {
 	if (!stage) return;
-	const target = e.detail.target;
+	const target = e.target;
 	target.moveTo(stage.attrs.layers.uiLayer);
 	target.moveToTop();
 	const clone = stage.attrs.layers.uiLayer?.findOne('.DragPreview');
@@ -245,7 +249,7 @@ const transformRotate = async (e: KonvaDragTransformEvent) => {
 };
 
 const transformRotateEnd = async (e: KonvaDragTransformEvent) => {
-	const target = e.detail.target;
+	const target = e.target;
 	target.moveToTop();
 	const clone = stage.attrs.layers.uiLayer?.findOne('.DragPreview');
 	setTimeout(() => {

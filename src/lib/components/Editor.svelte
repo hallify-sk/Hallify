@@ -1,23 +1,20 @@
 <script lang="ts">
 	import { Stage, Layer, Rect, Line, Group, Transformer, Circle } from 'svelte-konva';
-	import Konva from 'konva';
 	import { registerWheelEvent } from './editor/events/wheel';
 	import type { Vector2d } from 'konva/lib/types';
-	import { constraintNumber, registerPlugin } from './editor/lib';
+	import { constraintNumber, registerPlugin, type StageAttrs } from './editor/lib';
 	import { brushes } from './editor/brushes';
 	import Brushes from './editor/plugins/Brushes.svelte';
 	import { v4 as uuidv4 } from 'uuid';
 	import { points, walls } from '$lib/util';
 
-	let stage: Konva.Stage | undefined = $state();
+	let stage: ReturnType<typeof Stage> | undefined = $state();
 
-	let tr: Konva.Transformer | undefined = $state(undefined);
+	let tr: ReturnType<typeof Transformer> | undefined = $state(undefined);
 
-	let gridLayer: Konva.Layer | undefined = $state(undefined);
-	let uiLayer: Konva.Layer | undefined = $state(undefined);
-	let collisionLayer: Konva.Layer | undefined = $state(undefined);
-
-	//let currentTween: Konva.Tween | undefined = $state(undefined);
+	let gridLayer: ReturnType<typeof Layer> | undefined = $state(undefined);
+	let uiLayer: ReturnType<typeof Layer> | undefined = $state(undefined);
+	let collisionLayer: ReturnType<typeof Layer> | undefined = $state(undefined);
 
 	let {
 		gridSize = $bindable(30),
@@ -36,33 +33,36 @@
 
 	$effect(() => {
 		if (stage) {
+			const stageHandle = stage?.handle();
+			if (!stageHandle) return;
 			windowWidth = window.innerWidth;
 			windowHeight = window.innerHeight;
-			stage?.size({ width: windowWidth, height: windowHeight });
+			stageHandle.size({ width: windowWidth, height: windowHeight });
 			window.onresize = () => {
 				windowWidth = window.innerWidth;
 				windowHeight = window.innerHeight;
-				stage?.size({ width: windowWidth, height: windowHeight });
+				stageHandle.size({ width: windowWidth, height: windowHeight });
 			};
 			//Register things to be used by other plugins;
-			stage.attrs.tr = tr;
-			stage.attrs.layers = {
-				uiLayer,
-				gridLayer,
-				collisionLayer
+			const attributes = stageHandle.attrs as StageAttrs;
+			attributes.tr = tr?.handle;
+			attributes.layers = {
+				uiLayer: uiLayer?.handle,
+				gridLayer: gridLayer?.handle,
+				collisionLayer: collisionLayer?.handle
 			};
-			stage.attrs.grid = {
+			stageHandle.attrs.grid = {
 				gridSize,
 				gridWidth,
 				gridHeight
 			};
-			registerWheelEvent(stage);
-			registerPlugin(brushes, stage);
+			registerWheelEvent(stageHandle);
+			registerPlugin(brushes, stageHandle);
 		}
 	});
 
 	function stageDragConstraint(pos: Vector2d) {
-		let scale = stage?.scaleX() || 1;
+		let scale = stage?.handle()?.scaleX() || 1;
 
 		let newX = constraintNumber(
 			pos.x,
@@ -105,121 +105,92 @@
 			}
 		}
 	];
-	$effect(() => {
-		if (tables) {
-			console.log(tables);
-		}
-	});
 </script>
 
-{#if stage?.attrs.plugins.includes('brushes')}
+{#if stage?.handle()?.attrs.plugins.includes('brushes')}
 	<Brushes />
 {/if}
-
 <div class="fixed top-0 left-0">
 	<Stage
-		bind:handle={stage}
-		config={{
-			width: windowWidth,
-			height: windowHeight,
-			pixelRatio: 1,
-			draggable: true,
-			dragBoundFunc: stageDragConstraint
-		}}
+		bind:this={stage}
+		width={windowWidth}
+		height={windowHeight}
+		pixelRatio={1}
+		draggable={true}
+		dragBoundFunc={stageDragConstraint}
 	>
 		<!--Griddy-->
-		<Layer bind:handle={gridLayer}>
+		<Layer bind:this={gridLayer}>
 			<Rect
-				config={{
-					x: 0,
-					y: 0,
-					width: gridWidth * gridSize,
-					height: gridHeight * gridSize,
-					fill: '#f1f5f9'
-				}}
+				x={0}
+				y={0}
+				width={gridWidth * gridSize}
+				height={gridHeight * gridSize}
+				fill="#f1f5f9"
 			/>
 			{#each Array(gridWidth + 1), index}
 				<Line
-					config={{
-						points: [index * gridSize, 0, index * gridSize, gridHeight * gridSize],
-						stroke: '#e2e8f0',
-						strokeWidth: 1,
-						listening: false,
-						perfectDrawEnabled: false,
-						id: `leftChair_${index}`
-					}}
+					points={[index * gridSize, 0, index * gridSize, gridHeight * gridSize]}
+					stroke="#e2e8f0"
+					strokeWidth={1}
+					listening={false}
+					perfectDrawEnabled={false}
+					id={`leftChair_${index}`}
 				/>
 			{/each}
 			{#each Array(gridHeight + 1), index}
 				<Line
-					config={{
-						points: [0, index * gridSize, gridWidth * gridSize, index * gridSize],
-						stroke: '#e2e8f0',
-						strokeWidth: 1,
-						listening: false,
-						perfectDrawEnabled: false
-					}}
+					points={[0, index * gridSize, gridWidth * gridSize, index * gridSize]}
+					stroke="#e2e8f0"
+					strokeWidth={1}
+					listening={false}
+					perfectDrawEnabled={false}
 				/>
 			{/each}
 		</Layer>
-		<Layer bind:handle={collisionLayer}>
+		<Layer bind:this={collisionLayer}>
 			{#each tables as table}
 				{@render tableRect(table.name, table.rotation, table.x, table.y, table.chairs)}
 			{/each}
 			{#each $walls as wall}
 				{@render wallPoly(wall.name, wall.points)}
 			{/each}
-			<Line
-				config={{
-					points: [150, 150, 180, 150, 210, 270, 150, 300],
-					stroke: 'black',
-					strokeWidth: 2,
-					closed: true,
-					fill: 'black'
-				}}
-			/>
 			{#if $points.length}
 				<Line
-					config={{
-						points: $points.flatMap((point) => [point.x, point.y]),
-						stroke: 'black',
-						strokeWidth: 2,
-						closed: true,
-						fill: 'black',
-						physics: true
-					}}
+					points={$points.flatMap((point) => [point.x, point.y])}
+					stroke="black"
+					strokeWidth={2}
+					closed={true}
+					fill="black"
+					physics={true}
 				/>
 			{/if}
 		</Layer>
-		<Layer config={{ name: 'uiLayer' }} bind:handle={uiLayer}>
+		<Layer name="uiLayer" bind:this={uiLayer}>
 			<Transformer
-				bind:handle={tr}
-				config={{
-					resizeEnabled: false,
-					rotationSnaps: [0, 45, 90, 135, 180, 225, 270, 315],
-					rotationSnapTolerance: 30
-				}}
+				bind:this={tr}
+				resizeEnabled={false}
+				rotationSnaps={[0, 45, 90, 135, 180, 225, 270, 315]}
+				rotationSnapTolerance={30}
 			/>
 			{#each $points as point}
 				<Circle
-					config={{
-						x: point.x,
-						y: point.y,
-						radius: 5,
-						fill: 'blue',
-						draggable: true,
-						name: point.name,
-						physics: false,
-						keepInBounds: true
-					}}
-					on:dragstart={stage?.attrs.plugins?.includes('brushes')
-						? stage?.attrs.brushes.dragStart
+					x={point.x}
+					y={point.y}
+					radius={5}
+					fill="blue"
+					draggable={true}
+					name={point.name}
+					physics={false}
+					keepInBounds={true}
+					ondragstart={stage?.handle()?.attrs.plugins?.includes('brushes')
+						? stage?.handle()?.attrs.brushes.dragStart
 						: undefined}
-					on:dragmove={stage?.attrs.plugins?.includes('brushes')
-						? stage?.attrs.brushes.dragMove
+					ondragmove={stage?.handle()?.attrs.plugins?.includes('brushes')
+						? stage?.handle()?.attrs.brushes.dragMove
 						: undefined}
-					on:dragend={stage?.attrs.plugins?.includes('brushes')
-						? stage?.attrs.brushes.dragEnd
+					ondragend={stage?.handle()?.attrs.plugins?.includes('brushes')
+						? stage?.handle()?.attrs.brushes.dragEnd
 						: undefined}
 				/>
 			{/each}
@@ -234,91 +205,75 @@
 	chairs: { left: string[]; right: string[] }
 )}
 	<Group
-		config={{
-			name,
-			rotation,
-			x,
-			y,
-			draggable: stage?.attrs.plugins?.includes('brushes'),
-			physics: true,
-			keepInBounds: true,
-			rotateEnabled: true
-		}}
-		on:dragstart={stage?.attrs.plugins?.includes('brushes')
-			? stage?.attrs.brushes.dragStart
+		{name}
+		{rotation}
+		{x}
+		{y}
+		draggable={stage?.handle()?.attrs.plugins?.includes('brushes')}
+		physics={true}
+		keepInBounds={true}
+		rotateEnabled={true}
+		ondragstart={stage?.handle()?.attrs.plugins?.includes('brushes')
+			? stage?.handle()?.attrs.brushes.dragStart
 			: undefined}
-		on:dragmove={stage?.attrs.plugins?.includes('brushes')
-			? stage?.attrs.brushes.dragMove
+		ondragmove={stage?.handle()?.attrs.plugins?.includes('brushes')
+			? stage?.handle()?.attrs.brushes.dragMove
 			: undefined}
-		on:dragend={stage?.attrs.plugins?.includes('brushes')
-			? stage?.attrs.brushes.dragEnd
+		ondragend={stage?.handle()?.attrs.plugins?.includes('brushes')
+			? stage?.handle()?.attrs.brushes.dragEnd
 			: undefined}
-		on:transformstart={stage?.attrs.plugins?.includes('brushes')
-			? stage?.attrs.brushes.transformRotateStart
+		ontransformstart={stage?.handle()?.attrs.plugins?.includes('brushes')
+			? stage?.handle()?.attrs.brushes.transformRotateStart
 			: undefined}
-		on:transform={stage?.attrs.plugins?.includes('brushes')
-			? stage?.attrs.brushes.transformRotate
+		ontransform={stage?.handle()?.attrs.plugins?.includes('brushes')
+			? stage?.handle()?.attrs.brushes.transformRotate
 			: undefined}
-		on:transformend={stage?.attrs.plugins?.includes('brushes')
-			? stage?.attrs.brushes.transformRotateEnd
+		ontransformend={stage?.handle()?.attrs.plugins?.includes('brushes')
+			? stage?.handle()?.attrs.brushes.transformRotateEnd
 			: undefined}
 	>
 		{#each chairs.left as chair, i}
 			<Rect
-				config={{
-					name: chair,
-					x: gridSize * 0.1,
-					y: (4 * gridSize - chairs.left.length * gridSize) / 2 + i * gridSize + gridSize * 0.1,
-					width: 0.8 * gridSize,
-					height: 0.8 * gridSize,
-					fill: '#64748b',
-					defaultFill: '#64748b',
-					cornerRadius: 4,
-					perfectDrawEnabled: false,
-					isChair: true,
-					rotateEnabled: false
-				}}
+				name={chair}
+				x={gridSize * 0.1}
+				y={(4 * gridSize - chairs.left.length * gridSize) / 2 + i * gridSize + gridSize * 0.1}
+				width={0.8 * gridSize}
+				height={0.8 * gridSize}
+				fill="#64748b"
+				defaultFill="#64748b"
+				cornerRadius={4}
+				perfectDrawEnabled={false}
+				isChair={true}
+				rotateEnabled={false}
 			/>
 		{/each}
 		<Rect
-			config={{
-				x: gridSize,
-				width: 2 * gridSize,
-				height: 4 * gridSize,
-				fill: '#334155',
-				defaultFill: '#334155',
-				cornerRadius: 4,
-				draggable: false,
-				perfectDrawEnabled: false
-			}}
+			x={gridSize}
+			width={2 * gridSize}
+			height={4 * gridSize}
+			fill="#334155"
+			defaultFill="#334155"
+			cornerRadius={4}
+			draggable={false}
+			perfectDrawEnabled={false}
 		/>
 		{#each chairs.right as chair, i}
 			<Rect
-				config={{
-					name: chair,
-					x: gridSize * 2 + gridSize + gridSize * 0.1,
-					y: (4 * gridSize - chairs.right.length * gridSize) / 2 + i * gridSize + gridSize * 0.1,
-					width: 0.8 * gridSize,
-					height: 0.8 * gridSize,
-					fill: '#64748b',
-					defaultFill: '#64748b',
-					cornerRadius: 4,
-					perfectDrawEnabled: false,
-					isChair: true,
-					rotateEnabled: false
-				}}
+				name={chair}
+				x={gridSize * 2 + gridSize + gridSize * 0.1}
+				y={(4 * gridSize - chairs.right.length * gridSize) / 2 + i * gridSize + gridSize * 0.1}
+				width={0.8 * gridSize}
+				height={0.8 * gridSize}
+				fill="#64748b"
+				defaultFill="#64748b"
+				cornerRadius={4}
+				perfectDrawEnabled={false}
+				isChair={true}
+				rotateEnabled={false}
 			/>
 		{/each}
 	</Group>
 {/snippet}
 {#snippet wallPoly(name: string, points: number[])}
-	<Line
-		config={{
-			points,
-			name,
-			closed: true,
-			fill: 'black',
-			rotateEnabled: false
-		}}
-	/>
+	<Line {points} {name} closed={true} fill="black" physics={true} />
 {/snippet}
