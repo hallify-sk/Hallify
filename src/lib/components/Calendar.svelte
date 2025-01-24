@@ -6,7 +6,7 @@
 	import Plus from '$lib/icons/Plus.svelte';
 
 	//Libraries
-	import { toast } from 'svelte-french-toast';
+	import { toast } from 'svelte-hot-french-toast';
 	import { CalendarOfMonth, type Month } from '@onsetsoftware/headless-calendar';
 
 	//Utils
@@ -52,10 +52,10 @@
 
 <div class="flex flex-col h-full">
 	<!--Loop over month Sveltekit-->
-	<div class="col-span-7 border-b border-slate-400/30 flex flex-row flex-nowrap w-full p-1 gap-1">
+	<div class="flex flex-row w-full col-span-7 gap-1 p-1 border-b border-slate-400/30 flex-nowrap">
 		<button
 			onclick={() => (selectingDay = !selectingDay)}
-			class="py-2 px-2 w-full border-slate-400/30 border rounded flex items-center hover:bg-slate-300 duration-150 gap-2 text-slate-500 text-sm"
+			class="flex items-center w-full gap-2 px-2 py-2 text-sm duration-150 border rounded border-slate-400/30 hover:bg-slate-300 text-slate-500"
 		>
 			<Icon scale="small">
 				<Calendar />
@@ -69,7 +69,7 @@
 		</button>
 		<button
 			onclick={handleMinusCalendar}
-			class="py-2 px-2 w-10 aspect-square border-slate-400/30 border rounded flex items-center hover:bg-slate-300 duration-150 gap-2 text-slate-500"
+			class="flex items-center w-10 gap-2 px-2 py-2 duration-150 border rounded aspect-square border-slate-400/30 hover:bg-slate-300 text-slate-500"
 		>
 			<Icon scale="small">
 				<Minus />
@@ -77,22 +77,22 @@
 		</button>
 		<button
 			onclick={handlePlusCalendar}
-			class="py-2 px-2 w-10 aspect-square border-slate-400/30 border rounded flex items-center hover:bg-slate-300 duration-150 gap-2 text-slate-500"
+			class="flex items-center w-10 gap-2 px-2 py-2 duration-150 border rounded aspect-square border-slate-400/30 hover:bg-slate-300 text-slate-500"
 		>
 			<Icon scale="small">
 				<Plus />
 			</Icon>
 		</button>
 	</div>
-	<div class="grid place-items-center h-full">
+	<div class="grid h-full place-items-center">
 		{#if selectingDay}
 			<div
-				class="flex flex-col w-full col-span-full row-span-full h-full"
+				class="flex flex-col w-full h-full col-span-full row-span-full"
 				in:zoom={{ delay: 200, duration: 200, scale: 0.8 }}
 				out:zoom={{ duration: 200, scale: 0.8 }}
 			>
 				<div
-					class="p-1 bg-slate-200 grid place-items-center grid-cols-7 border-b border-slate-400/30 h-full"
+					class="grid h-full grid-cols-7 p-1 border-b bg-slate-200 place-items-center border-slate-400/30"
 				>
 					{#each ['Po', 'Ut', 'St', 'Št', 'Pi', 'So', 'Ne'] as day}
 						<p class="text-slate-500 text-[0.65rem] uppercase">{day}</p>
@@ -100,7 +100,7 @@
 				</div>
 				{#key month}
 					<div
-						class="grid place-items-center grid-cols-7 grid-rows-6 px-1 mt-1 pb-1 gap-1 w-full h-full"
+						class="grid w-full h-full grid-cols-7 grid-rows-6 gap-1 px-1 pb-1 mt-1 place-items-center"
 					>
 						{#each [...prevMonth]
 							.filter((i) => i.value.weekAxisIndex == Math.max(...[...prevMonth].map((obj) => obj.value.weekAxisIndex)))
@@ -124,7 +124,7 @@
 									onclick={() => {
 										toast.error('Na tento dátum není žiadna udalosť.', {
 											duration: 3000,
-											position: 'bottom-right'
+											position: 'bottom-end'
 										});
 									}}
 									class="calendarButton col-start-{day.value
@@ -158,7 +158,7 @@
 			</div>
 		{:else}
 			<div
-				class="grid w-full grid-cols-4 grid-rows-3 col-span-full row-span-full gap-1 p-1 h-full"
+				class="grid w-full h-full grid-cols-4 grid-rows-3 gap-1 p-1 col-span-full row-span-full"
 				in:zoom={{ delay: 200, duration: 200, scale: 0.8 }}
 				out:zoom={{ duration: 200, scale: 0.8 }}
 			>

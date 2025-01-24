@@ -1,12 +1,12 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
 	import '../app.postcss';
-	import { Toaster } from 'svelte-french-toast';
+	import { Toaster } from 'svelte-hot-french-toast';
 
 	let { children }: { children: Snippet } = $props();
 </script>
 
-<Toaster toastOptions={{ className: 'toast', position: 'bottom-right' }} />
+<Toaster toastOptions={{ class: 'toast', position: "bottom-end" }} />
 
 {@render children?.()}
 

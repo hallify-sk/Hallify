@@ -5,6 +5,7 @@ import { get } from 'svelte/store';
 import { v4 as uuidv4 } from 'uuid';
 import { circleBounds, pointsToVector2D, snapToGrid } from '../lib';
 
+
 export function registerClickEvent(
 	stage: Konva.Stage,
 	tr: Konva.Transformer | undefined,
