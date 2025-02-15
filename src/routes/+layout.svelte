@@ -6,7 +6,7 @@
 	let { children }: { children: Snippet } = $props();
 </script>
 
-<Toaster toastOptions={{ class: 'toast', position: "bottom-end" }} />
+<Toaster toastOptions={{ class: 'toast', position: 'bottom-end' }} />
 
 {@render children?.()}
 

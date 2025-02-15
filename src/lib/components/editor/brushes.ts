@@ -48,10 +48,10 @@ export function brushes(stageRef: Konva.Stage) {
 }
 
 const dragStart = async (e: KonvaDragTransformEvent) => {
-	console.log("START MOVING")
+	console.log('START MOVING');
 
 	const target = e.target;
-	console.log((stage.attrs.layers.uiLayer as Layer));
+	console.log(stage.attrs.layers.uiLayer as Layer);
 	target.moveTo(stage.attrs.layers.uiLayer);
 	const clone = target.clone() as Konva.Group;
 	target.moveToTop();
@@ -68,7 +68,6 @@ const dragStart = async (e: KonvaDragTransformEvent) => {
 };
 
 const dragMove = async (e: KonvaDragTransformEvent) => {
-
 	if (!stage) return;
 	console.log(e);
 	const target = e.target;
