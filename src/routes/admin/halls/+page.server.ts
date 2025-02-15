@@ -1,77 +1,58 @@
-import { serializeNonPOJOs } from "$lib/lib";
-import { fail } from "@sveltejs/kit";
+import { Hall, Reservation } from '$lib/server/models.js';
+import { serializeNonPOJOs, validateHex } from '$lib/util';
+import { fail } from '@sveltejs/kit';
 
-export const actions: import("./$types").Actions = {
-	/**
-	 * Fetch additional halls with pagination.
-	 *
-	 * @param {Object} context - The context object.
-	 * @param {Object} context.locals - Local variables including PocketBase client instance.
-	 * @param {Object} context.request - The HTTP request object.
-	 * @returns {Object} - An object containing serialized halls.
-	 *
-	 * @throws {Error} - Throws an error if the page parameter is invalid or if no halls are found.
-	 */
-	getMoreHalls: async ({ locals, request }) => {
-		const data = await request.formData();
-		const page = data.get("page")?.toString();
-		if (!page) return fail(400);
-		if (isNaN(parseInt(page))) return fail(400);
-		const halls = await locals.pb.collection("halls").getList(parseInt(page), 50, { sort: "created", expand: "user,addons,category" });
-		if (!halls.items.length) return fail(404);
-		return {
-			halls: serializeNonPOJOs(halls)
-		};
-	},
-
-	/**
-	 * Remove specified halls from the collection.
-	 *
-	 * @param {Object} context - The context object.
-	 * @param {Object} context.locals - Local variables including PocketBase client instance.
-	 * @param {Object} context.request - The HTTP request object.
-	 * @returns {Object} - An object indicating success.
-	 *
-	 * @throws {Error} - Throws an error if the reason or checkboxes parameters are missing or invalid.
-	 */
-	removeHalls: async ({ locals, request }) => {
-		const formData = await request.formData();
-		console.log(formData);
-		const reason = formData.get("reason")?.toString();
-		const checkboxes = formData.get("checkboxes")?.toString();
-
-		const parsedCheckboxes = JSON.parse(checkboxes || "[]");
-		if (!parsedCheckboxes.length || !reason) return fail(400);
-		for (let i = 0; i < parsedCheckboxes.length; i++) {
-			await locals.pb.collection("halls").delete(parsedCheckboxes[i]);
+export const actions = {
+	create: async function ({ request }) {
+		if (request.method != 'POST') {
+			return fail(405, { message: 'Metóda nie je povolená.' });
 		}
-		return { success: true };
-	},
+		const formData = await request.formData();
+		const name = formData.get('name');
+		if (!name || typeof name !== 'string' || name.length < 1) {
+			return fail(400, { message: 'Názov sály je povinný.', validate: ['name'] });
+		}
+		if (await Hall.findOne({ where: { name } })) {
+			return fail(400, { message: 'Sála s týmto názvom už existuje.', validate: ['name'] });
+		}
+		const plan = formData.get('plan');
+		if (plan && typeof plan !== 'number') {
+			return fail(400, { message: 'Plán sály je neplatný.', validate: ['plan'] });
+		}
+		const color = formData.get('color');
+		if (!color || typeof color !== 'string' || color.length < 1) {
+			return fail(400, { message: 'Farba sály je povinná.', validate: ['color'] });
+		}
+		if (await Hall.findOne({ where: { color } })) {
+			return fail(400, { message: 'Sála s touto farbou už existuje.', validate: ['color'] });
+		}
+		if (validateHex(color) === false) {
+			return fail(400, { message: 'Farba sály je neplatná.', validate: ['color'] });
+		}
+		const allow_reservations = formData.get('allow_reservations') == 'on';
+		const custom_layouts = formData.get('custom_layouts') == 'on';
+		const force_layouts = formData.get('force_layouts') == 'on';
+		const allow_feedback = formData.get('allow_feedback') == 'on';
 
-	/**
-	 * Create a new hall with default details.
-	 *
-	 * @param {Object} context - The context object.
-	 * @param {Object} context.locals - Local variables including PocketBase client instance.
-	 * @param {Object} context.request - The HTTP request object.
-	 * @returns {Object} - The created hall.
-	 */
-	createHall: async ({ locals }) => {
-		const hall = await locals.pb.collection("halls").create({ name: "Nová sála", config: {}, data: {} });
-		return { hall };
+		// Create hall
+		const hall = await Hall.create({
+			name,
+			plan,
+			color,
+			allow_reservations,
+			custom_layouts,
+			force_layouts,
+			allow_feedback
+		});
+		return { hall: serializeNonPOJOs(hall) };
 	}
 };
-/**
- * Load initial hall details.
- *
- * @param {Object} context - The context object.
- * @param {Object} context.locals - Local variables including PocketBase client instance and user information.
- * @returns {Object} - An object containing user information, halls, and API URL.
- */
-export async function load({ locals }) {
+
+export const load = async function () {
+	const halls = await Hall.findAll();
+	const reservations = await Reservation.findAll();
 	return {
-		user: locals.user,
-		halls: await locals.pb.collection("halls").getList(0, 50, { sort: "created" }),
-		apiUrl: locals.pbApiURL
+		halls: serializeNonPOJOs(halls) as Array<Hall>,
+		reservations: serializeNonPOJOs(reservations) as Array<Reservation>
 	};
-}
+};
