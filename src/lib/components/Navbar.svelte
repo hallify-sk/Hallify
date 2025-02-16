@@ -48,6 +48,7 @@
 	} = $props();
 
 	let openLogin = $state(false);
+	let openRegister = $state(false);
 
 	let openUserDropdown: boolean = $state(false);
 
@@ -63,12 +64,12 @@
 	});
 </script>
 
-<div class="bg-slate-50 w-full sticky -top-[61px] left-0 z-30">
-	<div class="border-b border-slate-400/30 w-full py-3 px-4 md:px-24">
+<div class="bg-background-1 w-full sticky -top-[61px] left-0 z-30">
+	<div class="border-b border-border-main/30 w-full py-3 px-4 md:px-24">
 		<div class="max-w-7xl mx-auto flex justify-between">
 			<a href="/" class="flex items-center gap-2">
 				<img src="/Hallify.svg" alt="logo" class="h-8 w-auto" />
-				<p class="font-bold text-slate-700 poppins-black-italic">Hallify</p>
+				<p class="font-bold text-text-main poppins-black-italic">Hallify</p>
 			</a>
 			<div class="flex items-center">
 				<NavCollapsibleNoButton bind:open={openUserDropdown} id="user">
@@ -82,10 +83,10 @@
 								}}
 						class="flex flex-row flex-nowrap gap-2 items-center"
 					>
-						<img src={avatar} alt="avatar" class="h-8 w-8 rounded border border-slate-500/30" />
+						<img src={avatar} alt="avatar" class="h-8 w-8 rounded border border-border-main/30" />
 						<div class="flex flex-col flex-nowrap text-left justify-center">
 							<p
-								class="text-slate-700 poppins-regular text-sm max-w-32 overflow-ellipsis overflow-hidden whitespace-nowrap text-nowrap"
+								class="text-text-main poppins-regular text-sm max-w-32 overflow-ellipsis overflow-hidden whitespace-nowrap text-nowrap"
 							>
 								{#if user}
 									{user?.first_name} {user?.last_name}
@@ -93,7 +94,7 @@
 									Neprihlásený používateľ
 								{/if}
 							</p>
-							<p class="text-slate-500 poppins-light text-xs">
+							<p class="text-text-1 poppins-light text-xs">
 								{#if user}
 									{permission?.name}
 								{:else}
@@ -104,28 +105,28 @@
 					</button>
 					{#if $collapsibleOpen == 'user' && user}
 						<div
-							class="flex flex-col absolute top-[48px] right-0 bg-slate-50 border border-slate-400/30 rounded-b overflow-hidden py-1"
+							class="flex flex-col absolute top-[48px] right-0 bg-background-1 border border-border-main/30 rounded-b overflow-hidden py-1"
 						>
 							{#if checkPathPermission('/profile', permission)}
 								<a
 									href="/profile"
-									class="py-2 px-3 text-sm flex items-center gap-2 w-44 hover:bg-slate-100"
+									class="py-2 px-3 text-sm flex items-center gap-2 w-44 text-text-4 hover:bg-background-4"
 								>
 									<Icon scale="small">
 										<UserIcon />
 									</Icon>
-									<p class="text-slate-600">Zobraziť profil</p>
+									<p>Zobraziť profil</p>
 								</a>
 							{/if}
 							{#if checkPathPermission('/admin', permission)}
 								<a
 									href="/admin"
-									class="py-2 px-3 text-sm flex items-center gap-2 w-44 hover:bg-slate-100"
+									class="py-2 px-3 text-sm flex items-center gap-2 w-44 hover:bg-background-4 text-text-4"
 								>
 									<Icon scale="small">
 										<ArrowRight />
 									</Icon>
-									<p class="text-slate-600">Admin režím</p>
+									<p>Admin režím</p>
 								</a>
 							{/if}
 							{#if checkPathPermission('/api/auth/signout', permission)}
@@ -148,12 +149,12 @@
 								>
 									<button
 										type="submit"
-										class="py-2 px-3 text-sm flex items-center gap-2 w-44 hover:bg-slate-100"
+										class="py-2 px-3 text-sm flex items-center gap-2 w-44 hover:bg-background-4 text-text-4"
 									>
 										<Icon scale="small">
 											<Logout />
 										</Icon>
-										<p class="text-slate-600">Odhlásiť sa</p>
+										<p>Odhlásiť sa</p>
 									</button>
 								</form>
 							{/if}
@@ -163,8 +164,8 @@
 			</div>
 		</div>
 	</div>
-	<div class="border-b border-slate-400/30 w-full px-4 md:px-24">
-		<div class="max-w-7xl mx-auto flex text-sm text-slate-400">
+	<div class="border-b border-border-main/30 w-full px-4 md:px-24">
+		<div class="max-w-7xl mx-auto flex text-sm text-text-4">
 			<a
 				href="/"
 				class="py-3 px-3 text-sm border-b-2 border-b-transparent hover:border-b-blue-500 flex items-center gap-2"
@@ -172,14 +173,14 @@
 				<Icon scale="small">
 					<Home />
 				</Icon>
-				<p class="text-slate-600">Domov</p>
+				<p class="text-text-4">Domov</p>
 			</a>
 			{#if checkPathPermission('/events', permission) || checkPathPermission('/events/create', permission)}
 				<Collapsible id="event">
 					<Icon scale="small">
 						<Calendar />
 					</Icon>
-					<p class="text-slate-600">Moje udalosti</p>
+					<p class="text-text-4">Moje udalosti</p>
 					<Icon scale="tiny">
 						{#if $collapsibleOpen == 'event'}
 							<ChevronUp />
@@ -189,28 +190,28 @@
 					</Icon>
 					{#if $collapsibleOpen == 'event'}
 						<div
-							class="flex flex-col absolute top-[46px] left-0 bg-slate-50 border border-slate-400/30 rounded-b overflow-hidden py-1"
+							class="flex flex-col absolute top-[46px] left-0 bg-background-1 border border-border-main/30 rounded-b overflow-hidden py-1"
 						>
 							{#if checkPathPermission('/events', permission)}
 								<a
 									href="/events"
-									class="py-2 px-3 text-sm flex items-center gap-2 w-44 hover:bg-slate-100"
+									class="py-2 px-3 text-sm flex items-center gap-2 w-44 hover:bg-background-4"
 								>
 									<Icon scale="small">
 										<BulletList />
 									</Icon>
-									<p class="text-slate-600">Zobraziť udalosti</p>
+									<p class="text-text-4">Zobraziť udalosti</p>
 								</a>
 							{/if}
 							{#if checkPathPermission('/events/create', permission)}
 								<a
 									href="/events/create"
-									class="py-2 px-3 text-sm flex items-center gap-2 w-44 hover:bg-slate-100"
+									class="py-2 px-3 text-sm flex items-center gap-2 w-44 hover:bg-background-4"
 								>
 									<Icon scale="small">
 										<Plus />
 									</Icon>
-									<p class="text-slate-600">Vytvoriť udalosť</p>
+									<p class="text-text-4">Vytvoriť udalosť</p>
 								</a>
 							{/if}
 						</div>
@@ -225,11 +226,11 @@
 					<Icon scale="small">
 						<Chat />
 					</Icon>
-					<p class="text-slate-600">Kontakt</p>
+					<p class="text-text-4">Kontakt</p>
 				</a>
 			{/if}
 		</div>
 	</div>
 </div>
 
-<AuthDialog bind:open={openLogin} />
+<AuthDialog bind:openLogin={openLogin} bind:openRegister={openRegister} />

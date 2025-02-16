@@ -23,7 +23,7 @@
 	let selectingDay = $state(true);
 
 	const d = new Date();
-	const todayMidnight = Date.UTC(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0);
+	const todayMidnight = Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()-16, 0, 0, 0, 0);
 
 	function regenerateDates() {
 		currentYear = selectedDate.getFullYear();
@@ -52,10 +52,10 @@
 
 <div class="flex flex-col h-full">
 	<!--Loop over month Sveltekit-->
-	<div class="flex flex-row w-full col-span-7 gap-1 p-1 border-b border-slate-400/30 flex-nowrap">
+	<div class="flex flex-row w-full col-span-7 gap-1 p-1 border-b border-border-main/30 bg-background-2 flex-nowrap">
 		<button
 			onclick={() => (selectingDay = !selectingDay)}
-			class="flex items-center w-full gap-2 px-2 py-2 text-sm duration-150 border rounded border-slate-400/30 hover:bg-slate-300 text-slate-500"
+			class="flex items-center w-full gap-2 px-2 py-2 text-sm duration-150 border rounded border-border-main/30 bg-background-1 hover:bg-background-4 text-text-2"
 		>
 			<Icon scale="small">
 				<Calendar />
@@ -69,7 +69,7 @@
 		</button>
 		<button
 			onclick={handleMinusCalendar}
-			class="flex items-center w-10 gap-2 px-2 py-2 duration-150 border rounded aspect-square border-slate-400/30 hover:bg-slate-300 text-slate-500"
+			class="flex items-center w-10 gap-2 px-2 py-2 duration-150 border rounded aspect-square border-border-main/30 bg-background-1 hover:bg-background-4 text-text-2"
 		>
 			<Icon scale="small">
 				<Minus />
@@ -77,7 +77,7 @@
 		</button>
 		<button
 			onclick={handlePlusCalendar}
-			class="flex items-center w-10 gap-2 px-2 py-2 duration-150 border rounded aspect-square border-slate-400/30 hover:bg-slate-300 text-slate-500"
+			class="flex items-center w-10 gap-2 px-2 py-2 duration-150 border rounded aspect-square border-border-main/30 bg-background-1 hover:bg-background-4 text-text-2"
 		>
 			<Icon scale="small">
 				<Plus />
@@ -92,10 +92,10 @@
 				out:zoom={{ duration: 200, scale: 0.8 }}
 			>
 				<div
-					class="grid h-full grid-cols-7 p-1 border-b bg-slate-200 place-items-center border-slate-400/30"
+					class="grid h-full grid-cols-7 p-1 border-b bg-background-2 place-items-center border-border-main/30"
 				>
 					{#each ['Po', 'Ut', 'St', 'Št', 'Pi', 'So', 'Ne'] as day}
-						<p class="text-slate-500 text-[0.65rem] uppercase">{day}</p>
+						<p class="text-text-1 text-[0.65rem] uppercase">{day}</p>
 					{/each}
 				</div>
 				{#key month}
@@ -108,12 +108,12 @@
 							<button
 								disabled={true}
 								class="calendarButton col-start-{prevMonthDay.value
-									.dayAxisIndex} w-full aspect-square rounded hover:bg-slate-200 text-sm duration-150 {todayMidnight ==
+									.dayAxisIndex} w-full aspect-square rounded hover:bg-background-2/30 text-sm duration-150 {todayMidnight ==
 								prevMonthDay.value.date.toJSDate().getTime()
-									? 'text-blue-300 bg-blue-300/40'
+									? 'text-primary bg-primary-1/15'
 									: prevMonthDay.value.dayAxisIndex % 7 == 0
-										? 'text-red-300'
-										: 'text-slate-400'}"
+										? 'text-calendar-sunday-1'
+										: 'text-text-1'}"
 							>
 								{prevMonthDay.value.dayNumber}
 							</button>
@@ -128,12 +128,12 @@
 										});
 									}}
 									class="calendarButton col-start-{day.value
-										.dayAxisIndex} w-full aspect-square rounded hover:bg-slate-200 duration-150 text-sm {todayMidnight ==
+										.dayAxisIndex} w-full aspect-square rounded hover:bg-background-2 duration-150 text-sm {todayMidnight ==
 									day.value.date.toJSDate().getTime()
-										? 'text-blue-500 bg-blue-300/40'
+										? 'text-primary bg-primary-1/30'
 										: day.value.dayAxisIndex % 7 == 0
-											? 'text-red-500'
-											: 'text-slate-700'}"
+											? 'text-calendar-sunday-main'
+											: 'text-text-main'}"
 								>
 									{day.value.dayNumber}
 								</button>
@@ -143,11 +143,11 @@
 							<button
 								disabled={true}
 								class="calendarButton col-start-{nextMonthDay.value
-									.dayAxisIndex} w-full aspect-square rounded hover:bg-slate-200 duration-150 text-sm
+									.dayAxisIndex} w-full aspect-square rounded hover:bg-background-2 duration-150 text-sm
                     {todayMidnight == nextMonthDay.value.date.toJSDate().getTime()
 									? 'text-blue-300 bg-blue-300/40'
 									: nextMonthDay.value.dayAxisIndex % 7 == 0
-										? 'text-red-300'
+										? 'text-calendar-sunday-1'
 										: 'text-slate-400'}"
 							>
 								{nextMonthDay.value.dayNumber}
@@ -169,7 +169,7 @@
 							regenerateDates();
 							selectingDay = true;
 						}}
-						class="calendarButton w-full aspect-square rounded hover:bg-slate-200 duration-150 text-sm h-full {i ==
+						class="calendarButton w-full aspect-square rounded hover:bg-background-4 duration-150 text-sm h-full {i ==
 							new Date().getMonth() && currentYear == new Date().getFullYear()
 							? 'text-blue-500 bg-blue-300/40'
 							: currentMonth == i
