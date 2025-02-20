@@ -19,5 +19,5 @@
 	{id}
 	{value}
 	{placeholder}
-	class="w-full invalid:border-red-400 bg-slate-100 border border-slate-400/30 rounded text-sm p-2 text-slate-600 focus:text-slate-800 placeholder:text-slate-400 shadow-sm"
+	class="w-full p-2 text-sm border rounded shadow-sm invalid:border-danger bg-background-1 border-border-main/50 text-text-2 focus:text-text-4 placeholder:text-text-1"
 />

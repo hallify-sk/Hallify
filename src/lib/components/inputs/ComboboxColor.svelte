@@ -63,16 +63,16 @@
 		name={id}
 		type="text"
 		{placeholder}
-		class="w-full p-2 text-sm border rounded shadow-sm invalid:border-red-400 bg-slate-100 border-slate-400/30 text-slate-500 focus:text-slate-700"
+		class="w-full p-2 text-sm border rounded shadow-sm invalid:border-danger bg-background-1 border-border-main/30 text-text-2 focus:text-text-4"
 	/>
 	{#if showOptions}
 		<div
-			class="absolute left-0 z-30 flex flex-col w-full pt-1 overflow-y-auto text-sm border rounded top-10 border-slate-400/30 bg-slate-100 max-h-40"
+			class="absolute left-0 z-30 flex flex-col w-full pt-1 overflow-y-auto text-sm border rounded top-10 border-border-main/30 bg-background-1 max-h-40"
 		>
 			{#if validateHex(name)}
 				<button
 					onclick={() => changeValue(name, name)}
-					class="flex flex-row items-center w-full gap-2 p-2 cursor-pointer hover:bg-slate-200 flex-nowrap"
+					class="flex flex-row items-center w-full gap-2 p-2 cursor-pointer hover:bg-background-4 flex-nowrap"
 				>
 					<div style="background: {name}" class="block p-2 rounded aspect-square"></div>
 					{name}
@@ -81,10 +81,10 @@
 				{#each options.filter((i) => i.name.toLowerCase().includes(name.toLowerCase())) as option}
 					<button
 						onclick={() => changeValue(option.name, option.value)}
-						class="flex flex-row items-center w-full gap-2 p-2 cursor-pointer hover:bg-slate-200 flex-nowrap"
+						class="flex flex-row items-center w-full gap-2 p-2 cursor-pointer hover:bg-background-4 flex-nowrap"
 					>
 						<div style="background: {option.value}" class="block p-2 rounded aspect-square"></div>
-						{option.name}
+						<p class="text-text-main">{option.name}</p>
 					</button>
 				{/each}
 			{/if}

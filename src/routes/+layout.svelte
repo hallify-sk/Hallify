@@ -12,6 +12,6 @@
 
 <style lang="postcss">
 	:global(.toast) {
-		@apply !border-slate-400/30 !border !bg-slate-100 !shadow-none hover:!bg-slate-50;
+		@apply !border-border-main/30 !border !bg-background-1 !shadow-none hover:!bg-background-2 !text-text-main;
 	}
 </style>

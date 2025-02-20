@@ -12,6 +12,7 @@
 	import Dialog from './Dialog.svelte';
 	import TextInput from './inputs/TextInput.svelte';
 	import Plus from '$lib/icons/Plus.svelte';
+	import Button from './Button.svelte';
 
 	let {
 		openLogin = $bindable(false),
@@ -34,7 +35,7 @@
 		<p>Prihlásiť sa</p>
 	{/snippet}
 	<form
-		class="w-full flex flex-col"
+		class="flex flex-col w-full"
 		action="/api/auth"
 		method="post"
 		use:enhance={() => {
@@ -52,48 +53,45 @@
 			};
 		}}
 	>
-		<div class="p-4 gap-2 flex flex-col">
+		<div class="flex flex-col gap-2 p-4">
 			<div>
-				<label for="" class="text-sm text-slate-800">E-Mail</label>
+				<label for="" class="text-sm text-text-4">E-Mail</label>
 				<TextInput name="email" id="email" placeholder="meno@email.com" />
 			</div>
 			<div>
-				<label for="" class="text-sm text-slate-800">Heslo</label>
+				<label for="" class="text-sm text-text-4">Heslo</label>
 				<TextInput type="password" name="password" id="password" />
 			</div>
 			{#if loginError}
-				<p in:fly={{ x: 10, duration: 600 }} class="text-red-500">{loginError}</p>
+				<p in:fly={{ x: 10, duration: 600 }} class="text-danger">{loginError}</p>
 			{/if}
-			<p class="text-slate-700">Nemáte účet?</p>
 		</div>
-		<div class="bg-slate-200 p-4 w-full border-t border-slate-400/30 flex justify-between">
-			<button
-				type="button"
-				onclick={() => (openLogin = false)}
-				class="flex flex-row gap-2 items-center hover:bg-slate-100/50 duration-150 text-slate-500 px-4 py-2 rounded text-sm"
+		<div class="flex justify-between w-full p-4 border-t rounded-b bg-background-2 border-border-main/30">
+			<Button
+				color="transparent"
+				onclick={() => {
+					openLogin = false;
+				}}
 			>
 				<p>Zrušiť</p>
-			</button>
+			</Button>
 			<div class="flex flex-row gap-2">
-				<button
+				<Button
 					type="button"
-					onclick={() => (openLogin = false, openRegister = true)}
-					class="flex flex-row items-center bg-slate-100 justify-center gap-2 px-4 py-2 text-sm duration-150 border rounded hover:bg-slate-200/50 text-slate-500 border-slate-400/30"
+					onclick={() => ((openLogin = false), (openRegister = true))}
+					color="secondary"
 				>
 					<Icon scale="small">
 						<Plus />
 					</Icon>
 					<p>Registrovať sa</p>
-				</button>
-				<button
-					type="submit"
-					class="flex flex-row gap-2 items-center bg-blue-500 hover:bg-blue-400 duration-150 text-slate-100 px-4 py-2 rounded border border-blue-600/30 text-sm"
-				>
+				</Button>
+				<Button type="submit" color="primary">
 					<Icon scale="small">
 						<LogIn />
 					</Icon>
 					<p>Prihlásiť sa</p>
-				</button>
+				</Button>
 			</div>
 		</div>
 	</form>
@@ -104,7 +102,7 @@
 		<p>Registrovať sa</p>
 	{/snippet}
 	<form
-		class="w-full flex flex-col"
+		class="flex flex-col w-full"
 		action="/api/user"
 		method="post"
 		use:enhance={() => {
@@ -122,57 +120,54 @@
 			};
 		}}
 	>
-		<div class="p-4 flex flex-col gap-2">
-			<div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+		<div class="flex flex-col gap-2 p-4">
+			<div class="grid grid-cols-1 gap-2 md:grid-cols-2">
 				<div>
-					<label for="" class="text-sm text-slate-800">Meno</label>
+					<label for="" class="text-sm text-text-4">Meno</label>
 					<TextInput name="firstName" id="firstName" placeholder="Janko" />
 				</div>
 				<div>
-					<label for="" class="text-sm text-slate-800">Priezvisko</label>
+					<label for="" class="text-sm text-text-4">Priezvisko</label>
 					<TextInput name="lastName" id="lastName" placeholder="Mrkvička" />
 				</div>
 			</div>
 			<div>
-				<label for="" class="text-sm text-slate-800">E-Mail</label>
+				<label for="" class="text-sm text-text-4">E-Mail</label>
 				<TextInput name="email" id="email" placeholder="jankomrkva@email.com" />
 			</div>
 			<div>
-				<label for="" class="text-sm text-slate-800">Heslo</label>
+				<label for="" class="text-sm text-text-4">Heslo</label>
 				<TextInput type="password" name="password" id="password" />
 			</div>
 			{#if registerError}
-				<p in:fly={{ x: 10, duration: 600 }} class="text-red-500 mt-4">{registerError}</p>
+				<p in:fly={{ x: 10, duration: 600 }} class="mt-4 text-danger">{registerError}</p>
 			{/if}
 		</div>
-		<div class="bg-slate-200 p-4 w-full border-t border-slate-400/30 flex justify-between">
-			<button
-				type="button"
-				onclick={() => (openRegister = false)}
-				class="flex flex-row gap-2 items-center hover:bg-slate-100/50 duration-150 text-slate-500 px-4 py-2 rounded text-sm"
+		<div class="flex justify-between w-full p-4 border-t rounded-b bg-background-2 border-slate-400/30">
+			<Button
+				onclick={() => {
+					openRegister = false;
+				}}
+				color="transparent"
 			>
 				<p>Zrušiť</p>
-			</button>
+			</Button>
 			<div class="flex flex-row gap-2">
-				<button
-					type="button"
-					onclick={() => (openLogin = true, openRegister = false)}
-					class="flex flex-row items-center bg-slate-100 justify-center gap-2 px-4 py-2 text-sm duration-150 border rounded hover:bg-slate-200/50 text-slate-500 border-slate-400/30"
+				<Button onclick={() => ((openLogin = true), (openRegister = false))} color="secondary">
+					<Icon scale="small">
+						<LogIn />
+					</Icon>
+					<p>Prihlásiť sa</p>
+				</Button>
+				<Button
+					type="submit"
+					color="primary"
 				>
 					<Icon scale="small">
 						<Plus />
 					</Icon>
-					<p>Prihlasiť sa</p>
-				</button>
-				<button
-					type="submit"
-					class="flex flex-row gap-2 items-center bg-blue-500 hover:bg-blue-400 duration-150 text-slate-100 px-4 py-2 rounded border border-blue-600/30 text-sm"
-				>
-					<Icon scale="small">
-						<LogIn />
-					</Icon>
 					<p>Registrovať sa</p>
-				</button>
+				</Button>
 			</div>
 		</div>
 	</form>

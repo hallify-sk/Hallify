@@ -14,7 +14,7 @@
 			}
 			collapsibleOpen.set(id);
 		}}
-		class="py-3 px-3 text-sm border-b-2 border-b-transparent hover:border-b-blue-500 flex items-center gap-2"
+		class="flex items-center gap-2 px-3 py-3 text-sm border-b-2 border-b-transparent hover:border-b-primary"
 	>
 		{@render children?.()}
 	</button>

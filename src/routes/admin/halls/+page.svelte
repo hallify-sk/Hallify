@@ -21,6 +21,7 @@
 	import Tooltip from '$lib/components/Tooltip.svelte';
 	import Combobox from '$lib/components/inputs/ComboboxColor.svelte';
 	import Calendar from '$lib/components/Calendar.svelte';
+	import Button from '$lib/components/Button.svelte';
 
 	const { data } = $props();
 
@@ -86,7 +87,7 @@
 						};
 					});
 
-					const styleOptions = barGraphStyle(months);
+					const styleOptions = barGraphStyle(months, 'dark');
 
 					myChart.setOption({
 						...styleOptions,
@@ -135,7 +136,7 @@
 						};
 					});
 
-					const styleOptions = barGraphStyle(months);
+					const styleOptions = barGraphStyle(months, 'dark');
 
 					myChart.setOption({
 						...styleOptions,
@@ -182,7 +183,7 @@
 						};
 					});
 
-					const styleOptions = barGraphStyle(days);
+					const styleOptions = barGraphStyle(days, 'dark');
 
 					myChart.setOption({
 						...styleOptions,
@@ -232,31 +233,28 @@
 	}
 </script>
 
-<div class="w-full min-h-screen px-4 py-6 bg-slate-200 md:px-24">
+<div class="w-full min-h-screen px-4 py-6 bg-background-main md:px-24">
 	<div class="flex flex-row flex-wrap items-center justify-between w-full mx-auto max-w-7xl">
 		<div class="flex flex-col flex-nowrap">
-			<p class="uppercase text-[0.65rem] text-slate-400">Prehľad</p>
-			<p class="text-slate-700">Manažment sál</p>
+			<p class="uppercase text-[0.65rem] text-text-1">Prehľad</p>
+			<p class="text-text-main">Manažment sál</p>
 		</div>
 		<div class="flex flex-row items-center flex-nowrap">
-			<button
-				onclick={() => (showHall = true)}
-				class="flex flex-row items-center gap-2 px-4 py-2 text-sm duration-150 bg-blue-500 border rounded hover:bg-blue-400 text-slate-100 border-blue-600/30"
-			>
+			<Button color="primary" onclick={() => (showHall = true)}>
 				<Icon scale="small">
 					<Plus />
 				</Icon>
 				<p>Pridať sálu</p>
-			</button>
+			</Button>
 		</div>
 	</div>
 	<div class="flex flex-col items-start w-full gap-4 mx-auto mt-4 max-w-7xl">
 		<div class="flex flex-col w-full gap-4 sm:flex-row">
 			<div
-				class="relative w-full overflow-y-auto border rounded border-slate-400/30 max-h-96 bg-slate-100"
+				class="relative w-full overflow-y-auto border rounded border-border-main/30 max-h-96 bg-background-1"
 			>
-				<div class="sticky top-0 p-4 border-b border-slate-400/30 bg-slate-100">
-					<h2>Prehľad sál</h2>
+				<div class="sticky top-0 p-4 border-b border-border-main/30 bg-background-1">
+					<h2 class="text-text-main">Prehľad sál</h2>
 				</div>
 				<div class="overflow-y-auto">
 					<table class="w-full border-collapse">
@@ -271,29 +269,29 @@
 							<col span="1" style="width: 10%; min-width:130px;" />
 						</colgroup>
 						<thead>
-							<tr class="bg-slate-200">
-								<th class="text-[0.65rem] text-left px-4 py-2 text-slate-500 font-normal uppercase"
+							<tr class="bg-background-2">
+								<th class="text-[0.65rem] text-left px-4 py-2 text-text-1 font-normal uppercase"
 									>Názov</th
 								>
-								<th class="text-[0.65rem] text-left px-4 py-2 text-slate-500 font-normal uppercase"
+								<th class="text-[0.65rem] text-left px-4 py-2 text-text-1 font-normal uppercase"
 									>Plan sály</th
 								>
-								<th class="text-[0.65rem] text-left px-4 py-2 text-slate-500 font-normal uppercase"
+								<th class="text-[0.65rem] text-left px-4 py-2 text-text-1 font-normal uppercase"
 									>Farba</th
 								>
-								<th class="text-[0.65rem] text-left px-4 py-2 text-slate-500 font-normal uppercase"
+								<th class="text-[0.65rem] text-left px-4 py-2 text-text-1 font-normal uppercase"
 									>Povoliť rezervácie</th
 								>
-								<th class="text-[0.65rem] text-left px-4 py-2 text-slate-500 font-normal uppercase"
+								<th class="text-[0.65rem] text-left px-4 py-2 text-text-1 font-normal uppercase"
 									>Vlastné rozloženia</th
 								>
-								<th class="text-[0.65rem] text-left px-4 py-2 text-slate-500 font-normal uppercase"
+								<th class="text-[0.65rem] text-left px-4 py-2 text-text-1 font-normal uppercase"
 									>Vynútiť rozloženia</th
 								>
-								<th class="text-[0.65rem] text-left px-4 py-2 text-slate-500 font-normal uppercase"
+								<th class="text-[0.65rem] text-left px-4 py-2 text-text-1 font-normal uppercase"
 									>Vytvorené</th
 								>
-								<th class="text-[0.65rem] text-left px-4 py-2 text-slate-500 font-normal uppercase"
+								<th class="text-[0.65rem] text-left px-4 py-2 text-text-1 font-normal uppercase"
 									>Naposledy zmenené</th
 								>
 							</tr>
@@ -310,42 +308,41 @@
 									<td class="event-table-long-text">{hall.name}</td>
 									<td class="px-4 py-3 text-sm">
 										{#if hall.plan}
-											<span class="px-2 py-1 text-green-600 rounded bg-green-300/40">Nastavený</span
-											>
+											<span class="px-2 py-1 rounded text-success bg-success/40">Nastavený</span>
 										{:else}
-											<span class="px-2 py-1 text-red-600 rounded bg-red-300/40">Nenastavený</span>
+											<span class="px-2 py-1 rounded text-danger bg-danger/40">Nenastavený</span>
 										{/if}
 									</td>
 									<td class="px-4 py-3 text-sm text-slate-600">
-										<div class="flex flex-row items-center gap-2">
+										<div class="flex flex-row items-center gap-2 text-text-main">
 											<div
-												class="w-5 border rounded border-slate-400/30 aspect-square"
+												class="w-5 border rounded border-border-main/30 aspect-square"
 												style="background: {hall.color};"
 											></div>
 											<p>{hall.color}</p>
 										</div>
 									</td>
-									<td class="px-4 py-3 text-sm">
+									<td class="px-4 py-3 text-sm text-text-main">
 										{hall.allow_reservations ? 'Áno' : 'Nie'}
 									</td>
-									<td class="px-4 py-3 text-sm">
+									<td class="px-4 py-3 text-sm text-text-main">
 										{hall.custom_layouts ? 'Áno' : 'Nie'}
 									</td>
-									<td class="px-4 py-3 text-sm">
+									<td class="px-4 py-3 text-sm text-text-main">
 										{hall.force_layouts ? 'Áno' : 'Nie'}
 									</td>
-									<td class="px-4 py-3 text-sm">
+									<td class="px-4 py-3 text-sm text-text-main">
 										<span class="flex flex-col">
 											<p>{new Date(hall.created_at).toLocaleDateString('sk')}</p>
-											<p class="text-xs text-slate-400">
+											<p class="text-xs text-text-1">
 												{new Date(hall.created_at).toLocaleTimeString('sk')}
 											</p>
 										</span>
 									</td>
-									<td class="px-4 py-3 text-sm">
+									<td class="px-4 py-3 text-sm text-text-main">
 										<span class="flex flex-col">
 											<p>{new Date(hall.updated_at).toLocaleDateString('sk')}</p>
-											<p class="text-xs text-slate-400">
+											<p class="text-xs text-text-1">
 												{new Date(hall.updated_at).toLocaleTimeString('sk')}
 											</p>
 										</span>
@@ -359,46 +356,44 @@
 		</div>
 		<div class="flex flex-col w-full gap-4 sm:flex-row">
 			<div
-				class="relative flex flex-col w-full overflow-y-auto border rounded border-slate-400/30 h-96 bg-slate-100"
+				class="relative flex flex-col w-full overflow-y-auto border rounded border-border-main/30 h-96 bg-background-1"
 			>
 				<div
-					class="flex flex-row items-center justify-between p-4 border-b border-slate-400/30 bg-slate-100"
+					class="flex flex-row items-center justify-between p-4 border-b border-border-main/30 bg-background-1"
 				>
-					<h2>Prehľad udalostí v sálach</h2>
+					<h2 class="text-text-main">Prehľad udalostí v sálach</h2>
 					<div class="flex flex-row items-center gap-2 justify-evenly">
-						<p class="text-sm text-slate-400">Obdobie:</p>
+						<p class="text-sm text-text-main">Obdobie:</p>
 						<button
 							onclick={() => {
 								timeFrame = 0;
 							}}
-							class="{timeFrame == 0 ? 'text-slate-800' : 'text-slate-400'} text-sm hover:underline"
+							class="{timeFrame == 0 ? 'text-primary' : 'text-text-1'} text-sm hover:underline"
 							>30 dni</button
 						>
 						<button
 							onclick={() => {
 								timeFrame = 1;
 							}}
-							class="{timeFrame == 1
-								? 'text-slate-800'
-								: 'text-slate-400'} text-sm text-slate-400 hover:underline">Polrok</button
+							class="{timeFrame == 1 ? 'text-primary' : 'text-text-1'} text-sm hover:underline"
+							>Polrok</button
 						>
 						<button
 							onclick={() => {
 								timeFrame = 2;
 							}}
-							class="{timeFrame == 2
-								? 'text-slate-800'
-								: 'text-slate-400'} text-sm text-slate-400 hover:underline">Rok</button
+							class="{timeFrame == 2 ? 'text-primary' : 'text-text-1'} text-sm hover:underline"
+							>Rok</button
 						>
 					</div>
 				</div>
 				<div class="h-full overflow-y-auto" id="chartWrapper"></div>
 			</div>
 			<div
-				class="flex flex-col w-full border rounded border-slate-400/30 min-w-72 sm:w-72 sm:h-96 bg-slate-100"
+				class="flex flex-col w-full border rounded border-border-main/30 min-w-72 sm:w-72 sm:h-96 bg-background-1"
 			>
-				<div class="p-4 border-b border-slate-400/30">
-					<h2>Naplánované udalosti</h2>
+				<div class="p-4 border-b border-border-main/30">
+					<h2 class="text-text-main">Naplánované udalosti</h2>
 				</div>
 				<div class="block h-full">
 					<Calendar />
@@ -406,21 +401,21 @@
 			</div>
 		</div>
 		<div class="grid w-full grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-			<div class="flex flex-col w-full p-4 border border-slate-400/30 bg-slate-100">
-				<h2 class="text-sm text-slate-500">Počet sál</h2>
-				<p class="text-3xl font-bold">{data?.halls?.length ?? 0}</p>
+			<div class="flex flex-col w-full p-4 border border-border-main/30 bg-background-1">
+				<h2 class="text-sm text-text-1">Počet sál</h2>
+				<p class="text-3xl font-bold text-text-main">{data?.halls?.length ?? 0}</p>
 			</div>
-			<div class="flex flex-col w-full p-4 border border-slate-400/30 bg-slate-100">
-				<h2 class="text-sm text-slate-500">Naplánované udalosti</h2>
-				<p class="text-3xl font-bold">24</p>
+			<div class="flex flex-col w-full p-4 border border-border-main/30 bg-background-1">
+				<h2 class="text-sm text-text-1">Naplánované udalosti</h2>
+				<p class="text-3xl font-bold text-text-main">24</p>
 			</div>
-			<div class="flex flex-col w-full p-4 border border-slate-400/30 bg-slate-100">
-				<h2 class="text-sm text-slate-500">Udalosti</h2>
-				<p class="text-3xl font-bold">24</p>
+			<div class="flex flex-col w-full p-4 border border-border-main/30 bg-background-1">
+				<h2 class="text-sm text-text-1">Udalosti</h2>
+				<p class="text-3xl font-bold text-text-main">24</p>
 			</div>
-			<div class="flex flex-col w-full p-4 border border-slate-400/30 bg-slate-100">
-				<h2 class="text-sm text-slate-500">Udalosti</h2>
-				<p class="text-3xl font-bold">24</p>
+			<div class="flex flex-col w-full p-4 border border-border-main/30 bg-background-1">
+				<h2 class="text-sm text-text-1">Udalosti</h2>
+				<p class="text-3xl font-bold text-text-main">24</p>
 			</div>
 		</div>
 	</div>
@@ -428,7 +423,7 @@
 
 <Dialog bind:open={showHall}>
 	{#snippet header()}
-		<p>Nová sála</p>
+		<p class="text-text-main">Nová sála</p>
 	{/snippet}
 	<form
 		class="flex flex-col w-full"
@@ -450,33 +445,31 @@
 		}}
 	>
 		<div class="flex flex-col p-4">
-			<label for="name" class="text-sm text-slate-800">Názov</label>
-			<TextInput name="name" id="name" />
+			<div class="flex flex-col gap-2">
+				<label for="name" class="text-sm text-text-4">Názov</label>
+				<TextInput name="name" id="name" placeholder="Názov sály" />
+			</div>
 			<div class="grid w-full grid-cols-1 gap-4 mt-2 sm:grid-cols-2">
 				<div class="flex flex-col gap-2">
-					<p class="text-sm text-slate-800">Plán sály</p>
-					<div class="flex flex-row w-full gap-2">
-						<button
-							class="flex flex-row items-center justify-center w-full gap-2 px-4 py-2 text-sm duration-150 border rounded hover:bg-slate-200/50 text-slate-500 border-slate-400/30"
-						>
-							<p>Použiť existujúci</p>
-						</button>
-						<button
-							class="flex flex-row items-center w-full gap-2 px-4 py-2 text-sm duration-150 bg-blue-500 border rounded hover:bg-blue-400 text-slate-100 border-blue-600/30"
-						>
-							<Icon scale="small">
-								<Plus />
-							</Icon>
-							<p>Vytvoriť nový</p>
-						</button>
+					<p class="text-sm text-text-4">Plán sály</p>
+					<div class="flex flex-row justify-between w-full gap-2">
+							<Button color="secondary">
+								<p>Použiť existujúci</p>
+							</Button>
+							<Button color="primary">
+								<Icon scale="small">
+									<Plus />
+								</Icon>
+								<p>Vytvoriť nový</p>
+							</Button>
 					</div>
 					<img src="https://placehold.co/1080x1080" class="rounded-md" alt="Plán sály" />
 				</div>
 
 				<div class="flex flex-col gap-2">
-					<label for="color" class="flex flex-row gap-2 text-sm text-slate-800"
+					<label for="color" class="flex flex-row gap-2 text-sm text-text-4"
 						>Farba v grafoch <Tooltip>
-							<p>
+							<p class="text-text-main">
 								Táto farba bude použitá v grafoch a prezentáciách, kde sa zobrazujú informácie o
 								sále.
 							</p>
@@ -484,7 +477,7 @@
 					>
 					<div class="flex flex-row gap-2 flex-nowrap">
 						<div
-							class="border rounded border-slate-400/30 aspect-square"
+							class="border rounded border-border-main/50 aspect-square"
 							style="background: {colorValue};"
 						></div>
 						<Combobox
@@ -499,7 +492,7 @@
 					</div>
 					<div class="flex flex-row items-center gap-2">
 						<Switch name="allow_reservations" id="allow_reservations" checked={true} />
-						<label for="allow_reservations" class="text-sm text-slate-800"
+						<label for="allow_reservations" class="text-sm text-text-4"
 							>Povoliť rezervácie v sále</label
 						>
 					</div>
@@ -507,7 +500,7 @@
 						<Switch name="custom_layouts" id="custom_layouts" />
 						<label
 							for="custom_layouts"
-							class="flex flex-row items-center gap-2 text-sm text-slate-800"
+							class="flex flex-row items-center gap-2 text-sm text-text-4"
 							>Povoliť vlastné rozloženia
 							<Tooltip>
 								<p>
@@ -522,7 +515,7 @@
 						<Switch name="force_layouts" id="force_layouts" />
 						<label
 							for="force_layouts"
-							class="flex flex-row items-center gap-2 text-sm text-slate-800"
+							class="flex flex-row items-center gap-2 text-sm text-text-4"
 						>
 							Vynútiť rozloženie sály
 							<Tooltip>
@@ -537,7 +530,7 @@
 						<Switch name="allow_feedback" id="allow_feedback" />
 						<label
 							for="allow_feedback"
-							class="flex flex-row items-center gap-2 text-sm text-slate-800"
+							class="flex flex-row items-center gap-2 text-sm text-text-4"
 						>
 							Povoliť spätnú väzbu
 							<Tooltip>
@@ -551,25 +544,20 @@
 				</div>
 			</div>
 			{#if hallCreateError}
-				<p in:fly={{ x: 10, duration: 600 }} class="mt-4 text-red-500">{hallCreateError}</p>
+				<p in:fly={{ x: 10, duration: 600 }} class="mt-4 text-danger">{hallCreateError}</p>
 			{/if}
 		</div>
-		<div class="flex justify-between w-full p-4 border-t bg-slate-200 border-slate-400/30">
-			<button
-				onclick={() => (showHall = false)}
-				class="flex flex-row items-center gap-2 px-4 py-2 text-sm duration-150 rounded hover:bg-slate-100/50 text-slate-500"
-			>
+		<div class="flex justify-between w-full p-4 border-t bg-background-2 border-border-main/30">
+			
+			<Button color="transparent" onclick={() => (showHall = false)}>
 				<p>Zrušiť</p>
-			</button>
-			<button
-				onclick={() => (showHall = true)}
-				class="flex flex-row items-center gap-2 px-4 py-2 text-sm duration-150 bg-blue-500 border rounded hover:bg-blue-400 text-slate-100 border-blue-600/30"
-			>
+			</Button>
+			<Button color="primary" onclick={() => (showHall = true)}>
 				<Icon scale="small">
 					<Plus />
 				</Icon>
 				<p>Pridať sálu</p>
-			</button>
+			</Button>
 		</div>
 	</form>
 </Dialog>
@@ -587,7 +575,7 @@
 					<p class="text-sm text-slate-800">Plán sály</p>
 					<div class="flex flex-row w-full gap-2">
 						<button
-							class="flex flex-row items-center justify-center w-full gap-2 px-4 py-2 text-sm duration-150 border rounded hover:bg-slate-200/50 text-slate-500 border-slate-400/30"
+							class="flex flex-row items-center justify-center w-full gap-2 px-4 py-2 text-sm duration-150 border rounded hover:bg-slate-200/50 text-slate-500 border-border-main/30"
 						>
 							<p>Použiť existujúci</p>
 						</button>
@@ -614,7 +602,7 @@
 					>
 					<div class="flex flex-row gap-2 flex-nowrap">
 						<div
-							class="border rounded border-slate-400/30 aspect-square"
+							class="border rounded border-border-main/30 aspect-square"
 							style="background: {colorValue};"
 						></div>
 						<Combobox
@@ -701,7 +689,7 @@
 				<p in:fly={{ x: 10, duration: 600 }} class="mt-4 text-red-500">{hallCreateError}</p>
 			{/if}
 		</div>
-		<div class="flex justify-between w-full p-4 border-t bg-slate-200 border-slate-400/30">
+		<div class="flex justify-between w-full p-4 border-t bg-slate-200 border-border-main/30">
 			<button
 				type="reset"
 				onclick={() => (showEditHall = false)}
@@ -728,7 +716,7 @@
 <style lang="postcss">
 	/*
 	.color-picker-radio {
-		@apply w-full h-full rounded block p-1 border border-slate-400/30 cursor-pointer relative hover:bg-slate-200;
+		@apply w-full h-full rounded block p-1 border border-border-main/30 cursor-pointer relative hover:bg-slate-200;
 	}
 	.color-picker-radio div {
 		@apply w-full h-full rounded block;
@@ -737,16 +725,16 @@
 		@apply hidden;
 	}
 	:global(input[type='radio']:checked + .color-picker-radio svg) {
-		@apply block absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-white;
+		@apply block absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-text-main;
 	}
 	.event-table-row {
-		@apply border-t border-slate-400/30 hover:bg-slate-200 cursor-pointer;
+		@apply border-t border-border-main/30 hover:bg-background-4 cursor-pointer;
 	}
 	/*
 	.event-table-row-modify {
-		@apply mx-2 border-slate-400/30 border w-8 h-8 flex justify-center items-center rounded duration-150 hover:bg-slate-300;
+		@apply mx-2 border-border-main/30 border w-8 h-8 flex justify-center items-center rounded duration-150 hover:bg-slate-300;
 	}*/
 	.event-table-long-text {
-		@apply text-sm px-4 py-3 text-slate-600 max-w-40 overflow-ellipsis overflow-hidden whitespace-nowrap text-nowrap h-12;
+		@apply text-sm px-4 py-3 text-text-main max-w-40 overflow-ellipsis overflow-hidden whitespace-nowrap text-nowrap h-12;
 	}
 </style>

@@ -23,7 +23,7 @@
 	let selectingDay = $state(true);
 
 	const d = new Date();
-	const todayMidnight = Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()-16, 0, 0, 0, 0);
+	const todayMidnight = Date.UTC(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0);
 
 	function regenerateDates() {
 		currentYear = selectedDate.getFullYear();
@@ -171,10 +171,10 @@
 						}}
 						class="calendarButton w-full aspect-square rounded hover:bg-background-4 duration-150 text-sm h-full {i ==
 							new Date().getMonth() && currentYear == new Date().getFullYear()
-							? 'text-blue-500 bg-blue-300/40'
+							? 'text-primary bg-primary-1/30'
 							: currentMonth == i
-								? 'bg-slate-300 text-slate-700'
-								: 'text-slate-700'}"
+								? 'text-secondary bg-secondary-1/30'
+								: 'text-text-main'}"
 					>
 						{month}
 					</button>

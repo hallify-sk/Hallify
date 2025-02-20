@@ -1,7 +1,8 @@
-export function barGraphStyle(xAxisData: string[]) {
+import colors from "tailwindcss/colors";
+
+export function barGraphStyle(xAxisData: string[], theme: "light" | "dark" = "light") {
 	return {
 		lineStyle: {
-			color: '#FFFFFF',
 			type: 'dashed',
 			width: 2
 		},
@@ -12,38 +13,40 @@ export function barGraphStyle(xAxisData: string[]) {
 			bottom: '10%'
 		},
 		legend: {
-			// Try 'horizontal'
 			orient: 'horizontal',
 			top: 0,
-			left: 'center'
+			left: 'center',
+			textStyle: {
+				color: theme == "light" ? colors.slate[700] : colors.gray[200]
+			}
 		},
 		tooltip: {},
 		xAxis: {
 			axisTick: {
-				show: false
+				show: false,
 			},
 			data: xAxisData,
 			splitLine: {
 				show: true,
 				lineStyle: {
-					color: '#e2e8f0',
+					color: theme == "light" ? colors.slate[300] : colors.slate[400],
 					type: 'dashed',
-					width: 1
+					width: 1,
 				}
 			},
 			axisLine: {
 				lineStyle: {
-					color: '#94a3b8',
+					color: theme == "light" ? colors.slate[500] : colors.slate[300],
 					width: 1,
 					join: 'round',
 					cap: 'round'
-				}
+				},
 			}
 		},
 		yAxis: {
 			splitLine: {
 				lineStyle: {
-					color: '#e2e8f0',
+					color: theme == "light" ? colors.slate[300] : colors.slate[500],
 					type: 'dashed',
 					width: 1
 				}

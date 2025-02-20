@@ -142,7 +142,6 @@ export function lineLine(
 }
 
 export function polyPoint(vertices: Vector2d[], px: number, py: number): boolean {
-	console.log(vertices, px, py);
 	let collision = false;
 
 	let next = 0;

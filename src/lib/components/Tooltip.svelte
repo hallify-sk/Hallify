@@ -15,7 +15,7 @@
 		{/if}
 	</Icon>
 	<div
-		class="hidden peer-hover:block hover:block bottom-5 left-0 p-2 rounded border border-slate-400/30 bg-slate-100 absolute min-w-60"
+		class="absolute left-0 hidden p-2 border rounded peer-hover:block hover:block bottom-5 border-border-main/30 bg-background-1 min-w-60"
 	>
 		{@render children?.()}
 	</div>

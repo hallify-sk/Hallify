@@ -71,11 +71,11 @@ const dragMove = async (e: KonvaDragTransformEvent) => {
 	if (!stage) return;
 	console.log(e);
 	const target = e.target;
-	target.moveTo(stage.attrs.layers.uiLayer);
 	target.moveToTop();
 	const clone = stage.attrs.layers.uiLayer?.findOne('.DragPreview');
 	if (!clone) return;
 	const objects: Node<NodeConfig>[] = stage.attrs.layers.collisionLayer?.children ?? [];
+	console.log(objects);
 	const targetCorners = pointsToVector2D(getCorners(target, stage));
 
 	let isColliding = false;
@@ -151,6 +151,7 @@ const dragMove = async (e: KonvaDragTransformEvent) => {
 
 const dragEnd = async (e: KonvaDragTransformEvent) => {
 	const target = e.target;
+	target.moveTo(stage.attrs.layers.collisionLayer);
 	target.moveToTop();
 	const clone = stage.attrs.layers.uiLayer?.findOne('.DragPreview');
 	setTimeout(() => {
