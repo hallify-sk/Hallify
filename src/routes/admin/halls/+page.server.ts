@@ -19,13 +19,14 @@ export const actions = {
 		if (plan && typeof plan !== 'number') {
 			return fail(400, { message: 'Plán sály je neplatný.', validate: ['plan'] });
 		}
-		const color = formData.get('color');
+		const color = formData.get('color_value');
 		if (!color || typeof color !== 'string' || color.length < 1) {
 			return fail(400, { message: 'Farba sály je povinná.', validate: ['color'] });
 		}
 		if (await Hall.findOne({ where: { color } })) {
 			return fail(400, { message: 'Sála s touto farbou už existuje.', validate: ['color'] });
 		}
+		console.log(color);
 		if (validateHex(color) === false) {
 			return fail(400, { message: 'Farba sály je neplatná.', validate: ['color'] });
 		}

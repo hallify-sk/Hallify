@@ -36,9 +36,15 @@
 	$effect(() => {
 		if (editingId) {
 			colorName = data.halls.find((i) => i.id == editingId)?.color ?? '';
-			colorValue = colorName;
+			//colorValue = colorName;
 		}
 	});
+
+	$effect(() =>{
+		if(colorValue){
+			console.log(colorValue);
+		}
+	})
 
 	let hallCreateError: string | unknown = $state('');
 	let validate: string[] = $state([]);
@@ -429,9 +435,9 @@
 		class="flex flex-col w-full"
 		action="/admin/halls/?/create"
 		method="post"
-		use:enhance={({ formData }) => {
-			formData.append('color', colorValue);
+		use:enhance={() => {
 			return async ({ result }) => {
+				console.log(result);
 				if (result.type === 'failure') {
 					hallCreateError = result.data?.message;
 					if (Array.isArray(result.data?.validate)) validate = result.data.validate;
@@ -552,7 +558,7 @@
 			<Button color="transparent" onclick={() => (showHall = false)}>
 				<p>Zrušiť</p>
 			</Button>
-			<Button color="primary" onclick={() => (showHall = true)}>
+			<Button type="submit" color="primary" onclick={() => (showHall = true)}>
 				<Icon scale="small">
 					<Plus />
 				</Icon>

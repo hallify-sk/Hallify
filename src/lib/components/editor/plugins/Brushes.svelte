@@ -4,17 +4,22 @@
 	import Cube from '$lib/icons/Cube.svelte';
 	import CursorArrowRays from '$lib/icons/CursorArrowRays.svelte';
 	import Icon from '$lib/icons/Icon.svelte';
-	import { points, walls } from '$lib/util';
+	import { points, walls, zonePoints, zones } from '$lib/util';
 	import type { Component } from 'svelte';
 	import { selectedBrush } from '../brushes';
 	import { v4 as uuidv4 } from 'uuid';
+	import Undo from '$lib/icons/Undo.svelte';
+	import { pushHistory, redo, tables, undo } from '../lib';
+	import Redo from '$lib/icons/Redo.svelte';
+	import CubeTransparent from '$lib/icons/CubeTransparent.svelte';
 	let {
 		allowedBrushes = [
-			{ name: 'cursor', icon: CursorArrowRays },
-			{ name: 'wallPainter', icon: Cube }
+			{ name: 'Cursor', id: "cursor", icon: CursorArrowRays },
+			{ name: 'Wall Painter', id: "wallPainter", icon: Cube },
+			{ name: 'Zone Painter', id: "zonePainter", icon: CubeTransparent },
 		]
 	}: {
-		allowedBrushes?: { name: string; icon: Component }[];
+		allowedBrushes?: { name: string; id: string; icon: Component }[];
 	} = $props();
 </script>
 
@@ -36,26 +41,95 @@
 					{ points: $points.flatMap((point) => [point.x, point.y]), name: uuidv4() }
 				]);
 				points.set([]);
+				pushHistory({ points: $points, zonePoints: $zonePoints, walls: $walls, zones: $zones, tables: $tables });
 			}}
 		>
 			<Icon scale="medium" stroke={2} fill="none" forceCenter={true}>
 				<Check />
 			</Icon>
-			Potvrdiť tvar
+			Potvrdiť stenu
 		</button>
 		<button
 			disabled={$points.length == 0}
 			class="barButton"
 			onclick={() => {
 				points.set([]);
+				pushHistory({ points: $points, zonePoints: $zonePoints, walls: $walls, zones: $zones, tables: $tables });
 			}}
 		>
 			<Icon scale="medium" stroke={2} fill="none" forceCenter={true}>
 				<Cross />
 			</Icon>
-			Zrušiť tvar
+			Zrušiť stenu
 		</button>
 	{/if}
+	{#if $selectedBrush == 'zonePainter'}
+		<button
+			disabled={$zonePoints.length == 0}
+			class="barButton"
+			onclick={() => {
+				zones.update((w) => [
+					...w,
+					{ points: $zonePoints.flatMap((point) => [point.x, point.y]), name: uuidv4(), color: "#333" }
+				]);
+				console.log($zones);
+				zonePoints.set([]);
+				pushHistory({ points: $points, zonePoints: $zonePoints, walls: $walls, zones: $zones, tables: $tables });
+			}}
+		>
+			<Icon scale="medium" stroke={2} fill="none" forceCenter={true}>
+				<Check />
+			</Icon>
+			Potvrdiť zónu
+		</button>
+		<button
+			disabled={$zonePoints.length == 0}
+			class="barButton"
+			onclick={() => {
+				zonePoints.set([]);
+				pushHistory({ points: $points, zonePoints: $zonePoints, walls: $walls, zones: $zones, tables: $tables });
+			}}
+		>
+			<Icon scale="medium" stroke={2} fill="none" forceCenter={true}>
+				<Cross />
+			</Icon>
+			Zrušiť zónu
+		</button>
+	{/if}
+	<button
+
+			class="barButton"
+			onclick={() => {
+				const undoData = undo();
+				if(!undoData) return;
+				points.set(undoData.points);
+				walls.set(undoData.walls);
+				tables.set(undoData.tables);
+				zonePoints.set(undoData.zonePoints);
+				zones.set(undoData.zones);
+			}}
+		>
+			<Icon scale="medium" stroke={2} fill="none" forceCenter={true}>
+				<Undo />
+			</Icon>
+		</button>
+		<button
+
+			class="barButton"
+			onclick={() => {
+				const undoData = redo();
+				if(!undoData) return;
+				points.set(undoData.points);
+				walls.set(undoData.walls);
+				tables.set(undoData.tables);
+				zonePoints.set(undoData.zonePoints);
+				zones.set(undoData.zones);
+			}}
+		>
+			<Icon scale="medium" stroke={2} fill="none" forceCenter={true}>
+				<Redo />
+			</Icon>
+		</button>
 </div>
 
 <div
@@ -65,9 +139,9 @@
 		{#each allowedBrushes as brush}
 			<button
 				title={brush.name}
-				onclick={() => selectedBrush.set(brush.name)}
+				onclick={() => selectedBrush.set(brush.id)}
 				class="grid overflow-hidden rounded hover:bg-slate-300/60 aspect-square place-items-center text-slate-600 {$selectedBrush ==
-				brush.name
+				brush.id
 					? 'bg-slate-300 hover:bg-slate-400/60 text-slate-700'
 					: ''}"
 			>

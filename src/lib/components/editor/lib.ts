@@ -1,6 +1,7 @@
 import type { Node, NodeConfig } from 'konva/lib/Node';
 import Konva from 'konva';
 import type { Vector2d } from 'konva/lib/types';
+import { writable, type Writable } from 'svelte/store';
 
 export function constraintNumber(num: number, min: number, max: number) {
 	const MIN = min ?? 1;
@@ -164,7 +165,15 @@ export function polyPoint(vertices: Vector2d[], px: number, py: number): boolean
 	return collision;
 }
 
-export function registerPlugin(plugin: (stage: Konva.Stage) => void, stage: Konva.Stage) {
+export function registerPlugin(
+	plugin: (stage: Konva.Stage) => void,
+	stage: Konva.Stage,
+	name: string
+) {
+	plugins.update((p) => {
+		p.push({name, attrs: {}});
+		return p;
+	});
 	plugin(stage);
 }
 
@@ -185,3 +194,96 @@ export interface StageAttrs {
 	plugins: string[];
 	[key: string]: unknown;
 }
+
+interface namedVector2d extends Vector2d {
+	name: string;
+}
+
+interface zoneVector2d extends namedVector2d {
+	color: string;
+}
+
+interface HistoryState {
+	points: namedVector2d[];
+	zonePoints: zoneVector2d[];
+	walls: { points: number[]; name: string }[];
+	zones: { points: number[]; name: string; color: string }[];
+	tables: Table[];
+	// Add other state properties as needed
+}
+
+const MAX_HISTORY = 50; // Limit history to prevent memory issues
+let historyIndex = -1;
+export const history: HistoryState[] = [];
+
+history.push({
+    points: [],
+	zonePoints: [],
+    walls: [],
+	zones: [],
+	tables: []
+});
+historyIndex = 0;
+
+export function pushHistory(state: HistoryState) {
+	// Create deep copy of state to prevent reference issues
+    const newState = {
+        points: JSON.parse(JSON.stringify(state.points)),
+        zonePoints: JSON.parse(JSON.stringify(state.zonePoints)),
+        walls: JSON.parse(JSON.stringify(state.walls)),
+		zones: JSON.parse(JSON.stringify(state.zones)),
+		tables: JSON.parse(JSON.stringify(state.tables))
+    };
+
+    // Remove any future states if we're in the middle of the history
+    if (historyIndex < history.length - 1) {
+        history.splice(historyIndex + 1);
+    }
+
+    // Add new state
+    history.push(newState);
+
+    // Remove oldest state if we exceed MAX_HISTORY, but never remove initial state
+    if (history.length > MAX_HISTORY) {
+        history.splice(1, 1); // Remove second element, keep initial state
+        historyIndex--; // Adjust index since we removed an element
+    }
+
+    historyIndex = history.length - 1;
+}
+
+export function undo(): HistoryState | null {
+    if (historyIndex > 0) {
+        historyIndex--;
+        return JSON.parse(JSON.stringify(history[historyIndex]));
+    }
+    return null;
+}
+
+export function redo(): HistoryState | null {
+    if (historyIndex < history.length - 1) {
+        historyIndex++;
+        return JSON.parse(JSON.stringify(history[historyIndex]));
+    }
+    return null;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export const plugins: Writable<{name: string, attrs: { [key: string]: any }}[]> = writable([]);
+
+export interface TableChairs {
+    left: string[];
+    right: string[];
+}
+
+export interface Table {
+    shape: 'rect';  // Currently only rect is used, but could be expanded for other shapes
+    name: string;
+    rotation: number;
+    x: number;
+    y: number;
+    chairs: TableChairs;
+}
+
+export const tables: Writable<Table[]> = writable([]);
+

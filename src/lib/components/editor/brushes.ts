@@ -4,16 +4,18 @@ import { type KonvaDragTransformEvent } from 'svelte-konva';
 import {
 	circleBounds,
 	getCorners,
+	plugins,
 	pointsToVector2D,
 	polyBounds,
 	polyPoly,
-	snapToGrid
+	pushHistory,
+	snapToGrid,
+	tables
 } from '$lib/components/editor/lib';
 import { registerClickEvent } from './events/click';
 import type { Node, NodeConfig } from 'konva/lib/Node';
 import { get, writable } from 'svelte/store';
-import { points } from '$lib/util';
-import type { Layer } from 'konva/lib/Layer';
+import { points, walls, zonePoints, zones } from '$lib/util';
 
 export interface BrushPlugin {
 	readonly dragStart: (e: KonvaDragTransformEvent) => void;
@@ -30,28 +32,29 @@ export const selectedBrush = writable('cursor');
 
 export function brushes(stageRef: Konva.Stage) {
 	stage = stageRef;
-	if (!stage.attrs.plugins) {
-		stage.attrs.plugins = ['brushes'];
-	} else {
-		stage.attrs.plugins.push('brushes');
-	}
-	const uiLayer = stage.attrs.layers.uiLayer;
-	const gridLayer = stage.attrs.layers.gridLayer;
+	const uiLayer = stage.attrs.layers?.uiLayer;
+	const gridLayer = stage.attrs.layers?.gridLayer;
+	console.log(stage.attrs);
 	registerClickEvent(stage, stage.attrs.tr, { uiLayer, gridLayer });
-	stage.attrs.brushes = {};
-	stage.attrs.brushes.dragStart = dragStart;
-	stage.attrs.brushes.dragMove = dragMove;
-	stage.attrs.brushes.dragEnd = dragEnd;
-	stage.attrs.brushes.transformRotateStart = transformRotateStart;
-	stage.attrs.brushes.transformRotate = transformRotate;
-	stage.attrs.brushes.transformRotateEnd = transformRotateEnd;
+
+	plugins.update((v) => {
+		//Populate the attrs of the brushes plugin with the following attributes
+		const brushPlugin = v.find((plugin) => plugin.name === 'brushes');
+		if (brushPlugin) {
+			brushPlugin.attrs.brushes = {};
+			brushPlugin.attrs.dragStart = dragStart;
+			brushPlugin.attrs.dragMove = dragMove;
+			brushPlugin.attrs.dragEnd = dragEnd;
+			brushPlugin.attrs.transformRotateStart = transformRotateStart;
+			brushPlugin.attrs.transformRotate = transformRotate;
+			brushPlugin.attrs.transformRotateEnd = transformRotateEnd;
+		}
+		return v;
+	});
 }
 
-const dragStart = async (e: KonvaDragTransformEvent) => {
-	console.log('START MOVING');
-
+export const dragStart = async (e: KonvaDragTransformEvent) => {
 	const target = e.target;
-	console.log(stage.attrs.layers.uiLayer as Layer);
 	target.moveTo(stage.attrs.layers.uiLayer);
 	const clone = target.clone() as Konva.Group;
 	target.moveToTop();
@@ -67,15 +70,15 @@ const dragStart = async (e: KonvaDragTransformEvent) => {
 	return;
 };
 
-const dragMove = async (e: KonvaDragTransformEvent) => {
+export const dragMove = async (e: KonvaDragTransformEvent) => {
 	if (!stage) return;
 	console.log(e);
 	const target = e.target;
+	console.log(target.x(), target.y());
 	target.moveToTop();
 	const clone = stage.attrs.layers.uiLayer?.findOne('.DragPreview');
 	if (!clone) return;
 	const objects: Node<NodeConfig>[] = stage.attrs.layers.collisionLayer?.children ?? [];
-	console.log(objects);
 	const targetCorners = pointsToVector2D(getCorners(target, stage));
 
 	let isColliding = false;
@@ -145,11 +148,23 @@ const dragMove = async (e: KonvaDragTransformEvent) => {
 				return p;
 			});
 		}
+		if (get(zonePoints).some((point) => point.name === target.name())) {
+			zonePoints.update((p) => {
+				const index = p.findIndex((point) => point.name === target.name());
+				p[index] = {
+					x: snapToGrid(target.x(), stage.attrs.grid.gridSize),
+					y: snapToGrid(target.y(), stage.attrs.grid.gridSize),
+					name: target.name(),
+					color: p[index].color
+				};
+				return p;
+			});
+		}
 	}
 	return;
 };
 
-const dragEnd = async (e: KonvaDragTransformEvent) => {
+export const dragEnd = async (e: KonvaDragTransformEvent) => {
 	const target = e.target;
 	target.moveTo(stage.attrs.layers.collisionLayer);
 	target.moveToTop();
@@ -166,11 +181,22 @@ const dragEnd = async (e: KonvaDragTransformEvent) => {
 		});
 	}
 
+	//Update tables store with the new position
+	if (get(tables).some((table) => table.name === target.name())) {
+		tables.update((t) => {
+			const index = t.findIndex((table) => table.name === target.name());
+			t[index].x = clone.x();
+			t[index].y = clone.y();
+			return t;
+		});
+	}
+
 	clone?.destroy();
+	pushHistory({ points: get(points), zonePoints: get(zonePoints), walls: get(walls), zones: get(zones), tables: get(tables) });
 	return;
 };
 
-const transformRotateStart = async (e: KonvaDragTransformEvent) => {
+export const transformRotateStart = async (e: KonvaDragTransformEvent) => {
 	const target = e.target;
 	target.moveTo(stage.attrs.layers.uiLayer);
 	const clone = target.clone() as Konva.Group;
@@ -184,7 +210,7 @@ const transformRotateStart = async (e: KonvaDragTransformEvent) => {
 	return;
 };
 
-const transformRotate = async (e: KonvaDragTransformEvent) => {
+export const transformRotate = async (e: KonvaDragTransformEvent) => {
 	if (!stage) return;
 	const target = e.target;
 	target.moveTo(stage.attrs.layers.uiLayer);
@@ -248,7 +274,7 @@ const transformRotate = async (e: KonvaDragTransformEvent) => {
 	return;
 };
 
-const transformRotateEnd = async (e: KonvaDragTransformEvent) => {
+export const transformRotateEnd = async (e: KonvaDragTransformEvent) => {
 	const target = e.target;
 	target.moveToTop();
 	const clone = stage.attrs.layers.uiLayer?.findOne('.DragPreview');
@@ -265,6 +291,21 @@ const transformRotateEnd = async (e: KonvaDragTransformEvent) => {
 		});
 	}
 	target.moveTo(stage.attrs.layers.collisionLayer);
+
+	//Update tables store with the new position
+	if (get(tables).some((table) => table.name === target.name())) {
+		tables.update((t) => {
+			const index = t.findIndex((table) => table.name === target.name());
+			t[index].rotation = clone.rotation();
+			t[index].x = clone.x();
+			t[index].y = clone.y();
+			return t;
+		});
+	}
+
 	clone?.destroy();
+
+	pushHistory({ points: get(points), zonePoints: get(zonePoints), walls: get(walls), zones: get(zones), tables: get(tables) });
+
 	return;
 };

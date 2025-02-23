@@ -2,11 +2,21 @@
 	import { Stage, Layer, Rect, Line, Group, Transformer, Circle } from 'svelte-konva';
 	import { registerWheelEvent } from './editor/events/wheel';
 	import type { Vector2d } from 'konva/lib/types';
-	import { constraintNumber, registerPlugin, type StageAttrs } from './editor/lib';
-	import { brushes } from './editor/brushes';
+	import { constraintNumber, plugins, registerPlugin, tables, type StageAttrs } from './editor/lib';
+	import {
+		brushes,
+		dragEnd,
+		dragMove,
+		dragStart,
+		transformRotate,
+		transformRotateEnd,
+		transformRotateStart
+	} from './editor/brushes';
 	import Brushes from './editor/plugins/Brushes.svelte';
+	import { points, walls, zonePoints, zones } from '$lib/util';
+	import { onMount } from 'svelte';
+	import colors from 'tailwindcss/colors';
 	import { v4 as uuidv4 } from 'uuid';
-	import { points, walls } from '$lib/util';
 
 	let stage: ReturnType<typeof Stage> | undefined = $state();
 
@@ -30,6 +40,12 @@
 		windowHeight?: number;
 		zoomBy?: number;
 	} = $props();
+
+	$effect(() => {
+		if ($plugins) {
+			console.log($plugins);
+		}
+	});
 
 	$effect(() => {
 		if (stage) {
@@ -56,8 +72,41 @@
 				gridWidth,
 				gridHeight
 			};
-			registerWheelEvent(stageHandle);
-			registerPlugin(brushes, stageHandle);
+			if (tr) {
+				registerWheelEvent(stageHandle);
+				registerPlugin(brushes, stageHandle, 'brushes');
+				tables.set([
+					{
+						shape: 'rect',
+						name: uuidv4(),
+						rotation: 0,
+						x: 0,
+						y: 0,
+						chairs: {
+							left: [uuidv4(), uuidv4(), uuidv4(), uuidv4()],
+							right: [uuidv4(), uuidv4(), uuidv4(), uuidv4()]
+						}
+					},
+					{
+						shape: 'rect',
+						name: uuidv4(),
+						rotation: 0,
+						x: 120,
+						y: 120,
+						chairs: {
+							left: [uuidv4(), uuidv4()],
+							right: [uuidv4(), uuidv4(), uuidv4()]
+						}
+					}
+				]);
+			}
+		}
+	});
+
+	onMount(async () => {
+		if (stage) {
+			const stageHandle = stage?.handle();
+			if (!stageHandle) return;
 		}
 	});
 
@@ -80,34 +129,9 @@
 			y: newY
 		};
 	}
-
-	const tables = [
-		{
-			shape: 'rect',
-			name: uuidv4(),
-			rotation: 0,
-			x: 0,
-			y: 0,
-			chairs: {
-				left: [uuidv4(), uuidv4(), uuidv4(), uuidv4()],
-				right: [uuidv4(), uuidv4(), uuidv4(), uuidv4()]
-			}
-		},
-		{
-			shape: 'rect',
-			name: uuidv4(),
-			rotation: 0,
-			x: 120,
-			y: 120,
-			chairs: {
-				left: [uuidv4(), uuidv4()],
-				right: [uuidv4(), uuidv4(), uuidv4()]
-			}
-		}
-	];
 </script>
 
-{#if stage?.handle()?.attrs.plugins.includes('brushes')}
+{#if $plugins.find((p) => p.name == 'brushes')}
 	<Brushes />
 {/if}
 <div class="fixed top-0 left-0">
@@ -126,30 +150,34 @@
 				y={0}
 				width={gridWidth * gridSize}
 				height={gridHeight * gridSize}
-				fill="#f1f5f9"
+				fill={colors.slate[100]}
 			/>
 			{#each Array(gridWidth + 1), index}
 				<Line
 					points={[index * gridSize, 0, index * gridSize, gridHeight * gridSize]}
-					stroke="#e2e8f0"
+					stroke={colors.slate[200]}
 					strokeWidth={1}
 					listening={false}
 					perfectDrawEnabled={false}
-					id={`leftChair_${index}`}
 				/>
 			{/each}
 			{#each Array(gridHeight + 1), index}
 				<Line
 					points={[0, index * gridSize, gridWidth * gridSize, index * gridSize]}
-					stroke="#e2e8f0"
+					stroke={colors.slate[200]}
 					strokeWidth={1}
 					listening={false}
 					perfectDrawEnabled={false}
 				/>
 			{/each}
 		</Layer>
+		<Layer>
+			{#each $zones as zone}
+				{@render zonePoly(zone.name, zone.points, zone.color)}
+			{/each}
+		</Layer>
 		<Layer bind:this={collisionLayer}>
-			{#each tables as table}
+			{#each $tables as table}
 				{@render tableRect(table.name, table.rotation, table.x, table.y, table.chairs)}
 			{/each}
 			{#each $walls as wall}
@@ -158,10 +186,10 @@
 			{#if $points.length}
 				<Line
 					points={$points.flatMap((point) => [point.x, point.y])}
-					stroke="black"
+					stroke={colors.slate[800]}
 					strokeWidth={2}
 					closed={true}
-					fill="black"
+					fill={colors.slate[800]}
 					physics={true}
 				/>
 			{/if}
@@ -178,22 +206,42 @@
 					x={point.x}
 					y={point.y}
 					radius={5}
-					fill="blue"
+					fill={colors.blue[500]}
 					draggable={true}
 					name={point.name}
 					physics={false}
 					keepInBounds={true}
-					ondragstart={stage?.handle()?.attrs.plugins?.includes('brushes')
-						? stage?.handle()?.attrs.brushes.dragStart
-						: undefined}
-					ondragmove={stage?.handle()?.attrs.plugins?.includes('brushes')
-						? stage?.handle()?.attrs.brushes.dragMove
-						: undefined}
-					ondragend={stage?.handle()?.attrs.plugins?.includes('brushes')
-						? stage?.handle()?.attrs.brushes.dragEnd
-						: undefined}
+					ondragstart={$plugins.find((p) => p.name == 'brushes') ? dragStart : undefined}
+					ondragmove={$plugins.find((p) => p.name == 'brushes') ? dragMove : undefined}
+					ondragend={$plugins.find((p) => p.name == 'brushes') ? dragEnd : undefined}
 				/>
 			{/each}
+			{#each $zonePoints as point}
+				<Circle
+					x={point.x}
+					y={point.y}
+					radius={5}
+					fill={colors.blue[500]}
+					draggable={true}
+					name={point.name}
+					physics={false}
+					keepInBounds={true}
+					ondragstart={$plugins.find((p) => p.name == 'brushes') ? dragStart : undefined}
+					ondragmove={$plugins.find((p) => p.name == 'brushes') ? dragMove : undefined}
+					ondragend={$plugins.find((p) => p.name == 'brushes') ? dragEnd : undefined}
+				/>
+			{/each}
+			{#if $zonePoints.length}
+				<Line
+					points={$zonePoints.flatMap((point) => [point.x, point.y])}
+					stroke={colors.slate[800]}
+					opacity={0.5}
+					strokeWidth={2}
+					closed={true}
+					fill={colors.slate[800]}
+					physics={false}
+				/>
+			{/if}
 		</Layer>
 	</Stage>
 </div>
@@ -209,28 +257,16 @@
 		{rotation}
 		{x}
 		{y}
-		draggable={stage?.handle()?.attrs.plugins?.includes('brushes')}
+		draggable={true}
 		physics={true}
 		keepInBounds={true}
 		rotateEnabled={true}
-		ondragstart={stage?.handle()?.attrs.plugins?.includes('brushes')
-			? stage?.handle()?.attrs.brushes.dragStart
-			: undefined}
-		ondragmove={stage?.handle()?.attrs.plugins?.includes('brushes')
-			? stage?.handle()?.attrs.brushes.dragMove
-			: undefined}
-		ondragend={stage?.handle()?.attrs.plugins?.includes('brushes')
-			? stage?.handle()?.attrs.brushes.dragEnd
-			: undefined}
-		ontransformstart={stage?.handle()?.attrs.plugins?.includes('brushes')
-			? stage?.handle()?.attrs.brushes.transformRotateStart
-			: undefined}
-		ontransform={stage?.handle()?.attrs.plugins?.includes('brushes')
-			? stage?.handle()?.attrs.brushes.transformRotate
-			: undefined}
-		ontransformend={stage?.handle()?.attrs.plugins?.includes('brushes')
-			? stage?.handle()?.attrs.brushes.transformRotateEnd
-			: undefined}
+		ondragstart={$plugins.find((p) => p.name == 'brushes') ? dragStart : undefined}
+		ondragmove={$plugins.find((p) => p.name == 'brushes') ? dragMove : undefined}
+		ondragend={$plugins.find((p) => p.name == 'brushes') ? dragEnd : undefined}
+		ontransformstart={$plugins.find((p) => p.name == 'brushes') ? transformRotateStart : undefined}
+		ontransform={$plugins.find((p) => p.name == 'brushes') ? transformRotate : undefined}
+		ontransformend={$plugins.find((p) => p.name == 'brushes') ? transformRotateEnd : undefined}
 	>
 		{#each chairs.left as chair, i}
 			<Rect
@@ -239,8 +275,8 @@
 				y={(4 * gridSize - chairs.left.length * gridSize) / 2 + i * gridSize + gridSize * 0.1}
 				width={0.8 * gridSize}
 				height={0.8 * gridSize}
-				fill="#64748b"
-				defaultFill="#64748b"
+				fill={colors.slate[500]}
+				defaultFill={colors.slate[500]}
 				cornerRadius={4}
 				perfectDrawEnabled={false}
 				isChair={true}
@@ -249,10 +285,11 @@
 		{/each}
 		<Rect
 			x={gridSize}
+			selectDisabled={true}
 			width={2 * gridSize}
 			height={4 * gridSize}
-			fill="#334155"
-			defaultFill="#334155"
+			fill={colors.slate[700]}
+			defaultFill={colors.slate[700]}
 			cornerRadius={4}
 			draggable={false}
 			perfectDrawEnabled={false}
@@ -264,8 +301,8 @@
 				y={(4 * gridSize - chairs.right.length * gridSize) / 2 + i * gridSize + gridSize * 0.1}
 				width={0.8 * gridSize}
 				height={0.8 * gridSize}
-				fill="#64748b"
-				defaultFill="#64748b"
+				fill={colors.slate[500]}
+				defaultFill={colors.slate[500]}
 				cornerRadius={4}
 				perfectDrawEnabled={false}
 				isChair={true}
@@ -275,5 +312,23 @@
 	</Group>
 {/snippet}
 {#snippet wallPoly(name: string, points: number[])}
-	<Line {points} {name} closed={true} fill="black" physics={true} />
+	<Line
+		{points}
+		{name}
+		closed={true}
+		fill={colors.slate[800]}
+		physics={true}
+		disableSelect={true}
+	/>
+{/snippet}
+{#snippet zonePoly(name: string, points: number[], fill: string)}
+	<Line
+		{points}
+		{name}
+		closed={true}
+		{fill}
+		opacity={0.5}
+		physics={false}
+		disableSelect={true}
+	/>
 {/snippet}

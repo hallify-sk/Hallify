@@ -21,13 +21,8 @@
 		name = newName;
 		value = newValue;
 		showOptions = false;
+		console.log(name, value);
 	}
-
-	$effect(() => {
-		if (name) {
-			value = name;
-		}
-	});
 
 	interface Props {
 		options?: Array<{ value: string; name: string }>;
@@ -51,7 +46,6 @@
 </script>
 
 <div class="relative w-full combobox">
-	<input id="{id}_value" bind:value class="hidden" type="text" />
 	<input
 		bind:value={name}
 		oninput={() => {
@@ -65,6 +59,7 @@
 		{placeholder}
 		class="w-full p-2 text-sm border rounded shadow-sm invalid:border-danger bg-background-1 border-border-main/30 text-text-2 focus:text-text-4"
 	/>
+	<input id="{id}_value" name="{id}_value" bind:value class="hidden" type="text" />
 	{#if showOptions}
 		<div
 			class="absolute left-0 z-30 flex flex-col w-full pt-1 overflow-y-auto text-sm border rounded top-10 border-border-main/30 bg-background-1 max-h-40"
@@ -75,7 +70,7 @@
 					class="flex flex-row items-center w-full gap-2 p-2 cursor-pointer hover:bg-background-4 flex-nowrap"
 				>
 					<div style="background: {name}" class="block p-2 rounded aspect-square"></div>
-					{name}
+					<p class="text-text-main">{name}</p>
 				</button>
 			{:else}
 				{#each options.filter((i) => i.name.toLowerCase().includes(name.toLowerCase())) as option}
