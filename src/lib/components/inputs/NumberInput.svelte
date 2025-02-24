@@ -2,10 +2,10 @@
 	let {
 		name,
 		id,
-		type = 'text',
-		value = $bindable(""),
+		type = 'number',
+		value = $bindable(20),
 		placeholder
-	}: { name: string; id: string; type?: 'text' | 'password' | 'email'; value?: string, placeholder?: string } = $props();
+	}: { name: string; id: string; type?: 'number'; value?: number, placeholder?: string } = $props();
 
 	function removeValidation() {
 		(document.getElementById(id) as HTMLInputElement).setCustomValidity('');
@@ -17,7 +17,7 @@
 	{type}
 	{name}
 	{id}
-	{value}
+	bind:value={value}
 	{placeholder}
 	class="w-full p-2 text-sm border rounded shadow-sm invalid:border-danger bg-background-1 border-border-main/50 text-text-2 focus:text-text-4 placeholder:text-text-1"
 />

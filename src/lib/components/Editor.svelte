@@ -17,6 +17,9 @@
 	import { onMount } from 'svelte';
 	import colors from 'tailwindcss/colors';
 	import { v4 as uuidv4 } from 'uuid';
+	import Accordion from './Accordion.svelte';
+	import TextInput from './inputs/TextInput.svelte';
+	import NumberInput from './inputs/NumberInput.svelte';
 
 	let stage: ReturnType<typeof Stage> | undefined = $state();
 
@@ -129,13 +132,29 @@
 			y: newY
 		};
 	}
+
+	let stageKey = $state(0);
+
+function forceStageRerender() {
+	stageKey++;
+}
+
+	$effect(() => {
+        // Watch for changes in grid values
+        if (gridWidth) {
+			console.log(gridWidth);
+            //forceStageRerender();
+        }
+    });
 </script>
 
 {#if $plugins.find((p) => p.name == 'brushes')}
 	<Brushes />
 {/if}
 <div class="fixed top-0 left-0">
+	{#key stageKey}
 	<Stage
+		key={stageKey}
 		bind:this={stage}
 		width={windowWidth}
 		height={windowHeight}
@@ -244,6 +263,25 @@
 			{/if}
 		</Layer>
 	</Stage>
+	{/key}
+</div>
+<div
+	class="fixed top-0 right-0 w-96 bg-background-1 border-l border-solid border-border-main/40 block h-screen pt-40"
+>
+	<Accordion open={true} text="Sála">
+		<div class="p-1 flex flex-col">
+			<div class="grid grid-cols-2 gap-2 p-1">
+				<div class="flex flex-col w-full">
+					<label class="text-text-2 text-sm" for="">Šírka</label>
+					<NumberInput bind:value={gridWidth} name="width" placeholder="30" id="width" />
+				</div>
+				<div class="flex flex-col w-full">
+					<label class="text-text-2 text-sm" for="">Výška</label>
+					<NumberInput bind:value={gridHeight} name="height" placeholder="20" id="height" />
+				</div>
+			</div>
+		</div>
+	</Accordion>
 </div>
 {#snippet tableRect(
 	name: string,
@@ -322,13 +360,5 @@
 	/>
 {/snippet}
 {#snippet zonePoly(name: string, points: number[], fill: string)}
-	<Line
-		{points}
-		{name}
-		closed={true}
-		{fill}
-		opacity={0.5}
-		physics={false}
-		disableSelect={true}
-	/>
+	<Line {points} {name} closed={true} {fill} opacity={0.5} physics={false} disableSelect={true} />
 {/snippet}
