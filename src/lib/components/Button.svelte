@@ -5,7 +5,9 @@
 		type = "button",
 		color,
 		children,
-		onclick
+		onclick,
+		disableBorder = false,
+		disabled = false
 	}: {
 		type?: "button" | "submit" | "reset",
 		color:
@@ -19,58 +21,69 @@
 			| 'transparent';
 		children: Snippet;
 		onclick?: () => void;
+		disableBorder?: boolean;
+		disabled?: boolean;
 	} = $props();
 </script>
 
 {#if color === 'primary'}
 	<button
 		{type}
+		{disabled}
 		{onclick}
-		class="text-white bg-primary hover:bg-primary-2 dark:text-black border-primary-4/30"
+		class="text-white bg-primary hover:bg-primary-2 dark:text-black border-primary-4/30 {disableBorder ? "!border-none" : ""}"
 	>
 		{@render children?.()}
 	</button>
 {:else if color == 'secondary'}
 	<button
 		{type}
+		{disabled}
 		{onclick}
-		class="text-white bg-secondary hover:bg-secondary-2 dark:text-black border-secondary-4/30"
+		class="text-white bg-secondary hover:bg-secondary-2 dark:text-black border-secondary-4/30 {disableBorder ? "!border-none" : ""}"
 	>
 		{@render children?.()}
 	</button>
 {:else if color == 'accent'}
 	<button
 	{type}
-	{onclick}>
+		{disabled}
+		{onclick}>
 		{@render children?.()}
 	</button>
 {:else if color == 'warning'}
 	<button
 	{type}
-	{onclick}>
+		{disabled}
+		{onclick}>
 		{@render children?.()}
 	</button>
 {:else if color == 'danger'}
 	<button 
 	{type}
-	{onclick}>
+		{disabled}
+		{onclick}>
 		{@render children?.()}
 	</button>
 {:else if color == 'success'}
 	<button 
 	{type}
-	{onclick}>
+		{disabled}
+		{onclick}>
 		{@render children?.()}
 	</button>
 {:else if color == 'white'}
 	<button 
+	class="bg-background-1 hover:bg-background-main text-text-main disabled:bg-background-main disabled:text-text-1 disabled:opacity-75 {disableBorder ? "!border-none" : ""}"
 	{type}
-	{onclick}>
+		{disabled}
+		{onclick}>
 		{@render children?.()}
 	</button>
 {:else if color == 'transparent'}
 	<button 
-	{type}
+		{disabled}
+		{type}
 	class="border-none bg-transpaent text-text-1 hover:bg-background-1 dark:text-white" {onclick}>
 		{@render children?.()}
 	</button>

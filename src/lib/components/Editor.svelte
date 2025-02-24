@@ -13,7 +13,7 @@
 		transformRotateStart
 	} from './editor/brushes';
 	import Brushes from './editor/plugins/Brushes.svelte';
-	import { points, walls, zonePoints, zones } from '$lib/util';
+	import { currentColor, points, walls, zonePoints, zones } from '$lib/util';
 	import { onMount } from 'svelte';
 	import colors from 'tailwindcss/colors';
 	import { v4 as uuidv4 } from 'uuid';
@@ -221,7 +221,7 @@
 					x={point.x}
 					y={point.y}
 					radius={5}
-					fill={colors.blue[500]}
+					fill={colors.pink[500]}
 					draggable={true}
 					name={point.name}
 					physics={false}
@@ -234,11 +234,11 @@
 			{#if $zonePoints.length}
 				<Line
 					points={$zonePoints.flatMap((point) => [point.x, point.y])}
-					stroke={colors.slate[800]}
+					stroke={$currentColor}
 					opacity={0.5}
 					strokeWidth={2}
 					closed={true}
-					fill={colors.slate[800]}
+					fill={$currentColor}
 					physics={false}
 				/>
 			{/if}

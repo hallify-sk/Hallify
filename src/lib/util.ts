@@ -1,6 +1,7 @@
 import { writable, type Writable } from 'svelte/store';
 import type { Permission } from './server/models';
 import { minimatch } from 'minimatch';
+import colors from 'tailwindcss/colors';
 
 export function isValidEmail(email: string): boolean {
 	return /.+@.+/.test(email);
@@ -29,4 +30,4 @@ export const zonePoints: Writable<Array<{ x: number; y: number; name: string; co
 export const walls: Writable<Array<{ points: number[]; name: string }>> = writable([]);
 export const zones: Writable<Array<{ points: number[]; name: string, color: string }>> = writable([]);
 
-export const currentColor: Writable<string> = writable("");
+export const currentColor: Writable<string> = writable(colors.red[500]);
