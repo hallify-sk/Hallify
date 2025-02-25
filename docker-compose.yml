@@ -6,18 +6,18 @@ services:
       context: .
       dockerfile: Dockerfile
     ports:
-      - "3000:3000"
+      - "8004:3000"
     environment:
       - NODE_ENV=development
     depends_on:
-      - pocketbase
+      - hallify-legacy-pb
 
-  pocketbase:
+  hallify-legacy-pb:
     image: ghcr.io/muchobien/pocketbase:latest
-    container_name: pocketbase
+    container_name: hallify-legacy-pb
     restart: unless-stopped
     ports:
-      - "8090:8090"
+      - "8005:8090"
     volumes:
       - pocketbase-data:/pb_data
       - pocketbase-public:/pb_public
