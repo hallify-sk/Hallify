@@ -9,6 +9,11 @@ services:
       - "8004:3000"
     environment:
       - NODE_ENV=development
+      - PUBLIC_TURNSTILE_TOKEN=0x4AAAAAAARSMHoAGPQ9_VYv
+      - SECRET_TURNSTILE_TOKEN=0x4AAAAAAARSMMq3Ije5wFOfJHi5e2wdEjI
+      - PUBLIC_DEV=true
+      - PUBLIC_TURNSTILE_URL=https://challenges.cloudflare.com/turnstile/v0/siteverify
+      - PUBLIC_CALENDAR_EXPIRE=7
     depends_on:
       - hallify-legacy-pb
 
