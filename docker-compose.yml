@@ -10,8 +10,7 @@ services:
     environment:
       - SQLURI=mysql://system:sb3k6kjmm7sj@192.168.0.17:3308/hallify
     depends_on:
-      mysql:
-        condition: service_healthy
+      - mysql
     restart: unless-stopped
   mysql:
     image: mysql:8.0
