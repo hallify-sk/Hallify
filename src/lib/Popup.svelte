@@ -17,16 +17,17 @@
 	}
 </script>
 
+<!-- svelte-ignore a11y_no_static_element_interactions -->
 {#if popupVisible}
 	<!-- Overlay -->
-	<button
-		type="button"
-		class="w-screen h-screen bg-black/20 fixed top-0 left-0 grid place-items-center z-50 cursor-pointer text-left"
+	<!-- svelte-ignore a11y_click_events_have_key_events -->
+	<div
+		class="fixed top-0 left-0 z-50 grid w-screen h-screen text-left cursor-pointer bg-black/20 place-items-center"
 		on:click={closePopup}
 	>
 		<!-- Popup content -->
-		<button type="button" class="bg-background-50 p-6 rounded-md block cursor-default text-left max-w-2xl" on:click|stopPropagation>
+		<button type="button" class="block max-w-2xl p-6 text-left rounded-md cursor-default bg-background-50" on:click|stopPropagation>
 			<slot />
 		</button>
-	</button>
+	</div>
 {/if}

@@ -36,19 +36,19 @@
 
 	$: profilePic = createAvatar(initials, {
 		seed: user?.name
-	}).toDataUriSync();
+	}).toDataUri();
 
 	export let onAuth: () => void = () => {};
 </script>
 
-<header class="w-60 md:w-80 h-screen bg-background-100 border-r border-background-200 fixed top-0 left-0 z-50">
-	<div class="px-4 gap-1 flex flex-col justify-between h-full">
-		<div class="flex flex-col gap-2 pb-2 border-b border-b-background-200 h-full">
+<header class="fixed top-0 left-0 z-50 h-screen border-r w-60 md:w-80 bg-background-100 border-background-200">
+	<div class="flex flex-col justify-between h-full gap-1 px-4">
+		<div class="flex flex-col h-full gap-2 pb-2 border-b border-b-background-200">
 			<a href="/" class="flex items-center gap-4 py-2 mb-10">
-				<img src="https://via.placeholder.com/150" alt="logo" class="h-10 w-10" />
+				<img src="https://via.placeholder.com/150" alt="logo" class="w-10 h-10" />
 				<p class="text-lg font-semibold text-text-600">Reduta</p>
 			</a>
-			<a class="flex py-3 px-2 rounded-md text-text-500 hover:text-text-700 hover:bg-background-200 gap-4" href="/">
+			<a class="flex gap-4 px-2 py-3 rounded-md text-text-500 hover:text-text-700 hover:bg-background-200" href="/">
 				<svg
 					xmlns="http://www.w3.org/2000/svg"
 					width="24"
@@ -68,7 +68,7 @@
 				>
 				Moje podujatia
 			</a>
-			<a class="flex py-3 px-2 rounded-md text-text-500 hover:text-text-700 hover:bg-background-200 gap-4" href="/">
+			<a class="flex gap-4 px-2 py-3 rounded-md text-text-500 hover:text-text-700 hover:bg-background-200" href="/">
 				<svg
 					xmlns="http://www.w3.org/2000/svg"
 					width="24"
@@ -86,7 +86,7 @@
 				>
 				Služby
 			</a>
-			<a class="flex py-3 px-2 rounded-md text-text-500 hover:text-text-700 hover:bg-background-200 gap-4" href="/">
+			<a class="flex gap-4 px-2 py-3 rounded-md text-text-500 hover:text-text-700 hover:bg-background-200" href="/">
 				<svg
 					xmlns="http://www.w3.org/2000/svg"
 					width="24"
@@ -107,13 +107,13 @@
 		</div>
 		<div class="flex flex-col gap-2 py-2">
 			{#if user}
-				<div class="pl-1 pr-4 py-1 rounded-md text-text-700 flex flex-row gap-3 items-center">
+				<div class="flex flex-row items-center gap-3 py-1 pl-1 pr-4 rounded-md text-text-700">
 					{#if profilePic}
-						<img class="rounded-full overflow-hidden w-8" src={profilePic} alt="Profilový obrázok" />
+						<img class="w-8 overflow-hidden rounded-full" src={profilePic} alt="Profilový obrázok" />
 					{/if}
 					<p>{user?.name}</p>
 				</div>
-				<a class="flex py-3 px-2 rounded-md text-text-500 hover:text-text-700 hover:bg-background-200 gap-4" href="/">
+				<a class="flex gap-4 px-2 py-3 rounded-md text-text-500 hover:text-text-700 hover:bg-background-200" href="/">
 					<svg
 						xmlns="http://www.w3.org/2000/svg"
 						width="24"
@@ -144,7 +144,7 @@
 						};
 					}}
 				>
-					<button type="submit" class="flex py-3 px-2 rounded-md text-text-100 gap-4 w-full bg-primary-700 hover:bg-primary-600">
+					<button type="submit" class="flex w-full gap-4 px-2 py-3 rounded-md text-text-100 bg-primary-700 hover:bg-primary-600">
 						<svg
 							xmlns="http://www.w3.org/2000/svg"
 							width="24"
@@ -167,7 +167,7 @@
 				<button
 					type="button"
 					on:click={openLoginPopup}
-					class="flex py-3 px-2 rounded-md text-text-100 gap-4 w-full bg-primary-700 hover:bg-primary-600"
+					class="flex w-full gap-4 px-2 py-3 rounded-md text-text-100 bg-primary-700 hover:bg-primary-600"
 				>
 					<svg
 						xmlns="http://www.w3.org/2000/svg"
@@ -192,38 +192,38 @@
 </header>
 <!-- HORIZONTAL NAVBAR
 <header
-	class="fixed top-0 left-0 w-screen bg-background-100 py-1 px-2 border-b border-background-200 z-30"
+	class="fixed top-0 left-0 z-30 w-screen px-2 py-1 border-b bg-background-100 border-background-200"
 >
-	<div class="max-w-7xl mx-auto">
-		<div class="flex flex-row justify-between items-center">
-			<div class="flex flex-row flex-nowrap gap-2">
+	<div class="mx-auto max-w-7xl">
+		<div class="flex flex-row items-center justify-between">
+			<div class="flex flex-row gap-2 flex-nowrap">
 				<a class="flex items-center gap-2 pr-4 border-r border-background-100" href="/">
-					<img src="https://via.placeholder.com/150" alt="logo" class="h-10 w-10" />
+					<img src="https://via.placeholder.com/150" alt="logo" class="w-10 h-10" />
 					<p class="text-lg font-semibold text-text-600">Reduta</p>
 				</a>
-				<nav class="flex flex-row flex-nowrap gap-8 items-center mx-4 text-text-600">
+				<nav class="flex flex-row items-center gap-8 mx-4 flex-nowrap text-text-600">
 					<a href="/#about" class="hover:text-text-400">Moje podujatia</a>
 					<a href="/#services" class="hover:text-text-400">Služby</a>
 					<a href="/#contact" class="hover:text-text-400">Kontakt</a>
 				</nav>
 			</div>
-			<div class="flex flex-row flex-nowrap gap-2 items-center">
+			<div class="flex flex-row items-center gap-2 flex-nowrap">
 				{#if !user}
 					<button
 						type="button"
 						on:click={openLoginPopup}
-						class="px-4 py-2 bg-background-700 hover:bg-primary-600 rounded-md text-text-50"
+						class="px-4 py-2 rounded-md bg-background-700 hover:bg-primary-600 text-text-50"
 						>Prihlásenie</button
 					>
 				{:else}
 					<div class="relative group">
 						<button
 							type="button"
-							class="pl-1 pr-4 py-1 hover:bg-background-50 rounded-md text-text-600 flex flex-row gap-2 items-center"
+							class="flex flex-row items-center gap-2 py-1 pl-1 pr-4 rounded-md hover:bg-background-50 text-text-600"
 						>
 							{#if profilePic}
 								<img
-									class="rounded-full overflow-hidden w-8"
+									class="w-8 overflow-hidden rounded-full"
 									src={profilePic}
 									alt="Profilový obrázok"
 								/>
@@ -231,11 +231,11 @@
 							<p>{user.name}</p>
 						</button>
 						<div
-							class="hidden group-focus-within:flex focus-within:flex focus:flex flex-col absolute top-11 rounded-b-md bg-background-100 w-52 px-2 py-2 gap-1 border border-background-200"
+							class="absolute flex-col hidden gap-1 px-2 py-2 border group-focus-within:flex focus-within:flex focus:flex top-11 rounded-b-md bg-background-100 w-52 border-background-200"
 						>
 							<a
 								href="/"
-								class="px-4 py-2 hover:bg-background-50 rounded-md text-text-600 w-full text-center"
+								class="w-full px-4 py-2 text-center rounded-md hover:bg-background-50 text-text-600"
 							>
 								Nastavenia
 							</a>
@@ -254,7 +254,7 @@
 							>
 								<button
 									type="submit"
-									class="px-4 py-2 bg-background-700 hover:bg-primary-600 rounded-md text-text-50 w-full"
+									class="w-full px-4 py-2 rounded-md bg-background-700 hover:bg-primary-600 text-text-50"
 								>
 									Odhlásiť sa
 								</button>
@@ -269,7 +269,7 @@
 
 {#if !user}
 	<Popup bind:openPopup={openLoginPopup} bind:closePopup={closeLoginPopup}>
-		<h2 class="text-text-700 text-xl mb-4">Prihlásenie</h2>
+		<h2 class="mb-4 text-xl text-text-700">Prihlásenie</h2>
 		<form
 			action="/?/login"
 			method="POST"
@@ -306,7 +306,7 @@
 				};
 			}}
 		>
-			<p class="text-red-500 mb-2 max-w-xs">{errorLoginMessage}</p>
+			<p class="max-w-xs mb-2 text-red-500">{errorLoginMessage}</p>
 			<Turnstile on:turnstile-error={turnstileLoginError} siteKey={PUBLIC_TURNSTILE_TOKEN} appearance="execute" />
 			<fieldset class="relative text-input">
 				<input
@@ -328,7 +328,7 @@
 					>Prihlasovací e-mail</label
 				>
 			</fieldset>
-			<fieldset class="relative text-input mt-2">
+			<fieldset class="relative mt-2 text-input">
 				<input
 					on:change={() => (passwordLoginError = false)}
 					placeholder=""
@@ -358,15 +358,15 @@
 					}}>Vytvorte si nový účet.</button
 				>
 			</p>
-			<div class="ml-auto mt-3 items-center flex flex-row flex-nowrap gap-2">
-				<button type="reset" on:click={closeLoginPopup} class="px-4 py-2 bg-background-100 hover:bg-background-200 rounded-md text-text-900"
+			<div class="flex flex-row items-center gap-2 mt-3 ml-auto flex-nowrap">
+				<button type="reset" on:click={closeLoginPopup} class="px-4 py-2 rounded-md bg-background-100 hover:bg-background-200 text-text-900"
 					>Zrušiť</button
 				>
 				<button type="submit" class="px-4 py-2 bg-background-700 hover:bg-primary-600 rounded-md text-text-50 w-[120px]">
 					{#if loadingLogin}
 						<svg
 							xmlns="http://www.w3.org/2000/svg"
-							class="icon animate-spin icon-tabler icon-tabler-loader-2 mx-auto stroke-2 stroke-text-50 h-6 w-6"
+							class="w-6 h-6 mx-auto stroke-2 icon animate-spin icon-tabler icon-tabler-loader-2 stroke-text-50"
 							stroke="currentColor"
 							fill="none"
 							stroke-linecap="round"
@@ -381,7 +381,7 @@
 	</Popup>
 
 	<Popup bind:openPopup={openRegisterPopup} bind:closePopup={closeRegisterPopup}>
-		<h2 class="text-text-700 text-xl mb-4">Registrácia</h2>
+		<h2 class="mb-4 text-xl text-text-700">Registrácia</h2>
 		<form
 			action="/?/register"
 			method="POST"
@@ -417,7 +417,7 @@
 				};
 			}}
 		>
-			<p class="text-red-500 mb-2 max-w-xs">{errorRegisterMessage}</p>
+			<p class="max-w-xs mb-2 text-red-500">{errorRegisterMessage}</p>
 			<Turnstile siteKey={PUBLIC_TURNSTILE_TOKEN} appearance="execute" />
 			<fieldset class="relative text-input">
 				<input
@@ -439,7 +439,7 @@
 					>Celé meno</label
 				>
 			</fieldset>
-			<fieldset class="relative text-input mt-2">
+			<fieldset class="relative mt-2 text-input">
 				<input
 					on:change={() => (emailRegisterError = false)}
 					placeholder=""
@@ -459,7 +459,7 @@
 					>Prihlasovací e-mail</label
 				>
 			</fieldset>
-			<fieldset class="relative text-input mt-2">
+			<fieldset class="relative mt-2 text-input">
 				<input
 					on:change={() => (passwordRegisterError = false)}
 					placeholder=""
@@ -489,19 +489,19 @@
 					}}>Vytvorte si nový účet.</button
 				>
 			</p>
-			<div class="ml-auto mt-3 items-center flex flex-row flex-nowrap gap-2">
+			<div class="flex flex-row items-center gap-2 mt-3 ml-auto flex-nowrap">
 				<button
 					type="reset"
 					on:click={() => {
 						closeRegisterPopup();
 					}}
-					class="px-4 py-2 bg-background-100 hover:bg-background-200 rounded-md text-text-900">Zrušiť</button
+					class="px-4 py-2 rounded-md bg-background-100 hover:bg-background-200 text-text-900">Zrušiť</button
 				>
 				<button type="submit" class="px-4 py-2 bg-background-700 hover:bg-primary-600 rounded-md text-text-50 w-[120px]">
 					{#if loadingRegister}
 						<svg
 							xmlns="http://www.w3.org/2000/svg"
-							class="icon animate-spin icon-tabler icon-tabler-loader-2 mx-auto stroke-2 stroke-text-50 h-6 w-6"
+							class="w-6 h-6 mx-auto stroke-2 icon animate-spin icon-tabler icon-tabler-loader-2 stroke-text-50"
 							stroke="currentColor"
 							fill="none"
 							stroke-linecap="round"
