@@ -11,7 +11,7 @@ services:
       - SQLURI=mysql://system:sb3k6kjmm7sj@192.168.0.17:3308/hallify
     depends_on:
       - mysql
-    restart: unless-stopped
+    restart: always
   mysql:
     image: mysql:8.0
     container_name: hallify_mysql
