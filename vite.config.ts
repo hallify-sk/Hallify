@@ -4,11 +4,11 @@ import { isoImport } from 'vite-plugin-iso-import';
 
 export default defineConfig({
 	optimizeDeps: {
-		exclude: ['@node-rs/argon2-linux-arm64-musl']
+		exclude: ['@node-rs/argon2']
 	},
 	build: {
 		rollupOptions: {
-			external: [/\.node$/]
+			external: [/\.node$/, '@node-rs/argon2']
 		}
 	},
 	plugins: [sveltekit(), isoImport()],
