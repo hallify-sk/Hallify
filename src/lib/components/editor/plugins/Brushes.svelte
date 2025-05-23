@@ -9,12 +9,14 @@
 	import { selectedBrush } from '../brushes';
 	import { v4 as uuidv4 } from 'uuid';
 	import Undo from '$lib/icons/Undo.svelte';
-	import { pushHistory, redo, tables, undo } from '../lib';
+	import { gridData, pushHistory, redo, screenshotStage, tables, undo } from '../lib';
 	import Redo from '$lib/icons/Redo.svelte';
 	import CubeTransparent from '$lib/icons/CubeTransparent.svelte';
 	import NavCollapsibleNoButton from '$lib/components/NavCollapsibleNoButton.svelte';
 	import Button from '$lib/components/Button.svelte';
 	import colors from 'tailwindcss/colors';
+	import Save from '$lib/icons/Save.svelte';
+	import { enhance } from '$app/forms';
 
 	let openColorDropdown: boolean = $state(false);
 
@@ -50,8 +52,9 @@
 </script>
 
 <div
-	class="fixed top-[108px] left-0 z-20 h-12 gap-0.5 w-full pl-[2.625rem] py-0.5 bg-slate-100 border-b border-slate-400/30 flex flex-row items-center"
+	class="fixed top-[108px] left-0 z-20 h-12 gap-0.5 w-full pl-[2.625rem] pr-1 py-0.5 bg-background-1 border-b border-slate-400/30 flex flex-row items-center justify-between"
 >
+	<div class="flex flex-row items-center gap-1">
 	{#if $selectedBrush == 'cursor'}
 		<Icon scale="medium" stroke={1.5} fill="currentColor" forceCenter={true}>
 			<CursorArrowRays />
@@ -68,6 +71,7 @@
 				]);
 				points.set([]);
 				pushHistory({
+					gridData: $gridData,
 					points: $points,
 					zonePoints: $zonePoints,
 					walls: $walls,
@@ -87,6 +91,7 @@
 			onclick={() => {
 				points.set([]);
 				pushHistory({
+					gridData: $gridData,
 					points: $points,
 					zonePoints: $zonePoints,
 					walls: $walls,
@@ -148,6 +153,7 @@
 				]);
 				zonePoints.set([]);
 				pushHistory({
+					gridData: $gridData,
 					points: $points,
 					zonePoints: $zonePoints,
 					walls: $walls,
@@ -167,6 +173,7 @@
 			onclick={() => {
 				zonePoints.set([]);
 				pushHistory({
+					gridData: $gridData,
 					points: $points,
 					zonePoints: $zonePoints,
 					walls: $walls,
@@ -181,10 +188,13 @@
 			Zrušiť zónu
 		</button>
 	{/if}
+	</div>
+	<div class="flex flex-row items-center gap-1">
 	<Button
 		onclick={() => {
 			const undoData = undo();
 			if (!undoData) return;
+			gridData.set(undoData.gridData);
 			points.set(undoData.points);
 			walls.set(undoData.walls);
 			tables.set(undoData.tables);
@@ -202,6 +212,7 @@
 		onclick={() => {
 			const undoData = redo();
 			if (!undoData) return;
+			gridData.set(undoData.gridData);
 			points.set(undoData.points);
 			walls.set(undoData.walls);
 			tables.set(undoData.tables);
@@ -213,19 +224,42 @@
 			<Redo />
 		</Icon>
 	</Button>
+	<form action="?/savePlan" method="POST" use:enhance={async ({formData}) => {
+		let screenshot = screenshotStage();
+		formData.append("plan", JSON.stringify({
+			gridData: $gridData,
+			points: $points,
+			walls: $walls,
+			tables: $tables,
+			zonePoints: $zonePoints,
+			zones: $zones
+		}));
+		formData.append("screenshot", screenshot || "");
+		return async ({ result }) => {
+			console.log(result);
+		};
+	}}>
+		<Button color="primary" type="submit">
+			<Icon scale="medium" stroke={2} fill="none" forceCenter={true}>
+				<Save />
+			</Icon>
+			Uložiť
+		</Button>
+	</form>
+	</div>
 </div>
 
 <div
-	class="fixed top-0 left-0 z-20 w-10 h-screen border-r pt-[108px] bg-slate-100 border-slate-400/30"
+	class="fixed top-0 left-0 z-20 w-10 h-screen border-r pt-[108px] bg-background-1 border-slate-400/30"
 >
 	<div class="flex flex-col gap-0.5 p-0.5">
 		{#each allowedBrushes as brush}
 			<button
 				title={brush.name}
 				onclick={() => selectedBrush.set(brush.id)}
-				class="grid overflow-hidden rounded hover:bg-slate-300/60 aspect-square place-items-center text-slate-600 {$selectedBrush ==
+				class="grid overflow-hidden rounded hover:bg-background-2 aspect-square place-items-center text-text-main {$selectedBrush ==
 				brush.id
-					? 'bg-slate-300 hover:bg-slate-400/60 text-slate-700'
+					? 'bg-background-4 hover:bg-background-5 text-text-main'
 					: ''}"
 			>
 				<Icon scale="medium" stroke={1.5} fill="currentColor" forceCenter={true}>

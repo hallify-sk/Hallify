@@ -25,7 +25,7 @@ export async function PUT({ request, params }) {
 			{ status: 400, headers: { 'Content-Type': 'application/json' } }
 		);
 	}
-	const plan = formData.get('plan');
+	const plan = parseInt(formData.get('plan')?.toString() ?? '0');
 	if (plan && typeof plan !== 'number') {
 		return new Response(JSON.stringify({ message: 'Plán sály je neplatný.', validate: ['plan'] }), {
 			status: 400,

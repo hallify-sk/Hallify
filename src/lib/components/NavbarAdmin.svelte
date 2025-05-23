@@ -29,6 +29,9 @@
 	import Collapsible from './NavCollapsible.svelte';
 	import NavCollapsibleNoButton from './NavCollapsibleNoButton.svelte';
 	import Adjustments from '$lib/icons/Adjustments.svelte';
+	import Grid from '$lib/icons/Grid.svelte';
+	import Square2Stack from '$lib/icons/Square2Stack.svelte';
+	import Clock from '$lib/icons/Clock.svelte';
 
 	onMount(() => {
 		document.addEventListener('click', (e) => {
@@ -194,6 +197,60 @@
 									</Icon>
 									<p class="text-text-4">Vytvoriť udalosť</p>
 								</a>
+							{/if}
+							{#if checkPathPermission('/admin/events', permission)}
+							<a
+								href="/admin/event-blocks"
+								class="flex items-center gap-2 px-3 py-2 text-sm w-44 hover:bg-background-4"
+							>
+								<Icon scale="small">
+									<Clock />
+								</Icon>
+								<p class="text-text-4">Časové výluky</p>
+							</a>
+						{/if}
+						</div>
+					{/if}
+				</Collapsible>
+			{/if}
+			{#if checkPathPermission('/admin/halls', permission) || checkPathPermission('/admin/plans', permission)}
+				<Collapsible id="halls">
+					<Icon scale="small">
+						<Grid />
+					</Icon>
+					<p class="text-text-4">Sály</p>
+					<Icon scale="tiny">
+						{#if $collapsibleOpen == 'halls'}
+							<ChevronUp />
+						{:else}
+							<ChevronDown />
+						{/if}
+					</Icon>
+					{#if $collapsibleOpen == 'halls'}
+						<div
+							class="flex flex-col absolute top-[46px] left-0 bg-background-1 border border-border-main/30 rounded-b overflow-hidden py-1"
+						>
+							{#if checkPathPermission('/admin/halls', permission)}
+								<a
+									href="/admin/halls"
+									class="flex items-center gap-2 px-3 py-2 text-sm w-44 hover:bg-background-4"
+								>
+									<Icon scale="small">
+										<Adjustments />
+									</Icon>
+									<p class="text-text-4">Spravovať sály</p>
+								</a>
+							{/if}
+							{#if checkPathPermission('/admin/plans', permission)}
+							<a
+							href="/admin/plans"
+							class="flex items-center gap-2 px-3 py-2 text-sm w-44 hover:bg-background-4"
+						>
+							<Icon scale="small">
+								<Square2Stack />
+							</Icon>
+							<p class="text-text-4">Spravovať plány</p>
+						</a>
 							{/if}
 						</div>
 					{/if}

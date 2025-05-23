@@ -3,14 +3,18 @@ import {
 	type InferAttributes,
 	type InferCreationAttributes,
 	Model,
-	DataTypes
+	DataTypes,
+	type NonAttribute,
+	type HasOneGetAssociationMixin,
+	type BelongsToGetAssociationMixin,
+	type BelongsToSetAssociationMixin
 } from '@sequelize/core';
 import {
-	AllowNull,
 	Attribute,
 	AutoIncrement,
 	CreatedAt,
 	Default,
+	HasOne,
 	NotNull,
 	PrimaryKey,
 	Unique,
@@ -118,10 +122,6 @@ export class Hall extends Model<InferAttributes<Hall>, InferCreationAttributes<H
 	declare name: string;
 
 	@Attribute(DataTypes.STRING)
-	@AllowNull
-	declare plan: CreationOptional<string> | null;
-
-	@Attribute(DataTypes.STRING)
 	@NotNull
 	declare color: CreationOptional<string>;
 
@@ -150,6 +150,14 @@ export class Hall extends Model<InferAttributes<Hall>, InferCreationAttributes<H
 
 	@UpdatedAt
 	declare updated_at: CreationOptional<Date>;
+
+	@Attribute(DataTypes.INTEGER)
+	declare plan?: CreationOptional<number | null>;
+
+	/** Defined by {@link Plan.hall} */
+	declare planData: NonAttribute<Plan>;
+	declare getPlanData: BelongsToGetAssociationMixin<Plan>;
+	declare setPlanData: BelongsToSetAssociationMixin<Plan, Plan["id"]>;
 }
 
 export class Reservation extends Model<
@@ -180,6 +188,35 @@ export class Reservation extends Model<
 	declare updated_at: CreationOptional<Date>;
 }
 
+export class Plan extends Model<InferAttributes<Plan>, InferCreationAttributes<Plan>> {
+    @Attribute(DataTypes.INTEGER)
+    @PrimaryKey
+    @AutoIncrement
+    declare id: CreationOptional<number>;
+
+    @Attribute(DataTypes.JSON)
+    @NotNull
+    declare data: object;
+
+    @Attribute(DataTypes.INTEGER)
+    @NotNull
+    declare user_id: number;
+
+	@HasOne(() => Hall, {foreignKey: "plan", inverse: "planData"})
+	declare hall?: NonAttribute<Hall>;
+	declare getHall: HasOneGetAssociationMixin<Hall>;
+
+    @Attribute(DataTypes.TEXT)
+    @NotNull
+    declare preview: string;
+
+    @CreatedAt
+    declare created_at: CreationOptional<Date>;
+
+    @UpdatedAt
+    declare updated_at: CreationOptional<Date>;
+}
+
 import { Sequelize } from '@sequelize/core';
 import { MySqlDialect } from '@sequelize/mysql';
 import { SQLURI } from '$env/static/private';
@@ -198,5 +235,5 @@ export const sequelize = new Sequelize({
 		updatedAt: 'updated_at',
 		underscored: true
 	},
-	models: [User, UserSession, Permission, Hall, Reservation]
+	models: [User, UserSession, Permission, Hall, Reservation, Plan]
 });

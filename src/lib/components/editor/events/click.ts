@@ -3,7 +3,7 @@ import Konva from 'konva';
 import { selectedBrush } from '../brushes';
 import { get } from 'svelte/store';
 import { v4 as uuidv4 } from 'uuid';
-import { circleBounds, pointsToVector2D, pushHistory, snapToGrid, tables } from '../lib';
+import { circleBounds, gridData, pointsToVector2D, pushHistory, snapToGrid, tables } from '../lib';
 
 export function registerClickEvent(
 	stage: Konva.Stage,
@@ -42,7 +42,7 @@ export function registerClickEvent(
 							(point, index, self) =>
 								index === self.findIndex((t) => t.x === point.x && t.y === point.y)
 						);
-						pushHistory({points: get(points), zonePoints: uniquePoints, walls: get(walls), zones: get(zones), tables: get(tables)});
+						pushHistory({gridData: get(gridData), points: get(points), zonePoints: uniquePoints, walls: get(walls), zones: get(zones), tables: get(tables)});
 						return uniquePoints;
 					});
 				}
@@ -65,7 +65,7 @@ export function registerClickEvent(
 							(point, index, self) =>
 								index === self.findIndex((t) => t.x === point.x && t.y === point.y)
 						);
-						pushHistory({points: uniquePoints, zonePoints: get(zonePoints), walls: get(walls), zones: get(zones), tables: get(tables)});
+						pushHistory({gridData: get(gridData), points: uniquePoints, zonePoints: get(zonePoints), walls: get(walls), zones: get(zones), tables: get(tables)});
 						return uniquePoints;
 					});
 				}

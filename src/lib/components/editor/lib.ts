@@ -2,6 +2,7 @@ import type { Node, NodeConfig } from 'konva/lib/Node';
 import Konva from 'konva';
 import type { Vector2d } from 'konva/lib/types';
 import { writable, type Writable } from 'svelte/store';
+import type { Stage } from 'svelte-konva';
 
 export function constraintNumber(num: number, min: number, max: number) {
 	const MIN = min ?? 1;
@@ -171,7 +172,7 @@ export function registerPlugin(
 	name: string
 ) {
 	plugins.update((p) => {
-		p.push({name, attrs: {}});
+		p.push({ name, attrs: {} });
 		return p;
 	});
 	plugin(stage);
@@ -204,6 +205,7 @@ interface zoneVector2d extends namedVector2d {
 }
 
 interface HistoryState {
+	gridData: {width: number; height: number};
 	points: namedVector2d[];
 	zonePoints: zoneVector2d[];
 	walls: { points: number[]; name: string }[];
@@ -217,73 +219,141 @@ let historyIndex = -1;
 export const history: HistoryState[] = [];
 
 history.push({
-    points: [],
+	gridData: {width: 20, height: 20},
+	points: [],
 	zonePoints: [],
-    walls: [],
+	walls: [],
 	zones: [],
 	tables: []
 });
-historyIndex = 0;
+historyIndex = 1;
 
 export function pushHistory(state: HistoryState) {
 	// Create deep copy of state to prevent reference issues
-    const newState = {
-        points: JSON.parse(JSON.stringify(state.points)),
-        zonePoints: JSON.parse(JSON.stringify(state.zonePoints)),
-        walls: JSON.parse(JSON.stringify(state.walls)),
+	const newState = {
+		gridData: {width: state.gridData.width, height: state.gridData.height},
+		points: JSON.parse(JSON.stringify(state.points)),
+		zonePoints: JSON.parse(JSON.stringify(state.zonePoints)),
+		walls: JSON.parse(JSON.stringify(state.walls)),
 		zones: JSON.parse(JSON.stringify(state.zones)),
 		tables: JSON.parse(JSON.stringify(state.tables))
-    };
+	};
 
-    // Remove any future states if we're in the middle of the history
-    if (historyIndex < history.length - 1) {
-        history.splice(historyIndex + 1);
-    }
+	// Remove any future states if we're in the middle of the history
+	if (historyIndex < history.length - 1) {
+		history.splice(historyIndex + 1);
+	}
 
-    // Add new state
-    history.push(newState);
+	// Add new state
+	history.push(newState);
 
-    // Remove oldest state if we exceed MAX_HISTORY, but never remove initial state
-    if (history.length > MAX_HISTORY) {
-        history.splice(1, 1); // Remove second element, keep initial state
-        historyIndex--; // Adjust index since we removed an element
-    }
+	// Remove oldest state if we exceed MAX_HISTORY, but never remove initial state
+	if (history.length > MAX_HISTORY) {
+		history.splice(1, 1); // Remove second element, keep initial state
+		historyIndex--; // Adjust index since we removed an element
+	}
 
-    historyIndex = history.length - 1;
+	historyIndex = history.length - 1;
+
+	//console.log('History pushed:', historyIndex, history.length);
+	// Optionally, you can log the current state for debugging
+	console.log('Current state:', JSON.stringify(newState, null, 2));
 }
 
 export function undo(): HistoryState | null {
-    if (historyIndex > 0) {
-        historyIndex--;
-        return JSON.parse(JSON.stringify(history[historyIndex]));
-    }
-    return null;
+	if (historyIndex > 0) {
+		historyIndex--;
+		return JSON.parse(JSON.stringify(history[historyIndex]));
+	}
+	return null;
 }
 
 export function redo(): HistoryState | null {
-    if (historyIndex < history.length - 1) {
-        historyIndex++;
-        return JSON.parse(JSON.stringify(history[historyIndex]));
-    }
-    return null;
+	if (historyIndex < history.length - 1) {
+		historyIndex++;
+		return JSON.parse(JSON.stringify(history[historyIndex]));
+	}
+	return null;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const plugins: Writable<{name: string, attrs: { [key: string]: any }}[]> = writable([]);
+export const plugins: Writable<{ name: string; attrs: { [key: string]: any } }[]> = writable([]);
 
 export interface TableChairs {
-    left: string[];
-    right: string[];
+	left: string[];
+	right: string[];
 }
 
 export interface Table {
-    shape: 'rect';  // Currently only rect is used, but could be expanded for other shapes
-    name: string;
-    rotation: number;
-    x: number;
-    y: number;
-    chairs: TableChairs;
+	shape: 'rect'; // Currently only rect is used, but could be expanded for other shapes
+	name: string;
+	rotation: number;
+	x: number;
+	y: number;
+	chairs: TableChairs;
 }
 
 export const tables: Writable<Table[]> = writable([]);
 
+export const gridData: Writable<{width: number, height: number}> = writable({width: 20, height: 20});
+
+let stage: ReturnType<typeof Stage>;
+
+export function setStage(s: ReturnType<typeof Stage>) {
+	stage = s;
+}
+
+export function screenshotStage() {
+    // Ensure the stage exists
+    if (!stage) return;
+
+    // Get the stage handle
+    const stageHandle = stage.handle();
+    if (!stageHandle) return;
+
+    // Save the current stage position and scale
+    const originalPosition = stageHandle.position();
+    const originalScale = stageHandle.scale();
+    const originalSize = stageHandle.size();
+
+    // Reset the stage scale to normal
+    stageHandle.scale({ x: 1, y: 1 });
+
+    // Calculate the stage dimensions
+    const stageWidth = stageHandle.attrs.grid.gridWidth * stageHandle.attrs.grid.gridSize;
+    const stageHeight = stageHandle.attrs.grid.gridHeight * stageHandle.attrs.grid.gridSize;
+
+    // Determine the larger dimension and calculate the scaling factor
+    const maxDimension = Math.max(stageWidth, stageHeight);
+    const scaleFactor = Math.min(800 / maxDimension, 1); // Cap at 800px
+
+    // Create a square canvas of 800x800
+    stageHandle.size({
+        width: 800,
+        height: 800
+    });
+
+    // Calculate center position to ensure content is centered in the square
+    // We need to offset the stage position to center the content
+    const offsetX = (800 - stageWidth * scaleFactor) / 2;
+    const offsetY = (800 - stageHeight * scaleFactor) / 2;
+    
+    // Position the stage to center the content
+    stageHandle.position({ x: offsetX, y: offsetY });
+    
+    // Scale the stage appropriately
+    stageHandle.scale({ x: scaleFactor, y: scaleFactor });
+
+    // Capture the stage as a data URL
+    const dataURL = stageHandle.toDataURL({
+        width: 800,
+        height: 800
+    });
+
+    // Restore the original stage position, scale, and size
+    stageHandle.position(originalPosition);
+    stageHandle.scale(originalScale);
+    stageHandle.size({ width: originalSize.width, height: originalSize.height });
+    // Return the captured data URL
+    return dataURL;
+}

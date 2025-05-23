@@ -4,6 +4,7 @@ import { type KonvaDragTransformEvent } from 'svelte-konva';
 import {
 	circleBounds,
 	getCorners,
+	gridData,
 	plugins,
 	pointsToVector2D,
 	polyBounds,
@@ -34,7 +35,6 @@ export function brushes(stageRef: Konva.Stage) {
 	stage = stageRef;
 	const uiLayer = stage.attrs.layers?.uiLayer;
 	const gridLayer = stage.attrs.layers?.gridLayer;
-	console.log(stage.attrs);
 	registerClickEvent(stage, stage.attrs.tr, { uiLayer, gridLayer });
 
 	plugins.update((v) => {
@@ -51,6 +51,13 @@ export function brushes(stageRef: Konva.Stage) {
 		}
 		return v;
 	});
+
+	//Reinitialize the tables
+	const tablesReinit = structuredClone(get(tables));
+	tables.set([]);
+	setTimeout(()=>{
+		tables.set(tablesReinit);
+	},1);
 }
 
 export const dragStart = async (e: KonvaDragTransformEvent) => {
@@ -72,7 +79,6 @@ export const dragStart = async (e: KonvaDragTransformEvent) => {
 
 export const dragMove = async (e: KonvaDragTransformEvent) => {
 	if (!stage) return;
-	console.log(e);
 	const target = e.target;
 	console.log(target.x(), target.y());
 	target.moveToTop();
@@ -192,7 +198,7 @@ export const dragEnd = async (e: KonvaDragTransformEvent) => {
 	}
 
 	clone?.destroy();
-	pushHistory({ points: get(points), zonePoints: get(zonePoints), walls: get(walls), zones: get(zones), tables: get(tables) });
+	pushHistory({ gridData: get(gridData), points: get(points), zonePoints: get(zonePoints), walls: get(walls), zones: get(zones), tables: get(tables) });
 	return;
 };
 
@@ -305,7 +311,7 @@ export const transformRotateEnd = async (e: KonvaDragTransformEvent) => {
 
 	clone?.destroy();
 
-	pushHistory({ points: get(points), zonePoints: get(zonePoints), walls: get(walls), zones: get(zones), tables: get(tables) });
+	pushHistory({ gridData: get(gridData), points: get(points), zonePoints: get(zonePoints), walls: get(walls), zones: get(zones), tables: get(tables) });
 
 	return;
 };

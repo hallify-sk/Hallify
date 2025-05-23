@@ -2,7 +2,15 @@
 	import { Stage, Layer, Rect, Line, Group, Transformer, Circle } from 'svelte-konva';
 	import { registerWheelEvent } from './editor/events/wheel';
 	import type { Vector2d } from 'konva/lib/types';
-	import { constraintNumber, plugins, registerPlugin, tables, type StageAttrs } from './editor/lib';
+	import {
+		constraintNumber,
+		gridData,
+		plugins,
+		registerPlugin,
+		setStage,
+		tables,
+		type StageAttrs
+	} from './editor/lib';
 	import {
 		brushes,
 		dragEnd,
@@ -18,8 +26,13 @@
 	import colors from 'tailwindcss/colors';
 	import { v4 as uuidv4 } from 'uuid';
 	import Accordion from './Accordion.svelte';
-	import TextInput from './inputs/TextInput.svelte';
 	import NumberInput from './inputs/NumberInput.svelte';
+	import Button from './Button.svelte';
+	import Dialog from './Dialog.svelte';
+	import Icon from '$lib/icons/Icon.svelte';
+	import Plus from '$lib/icons/Plus.svelte';
+
+	let openConfirmDeleteDialog = $state(false);
 
 	let stage: ReturnType<typeof Stage> | undefined = $state();
 
@@ -53,6 +66,7 @@
 	$effect(() => {
 		if (stage) {
 			const stageHandle = stage?.handle();
+			setStage(stage);
 			if (!stageHandle) return;
 			windowWidth = window.innerWidth;
 			windowHeight = window.innerHeight;
@@ -78,30 +92,6 @@
 			if (tr) {
 				registerWheelEvent(stageHandle);
 				registerPlugin(brushes, stageHandle, 'brushes');
-				tables.set([
-					{
-						shape: 'rect',
-						name: uuidv4(),
-						rotation: 0,
-						x: 0,
-						y: 0,
-						chairs: {
-							left: [uuidv4(), uuidv4(), uuidv4(), uuidv4()],
-							right: [uuidv4(), uuidv4(), uuidv4(), uuidv4()]
-						}
-					},
-					{
-						shape: 'rect',
-						name: uuidv4(),
-						rotation: 0,
-						x: 120,
-						y: 120,
-						chairs: {
-							left: [uuidv4(), uuidv4()],
-							right: [uuidv4(), uuidv4(), uuidv4()]
-						}
-					}
-				]);
 			}
 		}
 	});
@@ -133,19 +123,16 @@
 		};
 	}
 
-	let stageKey = $state(0);
-
-function forceStageRerender() {
-	stageKey++;
-}
-
 	$effect(() => {
-        // Watch for changes in grid values
-        if (gridWidth) {
-			console.log(gridWidth);
-            //forceStageRerender();
-        }
-    });
+		if (gridWidth || gridHeight) {
+			gridData.set({
+				width: gridWidth,
+				height: gridHeight
+			});
+		}
+	});
+
+	let stageKey = $state(0);
 </script>
 
 {#if $plugins.find((p) => p.name == 'brushes')}
@@ -153,136 +140,194 @@ function forceStageRerender() {
 {/if}
 <div class="fixed top-0 left-0">
 	{#key stageKey}
-	<Stage
-		key={stageKey}
-		bind:this={stage}
-		width={windowWidth}
-		height={windowHeight}
-		pixelRatio={1}
-		draggable={true}
-		dragBoundFunc={stageDragConstraint}
-	>
-		<!--Griddy-->
-		<Layer bind:this={gridLayer}>
-			<Rect
-				x={0}
-				y={0}
-				width={gridWidth * gridSize}
-				height={gridHeight * gridSize}
-				fill={colors.slate[100]}
-			/>
-			{#each Array(gridWidth + 1), index}
-				<Line
-					points={[index * gridSize, 0, index * gridSize, gridHeight * gridSize]}
-					stroke={colors.slate[200]}
-					strokeWidth={1}
-					listening={false}
-					perfectDrawEnabled={false}
+		<Stage
+			key={stageKey}
+			bind:this={stage}
+			width={windowWidth}
+			height={windowHeight}
+			pixelRatio={1}
+			draggable={true}
+			dragBoundFunc={stageDragConstraint}
+		>
+			<!--Griddy-->
+			<Layer bind:this={gridLayer}>
+				<Rect
+					x={0}
+					y={0}
+					width={gridWidth * gridSize}
+					height={gridHeight * gridSize}
+					fill={colors.slate[100]}
 				/>
-			{/each}
-			{#each Array(gridHeight + 1), index}
-				<Line
-					points={[0, index * gridSize, gridWidth * gridSize, index * gridSize]}
-					stroke={colors.slate[200]}
-					strokeWidth={1}
-					listening={false}
-					perfectDrawEnabled={false}
+				{#each Array(gridWidth + 1), index}
+					<Line
+						points={[index * gridSize, 0, index * gridSize, gridHeight * gridSize]}
+						stroke={colors.slate[200]}
+						strokeWidth={1}
+						listening={false}
+						perfectDrawEnabled={false}
+					/>
+				{/each}
+				{#each Array(gridHeight + 1), index}
+					<Line
+						points={[0, index * gridSize, gridWidth * gridSize, index * gridSize]}
+						stroke={colors.slate[200]}
+						strokeWidth={1}
+						listening={false}
+						perfectDrawEnabled={false}
+					/>
+				{/each}
+			</Layer>
+			<Layer>
+				{#each $zones as zone}
+					{@render zonePoly(zone.name, zone.points, zone.color)}
+				{/each}
+			</Layer>
+			<Layer bind:this={collisionLayer}>
+				{#each $tables as table}
+					{@render tableRect(table.name, table.rotation, table.x, table.y, table.chairs)}
+				{/each}
+				{#each $walls as wall}
+					{@render wallPoly(wall.name, wall.points)}
+				{/each}
+				{#if $points.length}
+					<Line
+						points={$points.flatMap((point) => [point.x, point.y])}
+						stroke={colors.slate[800]}
+						strokeWidth={2}
+						closed={true}
+						fill={colors.slate[800]}
+						physics={true}
+					/>
+				{/if}
+			</Layer>
+			<Layer name="uiLayer" bind:this={uiLayer}>
+				<Transformer
+					bind:this={tr}
+					resizeEnabled={false}
+					rotationSnaps={[0, 45, 90, 135, 180, 225, 270, 315]}
+					rotationSnapTolerance={30}
 				/>
-			{/each}
-		</Layer>
-		<Layer>
-			{#each $zones as zone}
-				{@render zonePoly(zone.name, zone.points, zone.color)}
-			{/each}
-		</Layer>
-		<Layer bind:this={collisionLayer}>
-			{#each $tables as table}
-				{@render tableRect(table.name, table.rotation, table.x, table.y, table.chairs)}
-			{/each}
-			{#each $walls as wall}
-				{@render wallPoly(wall.name, wall.points)}
-			{/each}
-			{#if $points.length}
-				<Line
-					points={$points.flatMap((point) => [point.x, point.y])}
-					stroke={colors.slate[800]}
-					strokeWidth={2}
-					closed={true}
-					fill={colors.slate[800]}
-					physics={true}
-				/>
-			{/if}
-		</Layer>
-		<Layer name="uiLayer" bind:this={uiLayer}>
-			<Transformer
-				bind:this={tr}
-				resizeEnabled={false}
-				rotationSnaps={[0, 45, 90, 135, 180, 225, 270, 315]}
-				rotationSnapTolerance={30}
-			/>
-			{#each $points as point}
-				<Circle
-					x={point.x}
-					y={point.y}
-					radius={5}
-					fill={colors.blue[500]}
-					draggable={true}
-					name={point.name}
-					physics={false}
-					keepInBounds={true}
-					ondragstart={$plugins.find((p) => p.name == 'brushes') ? dragStart : undefined}
-					ondragmove={$plugins.find((p) => p.name == 'brushes') ? dragMove : undefined}
-					ondragend={$plugins.find((p) => p.name == 'brushes') ? dragEnd : undefined}
-				/>
-			{/each}
-			{#each $zonePoints as point}
-				<Circle
-					x={point.x}
-					y={point.y}
-					radius={5}
-					fill={colors.pink[500]}
-					draggable={true}
-					name={point.name}
-					physics={false}
-					keepInBounds={true}
-					ondragstart={$plugins.find((p) => p.name == 'brushes') ? dragStart : undefined}
-					ondragmove={$plugins.find((p) => p.name == 'brushes') ? dragMove : undefined}
-					ondragend={$plugins.find((p) => p.name == 'brushes') ? dragEnd : undefined}
-				/>
-			{/each}
-			{#if $zonePoints.length}
-				<Line
-					points={$zonePoints.flatMap((point) => [point.x, point.y])}
-					stroke={$currentColor}
-					opacity={0.5}
-					strokeWidth={2}
-					closed={true}
-					fill={$currentColor}
-					physics={false}
-				/>
-			{/if}
-		</Layer>
-	</Stage>
+				{#each $points as point}
+					<Circle
+						x={point.x}
+						y={point.y}
+						radius={5}
+						fill={colors.blue[500]}
+						draggable={true}
+						name={point.name}
+						physics={false}
+						keepInBounds={true}
+						ondragstart={$plugins.find((p) => p.name == 'brushes') ? dragStart : undefined}
+						ondragmove={$plugins.find((p) => p.name == 'brushes') ? dragMove : undefined}
+						ondragend={$plugins.find((p) => p.name == 'brushes') ? dragEnd : undefined}
+					/>
+				{/each}
+				{#each $zonePoints as point}
+					<Circle
+						x={point.x}
+						y={point.y}
+						radius={5}
+						fill={colors.pink[500]}
+						draggable={true}
+						name={point.name}
+						physics={false}
+						keepInBounds={true}
+						ondragstart={$plugins.find((p) => p.name == 'brushes') ? dragStart : undefined}
+						ondragmove={$plugins.find((p) => p.name == 'brushes') ? dragMove : undefined}
+						ondragend={$plugins.find((p) => p.name == 'brushes') ? dragEnd : undefined}
+					/>
+				{/each}
+				{#if $zonePoints.length}
+					<Line
+						points={$zonePoints.flatMap((point) => [point.x, point.y])}
+						stroke={$currentColor}
+						opacity={0.5}
+						strokeWidth={2}
+						closed={true}
+						fill={$currentColor}
+						physics={false}
+					/>
+				{/if}
+			</Layer>
+		</Stage>
 	{/key}
 </div>
 <div
-	class="fixed top-0 right-0 w-96 bg-background-1 border-l border-solid border-border-main/40 block h-screen pt-40"
+	class="fixed top-0 right-0 block h-screen pt-40 border-l border-solid w-96 bg-background-1 border-border-main/40"
 >
 	<Accordion open={true} text="Sála">
-		<div class="p-1 flex flex-col">
+		<div class="flex flex-col p-1">
 			<div class="grid grid-cols-2 gap-2 p-1">
 				<div class="flex flex-col w-full">
-					<label class="text-text-2 text-sm" for="">Šírka</label>
+					<label class="text-sm text-text-2" for="">Šírka</label>
 					<NumberInput bind:value={gridWidth} name="width" placeholder="30" id="width" />
 				</div>
 				<div class="flex flex-col w-full">
-					<label class="text-text-2 text-sm" for="">Výška</label>
+					<label class="text-sm text-text-2" for="">Výška</label>
 					<NumberInput bind:value={gridHeight} name="height" placeholder="20" id="height" />
 				</div>
 			</div>
 		</div>
+		<hr class="border-solid bg-none border-background-4" />
+	</Accordion>
+	<Accordion open={true} text="Plan">
+		<Button
+			color="danger"
+			onclick={() => {
+				openConfirmDeleteDialog = true;
+			}}
+		>
+			Vymazať plan
+		</Button>
+		<div class="mb-2"></div>
+		<hr class="border-solid bg-none border-background-4" />
 	</Accordion>
 </div>
+
+<Dialog open={openConfirmDeleteDialog}>
+	{#snippet header()}
+		<p>Vymazať plan</p>
+	{/snippet}
+	<div class="flex flex-col gap-2 p-4">
+		<p class="text-text-main">Táto akcia je nevratná. Všetky údaje budú stratené.</p>
+	</div>
+	<div
+		class="flex justify-between w-full p-4 border-t rounded-b bg-background-2 border-slate-400/30"
+	>
+		<Button
+			onclick={() => {
+				openConfirmDeleteDialog = false;
+			}}
+			color="transparent"
+		>
+			<p>Zrušiť</p>
+		</Button>
+		<div class="flex flex-row gap-2">
+			<Button type="button" color="danger" onclick={
+				() => {
+					gridData.set({
+						width: 20,
+						height: 20
+					});
+					gridWidth = 20;
+					gridHeight = 20;
+					$tables = [];
+					$walls = [];
+					$points = [];
+					$zones = [];
+					$zonePoints = [];
+					openConfirmDeleteDialog = false;
+				}
+			}>
+				<Icon scale="small">
+					<Plus />
+				</Icon>
+				<p>Vymazať plan</p>
+			</Button>
+		</div>
+	</div>
+</Dialog>
+
 {#snippet tableRect(
 	name: string,
 	rotation: number,

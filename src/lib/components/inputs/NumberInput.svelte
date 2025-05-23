@@ -4,8 +4,9 @@
 		id,
 		type = 'number',
 		value = $bindable(20),
-		placeholder
-	}: { name: string; id: string; type?: 'number'; value?: number, placeholder?: string } = $props();
+		placeholder,
+		oninput = () => {}
+	}: { name: string; id: string; type?: 'number'; value?: number, placeholder?: string; oninput?: () => void } = $props();
 
 	function removeValidation() {
 		(document.getElementById(id) as HTMLInputElement).setCustomValidity('');
@@ -13,7 +14,10 @@
 </script>
 
 <input
-	onchange={removeValidation}
+	onchange={() => {
+		removeValidation();
+		oninput();
+	}}
 	{type}
 	{name}
 	{id}

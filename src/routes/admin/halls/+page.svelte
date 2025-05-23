@@ -31,6 +31,7 @@
 	let showHall = $state(false);
 
 	let showEditHall = $state(false);
+	let showPlansDialog = $state(false);
 	let editingId: number = $state(0);
 
 	$effect(() => {
@@ -40,11 +41,11 @@
 		}
 	});
 
-	$effect(() =>{
-		if(colorValue){
-			console.log(colorValue);
+	$effect(() => {
+		if (colorValue) {
+			//console.log(colorValue);
 		}
-	})
+	});
 
 	let hallCreateError: string | unknown = $state('');
 	let validate: string[] = $state([]);
@@ -56,7 +57,7 @@
 	});
 
 	let timeFrame: 0 | 1 | 2 = $state(0);
-
+	console.log(data);
 	$effect(() => {
 		const myChart = echarts.init(document.getElementById('chartWrapper'));
 
@@ -93,7 +94,7 @@
 						};
 					});
 
-					const styleOptions = barGraphStyle(months, 'dark');
+					const styleOptions = barGraphStyle(months, 'light');
 
 					myChart.setOption({
 						...styleOptions,
@@ -142,7 +143,7 @@
 						};
 					});
 
-					const styleOptions = barGraphStyle(months, 'dark');
+					const styleOptions = barGraphStyle(months, 'light');
 
 					myChart.setOption({
 						...styleOptions,
@@ -189,7 +190,7 @@
 						};
 					});
 
-					const styleOptions = barGraphStyle(days, 'dark');
+					const styleOptions = barGraphStyle(days, 'light');
 
 					myChart.setOption({
 						...styleOptions,
@@ -217,6 +218,7 @@
 		const formData = new FormData();
 		formData.set('name', (target.name as unknown as HTMLInputElement).value);
 		formData.set('color', colorValue);
+		formData.set('plan', `${data.halls.find((i) => i.id == editingId)?.plan}`);
 		formData.set('allow_reservations', target.allow_reservations?.checked);
 		formData.set('custom_layouts', target.custom_layouts?.checked);
 		formData.set('force_layouts', target.force_layouts?.checked);
@@ -246,7 +248,13 @@
 			<p class="text-text-main">Manažment sál</p>
 		</div>
 		<div class="flex flex-row items-center flex-nowrap">
-			<Button color="primary" onclick={() => (showHall = true)}>
+			<Button
+				color="primary"
+				onclick={() => {
+					showHall = true;
+					colorValue = '';
+				}}
+			>
 				<Icon scale="small">
 					<Plus />
 				</Icon>
@@ -308,6 +316,7 @@
 									class="event-table-row"
 									onclick={() => {
 										editingId = hall.id;
+										colorValue = hall.color;
 										showEditHall = true;
 									}}
 								>
@@ -437,7 +446,7 @@
 		method="post"
 		use:enhance={() => {
 			return async ({ result }) => {
-				console.log(result);
+				//console.log(result);
 				if (result.type === 'failure') {
 					hallCreateError = result.data?.message;
 					if (Array.isArray(result.data?.validate)) validate = result.data.validate;
@@ -459,17 +468,27 @@
 				<div class="flex flex-col gap-2">
 					<p class="text-sm text-text-4">Plán sály</p>
 					<div class="flex flex-row justify-between w-full gap-2">
-							<Button color="secondary">
-								<p>Použiť existujúci</p>
-							</Button>
+						<Button color="secondary">
+							<p>Použiť existujúci</p>
+						</Button>
+						<a href="/admin/halls/{editingId}/editor">
 							<Button color="primary">
 								<Icon scale="small">
 									<Plus />
 								</Icon>
 								<p>Vytvoriť nový</p>
 							</Button>
+						</a>
 					</div>
-					<img src="https://placehold.co/1080x1080" class="rounded-md" alt="Plán sály" />
+					{#if data.halls.find((i) => i.id == editingId)?.plan}
+						<img
+							src={data.halls.find((i) => i.id == editingId)?.planData.preview}
+							class="rounded-md"
+							alt="Plán sály"
+						/>
+					{:else}
+						<img src="https://placehold.co/1080x1080" class="rounded-md" alt="Plán sály" />
+					{/if}
 				</div>
 
 				<div class="flex flex-col gap-2">
@@ -504,9 +523,7 @@
 					</div>
 					<div class="flex flex-row items-center gap-2">
 						<Switch name="custom_layouts" id="custom_layouts" />
-						<label
-							for="custom_layouts"
-							class="flex flex-row items-center gap-2 text-sm text-text-4"
+						<label for="custom_layouts" class="flex flex-row items-center gap-2 text-sm text-text-4"
 							>Povoliť vlastné rozloženia
 							<Tooltip>
 								<p>
@@ -519,10 +536,7 @@
 					</div>
 					<div class="flex flex-row items-center gap-2">
 						<Switch name="force_layouts" id="force_layouts" />
-						<label
-							for="force_layouts"
-							class="flex flex-row items-center gap-2 text-sm text-text-4"
-						>
+						<label for="force_layouts" class="flex flex-row items-center gap-2 text-sm text-text-4">
 							Vynútiť rozloženie sály
 							<Tooltip>
 								<p>
@@ -554,7 +568,6 @@
 			{/if}
 		</div>
 		<div class="flex justify-between w-full p-4 border-t bg-background-2 border-border-main/30">
-			
 			<Button color="transparent" onclick={() => (showHall = false)}>
 				<p>Zrušiť</p>
 			</Button>
@@ -580,21 +593,40 @@
 				<div class="flex flex-col gap-2">
 					<p class="text-sm text-slate-800">Plán sály</p>
 					<div class="flex flex-row w-full gap-2">
-						<button
-							class="flex flex-row items-center justify-center w-full gap-2 px-4 py-2 text-sm duration-150 border rounded hover:bg-slate-200/50 text-slate-500 border-border-main/30"
-						>
-							<p>Použiť existujúci</p>
-						</button>
-						<button
-							class="flex flex-row items-center w-full gap-2 px-4 py-2 text-sm duration-150 bg-blue-500 border rounded hover:bg-blue-400 text-slate-100 border-blue-600/30"
+						<Button
+							onclick={() => {
+								showPlansDialog = true;
+							}}
+							color="primary"
 						>
 							<Icon scale="small">
 								<Plus />
 							</Icon>
-							<p>Vytvoriť nový</p>
-						</button>
+							<p>Zmeniť plan</p>
+						</Button>
+						<a href="/admin/halls/{editingId}/editor">
+							<Button
+								onclick={() => {
+									showPlansDialog = true;
+								}}
+								color="secondary"
+							>
+								<Icon scale="small">
+									<Plus />
+								</Icon>
+								<p>Upraviť plan</p>
+							</Button>
+						</a>
 					</div>
-					<img src="https://placehold.co/1080x1080" class="rounded-md" alt="Plán sály" />
+					{#if data.halls.find((i) => i.id == editingId)?.plan}
+						<img
+							src={data.halls.find((i) => i.id == editingId)?.planData.preview}
+							class="rounded-md"
+							alt="Plán sály"
+						/>
+					{:else}
+						<img src="https://placehold.co/1080x1080" class="rounded-md" alt="Plán sály" />
+					{/if}
 				</div>
 
 				<div class="flex flex-col gap-2">
@@ -717,6 +749,67 @@
 			</button>
 		</div>
 	</form>
+</Dialog>
+
+<Dialog bind:open={showPlansDialog}>
+	{#snippet header()}
+		<p>Vybrať plan</p>
+	{/snippet}
+	<div class="flex flex-col w-full">
+		<form
+			class="flex flex-col w-full"
+			action="/admin/halls/{editingId}?/changePlan"
+			method="post"
+			use:enhance={({ formData }) => {
+				return async ({ result }) => {
+					if (result.type === 'failure') {
+						hallCreateError = result.data?.message;
+						if (Array.isArray(result.data?.validate)) validate = result.data.validate;
+						console.error(result);
+					} else {
+						await invalidateAll();
+						showPlansDialog = false;
+						await applyAction(result);
+					}
+				};
+			}}
+		>
+			<div class="grid grid-cols-3 gap-4 p-4 auto-rows-fr">
+				{#each data.plans as plan}
+					<fieldset>
+						<input
+							type="radio"
+							name="planId"
+							id={plan.id.toString()}
+							value={plan.id}
+							class="hidden peer"
+						/>
+						<label
+							class="block p-2 rounded cursor-pointer hover:bg-background-4 peer-checked:bg-background-4"
+							for={plan.id.toString()}
+						>
+							<img src={plan.preview} class="rounded-md" alt="Plán sály" />
+						</label>
+					</fieldset>
+				{/each}
+			</div>
+			<div class="flex justify-between w-full p-4 border-t bg-slate-200 border-border-main/30">
+				<button
+					type="reset"
+					onclick={() => (showPlansDialog = false)}
+					class="flex flex-row items-center gap-2 px-4 py-2 text-sm duration-150 rounded hover:bg-slate-100/50 text-slate-500"
+				>
+					<p>Zrušiť</p>
+				</button>
+				<Button type="submit" onclick={() => (showPlansDialog = true)} color="primary">
+					<Icon scale="small">
+						<Plus />
+					</Icon>
+					<p>Nastaviť plan</p>
+				</Button>
+			</div>
+		</form>
+	</div>
 </Dialog>
 
 <style lang="postcss">
