@@ -14,7 +14,8 @@
 
 Hallify je najmodernejší rezervačný systém pre spoločenské sály, ktorý podporuje vytváranie rozložení sál. Tento repozitár obsahuje samostatnú aplikáciu, ktorú vytvárame a distribujeme.
 
-> [!NOTE] > **Hallify je v štádiu skorého vývoja** - veľa vecí sa bude ešte meniť a produkt je momentálne nepoužiteľný v reálnom prostredí.
+> [!NOTE]
+> **Hallify je v štádiu skorého vývoja** - veľa vecí sa bude ešte meniť a produkt je momentálne nepoužiteľný v reálnom prostredí.
 
 ## Setup development prostredia
 
