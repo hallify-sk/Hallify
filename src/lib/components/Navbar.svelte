@@ -24,7 +24,7 @@
 	//Utils
 	import { checkPathPermission, collapsibleOpen } from '$lib/util';
 	import type { UserSanitized } from '$lib/types/auth';
-	import type { Permission } from '$lib/server/models';
+	import type { Permission } from '$lib/server/schema';
 
 	//Components
 	import Collapsible from './NavCollapsible.svelte';
@@ -233,4 +233,4 @@
 	</div>
 </div>
 
-<AuthDialog bind:openLogin={openLogin} bind:openRegister={openRegister} />
+<AuthDialog bind:openLogin bind:openRegister />

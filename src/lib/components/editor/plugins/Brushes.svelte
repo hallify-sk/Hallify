@@ -16,7 +16,7 @@
 	import Button from '$lib/components/Button.svelte';
 	import colors from 'tailwindcss/colors';
 	import Save from '$lib/icons/Save.svelte';
-	import { enhance } from '$app/forms';
+	import { applyAction, enhance } from '$app/forms';
 
 	let openColorDropdown: boolean = $state(false);
 
@@ -55,197 +55,204 @@
 	class="fixed top-[108px] left-0 z-20 h-12 gap-0.5 w-full pl-[2.625rem] pr-1 py-0.5 bg-background-1 border-b border-slate-400/30 flex flex-row items-center justify-between"
 >
 	<div class="flex flex-row items-center gap-1">
-	{#if $selectedBrush == 'cursor'}
-		<Icon scale="medium" stroke={1.5} fill="currentColor" forceCenter={true}>
-			<CursorArrowRays />
-		</Icon>
-	{/if}
-	{#if $selectedBrush == 'wallPainter'}
-		<Button
-			disabled={$points.length == 0}
-			color="white"
-			onclick={() => {
-				walls.update((w) => [
-					...w,
-					{ points: $points.flatMap((point) => [point.x, point.y]), name: uuidv4() }
-				]);
-				points.set([]);
-				pushHistory({
-					gridData: $gridData,
-					points: $points,
-					zonePoints: $zonePoints,
-					walls: $walls,
-					zones: $zones,
-					tables: $tables
-				});
-			}}
-		>
-			<Icon scale="medium" stroke={2} fill="none" forceCenter={true}>
-				<Check />
+		{#if $selectedBrush == 'cursor'}
+			<Icon scale="medium" stroke={1.5} fill="currentColor" forceCenter={true}>
+				<CursorArrowRays />
 			</Icon>
-			Potvrdiť stenu
-		</Button>
-		<Button
-			disabled={$points.length == 0}
-			color="white"
-			onclick={() => {
-				points.set([]);
-				pushHistory({
-					gridData: $gridData,
-					points: $points,
-					zonePoints: $zonePoints,
-					walls: $walls,
-					zones: $zones,
-					tables: $tables
-				});
-			}}
-		>
-			<Icon scale="medium" stroke={2} fill="none" forceCenter={true}>
-				<Cross />
-			</Icon>
-			Zrušiť stenu
-		</Button>
-	{/if}
-	{#if $selectedBrush == 'zonePainter'}
-		<NavCollapsibleNoButton id="zoneColors" open={openColorDropdown}>
+		{/if}
+		{#if $selectedBrush == 'wallPainter'}
 			<Button
-				onclick={() => {
-					openColorDropdown = !openColorDropdown;
-				}}
+				disabled={$points.length == 0}
 				color="white"
+				onclick={() => {
+					walls.update((w) => [
+						...w,
+						{ points: $points.flatMap((point) => [point.x, point.y]), name: uuidv4() }
+					]);
+					points.set([]);
+					pushHistory({
+						gridData: $gridData,
+						points: $points,
+						zonePoints: $zonePoints,
+						walls: $walls,
+						zones: $zones,
+						tables: $tables
+					});
+				}}
 			>
-				<div class="block w-5 h-5 rounded" style="background-color: {$currentColor}"></div>
-				<p>Farba</p>
+				<Icon scale="medium" stroke={2} fill="none" forceCenter={true}>
+					<Check />
+				</Icon>
+				Potvrdiť stenu
 			</Button>
-			{#if $collapsibleOpen == 'zoneColors'}
-				<div
-					class="absolute left-0 flex flex-col py-1 overflow-hidden border rounded-b top-[39px] bg-background-1 border-border-main/30 max-h-80 overflow-y-auto"
+			<Button
+				disabled={$points.length == 0}
+				color="white"
+				onclick={() => {
+					points.set([]);
+					pushHistory({
+						gridData: $gridData,
+						points: $points,
+						zonePoints: $zonePoints,
+						walls: $walls,
+						zones: $zones,
+						tables: $tables
+					});
+				}}
+			>
+				<Icon scale="medium" stroke={2} fill="none" forceCenter={true}>
+					<Cross />
+				</Icon>
+				Zrušiť stenu
+			</Button>
+		{/if}
+		{#if $selectedBrush == 'zonePainter'}
+			<NavCollapsibleNoButton id="zoneColors" open={openColorDropdown}>
+				<Button
+					onclick={() => {
+						openColorDropdown = !openColorDropdown;
+					}}
+					color="white"
 				>
-					{#each allowedColors as color}
-						<Button
-							disableBorder={true}
-							color="white"
-							onclick={() => {
-								currentColor.set(color.value);
-								openColorDropdown = false;
-							}}
-						>
-							<div class="flex flex-row items-center w-full gap-2 text-left">
-								<div class="block w-5 h-5 rounded" style="background-color: {color.value}"></div>
-								<p>{color.name}</p>
-							</div>
-						</Button>
-					{/each}
-				</div>
-			{/if}
-		</NavCollapsibleNoButton>
-		<button
-			disabled={$zonePoints.length == 0}
-			class="barButton"
-			onclick={() => {
-				zones.update((w) => [
-					...w,
-					{
-						points: $zonePoints.flatMap((point) => [point.x, point.y]),
-						name: uuidv4(),
-						color: $currentColor
-					}
-				]);
-				zonePoints.set([]);
-				pushHistory({
-					gridData: $gridData,
-					points: $points,
-					zonePoints: $zonePoints,
-					walls: $walls,
-					zones: $zones,
-					tables: $tables
-				});
-			}}
-		>
-			<Icon scale="medium" stroke={2} fill="none" forceCenter={true}>
-				<Check />
-			</Icon>
-			Potvrdiť zónu
-		</button>
-		<button
-			disabled={$zonePoints.length == 0}
-			class="barButton"
-			onclick={() => {
-				zonePoints.set([]);
-				pushHistory({
-					gridData: $gridData,
-					points: $points,
-					zonePoints: $zonePoints,
-					walls: $walls,
-					zones: $zones,
-					tables: $tables
-				});
-			}}
-		>
-			<Icon scale="medium" stroke={2} fill="none" forceCenter={true}>
-				<Cross />
-			</Icon>
-			Zrušiť zónu
-		</button>
-	{/if}
+					<div class="block w-5 h-5 rounded" style="background-color: {$currentColor}"></div>
+					<p>Farba</p>
+				</Button>
+				{#if $collapsibleOpen == 'zoneColors'}
+					<div
+						class="absolute left-0 flex flex-col py-1 overflow-hidden border rounded-b top-[39px] bg-background-1 border-border-main/30 max-h-80 overflow-y-auto"
+					>
+						{#each allowedColors as color}
+							<Button
+								disableBorder={true}
+								color="white"
+								onclick={() => {
+									currentColor.set(color.value);
+									openColorDropdown = false;
+								}}
+							>
+								<div class="flex flex-row items-center w-full gap-2 text-left">
+									<div class="block w-5 h-5 rounded" style="background-color: {color.value}"></div>
+									<p>{color.name}</p>
+								</div>
+							</Button>
+						{/each}
+					</div>
+				{/if}
+			</NavCollapsibleNoButton>
+			<button
+				disabled={$zonePoints.length == 0}
+				class="barButton"
+				onclick={() => {
+					zones.update((w) => [
+						...w,
+						{
+							points: $zonePoints.flatMap((point) => [point.x, point.y]),
+							name: uuidv4(),
+							color: $currentColor
+						}
+					]);
+					zonePoints.set([]);
+					pushHistory({
+						gridData: $gridData,
+						points: $points,
+						zonePoints: $zonePoints,
+						walls: $walls,
+						zones: $zones,
+						tables: $tables
+					});
+				}}
+			>
+				<Icon scale="medium" stroke={2} fill="none" forceCenter={true}>
+					<Check />
+				</Icon>
+				Potvrdiť zónu
+			</button>
+			<button
+				disabled={$zonePoints.length == 0}
+				class="barButton"
+				onclick={() => {
+					zonePoints.set([]);
+					pushHistory({
+						gridData: $gridData,
+						points: $points,
+						zonePoints: $zonePoints,
+						walls: $walls,
+						zones: $zones,
+						tables: $tables
+					});
+				}}
+			>
+				<Icon scale="medium" stroke={2} fill="none" forceCenter={true}>
+					<Cross />
+				</Icon>
+				Zrušiť zónu
+			</button>
+		{/if}
 	</div>
 	<div class="flex flex-row items-center gap-1">
-	<Button
-		onclick={() => {
-			const undoData = undo();
-			if (!undoData) return;
-			gridData.set(undoData.gridData);
-			points.set(undoData.points);
-			walls.set(undoData.walls);
-			tables.set(undoData.tables);
-			zonePoints.set(undoData.zonePoints);
-			zones.set(undoData.zones);
-		}}
-		color="white"
-	>
-		<Icon scale="medium" stroke={2} fill="none" forceCenter={true}>
-			<Undo />
-		</Icon>
-	</Button>
-	<Button
-		color="white"
-		onclick={() => {
-			const undoData = redo();
-			if (!undoData) return;
-			gridData.set(undoData.gridData);
-			points.set(undoData.points);
-			walls.set(undoData.walls);
-			tables.set(undoData.tables);
-			zonePoints.set(undoData.zonePoints);
-			zones.set(undoData.zones);
-		}}
-	>
-		<Icon scale="medium" stroke={2} fill="none" forceCenter={true}>
-			<Redo />
-		</Icon>
-	</Button>
-	<form action="?/savePlan" method="POST" use:enhance={async ({formData}) => {
-		let screenshot = screenshotStage();
-		formData.append("plan", JSON.stringify({
-			gridData: $gridData,
-			points: $points,
-			walls: $walls,
-			tables: $tables,
-			zonePoints: $zonePoints,
-			zones: $zones
-		}));
-		formData.append("screenshot", screenshot || "");
-		return async ({ result }) => {
-			console.log(result);
-		};
-	}}>
-		<Button color="primary" type="submit">
+		<Button
+			onclick={() => {
+				const undoData = undo();
+				if (!undoData) return;
+				gridData.set(undoData.gridData);
+				points.set(undoData.points);
+				walls.set(undoData.walls);
+				tables.set(undoData.tables);
+				zonePoints.set(undoData.zonePoints);
+				zones.set(undoData.zones);
+			}}
+			color="white"
+		>
 			<Icon scale="medium" stroke={2} fill="none" forceCenter={true}>
-				<Save />
+				<Undo />
 			</Icon>
-			Uložiť
 		</Button>
-	</form>
+		<Button
+			color="white"
+			onclick={() => {
+				const undoData = redo();
+				if (!undoData) return;
+				gridData.set(undoData.gridData);
+				points.set(undoData.points);
+				walls.set(undoData.walls);
+				tables.set(undoData.tables);
+				zonePoints.set(undoData.zonePoints);
+				zones.set(undoData.zones);
+			}}
+		>
+			<Icon scale="medium" stroke={2} fill="none" forceCenter={true}>
+				<Redo />
+			</Icon>
+		</Button>
+		<form
+			action="?/savePlan"
+			method="POST"
+			use:enhance={async ({ formData }) => {
+				let screenshot = screenshotStage();
+				formData.append(
+					'plan',
+					JSON.stringify({
+						gridData: $gridData,
+						points: $points,
+						walls: $walls,
+						tables: $tables,
+						zonePoints: $zonePoints,
+						zones: $zones
+					})
+				);
+				formData.append('screenshot', screenshot || '');
+				return async ({ result }) => {
+					applyAction(result);
+				};
+			}}
+		>
+			<Button color="primary" type="submit">
+				<Icon scale="medium" stroke={2} fill="none" forceCenter={true}>
+					<Save />
+				</Icon>
+				Uložiť
+			</Button>
+		</form>
 	</div>
 </div>
 

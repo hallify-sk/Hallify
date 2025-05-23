@@ -23,7 +23,7 @@
 	//Utils
 	import { checkPathPermission, collapsibleOpen } from '$lib/util';
 	import type { UserSanitized } from '$lib/types/auth';
-	import type { Permission } from '$lib/server/models';
+	import type { Permission } from '$lib/server/schema';
 
 	//Components
 	import Collapsible from './NavCollapsible.svelte';
@@ -199,16 +199,16 @@
 								</a>
 							{/if}
 							{#if checkPathPermission('/admin/events', permission)}
-							<a
-								href="/admin/event-blocks"
-								class="flex items-center gap-2 px-3 py-2 text-sm w-44 hover:bg-background-4"
-							>
-								<Icon scale="small">
-									<Clock />
-								</Icon>
-								<p class="text-text-4">Časové výluky</p>
-							</a>
-						{/if}
+								<a
+									href="/admin/event-blocks"
+									class="flex items-center gap-2 px-3 py-2 text-sm w-44 hover:bg-background-4"
+								>
+									<Icon scale="small">
+										<Clock />
+									</Icon>
+									<p class="text-text-4">Časové výluky</p>
+								</a>
+							{/if}
 						</div>
 					{/if}
 				</Collapsible>
@@ -242,15 +242,15 @@
 								</a>
 							{/if}
 							{#if checkPathPermission('/admin/plans', permission)}
-							<a
-							href="/admin/plans"
-							class="flex items-center gap-2 px-3 py-2 text-sm w-44 hover:bg-background-4"
-						>
-							<Icon scale="small">
-								<Square2Stack />
-							</Icon>
-							<p class="text-text-4">Spravovať plány</p>
-						</a>
+								<a
+									href="/admin/plans"
+									class="flex items-center gap-2 px-3 py-2 text-sm w-44 hover:bg-background-4"
+								>
+									<Icon scale="small">
+										<Square2Stack />
+									</Icon>
+									<p class="text-text-4">Spravovať plány</p>
+								</a>
 							{/if}
 						</div>
 					{/if}

@@ -1,4 +1,4 @@
-import { User } from '$lib/server/models.js';
+import { users } from '$lib/server/schema.js';
 import { isValidEmail } from '$lib/util';
 import commonList from '$lib/data/commonPasswords.json';
 import {
@@ -8,6 +8,8 @@ import {
 	setSessionTokenCookie
 } from '$lib/server/auth.js';
 import { TokenBucket } from '$lib/server/ratelimit';
+import { db } from '$lib/server/db.js';
+import { eq } from 'drizzle-orm';
 
 const createUserBucket = new TokenBucket<string>(8, 1);
 
@@ -31,7 +33,7 @@ export const actions = {
 			});
 		}
 		email = email.toLowerCase();
-		if (await User.findOne({ where: { email } })) {
+		if ((await db.select().from(users).where(eq(users.email, email)).limit(1)).length > 0) {
 			return new Response('E-Mail je už použitý.', {
 				status: 409
 			});
@@ -66,13 +68,18 @@ export const actions = {
 		}
 
 		const passwordHash = await hashPassword(password);
-		const user = await User.create({
-			email,
-			password_hash: passwordHash,
-			permission_id: 1,
-			first_name: name,
-			last_name: surname
-		});
+		const user = (
+			await db
+				.insert(users)
+				.values({
+					email,
+					password_hash: passwordHash,
+					permission_id: 1,
+					first_name: name,
+					last_name: surname
+				})
+				.returning()
+		)[0];
 
 		const token = generateSessionToken();
 		const session = await createSession(token, user.id);

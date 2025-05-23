@@ -36,14 +36,9 @@
 
 	$effect(() => {
 		if (editingId) {
-			colorName = data.halls.find((i) => i.id == editingId)?.color ?? '';
-			//colorValue = colorName;
-		}
-	});
-
-	$effect(() => {
-		if (colorValue) {
-			//console.log(colorValue);
+			// Fix: Access hall data correctly for Drizzle join result
+			const hallData = data.halls.find((h) => h.hall.id == editingId);
+			colorName = hallData?.hall.color ?? '';
 		}
 	});
 
@@ -57,7 +52,6 @@
 	});
 
 	let timeFrame: 0 | 1 | 2 = $state(0);
-	console.log(data);
 	$effect(() => {
 		const myChart = echarts.init(document.getElementById('chartWrapper'));
 
@@ -75,7 +69,9 @@
 					};
 
 					const months = getLast6Months();
-					const hallData = data.halls.map((hall) => {
+					// Fix: Update for Drizzle join structure
+					const hallData = data.halls.map((hallItem) => {
+						const hall = hallItem.hall;
 						return {
 							name: hall.name,
 							data: months.map((month) => {
@@ -124,7 +120,9 @@
 
 					const months = getLast12Months();
 
-					const hallData = data.halls.map((hall) => {
+					// Fix: Update for Drizzle join structure
+					const hallData = data.halls.map((hallItem) => {
+						const hall = hallItem.hall;
 						return {
 							name: hall.name,
 							data: months.map((month) => {
@@ -173,7 +171,9 @@
 
 					const days = getLast30Days();
 
-					const hallData = data.halls.map((hall) => {
+					// Fix: Update for Drizzle join structure
+					const hallData = data.halls.map((hallItem) => {
+						const hall = hallItem.hall;
 						return {
 							name: hall.name,
 							data: days.map((day) => {
@@ -218,7 +218,9 @@
 		const formData = new FormData();
 		formData.set('name', (target.name as unknown as HTMLInputElement).value);
 		formData.set('color', colorValue);
-		formData.set('plan', `${data.halls.find((i) => i.id == editingId)?.plan}`);
+		// Fix: Access plan data correctly for Drizzle join result
+		const hallData = data.halls.find((h) => h.hall.id == editingId);
+		formData.set('plan', `${hallData?.hall.plan || ''}`);
 		formData.set('allow_reservations', target.allow_reservations?.checked);
 		formData.set('custom_layouts', target.custom_layouts?.checked);
 		formData.set('force_layouts', target.force_layouts?.checked);
@@ -311,7 +313,9 @@
 							</tr>
 						</thead>
 						<tbody>
-							{#each data.halls as hall}
+							<!-- Fix: Update for Drizzle join structure -->
+							{#each data.halls as hallItem}
+								{@const hall = hallItem.hall}
 								<tr
 									class="event-table-row"
 									onclick={() => {
@@ -446,7 +450,6 @@
 		method="post"
 		use:enhance={() => {
 			return async ({ result }) => {
-				//console.log(result);
 				if (result.type === 'failure') {
 					hallCreateError = result.data?.message;
 					if (Array.isArray(result.data?.validate)) validate = result.data.validate;
@@ -480,15 +483,8 @@
 							</Button>
 						</a>
 					</div>
-					{#if data.halls.find((i) => i.id == editingId)?.plan}
-						<img
-							src={data.halls.find((i) => i.id == editingId)?.planData.preview}
-							class="rounded-md"
-							alt="Plán sály"
-						/>
-					{:else}
-						<img src="https://placehold.co/1080x1080" class="rounded-md" alt="Plán sály" />
-					{/if}
+					<!-- Fix: Remove planData reference for create dialog -->
+					<img src="https://placehold.co/1080x1080" class="rounded-md" alt="Plán sály" />
 				</div>
 
 				<div class="flex flex-col gap-2">
@@ -582,13 +578,19 @@
 </Dialog>
 
 <Dialog bind:open={showEditHall}>
+	{@const currentHall = data.halls.find((h) => h.hall.id == editingId)?.hall}
 	{#snippet header()}
 		<p>Upraviť sálu</p>
 	{/snippet}
 	<form class="flex flex-col w-full" onsubmit={handleEditSubmit}>
 		<div class="flex flex-col p-4">
 			<label for="name" class="text-sm text-slate-800">Názov</label>
-			<TextInput name="name" id="name" value={data.halls.find((i) => i.id == editingId)?.name} />
+			<!-- Fix: Access hall data correctly for Drizzle join result -->
+			<TextInput
+				name="name"
+				id="name"
+				value={data.halls.find((h) => h.hall.id == editingId)?.hall.name}
+			/>
 			<div class="grid w-full grid-cols-1 gap-4 mt-2 sm:grid-cols-2">
 				<div class="flex flex-col gap-2">
 					<p class="text-sm text-slate-800">Plán sály</p>
@@ -618,12 +620,14 @@
 							</Button>
 						</a>
 					</div>
-					{#if data.halls.find((i) => i.id == editingId)?.plan}
-						<img
-							src={data.halls.find((i) => i.id == editingId)?.planData.preview}
-							class="rounded-md"
-							alt="Plán sály"
-						/>
+					<!-- Fix: Access plan data correctly for Drizzle join result -->
+					{#if data.halls.find((h) => h.hall.id == editingId)?.hall.plan}
+						{@const hallData = data.halls.find((h) => h.hall.id == editingId)}
+						{#if hallData?.plan}
+							<img src={hallData.plan.preview} class="rounded-md" alt="Plán sály" />
+						{:else}
+							<img src="https://placehold.co/1080x1080" class="rounded-md" alt="Plán sály" />
+						{/if}
 					{:else}
 						<img src="https://placehold.co/1080x1080" class="rounded-md" alt="Plán sály" />
 					{/if}
@@ -654,11 +658,13 @@
 							]}
 						/>
 					</div>
+					<!-- Fix: Access hall data correctly for all switches -->
+
 					<div class="flex flex-row items-center gap-2">
 						<Switch
 							name="allow_reservations"
 							id="allow_reservations"
-							checked={data.halls.find((i) => i.id == editingId)?.allow_reservations}
+							checked={currentHall?.allow_reservations}
 						/>
 						<label for="allow_reservations" class="text-sm text-slate-800"
 							>Povoliť rezervácie v sále</label
@@ -668,7 +674,7 @@
 						<Switch
 							name="custom_layouts"
 							id="custom_layouts"
-							checked={data.halls.find((i) => i.id == editingId)?.custom_layouts}
+							checked={currentHall?.custom_layouts}
 						/>
 						<label
 							for="custom_layouts"
@@ -684,11 +690,7 @@
 						</label>
 					</div>
 					<div class="flex flex-row items-center gap-2">
-						<Switch
-							name="force_layouts"
-							id="force_layouts"
-							checked={data.halls.find((i) => i.id == editingId)?.force_layouts}
-						/>
+						<Switch name="force_layouts" id="force_layouts" checked={currentHall?.force_layouts} />
 						<label
 							for="force_layouts"
 							class="flex flex-row items-center gap-2 text-sm text-slate-800"
@@ -706,7 +708,7 @@
 						<Switch
 							name="allow_feedback"
 							id="allow_feedback"
-							checked={data.halls.find((i) => i.id == editingId)?.allow_feedback}
+							checked={currentHall?.allow_feedback}
 						/>
 						<label
 							for="allow_feedback"
@@ -760,7 +762,7 @@
 			class="flex flex-col w-full"
 			action="/admin/halls/{editingId}?/changePlan"
 			method="post"
-			use:enhance={({ formData }) => {
+			use:enhance={() => {
 				return async ({ result }) => {
 					if (result.type === 'failure') {
 						hallCreateError = result.data?.message;
@@ -814,12 +816,12 @@
 
 <style lang="postcss">
 	/*
-	.color-picker-radio {
-		@apply w-full h-full rounded block p-1 border border-border-main/30 cursor-pointer relative hover:bg-slate-200;
-	}
-	.color-picker-radio div {
-		@apply w-full h-full rounded block;
-	}*/
+    .color-picker-radio {
+        @apply w-full h-full rounded block p-1 border border-border-main/30 cursor-pointer relative hover:bg-slate-200;
+    }
+    .color-picker-radio div {
+        @apply w-full h-full rounded block;
+    }*/
 	:global(input[type='radio'] + .color-picker-radio svg) {
 		@apply hidden;
 	}
@@ -830,9 +832,9 @@
 		@apply border-t border-border-main/30 hover:bg-background-4 cursor-pointer;
 	}
 	/*
-	.event-table-row-modify {
-		@apply mx-2 border-border-main/30 border w-8 h-8 flex justify-center items-center rounded duration-150 hover:bg-slate-300;
-	}*/
+    .event-table-row-modify {
+        @apply mx-2 border-border-main/30 border w-8 h-8 flex justify-center items-center rounded duration-150 hover:bg-slate-300;
+    }*/
 	.event-table-long-text {
 		@apply text-sm px-4 py-3 text-text-main max-w-40 overflow-ellipsis overflow-hidden whitespace-nowrap text-nowrap h-12;
 	}

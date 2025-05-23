@@ -55,9 +55,9 @@ export function brushes(stageRef: Konva.Stage) {
 	//Reinitialize the tables
 	const tablesReinit = structuredClone(get(tables));
 	tables.set([]);
-	setTimeout(()=>{
+	setTimeout(() => {
 		tables.set(tablesReinit);
-	},1);
+	}, 1);
 }
 
 export const dragStart = async (e: KonvaDragTransformEvent) => {
@@ -80,7 +80,6 @@ export const dragStart = async (e: KonvaDragTransformEvent) => {
 export const dragMove = async (e: KonvaDragTransformEvent) => {
 	if (!stage) return;
 	const target = e.target;
-	console.log(target.x(), target.y());
 	target.moveToTop();
 	const clone = stage.attrs.layers.uiLayer?.findOne('.DragPreview');
 	if (!clone) return;
@@ -198,7 +197,14 @@ export const dragEnd = async (e: KonvaDragTransformEvent) => {
 	}
 
 	clone?.destroy();
-	pushHistory({ gridData: get(gridData), points: get(points), zonePoints: get(zonePoints), walls: get(walls), zones: get(zones), tables: get(tables) });
+	pushHistory({
+		gridData: get(gridData),
+		points: get(points),
+		zonePoints: get(zonePoints),
+		walls: get(walls),
+		zones: get(zones),
+		tables: get(tables)
+	});
 	return;
 };
 
@@ -311,7 +317,14 @@ export const transformRotateEnd = async (e: KonvaDragTransformEvent) => {
 
 	clone?.destroy();
 
-	pushHistory({ gridData: get(gridData), points: get(points), zonePoints: get(zonePoints), walls: get(walls), zones: get(zones), tables: get(tables) });
+	pushHistory({
+		gridData: get(gridData),
+		points: get(points),
+		zonePoints: get(zonePoints),
+		walls: get(walls),
+		zones: get(zones),
+		tables: get(tables)
+	});
 
 	return;
 };

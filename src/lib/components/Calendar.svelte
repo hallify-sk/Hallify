@@ -52,7 +52,9 @@
 
 <div class="flex flex-col h-full">
 	<!--Loop over month Sveltekit-->
-	<div class="flex flex-row w-full col-span-7 gap-1 p-1 border-b border-border-main/30 bg-background-2 flex-nowrap">
+	<div
+		class="flex flex-row w-full col-span-7 gap-1 p-1 border-b border-border-main/30 bg-background-2 flex-nowrap"
+	>
 		<button
 			onclick={() => (selectingDay = !selectingDay)}
 			class="flex items-center w-full gap-2 px-2 py-2 text-sm duration-150 border rounded border-border-main/30 bg-background-1 hover:bg-background-4 text-text-2"

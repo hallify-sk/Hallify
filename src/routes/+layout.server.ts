@@ -1,7 +1,7 @@
 import { checkPermission } from '$lib/server/auth';
 import { error } from '@sveltejs/kit';
 import type { LayoutServerLoad } from './$types';
-import type { Permission, User } from '$lib/server/models';
+import type { Permission, User } from '$lib/server/schema';
 
 export const load: LayoutServerLoad = async ({ locals, request, depends }) => {
 	depends('/');

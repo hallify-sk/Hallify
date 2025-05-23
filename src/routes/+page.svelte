@@ -10,8 +10,6 @@
 
 	let { data } = $props();
 
-	console.log(data);
-
 	let showEventDialog = $state(false);
 </script>
 

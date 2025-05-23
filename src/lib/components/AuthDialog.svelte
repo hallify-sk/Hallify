@@ -66,7 +66,9 @@
 				<p in:fly={{ x: 10, duration: 600 }} class="text-danger">{loginError}</p>
 			{/if}
 		</div>
-		<div class="flex justify-between w-full p-4 border-t rounded-b bg-background-2 border-border-main/30">
+		<div
+			class="flex justify-between w-full p-4 border-t rounded-b bg-background-2 border-border-main/30"
+		>
 			<Button
 				color="transparent"
 				onclick={() => {
@@ -143,7 +145,9 @@
 				<p in:fly={{ x: 10, duration: 600 }} class="mt-4 text-danger">{registerError}</p>
 			{/if}
 		</div>
-		<div class="flex justify-between w-full p-4 border-t rounded-b bg-background-2 border-slate-400/30">
+		<div
+			class="flex justify-between w-full p-4 border-t rounded-b bg-background-2 border-slate-400/30"
+		>
 			<Button
 				onclick={() => {
 					openRegister = false;
@@ -159,10 +163,7 @@
 					</Icon>
 					<p>Prihlásiť sa</p>
 				</Button>
-				<Button
-					type="submit"
-					color="primary"
-				>
+				<Button type="submit" color="primary">
 					<Icon scale="small">
 						<Plus />
 					</Icon>

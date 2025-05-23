@@ -4,10 +4,12 @@ import {
 	setSessionTokenCookie,
 	validatePassword
 } from '$lib/server/auth.js';
-import { User } from '$lib/server/models.js';
+import { users } from '$lib/server/schema.js';
 import { TokenBucket } from '$lib/server/ratelimit';
 import { isValidEmail } from '$lib/util.js';
 import { fail } from '@sveltejs/kit';
+import { db } from '$lib/server/db.js';
+import { eq } from 'drizzle-orm';
 
 const authBucket = new TokenBucket<string>(2, 1);
 
@@ -28,7 +30,7 @@ export const actions = {
 			return fail(400, { message: 'E-Mail je neplatný.', validate: ['email'] });
 		}
 		email = email.toLowerCase();
-		const user = await User.findOne({ where: { email } });
+		const user = (await db.select().from(users).where(eq(users.email, email)).limit(1))[0];
 		if (!user) {
 			return fail(404, { message: 'Účet s týmto e-mailom neexistuje.', validate: ['email'] });
 		}

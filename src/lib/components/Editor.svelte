@@ -1,3 +1,4 @@
+<!-- eslint-disable-file -->
 <script lang="ts">
 	import { Stage, Layer, Rect, Line, Group, Transformer, Circle } from 'svelte-konva';
 	import { registerWheelEvent } from './editor/events/wheel';
@@ -58,14 +59,8 @@
 	} = $props();
 
 	$effect(() => {
-		if ($plugins) {
-			console.log($plugins);
-		}
-	});
-
-	$effect(() => {
 		if (stage) {
-			const stageHandle = stage?.handle();
+			const stageHandle = stage?.node;
 			setStage(stage);
 			if (!stageHandle) return;
 			windowWidth = window.innerWidth;
@@ -78,11 +73,11 @@
 			};
 			//Register things to be used by other plugins;
 			const attributes = stageHandle.attrs as StageAttrs;
-			attributes.tr = tr?.handle;
+			attributes.tr = tr?.node;
 			attributes.layers = {
-				uiLayer: uiLayer?.handle,
-				gridLayer: gridLayer?.handle,
-				collisionLayer: collisionLayer?.handle
+				uiLayer: uiLayer?.node,
+				gridLayer: gridLayer?.node,
+				collisionLayer: collisionLayer?.node
 			};
 			stageHandle.attrs.grid = {
 				gridSize,
@@ -98,13 +93,13 @@
 
 	onMount(async () => {
 		if (stage) {
-			const stageHandle = stage?.handle();
+			const stageHandle = stage?.node;
 			if (!stageHandle) return;
 		}
 	});
 
 	function stageDragConstraint(pos: Vector2d) {
-		let scale = stage?.handle()?.scaleX() || 1;
+		let scale = stage?.node?.scaleX() || 1;
 
 		let newX = constraintNumber(
 			pos.x,
@@ -303,8 +298,10 @@
 			<p>Zrušiť</p>
 		</Button>
 		<div class="flex flex-row gap-2">
-			<Button type="button" color="danger" onclick={
-				() => {
+			<Button
+				type="button"
+				color="danger"
+				onclick={() => {
 					gridData.set({
 						width: 20,
 						height: 20
@@ -317,8 +314,8 @@
 					$zones = [];
 					$zonePoints = [];
 					openConfirmDeleteDialog = false;
-				}
-			}>
+				}}
+			>
 				<Icon scale="small">
 					<Plus />
 				</Icon>

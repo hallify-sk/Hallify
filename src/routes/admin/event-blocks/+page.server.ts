@@ -1,6 +1,15 @@
-import { Hall, Plan, Reservation } from '$lib/server/models.js';
+import { db } from '$lib/server/db.js';
+import {
+	halls,
+	plans,
+	reservations,
+	type Hall,
+	type Plan,
+	type Reservation
+} from '$lib/server/schema.js';
 import { serializeNonPOJOs, validateHex } from '$lib/util';
 import { fail } from '@sveltejs/kit';
+import { eq } from 'drizzle-orm';
 
 export const actions = {
 	changeHallPlan: async function ({ request }) {
@@ -16,24 +25,44 @@ export const actions = {
 		if (!plan_id || typeof plan_id !== 'string' || plan_id.length < 1) {
 			return fail(400, { message: 'ID plánu je povinné.', validate: ['plan_id'] });
 		}
-		const hall = await Hall.findOne({ where: { id: hall_id } });
-		if (!hall) {
+
+		const hall = await db
+			.select()
+			.from(halls)
+			.where(eq(halls.id, parseInt(hall_id)))
+			.limit(1);
+		if (!hall[0]) {
 			return fail(404, { message: 'Sála neexistuje.', validate: ['hall_id'] });
 		}
-		const plan = await Plan.findOne({ where: { id: plan_id } });
-		if (!plan) {
+
+		const plan = await db
+			.select()
+			.from(plans)
+			.where(eq(plans.id, parseInt(plan_id)))
+			.limit(1);
+		if (!plan[0]) {
 			return fail(404, { message: 'Plán neexistuje.', validate: ['plan_id'] });
 		}
-		const planExists = await Hall.findOne({ where: { plan: plan_id } });
-		if (planExists) {
+
+		const planExists = await db
+			.select()
+			.from(halls)
+			.where(eq(halls.plan, parseInt(plan_id)))
+			.limit(1);
+		if (planExists[0]) {
 			return fail(400, { message: 'Plán už patrí inej sále.', validate: ['plan_id'] });
 		}
 
 		// Update hall
-		hall.plan = parseInt(plan_id);
-		await hall.save();
-		return { hall: serializeNonPOJOs(hall) };
+		const updatedHall = await db
+			.update(halls)
+			.set({ plan: parseInt(plan_id) })
+			.where(eq(halls.id, parseInt(hall_id)))
+			.returning();
+
+		return { hall: serializeNonPOJOs(updatedHall[0]) };
 	},
+
 	create: async function ({ request }) {
 		if (request.method != 'POST') {
 			return fail(405, { message: 'Metóda nie je povolená.' });
@@ -43,49 +72,74 @@ export const actions = {
 		if (!name || typeof name !== 'string' || name.length < 1) {
 			return fail(400, { message: 'Názov sály je povinný.', validate: ['name'] });
 		}
-		if (await Hall.findOne({ where: { name } })) {
+
+		const existingHallByName = await db.select().from(halls).where(eq(halls.name, name)).limit(1);
+		if (existingHallByName[0]) {
 			return fail(400, { message: 'Sála s týmto názvom už existuje.', validate: ['name'] });
 		}
+
 		const plan = formData.get('plan');
 		if (plan && typeof plan !== 'number') {
 			return fail(400, { message: 'Plán sály je neplatný.', validate: ['plan'] });
 		}
+
 		const color = formData.get('color_value');
 		if (!color || typeof color !== 'string' || color.length < 1) {
 			return fail(400, { message: 'Farba sály je povinná.', validate: ['color'] });
 		}
-		if (await Hall.findOne({ where: { color } })) {
+
+		const existingHallByColor = await db
+			.select()
+			.from(halls)
+			.where(eq(halls.color, color))
+			.limit(1);
+		if (existingHallByColor[0]) {
 			return fail(400, { message: 'Sála s touto farbou už existuje.', validate: ['color'] });
 		}
+
 		if (validateHex(color) === false) {
 			return fail(400, { message: 'Farba sály je neplatná.', validate: ['color'] });
 		}
+
 		const allow_reservations = formData.get('allow_reservations') == 'on';
 		const custom_layouts = formData.get('custom_layouts') == 'on';
 		const force_layouts = formData.get('force_layouts') == 'on';
 		const allow_feedback = formData.get('allow_feedback') == 'on';
 
 		// Create hall
-		const hall = Hall.create({
-			name,
-			color,
-			allow_reservations,
-			custom_layouts,
-			force_layouts,
-			allow_feedback
-		});
-		
-		return { hall: serializeNonPOJOs(hall) };
+		const newHall = await db
+			.insert(halls)
+			.values({
+				name,
+				color,
+				allow_reservations,
+				custom_layouts,
+				force_layouts,
+				allow_feedback,
+				plan: plan ? parseInt(plan as string) : null
+			})
+			.returning();
+
+		return { hall: serializeNonPOJOs(newHall[0]) };
 	}
 };
 
 export const load = async function () {
-	const halls = await Hall.findAll({include: {model: Plan}});
-	const plans = await Plan.findAll();
-	const reservations = await Reservation.findAll();
+	// Get halls with their plans using a join
+	const hallsWithPlans = await db
+		.select({
+			hall: halls,
+			plan: plans
+		})
+		.from(halls)
+		.leftJoin(plans, eq(halls.plan, plans.id));
+
+	const allPlans = await db.select().from(plans);
+	const allReservations = await db.select().from(reservations);
+
 	return {
-		halls: serializeNonPOJOs(halls) as Array<Hall>,
-		plans: serializeNonPOJOs(plans) as Array<Plan>,
-		reservations: serializeNonPOJOs(reservations) as Array<Reservation>
+		halls: serializeNonPOJOs(hallsWithPlans) as Array<{ hall: Hall; plan: Plan | null }>,
+		plans: serializeNonPOJOs(allPlans) as Array<Plan>,
+		reservations: serializeNonPOJOs(allReservations) as Array<Reservation>
 	};
 };

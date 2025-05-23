@@ -6,7 +6,7 @@ services:
       context: .
       dockerfile: Dockerfile
     ports:
-      - "8007:3000"
+      - '8007:3000'
     environment:
       - SQLURI=${SQLURI}
     depends_on:
@@ -16,7 +16,7 @@ services:
     image: mysql:8.0
     container_name: hallify_mysql
     ports:
-      - "3308:3306"
+      - '3308:3306'
     env_file:
       - .env
     volumes:

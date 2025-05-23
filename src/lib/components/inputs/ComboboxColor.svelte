@@ -21,7 +21,6 @@
 		name = newName;
 		value = newValue;
 		showOptions = false;
-		console.log(name, value);
 	}
 
 	interface Props {

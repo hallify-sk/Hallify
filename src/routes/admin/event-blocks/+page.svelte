@@ -7,7 +7,7 @@
 	import Switch from '$lib/components/inputs/Switch.svelte';
 	import Calendar from '$lib/components/Calendar.svelte';
 	import Button from '$lib/components/Button.svelte';
-	
+
 	const { data } = $props();
 
 	let validate: string[] = $state([]);
@@ -26,9 +26,7 @@
 			<p class="text-text-main">Časové výluky</p>
 		</div>
 		<div class="flex flex-row items-center flex-nowrap">
-			<Button
-				color="primary"
-			>
+			<Button color="primary">
 				<Icon scale="small">
 					<Plus />
 				</Icon>
@@ -58,10 +56,14 @@
 						</colgroup>
 						<thead>
 							<tr class="bg-background-2">
-								<th rowspan="2" class="text-[0.65rem] text-left px-4 py-2 text-text-1 font-normal uppercase border-r border-solid border-r-border-main/40"
+								<th
+									rowspan="2"
+									class="text-[0.65rem] text-left px-4 py-2 text-text-1 font-normal uppercase border-r border-solid border-r-border-main/40"
 									>Názov sály</th
 								>
-								<th colspan="7" class="text-[0.65rem] px-4 pt-2 text-text-1 font-bold text-center uppercase"
+								<th
+									colspan="7"
+									class="text-[0.65rem] px-4 pt-2 text-text-1 font-bold text-center uppercase"
 									>Povolené dni</th
 								>
 							</tr>
@@ -90,31 +92,31 @@
 							</tr>
 						</thead>
 						<tbody>
-							{#each data.halls as hall}
-								<tr
-									class="event-table-row"
-								>
+							<!-- Fix: Access hall data correctly for Drizzle join result -->
+							{#each data.halls as hallItem}
+								{@const hall = hallItem.hall}
+								<tr class="event-table-row">
 									<td class="event-table-long-text">{hall.name}</td>
 									<td class="px-4 py-3 text-sm text-slate-600">
-										<Switch checked={true} name="{hall.id}-pon" id="{hall.id}-pon"/>
+										<Switch checked={true} name="{hall.id}-pon" id="{hall.id}-pon" />
 									</td>
 									<td class="px-4 py-3 text-sm text-slate-600">
-										<Switch checked={true} name="{hall.id}-uto" id="{hall.id}-uto"/>
+										<Switch checked={true} name="{hall.id}-uto" id="{hall.id}-uto" />
 									</td>
 									<td class="px-4 py-3 text-sm text-slate-600">
-										<Switch checked={true} name="{hall.id}-str" id="{hall.id}-str"/>
+										<Switch checked={true} name="{hall.id}-str" id="{hall.id}-str" />
 									</td>
 									<td class="px-4 py-3 text-sm text-slate-600">
-										<Switch checked={true} name="{hall.id}-stv" id="{hall.id}-stv"/>
+										<Switch checked={true} name="{hall.id}-stv" id="{hall.id}-stv" />
 									</td>
 									<td class="px-4 py-3 text-sm text-slate-600">
-										<Switch checked={true} name="{hall.id}-pia" id="{hall.id}-pia"/>
+										<Switch checked={true} name="{hall.id}-pia" id="{hall.id}-pia" />
 									</td>
 									<td class="px-4 py-3 text-sm text-slate-600">
-										<Switch checked={true} name="{hall.id}-sob" id="{hall.id}-sob"/>
+										<Switch checked={true} name="{hall.id}-sob" id="{hall.id}-sob" />
 									</td>
 									<td class="px-4 py-3 text-sm text-slate-600">
-										<Switch checked={true} name="{hall.id}-ned" id="{hall.id}-ned"/>
+										<Switch checked={true} name="{hall.id}-ned" id="{hall.id}-ned" />
 									</td>
 								</tr>
 							{/each}
@@ -131,9 +133,7 @@
 					class="flex flex-row items-center justify-between p-4 border-b border-border-main/30 bg-background-1"
 				>
 					<h2 class="text-text-main">Časové výluky</h2>
-					<Button color="primary">
-						Vytvoriť výluku
-					</Button>
+					<Button color="primary">Vytvoriť výluku</Button>
 				</div>
 			</div>
 			<div

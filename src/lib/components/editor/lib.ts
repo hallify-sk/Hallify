@@ -204,8 +204,8 @@ interface zoneVector2d extends namedVector2d {
 	color: string;
 }
 
-interface HistoryState {
-	gridData: {width: number; height: number};
+export interface HistoryState {
+	gridData: { width: number; height: number };
 	points: namedVector2d[];
 	zonePoints: zoneVector2d[];
 	walls: { points: number[]; name: string }[];
@@ -219,7 +219,7 @@ let historyIndex = -1;
 export const history: HistoryState[] = [];
 
 history.push({
-	gridData: {width: 20, height: 20},
+	gridData: { width: 20, height: 20 },
 	points: [],
 	zonePoints: [],
 	walls: [],
@@ -231,7 +231,7 @@ historyIndex = 1;
 export function pushHistory(state: HistoryState) {
 	// Create deep copy of state to prevent reference issues
 	const newState = {
-		gridData: {width: state.gridData.width, height: state.gridData.height},
+		gridData: { width: state.gridData.width, height: state.gridData.height },
 		points: JSON.parse(JSON.stringify(state.points)),
 		zonePoints: JSON.parse(JSON.stringify(state.zonePoints)),
 		walls: JSON.parse(JSON.stringify(state.walls)),
@@ -254,10 +254,6 @@ export function pushHistory(state: HistoryState) {
 	}
 
 	historyIndex = history.length - 1;
-
-	//console.log('History pushed:', historyIndex, history.length);
-	// Optionally, you can log the current state for debugging
-	console.log('Current state:', JSON.stringify(newState, null, 2));
 }
 
 export function undo(): HistoryState | null {
@@ -295,7 +291,10 @@ export interface Table {
 
 export const tables: Writable<Table[]> = writable([]);
 
-export const gridData: Writable<{width: number, height: number}> = writable({width: 20, height: 20});
+export const gridData: Writable<{ width: number; height: number }> = writable({
+	width: 20,
+	height: 20
+});
 
 let stage: ReturnType<typeof Stage>;
 
@@ -304,56 +303,56 @@ export function setStage(s: ReturnType<typeof Stage>) {
 }
 
 export function screenshotStage() {
-    // Ensure the stage exists
-    if (!stage) return;
+	// Ensure the stage exists
+	if (!stage) return;
 
-    // Get the stage handle
-    const stageHandle = stage.handle();
-    if (!stageHandle) return;
+	// Get the stage handle
+	const stageHandle = stage.node;
+	if (!stageHandle) return;
 
-    // Save the current stage position and scale
-    const originalPosition = stageHandle.position();
-    const originalScale = stageHandle.scale();
-    const originalSize = stageHandle.size();
+	// Save the current stage position and scale
+	const originalPosition = stageHandle.position();
+	const originalScale = stageHandle.scale();
+	const originalSize = stageHandle.size();
 
-    // Reset the stage scale to normal
-    stageHandle.scale({ x: 1, y: 1 });
+	// Reset the stage scale to normal
+	stageHandle.scale({ x: 1, y: 1 });
 
-    // Calculate the stage dimensions
-    const stageWidth = stageHandle.attrs.grid.gridWidth * stageHandle.attrs.grid.gridSize;
-    const stageHeight = stageHandle.attrs.grid.gridHeight * stageHandle.attrs.grid.gridSize;
+	// Calculate the stage dimensions
+	const stageWidth = stageHandle.attrs.grid.gridWidth * stageHandle.attrs.grid.gridSize;
+	const stageHeight = stageHandle.attrs.grid.gridHeight * stageHandle.attrs.grid.gridSize;
 
-    // Determine the larger dimension and calculate the scaling factor
-    const maxDimension = Math.max(stageWidth, stageHeight);
-    const scaleFactor = Math.min(800 / maxDimension, 1); // Cap at 800px
+	// Determine the larger dimension and calculate the scaling factor
+	const maxDimension = Math.max(stageWidth, stageHeight);
+	const scaleFactor = Math.min(800 / maxDimension, 1); // Cap at 800px
 
-    // Create a square canvas of 800x800
-    stageHandle.size({
-        width: 800,
-        height: 800
-    });
+	// Create a square canvas of 800x800
+	stageHandle.size({
+		width: 800,
+		height: 800
+	});
 
-    // Calculate center position to ensure content is centered in the square
-    // We need to offset the stage position to center the content
-    const offsetX = (800 - stageWidth * scaleFactor) / 2;
-    const offsetY = (800 - stageHeight * scaleFactor) / 2;
-    
-    // Position the stage to center the content
-    stageHandle.position({ x: offsetX, y: offsetY });
-    
-    // Scale the stage appropriately
-    stageHandle.scale({ x: scaleFactor, y: scaleFactor });
+	// Calculate center position to ensure content is centered in the square
+	// We need to offset the stage position to center the content
+	const offsetX = (800 - stageWidth * scaleFactor) / 2;
+	const offsetY = (800 - stageHeight * scaleFactor) / 2;
 
-    // Capture the stage as a data URL
-    const dataURL = stageHandle.toDataURL({
-        width: 800,
-        height: 800
-    });
+	// Position the stage to center the content
+	stageHandle.position({ x: offsetX, y: offsetY });
 
-    // Restore the original stage position, scale, and size
-    stageHandle.position(originalPosition);
-    stageHandle.scale(originalScale);
-    stageHandle.size({ width: originalSize.width, height: originalSize.height });
-    // Return the captured data URL
-    return dataURL;
+	// Scale the stage appropriately
+	stageHandle.scale({ x: scaleFactor, y: scaleFactor });
+
+	// Capture the stage as a data URL
+	const dataURL = stageHandle.toDataURL({
+		width: 800,
+		height: 800
+	});
+
+	// Restore the original stage position, scale, and size
+	stageHandle.position(originalPosition);
+	stageHandle.scale(originalScale);
+	stageHandle.size({ width: originalSize.width, height: originalSize.height });
+	// Return the captured data URL
+	return dataURL;
 }

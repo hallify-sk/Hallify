@@ -1,14 +1,21 @@
-import { Hall } from '$lib/server/models.js';
+import { db } from '$lib/server/db.js';
+import { halls } from '$lib/server/schema.js';
 import { serializeNonPOJOs, validateHex } from '$lib/util.js';
+import { eq, and, ne } from 'drizzle-orm';
 
 export async function PUT({ request, params }) {
 	const id = params.id;
-	const hall = await Hall.findOne({ where: { id } });
+	const hall = (
+		await db
+			.select()
+			.from(halls)
+			.where(eq(halls.id, parseInt(id)))
+			.limit(1)
+	)[0];
 	if (!hall) {
 		return new Response(null, { status: 404, statusText: 'Nenašla sa sála s týmto ID.' });
 	}
 	const formData = await request.formData();
-	console.log(formData);
 	const name = formData.get('name')?.toString();
 	if (!name || typeof name !== 'string' || name.length < 1) {
 		return new Response(JSON.stringify({ message: 'Názov sály je povinný.', validate: ['name'] }), {
@@ -18,8 +25,14 @@ export async function PUT({ request, params }) {
 			}
 		});
 	}
-	const hallSecond = await Hall.findOne({ where: { name } });
-	if (hallSecond && hallSecond.id !== hall.id) {
+	const hallSecond = (
+		await db
+			.select()
+			.from(halls)
+			.where(and(eq(halls.name, name), ne(halls.id, parseInt(id))))
+			.limit(1)
+	)[0];
+	if (hallSecond) {
 		return new Response(
 			JSON.stringify({ message: 'Sála s týmto názvom už existuje.', validate: ['name'] }),
 			{ status: 400, headers: { 'Content-Type': 'application/json' } }
@@ -57,8 +70,14 @@ export async function PUT({ request, params }) {
 			}
 		);
 	}
-	const hallThird = await Hall.findOne({ where: { color } });
-	if (hallThird && hallThird.id !== hall.id) {
+	const hallThird = (
+		await db
+			.select()
+			.from(halls)
+			.where(and(eq(halls.color, color), ne(halls.id, parseInt(id))))
+			.limit(1)
+	)[0];
+	if (hallThird) {
 		return new Response(
 			JSON.stringify({ message: 'Sála s touto farbou už existuje.', validate: ['color'] }),
 			{
@@ -73,15 +92,26 @@ export async function PUT({ request, params }) {
 	const custom_layouts = formData.get('custom_layouts') == 'true';
 	const force_layouts = formData.get('force_layouts') == 'true';
 	const allow_feedback = formData.get('allow_feedback') == 'true';
+
 	// Update hall
-	await hall.update({
-		name,
-		plan,
-		color,
-		allow_reservations,
-		custom_layouts,
-		force_layouts,
-		allow_feedback
+	const updatedHall = await db
+		.update(halls)
+		.set({
+			name,
+			plan: plan || null,
+			color,
+			allow_reservations,
+			custom_layouts,
+			force_layouts,
+			allow_feedback
+		})
+		.where(eq(halls.id, parseInt(id)))
+		.returning();
+
+	return new Response(JSON.stringify(serializeNonPOJOs(updatedHall[0])), {
+		status: 200,
+		headers: {
+			'Content-Type': 'application/json'
+		}
 	});
-	return new Response(serializeNonPOJOs(hall), { status: 200 });
 }

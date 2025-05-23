@@ -3,9 +3,15 @@
 		name,
 		id,
 		type = 'text',
-		value = $bindable(""),
+		value = $bindable(''),
 		placeholder
-	}: { name: string; id: string; type?: 'text' | 'password' | 'email'; value?: string, placeholder?: string } = $props();
+	}: {
+		name: string;
+		id: string;
+		type?: 'text' | 'password' | 'email';
+		value?: string;
+		placeholder?: string;
+	} = $props();
 
 	function removeValidation() {
 		(document.getElementById(id) as HTMLInputElement).setCustomValidity('');

@@ -4,14 +4,18 @@ import {
 	setSessionTokenCookie,
 	validateSessionToken
 } from '$lib/server/auth';
-import { Permission } from '$lib/server/models';
+import { db } from '$lib/server/db';
+import { permissions, type Permission } from '$lib/server/schema';
 import { error, type Handle } from '@sveltejs/kit';
+import { eq } from 'drizzle-orm';
 
 export const handle: Handle = async ({ event, resolve }) => {
 	const token = event.cookies.get('session') ?? null;
 
 	if (token === null) {
-		const permission = await Permission.findByPk(`1`);
+		const permission: Permission = (
+			await db.select().from(permissions).where(eq(permissions.id, 1)).limit(1)
+		)[0];
 		if (!permission) {
 			throw new Error('Permission table is missing default permission (ID = 1).');
 		}
@@ -35,9 +39,13 @@ export const handle: Handle = async ({ event, resolve }) => {
 		deleteSessionTokenCookie(event.cookies);
 	}
 
-	const permission = user
-		? await Permission.findByPk(`${user.permission_id}`)
-		: await Permission.findByPk(`1`);
+	const permission: Permission | null = (
+		await db
+			.select()
+			.from(permissions)
+			.where(eq(permissions.id, user?.permission_id ?? 1))
+			.limit(1)
+	)[0];
 
 	if (!permission) {
 		throw new Error('Permission table is missing default permission (ID = 1).');
