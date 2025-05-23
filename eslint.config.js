@@ -20,13 +20,6 @@ export default [
 		}
 	},
 	{
-		ignores: [
-			'node_modules/',
-			'package-lock.json',
-			'pnpm-lock.yaml',
-			'yarn.lock',
-			'src/lib/components/Editor.svelte'
-		],
 		files: ['**/*.svelte'],
 		languageOptions: {
 			parserOptions: {
@@ -35,6 +28,6 @@ export default [
 		}
 	},
 	{
-		ignores: ['build/', '.svelte-kit/', 'dist/']
+		ignores: ['build/', '.svelte-kit/', 'dist/', 'src/lib/components/Editor.svelte']
 	}
 ];
