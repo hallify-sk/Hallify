@@ -42,12 +42,7 @@ jobs:
   SvelteKit:
     runs-on: ubuntu-latest
     env:
-      SQLURI: ${{ vars.SQLURI }}
-      PUBLIC_CALENDAR_EXPIRE: ${{ vars.PUBLIC_CALENDAR_EXPIRE }}
-      PUBLIC_DEV: ${{ vars.PUBLIC_DEV }}
-      PUBLIC_TURNSTILE_TOKEN: ${{ vars.PUBLIC_TURNSTILE_TOKEN }}
-      PUBLIC_TURNSTILE_URL: ${{ vars.PUBLIC_TURNSTILE_URL }}
-      SECRET_TURNSTILE_TOKEN: ${{ secrets.SECRET_TURNSTILE_TOKEN }}
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
     strategy:
       matrix:
         bun-version: [latest]
