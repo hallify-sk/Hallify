@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type Editor from '$lib/components/Editor.svelte.bak';
+	import type Editor from '$lib/components/Editor.svelte';
 	import { tables, type HistoryState } from '$lib/components/editor/lib.js';
 	import { points, walls, zonePoints, zones } from '$lib/util.js';
 	import { onMount } from 'svelte';
@@ -21,7 +21,7 @@
 
 	onMount(async () => {
 		// Dynamically import your canvas component encapsulating all svelte-konva functionality inside onMount()
-		MyCanvas = (await import('$lib/components/Editor.svelte.bak')).default;
+		MyCanvas = (await import('$lib/components/Editor.svelte')).default;
 
 		// Fix: Check if plan exists and access data correctly
 		if (data.plan?.data) {
