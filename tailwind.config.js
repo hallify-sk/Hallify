@@ -1,76 +1,171 @@
+import themer from 'tailwindcss-themer';
+import colors from 'tailwindcss/colors';
+
 /** @type {import('tailwindcss').Config} */
 export default {
-	content: ["./src/**/*.{html,js,svelte,ts}"],
+	content: ['./src/**/*.{html,js,svelte,ts}', './node_modules/layerchart/**/*.{svelte,js}'],
 	theme: {
-		extend: {
-			colors: {
-				text: {
-					50: "var(--text-50)",
-					100: "var(--text-100)",
-					200: "var(--text-200)",
-					300: "var(--text-300)",
-					400: "var(--text-400)",
-					500: "var(--text-500)",
-					600: "var(--text-600)",
-					700: "var(--text-700)",
-					800: "var(--text-800)",
-					900: "var(--text-900)",
-					950: "var(--text-950)"
-				},
-				background: {
-					50: "var(--background-50)",
-					100: "var(--background-100)",
-					200: "var(--background-200)",
-					300: "var(--background-300)",
-					400: "var(--background-400)",
-					500: "var(--background-500)",
-					600: "var(--background-600)",
-					700: "var(--background-700)",
-					800: "var(--background-800)",
-					900: "var(--background-900)",
-					950: "var(--background-950)"
-				},
-				primary: {
-					50: "var(--primary-50)",
-					100: "var(--primary-100)",
-					200: "var(--primary-200)",
-					300: "var(--primary-300)",
-					400: "var(--primary-400)",
-					500: "var(--primary-500)",
-					600: "var(--primary-600)",
-					700: "var(--primary-700)",
-					800: "var(--primary-800)",
-					900: "var(--primary-900)",
-					950: "var(--primary-950)"
-				},
-				secondary: {
-					50: "var(--secondary-50)",
-					100: "var(--secondary-100)",
-					200: "var(--secondary-200)",
-					300: "var(--secondary-300)",
-					400: "var(--secondary-400)",
-					500: "var(--secondary-500)",
-					600: "var(--secondary-600)",
-					700: "var(--secondary-700)",
-					800: "var(--secondary-800)",
-					900: "var(--secondary-900)",
-					950: "var(--secondary-950)"
-				},
-				accent: {
-					50: "var(--accent-50)",
-					100: "var(--accent-100)",
-					200: "var(--accent-200)",
-					300: "var(--accent-300)",
-					400: "var(--accent-400)",
-					500: "var(--accent-500)",
-					600: "var(--accent-600)",
-					700: "var(--accent-700)",
-					800: "var(--accent-800)",
-					900: "var(--accent-900)",
-					950: "var(--accent-950)"
-				}
-			}
-		}
+		extend: {}
 	},
-	plugins: []
+	darkMode: 'class',
+	plugins: [
+		themer({
+			defaultTheme: {
+				extend: {
+					colors: {
+						primary: colors.blue[500],
+						'primary-1': colors.blue[300],
+						'primary-2': colors.blue[400],
+						'primary-4': colors.blue[600],
+						'primary-5': colors.blue[700],
+						secondary: colors.pink[500],
+						'secondary-1': colors.pink[300],
+						'secondary-2': colors.pink[400],
+						'secondary-4': colors.pink[600],
+						'secondary-5': colors.pink[700],
+						accent: '#f66d9b',
+						black: '#000000',
+						white: colors.slate[100],
+						'background-main': colors.slate[200],
+						'background-1': colors.slate[100],
+						'background-2': colors.slate[200],
+						'background-4': colors.slate[200],
+						'background-5': colors.slate[100],
+						'border-main': colors.slate[400],
+						'text-main': colors.slate[700],
+						'text-1': colors.slate[500],
+						'text-2': colors.slate[600],
+						'text-4': colors.slate[800],
+						'text-5': colors.slate[900],
+						'calendar-sunday-main': colors.red[500],
+						'calendar-sunday-1': colors.red[300],
+						warning: colors.yellow[500],
+						'warning-1': colors.yellow[300],
+						'warning-2': colors.yellow[400],
+						'warning-4': colors.yellow[600],
+						'warning-5': colors.yellow[700],
+						danger: colors.red[500],
+						'danger-1': colors.red[300],
+						'danger-2': colors.red[400],
+						'danger-4': colors.red[600],
+						'danger-5': colors.red[700],
+						success: colors.green[500],
+						'success-1': colors.green[300],
+						'success-2': colors.green[400],
+						'success-4': colors.green[600],
+						'success-5': colors.green[700]
+					}
+				}
+			},
+			themes: [
+				{
+					name: 'darkTheme',
+					selectors: ['.dark', '[data-theme="dark"]'],
+					extend: {
+						colors: {
+							primary: colors.blue[400],
+							'primary-1': colors.blue[200],
+							'primary-2': colors.blue[300],
+							'primary-4': colors.blue[500],
+							'primary-5': colors.blue[600],
+							secondary: colors.pink[400],
+							'secondary-1': colors.pink[200],
+							'secondary-2': colors.pink[300],
+							'secondary-4': colors.pink[500],
+							'secondary-5': colors.pink[600],
+							accent: '#f66d9b',
+							black: colors.slate[900],
+							white: colors.slate[100],
+							'background-main': colors.gray[800],
+							'background-1': colors.gray[700],
+							'background-2': colors.gray[800],
+							'background-4': colors.gray[600],
+							'background-5': colors.gray[500],
+							'border-main': colors.gray[500],
+							'text-main': colors.gray[200],
+							'text-1': colors.gray[400],
+							'text-2': colors.gray[300],
+							'text-4': colors.gray[100],
+							'text-5': colors.gray[50],
+							'calendar-sunday-main': colors.red[400],
+							'calendar-sunday-1': colors.red[300],
+							warning: colors.yellow[400],
+							'warning-1': colors.yellow[200],
+							'warning-2': colors.yellow[300],
+							'warning-4': colors.yellow[500],
+							'warning-5': colors.yellow[600],
+							danger: colors.red[400],
+							'danger-1': colors.red[200],
+							'danger-2': colors.red[300],
+							'danger-4': colors.red[500],
+							'danger-5': colors.red[600],
+							success: colors.green[400],
+							'success-1': colors.green[200],
+							'success-2': colors.green[300],
+							'success-4': colors.green[500],
+							'success-5': colors.green[600]
+						}
+					}
+				},
+				{
+					name: 'neon',
+					selectors: ['.neon'],
+					extend: {
+						colors: {
+							primary: colors.lime[400],
+							'primary-1': colors.lime[200],
+							'primary-2': colors.lime[300],
+							'primary-4': colors.lime[500],
+							'primary-5': colors.lime[600],
+							secondary: colors.pink[400],
+							'secondary-1': colors.pink[200],
+							'secondary-2': colors.pink[300],
+							'secondary-4': colors.pink[500],
+							'secondary-5': colors.pink[600],
+							accent: '#f66d9b',
+							black: colors.slate[900],
+							white: colors.slate[100],
+							'background-main': colors.gray[800],
+							'background-1': colors.gray[700],
+							'background-2': colors.gray[800],
+							'background-4': colors.gray[600],
+							'background-5': colors.gray[500],
+							'border-main': colors.gray[500],
+							'text-main': colors.gray[200],
+							'text-1': colors.gray[400],
+							'text-2': colors.gray[300],
+							'text-4': colors.gray[100],
+							'text-5': colors.gray[50],
+							'calendar-sunday-main': colors.red[400],
+							'calendar-sunday-1': colors.red[300],
+							warning: colors.yellow[400],
+							'warning-1': colors.yellow[200],
+							'warning-2': colors.yellow[300],
+							'warning-4': colors.yellow[500],
+							'warning-5': colors.yellow[600],
+							danger: colors.red[400],
+							'danger-1': colors.red[200],
+							'danger-2': colors.red[300],
+							'danger-4': colors.red[500],
+							'danger-5': colors.red[600],
+							success: colors.green[400],
+							'success-1': colors.green[200],
+							'success-2': colors.green[300],
+							'success-4': colors.green[500],
+							'success-5': colors.green[600]
+						}
+					}
+				}
+			]
+		})
+	],
+	safelist: [
+		'col-start-1',
+		'col-start-2',
+		'col-start-3',
+		'col-start-4',
+		'col-start-5',
+		'col-start-6',
+		'col-start-7'
+	]
 };

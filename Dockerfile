@@ -1,6 +1,6 @@
 FROM node:20-alpine
 
-# Install system dependencies required for canvas
+# Install system dependencies required for native modules and canvas
 RUN apk add --no-cache \
     python3 \
     make \
@@ -11,20 +11,20 @@ RUN apk add --no-cache \
     giflib-dev \
     librsvg-dev
 
-RUN mkdir -p /home/node/app/node_modules && chown -R node:node /home/node/app
+WORKDIR /app
 
-WORKDIR /home/node/app
-
+# Copy package files
 COPY package*.json ./
 
-USER node
-
+# Install dependencies
 RUN npm ci
 
-COPY --chown=node:node . .
+# Copy rest of the application
+COPY . .
 
+# Build the application
 RUN npm run build
 
 EXPOSE 3000
 
-CMD [ "node", "./build/index.js" ]
+CMD ["node", "build"]

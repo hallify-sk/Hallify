@@ -14,8 +14,7 @@
 
 Hallify je najmodernejší rezervačný systém pre spoločenské sály, ktorý podporuje vytváranie rozložení sál. Tento repozitár obsahuje samostatnú aplikáciu, ktorú vytvárame a distribujeme.
 
-> [!NOTE]
-> **Hallify je v štádiu skorého vývoja** - veľa vecí sa bude ešte meniť a produkt je momentálne nepoužiteľný v reálnom prostredí.
+> [!NOTE] > **Hallify je v štádiu skorého vývoja** - veľa vecí sa bude ešte meniť a produkt je momentálne nepoužiteľný v reálnom prostredí.
 
 ## Setup development prostredia
 
@@ -25,12 +24,12 @@ Hallify je najmodernejší rezervačný systém pre spoločenské sály, ktorý 
 4. Ak nemáte, stiahnite si [Node.JS](https://nodejs.org/en), po inštalácií reštartujte PC
 5. Otvorte si prvý terminál v `/` a napíšte doň `npm install`
 6. Otvorte si druhý terminál v `/pb` a napíšte doň `./pocketbase serve` (ak máte nejaký problém, obráťte sa na [pocketbase dokumentáciu](https://pocketbase.io/docs))
-> [!WARNING]
-> Ak PocketBase spustíte na inom porte ako `8090`, je veľká šanca že budete musieť zmeniť obsah súboru `/config/pocketbase.json` na
->
-> ```json
-> { "POCKETBASE_URL": "", "POCKETBASE_API_URL": "" }
-> ```
+   > [!WARNING]
+   > Ak PocketBase spustíte na inom porte ako `8090`, je veľká šanca že budete musieť zmeniť obsah súboru `/config/pocketbase.json` na
+   >
+   > ```json
+   > { "POCKETBASE_URL": "", "POCKETBASE_API_URL": "" }
+   > ```
 7. Otvorte si pocketbase web editor, a vytvorte si admin používateľa. Tento používateľ bude používaný aj na prístup do Hallify admin panelu
 8. V prvom termináli po ukončení inštalácie môžete zapnúť vývojársky server príkazom `npm run dev`
 9. Hallify by mal byť spustený!

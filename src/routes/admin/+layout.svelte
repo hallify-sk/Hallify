@@ -1,10 +1,8 @@
 <script>
-	import { theme } from "$lib/stores/theme";
-	import "../../app.css";
-
-	theme.set("light");
+	import NavbarAdmin from '$lib/components/NavbarAdmin.svelte';
+	let { data, children } = $props();
 </script>
 
-<div class="bg-background-100 min-h-screen pr-4">
-	<slot />
-</div>
+<NavbarAdmin permission={data.permission} user={data.user} />
+
+{@render children?.()}
