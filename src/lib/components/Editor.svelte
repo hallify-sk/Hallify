@@ -24,7 +24,7 @@
 	import Brushes from './editor/plugins/Brushes.svelte';
 	import { currentColor, points, walls, zonePoints, zones } from '$lib/util';
 	import { onMount } from 'svelte';
-	import colors from 'tailwindcss/colors';
+	import colors from 'tailwindcss/colors.js';
 	import { v4 as uuidv4 } from 'uuid';
 	import Accordion from './Accordion.svelte';
 	import NumberInput from './inputs/NumberInput.svelte';

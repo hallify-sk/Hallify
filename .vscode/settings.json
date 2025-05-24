@@ -9,5 +9,5 @@
 		"**/src/routes/**/+error.svelte": "${dirname} - Error",
 		"**/src/routes/**/+layout.ts": "${dirname} - Layout Script",
 		"**/src/routes/**/+server.ts": "${dirname} - API endpoint"
-	}
+	},
 }

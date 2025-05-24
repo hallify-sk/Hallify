@@ -94,7 +94,8 @@
 {/if}
 
 <style lang="postcss">
+	@reference "$lib/theme.postcss";
 	button {
-		@apply flex flex-row gap-2 items-center justify-center duration-150 px-4 py-2 rounded border text-sm text-center;
+		@apply flex !bg-primary-4 flex-row gap-2 items-center justify-center duration-150 px-4 py-2 rounded border text-sm text-center;
 	}
 </style>

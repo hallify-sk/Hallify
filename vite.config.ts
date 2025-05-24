@@ -1,6 +1,7 @@
 import { sveltekit } from '@sveltejs/kit/vite';
 import { defineConfig } from 'vitest/config';
 import { isoImport } from 'vite-plugin-iso-import';
+import path from 'path';
 
 export default defineConfig({
 	optimizeDeps: {
@@ -12,6 +13,11 @@ export default defineConfig({
 		}
 	},
 	plugins: [sveltekit(), isoImport()],
+	resolve: {
+		alias: {
+			"$tw": path.resolve('./src'),
+		}
+	},
 	test: {
 		include: ['src/**/*.{test,spec}.{js,ts}']
 	}
