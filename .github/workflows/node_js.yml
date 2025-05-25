@@ -22,11 +22,11 @@ jobs:
         run: bun install --frozen-lockfile
       - name: Check formatting
         run: |
-          if bun run format:check; then
-            echo "✅ Code formatting is correct"
-          else
+          if ! bun run format:check; then
             echo "::warning::Code formatting issues found. Run 'bun run format' to fix them."
             echo "🔶 Formatting check completed with warnings"
+          else
+            echo "✅ Code formatting is correct"
           fi
 
   Eslint:
@@ -44,17 +44,17 @@ jobs:
         run: bun install --frozen-lockfile
       - name: Run Eslint
         run: |
-          if bun run lint; then
-            echo "✅ Linting passed"
-          else
+          if ! bun run lint; then
             echo "::warning::ESLint found issues. Please review and fix them."
             echo "🔶 Linting completed with warnings"
+          else
+            echo "✅ Linting passed"
           fi
 
   SvelteKit:
     runs-on: ubuntu-latest
     env:
-      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      DATABASE_URL: postgres://test:test@localhost:5432/test_db
     strategy:
       matrix:
         bun-version: [latest]
