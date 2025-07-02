@@ -1,145 +1,352 @@
 import { db } from '$lib/server/db.js';
 import {
-	halls,
-	plans,
-	reservations,
-	type Hall,
-	type Plan,
-	type Reservation
+    halls,
+    plans,
+    reservations,
+    eventBlocks,
+    type Hall,
+    type Plan,
+    type Reservation,
+    type EventBlock
 } from '$lib/server/schema.js';
-import { serializeNonPOJOs, validateHex } from '$lib/util';
+import { serializeNonPOJOs } from '$lib/util';
 import { fail } from '@sveltejs/kit';
 import { eq } from 'drizzle-orm';
 
 export const actions = {
-	changeHallPlan: async function ({ request }) {
-		if (request.method != 'POST') {
-			return fail(405, { message: 'Metóda nie je povolená.' });
-		}
-		const formData = await request.formData();
-		const hall_id = formData.get('hall_id');
-		if (!hall_id || typeof hall_id !== 'string' || hall_id.length < 1) {
-			return fail(400, { message: 'ID sály je povinné.', validate: ['hall_id'] });
-		}
-		const plan_id = formData.get('plan_id');
-		if (!plan_id || typeof plan_id !== 'string' || plan_id.length < 1) {
-			return fail(400, { message: 'ID plánu je povinné.', validate: ['plan_id'] });
-		}
+    createEventBlock: async ({ request }) => {
+        const formData = await request.formData();
+        
+        const hallId = formData.get('hallId') as string;
+        const startDate = formData.get('startDate') as string;
+        const endDate = formData.get('endDate') as string;
+        const reason = formData.get('reason') as string;
 
-		const hall = await db
-			.select()
-			.from(halls)
-			.where(eq(halls.id, parseInt(hall_id)))
-			.limit(1);
-		if (!hall[0]) {
-			return fail(404, { message: 'Sála neexistuje.', validate: ['hall_id'] });
-		}
+		console.log(startDate, endDate, hallId, reason);
+        
+        // Get selected days from checkboxes
+        const selectedDays: string[] = [];
+        const dayNames = ['pon', 'uto', 'str', 'stv', 'pia', 'sob', 'ned'];
+        
+        dayNames.forEach(day => {
+            if (formData.get(day) === 'on') {
+                selectedDays.push(day);
+            }
+        });
 
-		const plan = await db
-			.select()
-			.from(plans)
-			.where(eq(plans.id, parseInt(plan_id)))
-			.limit(1);
-		if (!plan[0]) {
-			return fail(404, { message: 'Plán neexistuje.', validate: ['plan_id'] });
-		}
+        // Validation
+        const errors: string[] = [];
+        
+        if (!hallId) {
+            errors.push('hallId');
+        }
+        
+        if (!startDate) {
+            errors.push('startDate');
+        }
+        
+        if (!endDate) {
+            errors.push('endDate');
+        }
+        
+        if (!reason || reason.trim().length < 3) {
+            errors.push('reason');
+        }
 
-		const planExists = await db
-			.select()
-			.from(halls)
-			.where(eq(halls.plan, parseInt(plan_id)))
-			.limit(1);
-		if (planExists[0]) {
-			return fail(400, { message: 'Plán už patrí inej sále.', validate: ['plan_id'] });
-		}
+        // Validate dates
+        const start = new Date(startDate);
+        const end = new Date(endDate);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
 
-		// Update hall
-		const updatedHall = await db
-			.update(halls)
-			.set({ plan: parseInt(plan_id) })
-			.where(eq(halls.id, parseInt(hall_id)))
-			.returning();
+        if (start < today) {
+            return fail(400, {
+                message: 'Začiatočný dátum nemôže byť v minulosti',
+                validate: errors
+            });
+        }
 
-		return { hall: serializeNonPOJOs(updatedHall[0]) };
-	},
+        if (end <= start) {
+            return fail(400, {
+                message: 'Konečný dátum musí byť po začiatočnom dátume',
+                validate: errors
+            });
+        }
 
-	create: async function ({ request }) {
-		if (request.method != 'POST') {
-			return fail(405, { message: 'Metóda nie je povolená.' });
-		}
-		const formData = await request.formData();
-		const name = formData.get('name');
-		if (!name || typeof name !== 'string' || name.length < 1) {
-			return fail(400, { message: 'Názov sály je povinný.', validate: ['name'] });
-		}
+        if (errors.length > 0) {
+            return fail(400, {
+                message: 'Prosím vyplňte všetky požadované polia',
+                validate: errors
+            });
+        }
 
-		const existingHallByName = await db.select().from(halls).where(eq(halls.name, name)).limit(1);
-		if (existingHallByName[0]) {
-			return fail(400, { message: 'Sála s týmto názvom už existuje.', validate: ['name'] });
-		}
+        // Check if hall exists
+        const hall = await db.select().from(halls).where(eq(halls.id, parseInt(hallId))).limit(1);
+        
+        if (hall.length === 0) {
+            return fail(400, {
+                message: 'Vybraná sála neexistuje',
+                validate: ['hallId']
+            });
+        }
 
-		const plan = formData.get('plan');
-		if (plan && typeof plan !== 'number') {
-			return fail(400, { message: 'Plán sály je neplatný.', validate: ['plan'] });
-		}
+        // Calculate if it's a short period (< 7 days) or long period
+        const diffTime = end.getTime() - start.getTime();
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        
+        const blockedDays = diffDays < 7 ? dayNames : selectedDays;
 
-		const color = formData.get('color_value');
-		if (!color || typeof color !== 'string' || color.length < 1) {
-			return fail(400, { message: 'Farba sály je povinná.', validate: ['color'] });
-		}
+        try {
+            // Create the event block
+            await db.insert(eventBlocks).values({
+                hallId: parseInt(hallId),
+                startDate: startDate,
+                endDate: endDate,
+                reason: reason.trim(),
+                blockedDays: blockedDays,
+                type: 'temporary',
+                isActive: true
+            });
 
-		const existingHallByColor = await db
-			.select()
-			.from(halls)
-			.where(eq(halls.color, color))
-			.limit(1);
-		if (existingHallByColor[0]) {
-			return fail(400, { message: 'Sála s touto farbou už existuje.', validate: ['color'] });
-		}
+            return {
+                success: true,
+                message: 'Výluka bola úspešne vytvorená'
+            };
+        } catch (error) {
+            console.error('Error creating event block:', error);
+            return fail(500, {
+                message: 'Chyba pri vytváraní výluky. Skúste to znova.',
+                validate: []
+            });
+        }
+    },
 
-		if (validateHex(color) === false) {
-			return fail(400, { message: 'Farba sály je neplatná.', validate: ['color'] });
-		}
+    updateEventBlock: async ({ request }) => {
+        const formData = await request.formData();
+        
+        const eventBlockId = formData.get('eventBlockId') as string;
+        const hallId = formData.get('hallId') as string;
+        const startDate = formData.get('startDate') as string;
+        const endDate = formData.get('endDate') as string;
+        const reason = formData.get('edit-reason') as string; // FIX: Changed from 'reason' to 'edit-reason'
+        
+        // Get selected days from checkboxes - FIX: Use correct field names
+        const selectedDays: string[] = [];
+        const dayNames = ['pon', 'uto', 'str', 'stv', 'pia', 'sob', 'ned'];
+        
+        dayNames.forEach(day => {
+            if (formData.get(`edit-${day}`) === 'on') {
+                selectedDays.push(day);
+            }
+        });
 
-		const allow_reservations = formData.get('allow_reservations') == 'on';
-		const custom_layouts = formData.get('custom_layouts') == 'on';
-		const force_layouts = formData.get('force_layouts') == 'on';
-		const allow_feedback = formData.get('allow_feedback') == 'on';
+        // Validation
+        const errors: string[] = [];
+        
+        if (!eventBlockId) {
+            return fail(400, {
+                message: 'ID výluky je povinné',
+                validate: []
+            });
+        }
+        
+        if (!hallId) {
+            errors.push('hallId');
+        }
+        
+        if (!startDate) {
+            errors.push('startDate');
+        }
+        
+        if (!endDate) {
+            errors.push('endDate');
+        }
+        
+        if (!reason || reason.trim().length < 3) {
+            errors.push('reason');
+        }
 
-		// Create hall
-		const newHall = await db
-			.insert(halls)
-			.values({
-				name,
-				color,
-				allow_reservations,
-				custom_layouts,
-				force_layouts,
-				allow_feedback,
-				plan: plan ? parseInt(plan as string) : null
-			})
-			.returning();
+        // Validate dates
+        const start = new Date(startDate);
+        const end = new Date(endDate);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
 
-		return { hall: serializeNonPOJOs(newHall[0]) };
-	}
+        if (start < today) {
+            return fail(400, {
+                message: 'Začiatočný dátum nemôže byť v minulosti',
+                validate: errors
+            });
+        }
+
+        if (end <= start) {
+            return fail(400, {
+                message: 'Konečný dátum musí byť po začiatočnom dátume',
+                validate: errors
+            });
+        }
+
+        if (errors.length > 0) {
+            return fail(400, {
+                message: 'Prosím vyplňte všetky požadované polia',
+                validate: errors
+            });
+        }
+
+        // Check if event block exists
+        const existingBlock = await db.select().from(eventBlocks)
+            .where(eq(eventBlocks.id, parseInt(eventBlockId)))
+            .limit(1);
+        
+        if (existingBlock.length === 0) {
+            return fail(400, {
+                message: 'Výluka nebola nájdená',
+                validate: []
+            });
+        }
+
+        // Check if hall exists
+        const hall = await db.select().from(halls).where(eq(halls.id, parseInt(hallId))).limit(1);
+        
+        if (hall.length === 0) {
+            return fail(400, {
+                message: 'Vybraná sála neexistuje',
+                validate: ['hallId']
+            });
+        }
+
+        // Calculate if it's a short period (< 7 days) or long period
+        const diffTime = end.getTime() - start.getTime();
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        
+        // FIX: Use selectedDays when period is long enough, otherwise use all days
+        const blockedDays = diffDays < 7 ? dayNames : (selectedDays.length > 0 ? selectedDays : dayNames);
+
+        try {
+            // Update the event block
+            await db.update(eventBlocks)
+                .set({
+                    hallId: parseInt(hallId),
+                    startDate: startDate,
+                    endDate: endDate,
+                    reason: reason.trim(),
+                    blockedDays: blockedDays,
+                    updatedAt: new Date()
+                })
+                .where(eq(eventBlocks.id, parseInt(eventBlockId)));
+
+            return {
+                success: true,
+                message: 'Výluka bola úspešne aktualizovaná'
+            };
+        } catch (error) {
+            console.error('Error updating event block:', error);
+            return fail(500, {
+                message: 'Chyba pri aktualizácii výluky. Skúste to znova.',
+                validate: []
+            });
+        }
+    },
+
+    deleteEventBlock: async ({ request }) => {
+        const formData = await request.formData();
+        const eventBlockId = formData.get('eventBlockId') as string;
+
+        // Validation
+        if (!eventBlockId) {
+            return fail(400, {
+                message: 'ID výluky je povinné',
+                validate: []
+            });
+        }
+
+        try {
+            // Check if event block exists
+            const existingBlock = await db.select().from(eventBlocks)
+                .where(eq(eventBlocks.id, parseInt(eventBlockId)))
+                .limit(1);
+            
+            if (existingBlock.length === 0) {
+                return fail(400, {
+                    message: 'Výluka nebola nájdená',
+                    validate: []
+                });
+            }
+
+            // Soft delete by setting isActive to false
+            await db.update(eventBlocks)
+                .set({
+                    isActive: false,
+                    updatedAt: new Date()
+                })
+                .where(eq(eventBlocks.id, parseInt(eventBlockId)));
+
+            return {
+                success: true,
+                message: 'Výluka bola úspešne zmazaná'
+            };
+        } catch (error) {
+            console.error('Error deleting event block:', error);
+            return fail(500, {
+                message: 'Chyba pri mazaní výluky. Skúste to znova.',
+                validate: []
+            });
+        }
+    },
+
+    updatePermanentBlocks: async ({ request }) => {
+        const formData = await request.formData();
+        const permanentBlocksData = formData.get('permanentBlocks') as string;
+
+        try {
+            const permanentBlocks = JSON.parse(permanentBlocksData);
+
+            // Update each hall's allowed days
+            for (const [hallId, daySettings] of Object.entries(permanentBlocks)) {
+                const allowedDays = Object.entries(daySettings as Record<string, boolean>)
+                    .filter(([, allowed]) => allowed)
+                    .map(([day]) => day);
+
+                await db.update(halls)
+                    .set({
+                        allowedDays: allowedDays,
+                        updatedAt: new Date()
+                    })
+                    .where(eq(halls.id, parseInt(hallId)));
+            }
+
+            return {
+                success: true,
+                message: 'Trvalé výluky boli úspešne aktualizované'
+            };
+        } catch (error) {
+            console.error('Error updating permanent blocks:', error);
+            return fail(500, {
+                message: 'Chyba pri aktualizácii trvalých výluk. Skúste to znova.',
+                validate: []
+            });
+        }
+    }
 };
 
 export const load = async function () {
-	// Get halls with their plans using a join
-	const hallsWithPlans = await db
-		.select({
-			hall: halls,
-			plan: plans
-		})
-		.from(halls)
-		.leftJoin(plans, eq(halls.plan, plans.id));
+    // Get halls with their plans using a join
+    const hallsWithPlans = await db
+        .select({
+            hall: halls,
+            plan: plans
+        })
+        .from(halls)
+        .leftJoin(plans, eq(halls.plan, plans.id));
 
-	const allPlans = await db.select().from(plans);
-	const allReservations = await db.select().from(reservations);
+    const allPlans = await db.select().from(plans);
+    const allReservations = await db.select().from(reservations);
+    const allEventBlocks = await db.select().from(eventBlocks).where(eq(eventBlocks.isActive, true));
 
-	return {
-		halls: serializeNonPOJOs(hallsWithPlans) as Array<{ hall: Hall; plan: Plan | null }>,
-		plans: serializeNonPOJOs(allPlans) as Array<Plan>,
-		reservations: serializeNonPOJOs(allReservations) as Array<Reservation>
-	};
+    return {
+        halls: serializeNonPOJOs(hallsWithPlans) as Array<{ hall: Hall; plan: Plan | null }>,
+        plans: serializeNonPOJOs(allPlans) as Array<Plan>,
+        reservations: serializeNonPOJOs(allReservations) as Array<Reservation>,
+        eventBlocks: serializeNonPOJOs(allEventBlocks) as Array<EventBlock>
+    };
 };

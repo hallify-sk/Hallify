@@ -4,6 +4,8 @@
 		id,
 		type = 'number',
 		value = $bindable(20),
+		min = 0,
+		max,
 		placeholder,
 		oninput = () => {}
 	}: {
@@ -11,6 +13,8 @@
 		id: string;
 		type?: 'number';
 		value?: number;
+		min?: number;
+		max?: number;
 		placeholder?: string;
 		oninput?: () => void;
 	} = $props();
@@ -25,6 +29,8 @@
 		removeValidation();
 		oninput();
 	}}
+	{min}
+	{max}
 	{type}
 	{name}
 	{id}

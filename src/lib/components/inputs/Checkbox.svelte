@@ -6,12 +6,13 @@
 		name: string;
 		id: string;
 		checked?: boolean;
+		disabled?: boolean;
 	}
 
-	let { name, id, checked = $bindable(false) }: Props = $props();
+	let { name, id, checked = $bindable(false), disabled }: Props = $props();
 </script>
 
-<input bind:checked type="checkbox" {name} {id} class="hidden peer" />
+<input {disabled} bind:checked type="checkbox" {name} {id} class="hidden peer" />
 <label
 	for={name}
 	class="w-6 h-6 p-0.5 bg-background-5 text-background-main border-2 border-solid border-background-4 rounded grid place-items-center relative cursor-pointer peer-checked:bg-blue-500 duration-200"

@@ -22,11 +22,12 @@
 	import Combobox from '$lib/components/inputs/ComboboxColor.svelte';
 	import Calendar from '$lib/components/Calendar.svelte';
 	import Button from '$lib/components/Button.svelte';
+	import NumberInput from '$lib/components/inputs/NumberInput.svelte';
 
 	const { data } = $props();
 
 	let colorValue: string = $state('');
-	let colorName: string = $state('');
+	let colorName: string = $state(''); // Add this for the display text
 
 	let showHall = $state(false);
 
@@ -36,9 +37,24 @@
 
 	$effect(() => {
 		if (editingId) {
-			// Fix: Access hall data correctly for Drizzle join result
+			// Fix: Access hall data correctly for Drizzle join result and initialize both values
 			const hallData = data.halls.find((h) => h.hall.id == editingId);
-			colorName = hallData?.hall.color ?? '';
+			if (hallData?.hall.color) {
+				colorValue = hallData.hall.color; // Set the hex value
+				// Try to find matching color name from options
+				const matchingOption = [
+					{ value: '#3b82f6', name: 'Modrá' },
+					{ value: '#8b5cf6', name: 'Fialová' },
+					{ value: '#10b981', name: 'Zelená' },
+					{ value: '#f59e0b', name: 'Oranžová' },
+					{ value: '#ef4444', name: 'Červená' },
+					{ value: '#06b6d4', name: 'Tyrkysová' },
+					{ value: '#f97316', name: 'Oranžová' },
+					{ value: '#84cc16', name: 'Limetková' }
+				].find(option => option.value === hallData.hall.color);
+				
+				colorName = matchingOption ? matchingOption.name : hallData.hall.color;
+			}
 		}
 	});
 
@@ -216,9 +232,11 @@
 		event.preventDefault();
 		const target = event.target as HTMLFormElement;
 		const formData = new FormData();
+		
 		formData.set('name', (target.name as unknown as HTMLInputElement).value);
+		formData.set('capacity', (target.capacity as unknown as HTMLInputElement).value);
 		formData.set('color', colorValue);
-		// Fix: Access plan data correctly for Drizzle join result
+		
 		const hallData = data.halls.find((h) => h.hall.id == editingId);
 		formData.set('plan', `${hallData?.hall.plan || ''}`);
 		formData.set('allow_reservations', target.allow_reservations?.checked);
@@ -230,16 +248,26 @@
 			method: 'PUT',
 			body: formData
 		});
+		
 		if (res.status == 400 || res.status == 403 || res.status == 404) {
 			const body = await res.json();
 			hallCreateError = body.message;
 			if (Array.isArray(body.validate)) validate = body.validate;
 			console.error(res);
+		} else {
+			await invalidateAll();
+			showEditHall = false;
 		}
-
-		await invalidateAll();
-		showEditHall = false;
+		
 		return res;
+	}
+
+	// Add function to reset form state
+	function resetCreateHallForm() {
+		colorValue = '';
+		colorName = ''; // Reset both values
+		hallCreateError = '';
+		validate = [];
 	}
 </script>
 
@@ -253,8 +281,8 @@
 			<Button
 				color="primary"
 				onclick={() => {
+					resetCreateHallForm(); // This will clear both colorValue and colorName
 					showHall = true;
-					colorValue = '';
 				}}
 			>
 				<Icon scale="small">
@@ -275,7 +303,8 @@
 				<div class="overflow-y-auto">
 					<table class="w-full border-collapse">
 						<colgroup>
-							<col span="1" style="width: 25%; min-width:150px;" />
+							<col span="1" style="width: 20%; min-width:150px;" />
+							<col span="1" style="width: 10%;" />
 							<col span="1" style="width: 10%;" />
 							<col span="1" style="width: 10%;" />
 							<col span="1" style="width: 5%;" />
@@ -286,30 +315,15 @@
 						</colgroup>
 						<thead>
 							<tr class="bg-background-2">
-								<th class="text-[0.65rem] text-left px-4 py-2 text-text-1 font-normal uppercase"
-									>Názov</th
-								>
-								<th class="text-[0.65rem] text-left px-4 py-2 text-text-1 font-normal uppercase"
-									>Plan sály</th
-								>
-								<th class="text-[0.65rem] text-left px-4 py-2 text-text-1 font-normal uppercase"
-									>Farba</th
-								>
-								<th class="text-[0.65rem] text-left px-4 py-2 text-text-1 font-normal uppercase"
-									>Povoliť rezervácie</th
-								>
-								<th class="text-[0.65rem] text-left px-4 py-2 text-text-1 font-normal uppercase"
-									>Vlastné rozloženia</th
-								>
-								<th class="text-[0.65rem] text-left px-4 py-2 text-text-1 font-normal uppercase"
-									>Vynútiť rozloženia</th
-								>
-								<th class="text-[0.65rem] text-left px-4 py-2 text-text-1 font-normal uppercase"
-									>Vytvorené</th
-								>
-								<th class="text-[0.65rem] text-left px-4 py-2 text-text-1 font-normal uppercase"
-									>Naposledy zmenené</th
-								>
+								<th class="text-[0.65rem] text-left px-4 py-2 text-text-1 font-normal uppercase">Názov</th>
+								<th class="text-[0.65rem] text-left px-4 py-2 text-text-1 font-normal uppercase">Kapacita</th>
+								<th class="text-[0.65rem] text-left px-4 py-2 text-text-1 font-normal uppercase">Plan sály</th>
+								<th class="text-[0.65rem] text-left px-4 py-2 text-text-1 font-normal uppercase">Farba</th>
+								<th class="text-[0.65rem] text-left px-4 py-2 text-text-1 font-normal uppercase">Povoliť rezervácie</th>
+								<th class="text-[0.65rem] text-left px-4 py-2 text-text-1 font-normal uppercase">Vlastné rozloženia</th>
+								<th class="text-[0.65rem] text-left px-4 py-2 text-text-1 font-normal uppercase">Vynútiť rozloženia</th>
+								<th class="text-[0.65rem] text-left px-4 py-2 text-text-1 font-normal uppercase">Vytvorené</th>
+								<th class="text-[0.65rem] text-left px-4 py-2 text-text-1 font-normal uppercase">Naposledy zmenené</th>
 							</tr>
 						</thead>
 						<tbody>
@@ -325,6 +339,7 @@
 									}}
 								>
 									<td class="event-table-long-text">{hall.name}</td>
+									<td class="px-4 py-3 text-sm text-text-main">{hall.capacity} ľudí</td>
 									<td class="px-4 py-3 text-sm">
 										{#if hall.plan}
 											<span class="px-2 py-1 rounded text-success bg-success/40">Nastavený</span>
@@ -352,17 +367,17 @@
 									</td>
 									<td class="px-4 py-3 text-sm text-text-main">
 										<span class="flex flex-col">
-											<p>{new Date(hall.created_at).toLocaleDateString('sk')}</p>
+											<p>{new Date(hall.createdAt).toLocaleDateString('sk')}</p>
 											<p class="text-xs text-text-1">
-												{new Date(hall.created_at).toLocaleTimeString('sk')}
+												{new Date(hall.createdAt).toLocaleTimeString('sk')}
 											</p>
 										</span>
 									</td>
 									<td class="px-4 py-3 text-sm text-text-main">
 										<span class="flex flex-col">
-											<p>{new Date(hall.updated_at).toLocaleDateString('sk')}</p>
+											<p>{new Date(hall.updatedAt).toLocaleDateString('sk')}</p>
 											<p class="text-xs text-text-1">
-												{new Date(hall.updated_at).toLocaleTimeString('sk')}
+												{new Date(hall.updatedAt).toLocaleTimeString('sk')}
 											</p>
 										</span>
 									</td>
@@ -415,7 +430,7 @@
 					<h2 class="text-text-main">Naplánované udalosti</h2>
 				</div>
 				<div class="block h-full">
-					<Calendar />
+					<Calendar/>
 				</div>
 			</div>
 		</div>
@@ -441,316 +456,542 @@
 </div>
 
 <Dialog bind:open={showHall}>
-	{#snippet header()}
-		<p class="text-text-main">Nová sála</p>
-	{/snippet}
-	<form
-		class="flex flex-col w-full"
-		action="/admin/halls/?/create"
-		method="post"
-		use:enhance={() => {
-			return async ({ result }) => {
-				if (result.type === 'failure') {
-					hallCreateError = result.data?.message;
-					if (Array.isArray(result.data?.validate)) validate = result.data.validate;
-					console.error(result);
-				} else {
-					await invalidateAll();
-					showHall = false;
-					await applyAction(result);
-				}
-			};
-		}}
-	>
-		<div class="flex flex-col p-4">
-			<div class="flex flex-col gap-2">
-				<label for="name" class="text-sm text-text-4">Názov</label>
-				<TextInput name="name" id="name" placeholder="Názov sály" />
-			</div>
-			<div class="grid w-full grid-cols-1 gap-4 mt-2 sm:grid-cols-2">
-				<div class="flex flex-col gap-2">
-					<p class="text-sm text-text-4">Plán sály</p>
-					<div class="flex flex-row justify-between w-full gap-2">
-						<Button color="secondary">
-							<p>Použiť existujúci</p>
-						</Button>
-						<a href="/admin/halls/{editingId}/editor">
-							<Button color="primary">
-								<Icon scale="small">
-									<Plus />
-								</Icon>
-								<p>Vytvoriť nový</p>
-							</Button>
-						</a>
-					</div>
-					<!-- Fix: Remove planData reference for create dialog -->
-					<img src="https://placehold.co/1080x1080" class="rounded-md" alt="Plán sály" />
-				</div>
+    {#snippet header()}
+        <div class="flex items-center gap-2">
+            <Icon scale="small">
+                <Plus />
+            </Icon>
+            <p class="text-text-main">Vytvoriť novú sálu</p>
+        </div>
+    {/snippet}
+    <form
+        class="flex flex-col w-full"
+        action="/admin/halls/?/create"
+        method="post"
+        use:enhance={() => {
+            return async ({ result }) => {
+                if (result.type === 'failure') {
+                    hallCreateError = result.data?.message;
+                    if (Array.isArray(result.data?.validate)) validate = result.data.validate;
+                    console.error(result);
+                } else {
+                    await invalidateAll();
+                    resetCreateHallForm(); // Reset form after successful creation
+                    showHall = false;
+                    await applyAction(result);
+                }
+            };
+        }}
+    >
+        <div class="flex flex-col p-6 space-y-6">
+            <!-- Step indicator -->
+            <div class="flex items-center gap-2 text-xs text-text-2 mb-2">
+                <span class="w-6 h-6 bg-primary text-white rounded-full flex items-center justify-center text-xs font-medium">1</span>
+                <span class="flex-1 h-px bg-border-main/30"></span>
+                <span class="w-6 h-6 bg-border-main/30 text-text-2 rounded-full flex items-center justify-center text-xs font-medium">2</span>
+                <span class="flex-1 h-px bg-border-main/30"></span>
+                <span class="w-6 h-6 bg-border-main/30 text-text-2 rounded-full flex items-center justify-center text-xs font-medium">3</span>
+            </div>
 
-				<div class="flex flex-col gap-2">
-					<label for="color" class="flex flex-row gap-2 text-sm text-text-4"
-						>Farba v grafoch <Tooltip>
-							<p class="text-text-main">
-								Táto farba bude použitá v grafoch a prezentáciách, kde sa zobrazujú informácie o
-								sále.
-							</p>
-						</Tooltip></label
-					>
-					<div class="flex flex-row gap-2 flex-nowrap">
-						<div
-							class="border rounded border-border-main/50 aspect-square"
-							style="background: {colorValue};"
-						></div>
-						<Combobox
-							id="color"
-							bind:value={colorValue}
-							placeholder="Názov farby / HEX kód"
-							options={[
-								{ value: '#3b82f6', name: 'Modrá' },
-								{ value: '#8b5cf6', name: 'Fialová' }
-							]}
-						/>
-					</div>
-					<div class="flex flex-row items-center gap-2">
-						<Switch name="allow_reservations" id="allow_reservations" checked={true} />
-						<label for="allow_reservations" class="text-sm text-text-4"
-							>Povoliť rezervácie v sále</label
-						>
-					</div>
-					<div class="flex flex-row items-center gap-2">
-						<Switch name="custom_layouts" id="custom_layouts" />
-						<label for="custom_layouts" class="flex flex-row items-center gap-2 text-sm text-text-4"
-							>Povoliť vlastné rozloženia
-							<Tooltip>
-								<p>
-									Zapnutím tejto možnosti si uživatelia môžu vytvárať vlastné rozloženia stolov vo
-									vašej sále. Ak je táto možnosť vypnutá, používatelia si môžu vyberať iba z vašich
-									predom vytvorených rozložení.
-								</p>
-							</Tooltip>
-						</label>
-					</div>
-					<div class="flex flex-row items-center gap-2">
-						<Switch name="force_layouts" id="force_layouts" />
-						<label for="force_layouts" class="flex flex-row items-center gap-2 text-sm text-text-4">
-							Vynútiť rozloženie sály
-							<Tooltip>
-								<p>
-									Ak je táto možnosť vypnutá, uživatelia si môžu rozloženie stolov dodatočne vyplniť
-									neskôr, po vytvorení rezervácie.
-								</p>
-							</Tooltip>
-						</label>
-					</div>
-					<div class="flex flex-row items-center gap-2">
-						<Switch name="allow_feedback" id="allow_feedback" />
-						<label
-							for="allow_feedback"
-							class="flex flex-row items-center gap-2 text-sm text-text-4"
-						>
-							Povoliť spätnú väzbu
-							<Tooltip>
-								<p>
-									Ak je táto možnosť zapnutá, po udalosti môžu používatelia nechať spätnú väzbu pre
-									personál alebo pre sálu.
-								</p>
-							</Tooltip>
-						</label>
-					</div>
-				</div>
-			</div>
-			{#if hallCreateError}
-				<p in:fly={{ x: 10, duration: 600 }} class="mt-4 text-danger">{hallCreateError}</p>
-			{/if}
-		</div>
-		<div class="flex justify-between w-full p-4 border-t bg-background-2 border-border-main/30">
-			<Button color="transparent" onclick={() => (showHall = false)}>
-				<p>Zrušiť</p>
-			</Button>
-			<Button type="submit" color="primary" onclick={() => (showHall = true)}>
-				<Icon scale="small">
-					<Plus />
-				</Icon>
-				<p>Pridať sálu</p>
-			</Button>
-		</div>
-	</form>
+            <!-- Step 1: Basic Information -->
+            <div class="space-y-4">
+                <div class="flex items-center gap-2 mb-4">
+                    <div class="w-6 h-6 bg-primary text-white rounded-full flex items-center justify-center text-xs font-medium">1</div>
+                    <h3 class="text-lg font-medium text-text-main">Základné informácie</h3>
+                </div>
+                
+                <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+                    <div class="space-y-2">
+                        <label for="name" class="text-sm font-medium text-text-main">
+                            Názov sály <span class="text-red-500">*</span>
+                        </label>
+                        <TextInput 
+                            name="name" 
+                            id="name" 
+                            placeholder="napr. Hlavná sála, Konferenčná miestnosť A"
+                            error={validate.includes('name') ? 'Názov je povinný' : ''}
+
+                        />
+                        <p class="text-xs text-text-2">Názov, ktorý budú vidieť používatelia pri rezervácii</p>
+                    </div>
+                    
+                    <div class="space-y-2">
+                        <label for="capacity" class="text-sm font-medium text-text-main">
+                            Kapacita <span class="text-red-500">*</span>
+                        </label>
+                        <div class="relative">
+                            <NumberInput 
+                                name="capacity" 
+                                id="capacity" 
+                                placeholder="50"
+                                min={1}
+                                max={10000}
+                                error={validate.includes('capacity') ? 'Kapacita musí byť číslo väčšie ako 0' : ''}
+
+                            />
+                            <span class="absolute right-3 top-1/2 transform -translate-y-1/2 text-text-2 text-sm">ľudí</span>
+                        </div>
+                        <p class="text-xs text-text-2">Maximálny počet osôb, ktoré sa zmestia do sály</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Step 2: Visual Settings -->
+            <div class="space-y-4">
+                <div class="flex items-center gap-2 mb-4">
+                    <div class="w-6 h-6 bg-border-main/30 text-text-2 rounded-full flex items-center justify-center text-xs font-medium">2</div>
+                    <h3 class="text-lg font-medium text-text-main">Vizuálne nastavenia</h3>
+                </div>
+
+                <div class="grid grid-cols-1 gap-6 md:grid-cols-2">
+                    <!-- Color Selection -->
+                    <div class="space-y-3">
+                        <label for="color" class="flex items-center gap-2 text-sm font-medium text-text-main">
+                            Farba sály <span class="text-red-500">*</span>
+                            <Tooltip>
+                                <p class="text-text-main">
+                                    Táto farba bude použitá v grafoch a prezentáciách na identifikáciu sály
+                                </p>
+                            </Tooltip>
+                        </label>
+                        <div class="flex items-center gap-3">
+                            <div class="flex-1">
+                                <Combobox
+                                    id="color"
+                                    bind:name={colorName}
+                                    bind:value={colorValue}
+                                    placeholder="Vyberte farbu alebo zadajte HEX kód"
+                                    error={validate.includes('color') ? 'Farba je povinná' : ''}
+                                    options={[
+                                        { value: '#3b82f6', name: 'Modrá' },
+                                        { value: '#8b5cf6', name: 'Fialová' },
+                                        { value: '#10b981', name: 'Zelená' },
+                                        { value: '#f59e0b', name: 'Oranžová' },
+                                        { value: '#ef4444', name: 'Červená' },
+                                        { value: '#06b6d4', name: 'Tyrkysová' },
+                                        { value: '#f97316', name: 'Oranžová' },
+                                        { value: '#84cc16', name: 'Limetková' }
+                                    ]}
+                                />
+                            </div>
+							<input type="hidden" name="color_value" bind:value={colorValue} />
+                        </div>
+                        <p class="text-xs text-text-2">Farba pre rozlíšenie sály v grafoch a zoznamoch</p>
+                    </div>
+
+                    <!-- Hall Plan -->
+                    <div class="space-y-3">
+                        <p class="text-sm font-medium text-text-main">Plán sály</p>
+                        <div class="border-2 border-dashed border-border-main/30 rounded-lg p-6 text-center bg-background-2/50">
+                            <div class="flex flex-col items-center gap-3">
+                                <div class="w-12 h-12 bg-background-4 rounded-lg flex items-center justify-center">
+                                    <Icon scale="medium">
+                                        <Plus />
+                                    </Icon>
+                                </div>
+                                <div class="space-y-1">
+                                    <p class="text-sm text-text-main">Plán sa nastaví neskôr</p>
+                                    <p class="text-xs text-text-2">Plán môžete vytvoriť po vytvorení sály</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Step 3: Permissions & Settings -->
+            <div class="space-y-4">
+                <div class="flex items-center gap-2 mb-4">
+                    <div class="w-6 h-6 bg-border-main/30 text-text-2 rounded-full flex items-center justify-center text-xs font-medium">3</div>
+                    <h3 class="text-lg font-medium text-text-main">Oprávnenia a nastavenia</h3>
+                </div>
+
+                <div class="space-y-4">
+                    <!-- Main Settings Grid -->
+                    <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+                        <div class="space-y-4 p-4 bg-background-2/50 rounded-lg">
+                            <h4 class="text-sm font-medium text-text-main">Rezervácie</h4>
+                            <div class="space-y-3">
+                                <div class="flex items-start gap-3">
+                                    <Switch name="allow_reservations" id="allow_reservations" checked={true} />
+                                    <div class="space-y-1">
+                                        <label for="allow_reservations" class="text-sm text-text-main font-medium cursor-pointer">
+                                            Povoliť rezervácie
+                                        </label>
+                                        <p class="text-xs text-text-2">Používatelia si môžu rezervovať túto sálu</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="space-y-4 p-4 bg-background-2/50 rounded-lg">
+                            <h4 class="text-sm font-medium text-text-main">Rozloženia</h4>
+                            <div class="space-y-3">
+                                <div class="flex items-start gap-3">
+                                    <Switch name="custom_layouts" id="custom_layouts" />
+                                    <div class="space-y-1">
+                                        <label for="custom_layouts" class="text-sm text-text-main font-medium cursor-pointer">
+                                            Vlastné rozloženia
+                                        </label>
+                                        <p class="text-xs text-text-2">Používatelia si môžu vytvárať vlastné rozloženia stolov</p>
+                                    </div>
+                                </div>
+                                
+                                <div class="flex items-start gap-3">
+                                    <Switch name="force_layouts" id="force_layouts" />
+                                    <div class="space-y-1">
+                                        <label for="force_layouts" class="text-sm text-text-main font-medium cursor-pointer">
+                                            Vynútiť rozloženie
+                                        </label>
+                                        <p class="text-xs text-text-2">Rozloženie musí byť nastavené pri rezervácii</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Feedback Setting -->
+                    <div class="p-4 bg-background-2/50 rounded-lg">
+                        <div class="flex items-start gap-3">
+                            <Switch name="allow_feedback" id="allow_feedback" />
+                            <div class="space-y-1">
+                                <label for="allow_feedback" class="text-sm text-text-main font-medium cursor-pointer">
+                                    Povoliť spätnú väzbu
+                                </label>
+                                <p class="text-xs text-text-2">Po udalosti môžu používatelia nechať hodnotenie a komentáre</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Error Display -->
+            {#if hallCreateError}
+                <div class="p-4 bg-red-50 border border-red-200 rounded-lg" in:fly={{ x: 10, duration: 600 }}>
+                    <div class="flex items-center gap-2">
+                        <svg class="w-5 h-5 text-red-500" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path>
+                        </svg>
+                        <p class="text-sm text-red-800 font-medium">Chyba pri vytváraní sály</p>
+                    </div>
+                    <p class="text-sm text-red-700 mt-1">{hallCreateError}</p>
+                </div>
+            {/if}
+        </div>
+
+        <!-- Footer Actions -->
+        <div class="flex justify-between items-center p-4 border-t border-border-main/30 bg-background-2">
+            <Button type="button" color="transparent" onclick={() => (showHall = false)}>
+                Zrušiť
+            </Button>
+            <Button type="submit" color="primary">
+                <Icon scale="small">
+                    <Plus />
+                </Icon>
+                <span>Vytvoriť sálu</span>
+            </Button>
+        </div>
+    </form>
 </Dialog>
 
 <Dialog bind:open={showEditHall}>
-	{@const currentHall = data.halls.find((h) => h.hall.id == editingId)?.hall}
-	{#snippet header()}
-		<p>Upraviť sálu</p>
-	{/snippet}
-	<form class="flex flex-col w-full" onsubmit={handleEditSubmit}>
-		<div class="flex flex-col p-4">
-			<label for="name" class="text-sm text-slate-800">Názov</label>
-			<!-- Fix: Access hall data correctly for Drizzle join result -->
-			<TextInput
-				name="name"
-				id="name"
-				value={data.halls.find((h) => h.hall.id == editingId)?.hall.name}
-			/>
-			<div class="grid w-full grid-cols-1 gap-4 mt-2 sm:grid-cols-2">
-				<div class="flex flex-col gap-2">
-					<p class="text-sm text-slate-800">Plán sály</p>
-					<div class="flex flex-row w-full gap-2">
-						<Button
-							onclick={() => {
-								showPlansDialog = true;
-							}}
-							color="primary"
-						>
-							<Icon scale="small">
-								<Plus />
-							</Icon>
-							<p>Zmeniť plan</p>
-						</Button>
-						<a href="/admin/halls/{editingId}/editor">
-							<Button
-								onclick={() => {
-									showPlansDialog = true;
-								}}
-								color="secondary"
-							>
-								<Icon scale="small">
-									<Plus />
-								</Icon>
-								<p>Upraviť plan</p>
-							</Button>
-						</a>
-					</div>
-					<!-- Fix: Access plan data correctly for Drizzle join result -->
-					{#if data.halls.find((h) => h.hall.id == editingId)?.hall.plan}
-						{@const hallData = data.halls.find((h) => h.hall.id == editingId)}
-						{#if hallData?.plan}
-							<img src={hallData.plan.preview} class="rounded-md" alt="Plán sály" />
-						{:else}
-							<img src="https://placehold.co/1080x1080" class="rounded-md" alt="Plán sály" />
-						{/if}
-					{:else}
-						<img src="https://placehold.co/1080x1080" class="rounded-md" alt="Plán sály" />
-					{/if}
-				</div>
+    {@const currentHall = data.halls.find((h) => h.hall.id == editingId)?.hall}
+    {#snippet header()}
+        <div class="flex items-center gap-2">
+            <Icon scale="small">
+                <Plus />
+            </Icon>
+            <p class="text-text-main">Upraviť sálu</p>
+        </div>
+    {/snippet}
+    <form class="flex flex-col w-full" onsubmit={handleEditSubmit}>
+        <div class="flex flex-col p-6 space-y-6">
+            <!-- Step indicator -->
+            <div class="flex items-center gap-2 text-xs text-text-2 mb-2">
+                <span class="w-6 h-6 bg-primary text-white rounded-full flex items-center justify-center text-xs font-medium">1</span>
+                <span class="flex-1 h-px bg-primary"></span>
+                <span class="w-6 h-6 bg-primary text-white rounded-full flex items-center justify-center text-xs font-medium">2</span>
+                <span class="flex-1 h-px bg-primary"></span>
+                <span class="w-6 h-6 bg-primary text-white rounded-full flex items-center justify-center text-xs font-medium">3</span>
+            </div>
 
-				<div class="flex flex-col gap-2">
-					<label for="color" class="flex flex-row gap-2 text-sm text-slate-800"
-						>Farba v grafoch <Tooltip>
-							<p>
-								Táto farba bude použitá v grafoch a prezentáciách, kde sa zobrazujú informácie o
-								sále.
-							</p>
-						</Tooltip></label
-					>
-					<div class="flex flex-row gap-2 flex-nowrap">
-						<div
-							class="border rounded border-border-main/30 aspect-square"
-							style="background: {colorValue};"
-						></div>
-						<Combobox
-							id="color"
-							name={colorName}
-							bind:value={colorValue}
-							placeholder="Názov farby / HEX kód"
-							options={[
-								{ value: '#3b82f6', name: 'Modrá' },
-								{ value: '#8b5cf6', name: 'Fialová' }
-							]}
-						/>
-					</div>
-					<!-- Fix: Access hall data correctly for all switches -->
+            <!-- Step 1: Basic Information -->
+            <div class="space-y-4">
+                <div class="flex items-center gap-2 mb-4">
+                    <div class="w-6 h-6 bg-primary text-white rounded-full flex items-center justify-center text-xs font-medium">1</div>
+                    <h3 class="text-lg font-medium text-text-main">Základné informácie</h3>
+                </div>
+                
+                <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+                    <div class="space-y-2">
+                        <label for="edit-name" class="text-sm font-medium text-text-main">
+                            Názov sály <span class="text-red-500">*</span>
+                        </label>
+                        <TextInput
+                            name="name"
+                            id="edit-name"
+                            value={currentHall?.name || ''}
+                            placeholder="napr. Hlavná sála, Konferenčná miestnosť A"
+                            error={validate.includes('name') ? 'Názov je povinný' : ''}
+                        />
+                        <p class="text-xs text-text-2">Názov, ktorý budú vidieť používatelia pri rezervácii</p>
+                    </div>
+                    
+                    <div class="space-y-2">
+                        <label for="edit-capacity" class="text-sm font-medium text-text-main">
+                            Kapacita <span class="text-red-500">*</span>
+                        </label>
+                        <div class="relative">
+                            <NumberInput
+                                name="capacity"
+                                id="edit-capacity"
+                                value={currentHall?.capacity || 0}
+                                placeholder="50"
+                                min={1}
+                                max={10000}
+                                error={validate.includes('capacity') ? 'Kapacita musí byť číslo väčšie ako 0' : ''}
+                            />
+                            <span class="absolute right-3 top-1/2 transform -translate-y-1/2 text-text-2 text-sm">ľudí</span>
+                        </div>
+                        <p class="text-xs text-text-2">Maximálny počet osôb, ktoré sa zmestia do sály</p>
+                    </div>
+                </div>
+            </div>
 
-					<div class="flex flex-row items-center gap-2">
-						<Switch
-							name="allow_reservations"
-							id="allow_reservations"
-							checked={currentHall?.allow_reservations}
-						/>
-						<label for="allow_reservations" class="text-sm text-slate-800"
-							>Povoliť rezervácie v sále</label
-						>
-					</div>
-					<div class="flex flex-row items-center gap-2">
-						<Switch
-							name="custom_layouts"
-							id="custom_layouts"
-							checked={currentHall?.custom_layouts}
-						/>
-						<label
-							for="custom_layouts"
-							class="flex flex-row items-center gap-2 text-sm text-slate-800"
-							>Povoliť vlastné rozloženia
-							<Tooltip>
-								<p>
-									Zapnutím tejto možnosti si uživatelia môžu vytvárať vlastné rozloženia stolov vo
-									vašej sále. Ak je táto možnosť vypnutá, používatelia si môžu vyberať iba z vašich
-									predom vytvorených rozložení.
-								</p>
-							</Tooltip>
-						</label>
-					</div>
-					<div class="flex flex-row items-center gap-2">
-						<Switch name="force_layouts" id="force_layouts" checked={currentHall?.force_layouts} />
-						<label
-							for="force_layouts"
-							class="flex flex-row items-center gap-2 text-sm text-slate-800"
-						>
-							Vynútiť rozloženie sály
-							<Tooltip>
-								<p>
-									Ak je táto možnosť vypnutá, uživatelia si môžu rozloženie stolov dodatočne vyplniť
-									neskôr, po vytvorení rezervácie.
-								</p>
-							</Tooltip>
-						</label>
-					</div>
-					<div class="flex flex-row items-center gap-2">
-						<Switch
-							name="allow_feedback"
-							id="allow_feedback"
-							checked={currentHall?.allow_feedback}
-						/>
-						<label
-							for="allow_feedback"
-							class="flex flex-row items-center gap-2 text-sm text-slate-800"
-						>
-							Povoliť spätnú väzbu
-							<Tooltip>
-								<p>
-									Ak je táto možnosť zapnutá, po udalosti môžu používatelia nechať spätnú väzbu pre
-									personál alebo pre sálu.
-								</p>
-							</Tooltip>
-						</label>
-					</div>
-				</div>
-			</div>
-			{#if hallCreateError}
-				<p in:fly={{ x: 10, duration: 600 }} class="mt-4 text-red-500">{hallCreateError}</p>
-			{/if}
-		</div>
-		<div class="flex justify-between w-full p-4 border-t bg-slate-200 border-border-main/30">
-			<button
-				type="reset"
-				onclick={() => (showEditHall = false)}
-				class="flex flex-row items-center gap-2 px-4 py-2 text-sm duration-150 rounded hover:bg-slate-100/50 text-slate-500"
-			>
-				<p>Zrušiť</p>
-			</button>
-			<button
-				type="submit"
-				onclick={() => {
-					showEditHall = true;
-				}}
-				class="flex flex-row items-center gap-2 px-4 py-2 text-sm duration-150 bg-blue-500 border rounded hover:bg-blue-400 text-slate-100 border-blue-600/30"
-			>
-				<Icon scale="small">
-					<Plus />
-				</Icon>
-				<p>Upraviť sálu</p>
-			</button>
-		</div>
-	</form>
+            <!-- Step 2: Visual Settings -->
+            <div class="space-y-4">
+                <div class="flex items-center gap-2 mb-4">
+                    <div class="w-6 h-6 bg-primary text-white rounded-full flex items-center justify-center text-xs font-medium">2</div>
+                    <h3 class="text-lg font-medium text-text-main">Vizuálne nastavenia</h3>
+                </div>
+
+                <div class="grid grid-cols-1 gap-6 md:grid-cols-2">
+                    <!-- Color Selection -->
+                    <div class="space-y-3">
+                        <label for="edit-color" class="flex items-center gap-2 text-sm font-medium text-text-main">
+                            Farba sály <span class="text-red-500">*</span>
+                            <Tooltip>
+                                <p class="text-text-main">
+                                    Táto farba bude použitá v grafoch a prezentáciách na identifikáciu sály
+                                </p>
+                            </Tooltip>
+                        </label>
+                        <div class="flex items-center gap-3">
+                            <div class="flex-1">
+                                <Combobox
+                                    id="edit-color"
+                                    bind:name={colorName}
+                                    bind:value={colorValue}
+                                    placeholder="Vyberte farbu alebo zadajte HEX kód"
+                                    error={validate.includes('color') ? 'Farba je povinná' : ''}
+                                    options={[
+                                        { value: '#3b82f6', name: 'Modrá' },
+                                        { value: '#8b5cf6', name: 'Fialová' },
+                                        { value: '#10b981', name: 'Zelená' },
+                                        { value: '#f59e0b', name: 'Oranžová' },
+                                        { value: '#ef4444', name: 'Červená' },
+                                        { value: '#8b5cf6', name: 'Fialová' },
+                                        { value: '#f97316', name: 'Oranžová' },
+                                        { value: '#84cc16', name: 'Limetková' }
+                                    ]}
+                                />
+                            </div>
+                        </div>
+                        <p class="text-xs text-text-2">Farba pre rozlíšenie sály v grafoch a zoznamoch</p>
+                    </div>
+
+                    <!-- Hall Plan -->
+                    <div class="space-y-3">
+                        <p class="text-sm font-medium text-text-main">Plán sály</p>
+                        
+                        {#if currentHall?.plan}
+                            {@const hallData = data.halls.find((h) => h.hall.id == editingId)}
+                            <div class="relative rounded-lg overflow-hidden border-2 border-border-main/30">
+                                {#if hallData?.plan}
+                                    <img src={hallData.plan.preview} class="w-full h-40 object-cover" alt="Plán sály" />
+                                {:else}
+                                    <div class="w-full h-40 bg-background-2 flex items-center justify-center">
+                                        <p class="text-text-2">Náhľad nie je dostupný</p>
+                                    </div>
+                                {/if}
+                                <div class="absolute inset-0 bg-black/50 opacity-0 hover:opacity-100 transition-opacity duration-200 flex items-center justify-center gap-2">
+                                    <Button
+                                        type="button"
+                                        onclick={() => { showPlansDialog = true; }}
+                                        color="secondary"
+                                    >
+                                        <Icon scale="small">
+                                            <Plus />
+                                        </Icon>
+                                        <span>Zmeniť</span>
+                                    </Button>
+                                    <a href="/admin/halls/{editingId}/editor">
+                                        <Button color="primary">
+                                            <Icon scale="small">
+                                                <Plus />
+                                            </Icon>
+                                            <span>Upraviť</span>
+                                        </Button>
+                                    </a>
+                                </div>
+                            </div>
+                        {:else}
+                            <div class="border-2 border-dashed border-border-main/30 rounded-lg p-6 text-center bg-background-2/50">
+                                <div class="flex flex-col items-center gap-3">
+                                    <div class="w-12 h-12 bg-background-4 rounded-lg flex items-center justify-center">
+                                        <Icon scale="medium">
+                                            <Plus />
+                                        </Icon>
+                                    </div>
+                                    <div class="space-y-1">
+                                        <p class="text-sm text-text-main">Žiadny plán</p>
+                                        <p class="text-xs text-text-2">Vytvorte alebo vyberte plán sály</p>
+                                    </div>
+                                    <div class="flex gap-2">
+                                        <Button 
+                                            type="button" 
+                                            onclick={() => { showPlansDialog = true; }}
+                                            color="secondary" 
+                                            
+                                        >
+                                            <Icon scale="small">
+                                                <Plus />
+                                            </Icon>
+                                            <span>Vybrať existujúci</span>
+                                        </Button>
+                                        <a href="/admin/halls/{editingId}/editor">
+                                            <Button color="primary">
+                                                <Icon scale="small">
+                                                    <Plus />
+                                                </Icon>
+                                                <span>Vytvoriť nový</span>
+                                            </Button>
+                                        </a>
+                                    </div>
+                                </div>
+                            </div>
+                        {/if}
+                        <p class="text-xs text-text-2">Plán ukazuje rozloženie stolov a sedadiel v sále</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Step 3: Permissions & Settings -->
+            <div class="space-y-4">
+                <div class="flex items-center gap-2 mb-4">
+                    <div class="w-6 h-6 bg-primary text-white rounded-full flex items-center justify-center text-xs font-medium">3</div>
+                    <h3 class="text-lg font-medium text-text-main">Oprávnenia a nastavenia</h3>
+                </div>
+
+                <div class="space-y-4">
+                    <!-- Main Settings Grid -->
+                    <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+                        <div class="space-y-4 p-4 bg-background-2/50 rounded-lg">
+                            <h4 class="text-sm font-medium text-text-main">Rezervácie</h4>
+                            <div class="space-y-3">
+                                <div class="flex items-start gap-3">
+                                    <Switch
+                                        name="allow_reservations"
+                                        id="edit_allow_reservations"
+                                        checked={currentHall?.allow_reservations}
+                                    />
+                                    <div class="space-y-1">
+                                        <label for="edit_allow_reservations" class="text-sm text-text-main font-medium cursor-pointer">
+                                            Povoliť rezervácie
+                                        </label>
+                                        <p class="text-xs text-text-2">Používatelia si môžu rezervovať túto sálu</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="space-y-4 p-4 bg-background-2/50 rounded-lg">
+                            <h4 class="text-sm font-medium text-text-main">Rozloženia</h4>
+                            <div class="space-y-3">
+                                <div class="flex items-start gap-3">
+                                    <Switch
+                                        name="custom_layouts"
+                                        id="edit_custom_layouts"
+                                        checked={currentHall?.custom_layouts}
+                                    />
+                                    <div class="space-y-1">
+                                        <label for="edit_custom_layouts" class="text-sm text-text-main font-medium cursor-pointer">
+                                            Vlastné rozloženia
+                                        </label>
+                                        <p class="text-xs text-text-2">Používatelia si môžu vytvárať vlastné rozloženia stolov</p>
+                                    </div>
+                                </div>
+                                
+                                <div class="flex items-start gap-3">
+                                    <Switch 
+                                        name="force_layouts" 
+                                        id="edit_force_layouts" 
+                                        checked={currentHall?.force_layouts} 
+                                    />
+                                    <div class="space-y-1">
+                                        <label for="edit_force_layouts" class="text-sm text-text-main font-medium cursor-pointer">
+                                            Vynútiť rozloženie
+                                        </label>
+                                        <p class="text-xs text-text-2">Rozloženie musí byť nastavené pri rezervácii</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Feedback Setting -->
+                    <div class="p-4 bg-background-2/50 rounded-lg">
+                        <div class="flex items-start gap-3">
+                            <Switch
+                                name="allow_feedback"
+                                id="edit_allow_feedback"
+                                checked={currentHall?.allow_feedback}
+                            />
+                            <div class="space-y-1">
+                                <label for="edit_allow_feedback" class="text-sm text-text-main font-medium cursor-pointer">
+                                    Povoliť spätnú väzbu
+                                </label>
+                                <p class="text-xs text-text-2">Po udalosti môžu používatelia nechať hodnotenie a komentáre</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Error Display -->
+            {#if hallCreateError}
+                <div class="p-4 bg-red-50 border border-red-200 rounded-lg" in:fly={{ x: 10, duration: 600 }}>
+                    <div class="flex items-center gap-2">
+                        <svg class="w-5 h-5 text-red-500" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path>
+                        </svg>
+                        <p class="text-sm text-red-800 font-medium">Chyba pri úprave sály</p>
+                    </div>
+                    <p class="text-sm text-red-700 mt-1">{hallCreateError}</p>
+                </div>
+            {/if}
+        </div>
+
+        <!-- Footer Actions -->
+        <div class="flex justify-between w-full p-4 border-t bg-slate-200 border-border-main/30">
+            <button
+                type="reset"
+                onclick={() => (showEditHall = false)}
+                class="flex flex-row items-center gap-2 px-4 py-2 text-sm duration-150 rounded hover:bg-slate-100/50 text-slate-500"
+            >
+                <p>Zrušiť</p>
+            </button>
+            <button
+                type="submit"
+                class="flex flex-row items-center gap-2 px-4 py-2 text-sm duration-150 bg-blue-500 border rounded hover:bg-blue-400 text-slate-100 border-blue-600/30"
+            >
+                <Icon scale="small">
+                    <Plus />
+                </Icon>
+                <p>Upraviť sálu</p>
+            </button>
+        </div>
+    </form>
 </Dialog>
 
 <Dialog bind:open={showPlansDialog}>

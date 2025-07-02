@@ -75,6 +75,17 @@ export const actions = {
 			return fail(400, { message: 'Názov sály je povinný.', validate: ['name'] });
 		}
 
+		// Add capacity validation
+		const capacity = formData.get('capacity');
+		if (!capacity || typeof capacity !== 'string') {
+			return fail(400, { message: 'Kapacita sály je povinná.', validate: ['capacity'] });
+		}
+
+		const capacityNumber = parseInt(capacity);
+		if (isNaN(capacityNumber) || capacityNumber < 1) {
+			return fail(400, { message: 'Kapacita musí byť číslo väčšie ako 0.', validate: ['capacity'] });
+		}
+
 		const existingHallByName = (
 			await db.select().from(halls).where(eq(halls.name, name)).limit(1)
 		)[0];
@@ -86,6 +97,8 @@ export const actions = {
 		if (plan && typeof plan !== 'number') {
 			return fail(400, { message: 'Plán sály je neplatný.', validate: ['plan'] });
 		}
+
+		// Fix: Get the color from the correct field name
 		const color = formData.get('color_value');
 		if (!color || typeof color !== 'string' || color.length < 1) {
 			return fail(400, { message: 'Farba sály je povinná.', validate: ['color'] });
@@ -101,17 +114,19 @@ export const actions = {
 		if (validateHex(color) === false) {
 			return fail(400, { message: 'Farba sály je neplatná.', validate: ['color'] });
 		}
+
 		const allow_reservations = formData.get('allow_reservations') == 'on';
 		const custom_layouts = formData.get('custom_layouts') == 'on';
 		const force_layouts = formData.get('force_layouts') == 'on';
 		const allow_feedback = formData.get('allow_feedback') == 'on';
 
-		// Create hall
+		// Create hall with capacity and correct color
 		const newHall = await db
 			.insert(halls)
 			.values({
 				name,
-				color,
+				capacity: capacityNumber,
+				color, // This will now be the hex value
 				allow_reservations,
 				custom_layouts,
 				force_layouts,
