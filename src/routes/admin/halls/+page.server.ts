@@ -120,6 +120,10 @@ export const actions = {
 		const force_layouts = formData.get('force_layouts') == 'on';
 		const allow_feedback = formData.get('allow_feedback') == 'on';
 
+		// Get minimum advance days (optional, defaults to 0)
+		const minAdvanceDaysString = formData.get('minAdvanceDays');
+		const minAdvanceDays = minAdvanceDaysString ? parseInt(minAdvanceDaysString as string) : 0;
+
 		// Create hall with capacity and correct color
 		const newHall = await db
 			.insert(halls)
@@ -127,6 +131,7 @@ export const actions = {
 				name,
 				capacity: capacityNumber,
 				color, // This will now be the hex value
+				minAdvanceDays,
 				allow_reservations,
 				custom_layouts,
 				force_layouts,
@@ -136,6 +141,92 @@ export const actions = {
 			.returning();
 
 		return { hall: serializeNonPOJOs(newHall[0]) };
+	},
+	update: async function ({ request }) {
+		if (request.method != 'POST') {
+			return fail(405, { message: 'Metóda nie je povolená.' });
+		}
+		const formData = await request.formData();
+		const id = formData.get('id');
+		if (!id || typeof id !== 'string' || id.length < 1) {
+			return fail(400, { message: 'ID sály je povinné.', validate: ['id'] });
+		}
+
+		const name = formData.get('name');
+		if (!name || typeof name !== 'string' || name.length < 1) {
+			return fail(400, { message: 'Názov sály je povinný.', validate: ['name'] });
+		}
+
+		const capacity = formData.get('capacity');
+		if (!capacity || typeof capacity !== 'string') {
+			return fail(400, { message: 'Kapacita sály je povinná.', validate: ['capacity'] });
+		}
+
+		const capacityNumber = parseInt(capacity);
+		if (isNaN(capacityNumber) || capacityNumber < 1) {
+			return fail(400, { message: 'Kapacita musí byť číslo väčšie ako 0.', validate: ['capacity'] });
+		}
+
+		// Check if hall exists
+		const existingHall = (
+			await db.select().from(halls).where(eq(halls.id, parseInt(id))).limit(1)
+		)[0];
+		if (!existingHall) {
+			return fail(404, { message: 'Sála neexistuje.', validate: ['id'] });
+		}
+
+		// Check for name conflicts (excluding current hall)
+		const existingHallByName = (
+			await db.select().from(halls).where(eq(halls.name, name)).limit(1)
+		)[0];
+		if (existingHallByName && existingHallByName.id !== parseInt(id)) {
+			return fail(400, { message: 'Sála s týmto názvom už existuje.', validate: ['name'] });
+		}
+
+		const color = formData.get('color_value');
+		if (!color || typeof color !== 'string' || color.length < 1) {
+			return fail(400, { message: 'Farba sály je povinná.', validate: ['color'] });
+		}
+
+		// Check for color conflicts (excluding current hall)
+		const existingHallByColor = (
+			await db.select().from(halls).where(eq(halls.color, color)).limit(1)
+		)[0];
+		if (existingHallByColor && existingHallByColor.id !== parseInt(id)) {
+			return fail(400, { message: 'Sála s touto farbou už existuje.', validate: ['color'] });
+		}
+
+		if (validateHex(color) === false) {
+			return fail(400, { message: 'Farba sály je neplatná.', validate: ['color'] });
+		}
+
+		const allow_reservations = formData.get('allow_reservations') == 'on';
+		const custom_layouts = formData.get('custom_layouts') == 'on';
+		const force_layouts = formData.get('force_layouts') == 'on';
+		const allow_feedback = formData.get('allow_feedback') == 'on';
+
+		// Get minimum advance days (optional, defaults to 0)
+		const minAdvanceDaysString = formData.get('minAdvanceDays');
+		const minAdvanceDays = minAdvanceDaysString ? parseInt(minAdvanceDaysString as string) : 0;
+
+		// Update hall
+		const updatedHall = await db
+			.update(halls)
+			.set({
+				name,
+				capacity: capacityNumber,
+				color,
+				minAdvanceDays,
+				allow_reservations,
+				custom_layouts,
+				force_layouts,
+				allow_feedback,
+				updatedAt: new Date()
+			})
+			.where(eq(halls.id, parseInt(id)))
+			.returning();
+
+		return { hall: serializeNonPOJOs(updatedHall[0]) };
 	}
 };
 

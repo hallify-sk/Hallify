@@ -51,6 +51,8 @@ export const halls = pgTable('halls', {
 	allowedDays: json('allowed_days')
 		.$type<string[]>()
 		.default(['pon', 'uto', 'str', 'stv', 'pia', 'sob', 'ned']),
+	// Minimum days in advance required for reservation
+	minAdvanceDays: integer('min_advance_days').default(0).notNull(),
 	createdAt: timestamp('created_at').defaultNow().notNull(),
 	updatedAt: timestamp('updated_at').defaultNow().notNull(),
 	allow_reservations: boolean('allow_reservations').default(false).notNull(),
@@ -116,6 +118,8 @@ export const events = pgTable('events', {
 	currentParticipants: integer('current_participants').default(0),
 	isPublic: boolean('is_public').default(true),
 	allowRegistration: boolean('allow_registration').default(true),
+	allowInvitations: boolean('allow_invitations').default(false),
+	invitationToken: varchar('invitation_token', { length: 255 }),
 	status: varchar('status', { length: 50 }).default('planned'), // 'planned', 'active', 'completed', 'cancelled'
 	layoutId: integer('layout_id').references(() => hallLayouts.id, { onDelete: 'set null' }),
 	notes: text('notes'),
@@ -135,6 +139,18 @@ export const eventRegistrations = pgTable('event_registrations', {
 	// Ensure a user can only register once per event
 	uniqueRegistration: unique().on(table.eventId, table.userId)
 }));
+
+// Table for tracking invitations from non-registered users
+export const eventInvitations = pgTable('event_invitations', {
+	id: serial('id').primaryKey(),
+	eventId: integer('event_id').notNull().references(() => events.id, { onDelete: 'cascade' }),
+	name: varchar('name', { length: 255 }).notNull(),
+	email: varchar('email', { length: 255 }),
+	phone: varchar('phone', { length: 50 }),
+	status: varchar('status', { length: 50 }).default('confirmed'), // 'confirmed', 'cancelled'
+	confirmedAt: timestamp('confirmed_at', { withTimezone: true }).defaultNow(),
+	notes: text('notes')
+});
 
 // Relations
 export const usersRelations = relations(users, ({ one, many }) => ({
@@ -201,7 +217,8 @@ export const eventsRelations = relations(events, ({ one, many }) => ({
 		fields: [events.layoutId],
 		references: [hallLayouts.id]
 	}),
-	registrations: many(eventRegistrations)
+	registrations: many(eventRegistrations),
+	invitations: many(eventInvitations)
 }));
 
 export const eventRegistrationsRelations = relations(eventRegistrations, ({ one }) => ({
@@ -212,6 +229,13 @@ export const eventRegistrationsRelations = relations(eventRegistrations, ({ one 
 	user: one(users, {
 		fields: [eventRegistrations.userId],
 		references: [users.id]
+	})
+}));
+
+export const eventInvitationsRelations = relations(eventInvitations, ({ one }) => ({
+	event: one(events, {
+		fields: [eventInvitations.eventId],
+		references: [events.id]
 	})
 }));
 
@@ -242,3 +266,6 @@ export type NewEvent = typeof events.$inferInsert;
 
 export type EventRegistration = typeof eventRegistrations.$inferSelect;
 export type NewEventRegistration = typeof eventRegistrations.$inferInsert;
+
+export type EventInvitation = typeof eventInvitations.$inferSelect;
+export type NewEventInvitation = typeof eventInvitations.$inferInsert;

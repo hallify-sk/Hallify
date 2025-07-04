@@ -1,6 +1,4 @@
 <script lang="ts">
-    import { createEventDispatcher } from 'svelte';
-
     let {
         name = '',
         id = '',
@@ -17,8 +15,14 @@
         minlength,
         pattern,
         autocomplete = undefined,
-        error = '',
+        error = undefined,
         class: className = '',
+        oninput,
+        onchange,
+        onfocus,
+        onblur,
+        onkeydown,
+        onkeyup,
         ...restProps
     }: {
         name?: string;
@@ -38,10 +42,14 @@
         autocomplete?: AutoFill | null | undefined;
         error?: string;
         class?: string;
+        oninput?: (event: Event & { currentTarget: EventTarget & HTMLInputElement }) => void;
+        onchange?: (event: Event & { currentTarget: EventTarget & HTMLInputElement }) => void;
+        onfocus?: (event: FocusEvent & { currentTarget: EventTarget & HTMLInputElement }) => void;
+        onblur?: (event: FocusEvent & { currentTarget: EventTarget & HTMLInputElement }) => void;
+        onkeydown?: (event: KeyboardEvent & { currentTarget: EventTarget & HTMLInputElement }) => void;
+        onkeyup?: (event: KeyboardEvent & { currentTarget: EventTarget & HTMLInputElement }) => void;
         [key: string]: any;
     } = $props();
-
-    const dispatch = createEventDispatcher();
 
     let inputElement: HTMLInputElement;
     let isFocused = $state(false);
@@ -55,38 +63,31 @@
             target.setCustomValidity('');
         }
         
-        dispatch('input', { value, event });
+        oninput?.(event as Event & { currentTarget: EventTarget & HTMLInputElement });
     }
 
     function handleChange(event: Event) {
         const target = event.target as HTMLInputElement;
         value = target.value;
-        dispatch('change', { value, event });
+        onchange?.(event as Event & { currentTarget: EventTarget & HTMLInputElement });
     }
 
     function handleFocus(event: FocusEvent) {
         isFocused = true;
-        dispatch('focus', { value, event });
+        onfocus?.(event as FocusEvent & { currentTarget: EventTarget & HTMLInputElement });
     }
 
     function handleBlur(event: FocusEvent) {
         isFocused = false;
-        dispatch('blur', { value, event });
+        onblur?.(event as FocusEvent & { currentTarget: EventTarget & HTMLInputElement });
     }
 
     function handleKeydown(event: KeyboardEvent) {
-        dispatch('keydown', { value, event });
+        onkeydown?.(event as KeyboardEvent & { currentTarget: EventTarget & HTMLInputElement });
     }
 
     function handleKeyup(event: KeyboardEvent) {
-        dispatch('keyup', { value, event });
-    }
-
-    // Remove validation when error prop changes
-    function removeValidation() {
-        if (inputElement) {
-            inputElement.setCustomValidity('');
-        }
+        onkeyup?.(event as KeyboardEvent & { currentTarget: EventTarget & HTMLInputElement });
     }
 
     // Set custom validity when error changes
@@ -98,29 +99,29 @@
         }
     });
 
-    // Computed classes
+    // Computed classes - Fixed the logic and background colors
     const inputClasses = $derived(() => {
-        const baseClasses = 'w-full p-2 text-sm border rounded shadow-sm transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-offset-0';
+        const baseClasses = 'w-full p-2 text-sm border rounded shadow-sm transition-colors duration-150 focus:outline-none bg-white';
         
-        const stateClasses = error
-            ? 'border-red-400 focus:border-red-500 focus:ring-red-200 bg-red-50 text-text-main'
-            : isFocused
-            ? 'border-primary focus:border-primary focus:ring-primary/20 bg-background-1 text-text-4'
-            : 'border-border-main/50 hover:border-border-main/70 bg-background-1 text-text-2 focus:text-text-4';
+        let stateClasses = '';
         
-        const disabledClasses = disabled
-            ? 'bg-background-3 text-text-2 cursor-not-allowed border-border-main/20 opacity-60'
-            : '';
+        if (disabled) {
+            stateClasses = 'bg-gray-100 text-gray-500 cursor-not-allowed border-gray-300 opacity-60';
+        } else if (readonly) {
+            stateClasses = 'bg-gray-50 cursor-default border-gray-300 text-gray-700';
+        } else if (error) {
+            stateClasses = 'border-red-400 bg-red-50 text-red-900 focus:border-red-500 focus:ring-2 focus:ring-red-200';
+        } else if (isFocused) {
+            stateClasses = 'border-blue-500 bg-white text-gray-900 focus:border-blue-500 focus:ring-2 focus:ring-blue-200';
+        } else {
+            stateClasses = 'border-gray-300 bg-white text-gray-900 hover:border-gray-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-200';
+        }
 
-        const readonlyClasses = readonly
-            ? 'bg-background-2 cursor-default'
-            : '';
-
-        return `${baseClasses} ${stateClasses} ${disabledClasses} ${readonlyClasses} ${className}`.trim();
+        return `${baseClasses} ${stateClasses} ${className}`.trim();
     });
 </script>
 
-<div class="input-wrapper">
+<div class="input-wrapper w-full">
     <input
         bind:this={inputElement}
         {type}
@@ -137,7 +138,7 @@
         {minlength}
         {pattern}
         {autocomplete}
-        class={inputClasses}
+        class={inputClasses()}
         bind:value
         oninput={handleInput}
         onchange={handleChange}
@@ -149,7 +150,7 @@
     />
     
     {#if error}
-        <p class="error-message mt-1 text-xs text-red-600" role="alert">
+        <p class="error-message mt-1 text-xs text-red-600 w-full" role="alert">
             {error}
         </p>
     {/if}
@@ -157,19 +158,25 @@
 
 <style lang="postcss">
     .input-wrapper {
-        @apply w-full;
+        @apply w-full block;
+    }
+
+    input {
+        @apply w-full block box-border;
+        min-width: 0;
     }
 
     input::placeholder {
-        @apply text-text-1;
+        @apply text-gray-400;
     }
 
-    input:focus {
-        @apply ring-2;
+    /* Override browser validation styles */
+    input:invalid {
+        box-shadow: none !important;
     }
 
-    input:disabled {
-        @apply opacity-60;
+    input:valid {
+        box-shadow: none !important;
     }
 
     /* Remove default number input spinners */

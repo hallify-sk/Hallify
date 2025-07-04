@@ -1,20 +1,47 @@
 import { db } from '$lib/server/db.js';
 import { halls, events } from '$lib/server/schema';
-import { eq } from 'drizzle-orm';
+import { eq, desc } from 'drizzle-orm';
 import { fail } from '@sveltejs/kit';
 
 export const load = async function ({ locals }) {
     if (!locals.user) {
         return {
             halls: [],
+            events: [],
             user: null,
             permission: null
         };
     }
+    
     const hallList = await db.select().from(halls).where(eq(halls.allow_reservations, true));
+    
+    // Fetch user's events with hall information
+    const userEvents = await db.select({
+        id: events.id,
+        name: events.name,
+        description: events.description,
+        startDate: events.startDate,
+        endDate: events.endDate,
+        status: events.status,
+        isPublic: events.isPublic,
+        allowRegistration: events.allowRegistration,
+        allowInvitations: events.allowInvitations,
+        invitationToken: events.invitationToken,
+        maxParticipants: events.maxParticipants,
+        createdAt: events.createdAt,
+        hallId: events.hallId,
+        hallName: halls.name,
+        hallCapacity: halls.capacity,
+        hallColor: halls.color
+    })
+    .from(events)
+    .leftJoin(halls, eq(events.hallId, halls.id))
+    .where(eq(events.userId, locals.user.id))
+    .orderBy(desc(events.startDate));
 
     return {
         halls: hallList,
+        events: userEvents,
         user: JSON.parse(JSON.stringify(locals.user)),
         permission: JSON.parse(JSON.stringify(locals.permission))
     };
@@ -34,13 +61,11 @@ export const actions = {
         const name = formData.get('name') as string;
         const description = formData.get('description') as string;
         const hallId = formData.get('hallId') as string;
-        const startDate = formData.get('startDate') as string;
-        const endDate = formData.get('endDate') as string;
-        const startTime = formData.get('startTime') as string;
-        const endTime = formData.get('endTime') as string;
+        const eventDate = formData.get('eventDate') as string;
         const maxParticipants = formData.get('maxParticipants') as string;
         const isPublic = formData.get('isPublic') === 'on';
         const allowRegistration = formData.get('allowRegistration') === 'on';
+        const allowInvitations = formData.get('allowInvitations') === 'on';
 
         // Validation
         const errors: string[] = [];
@@ -57,37 +82,18 @@ export const actions = {
             errors.push('hallId');
         }
         
-        if (!startDate) {
-            errors.push('startDate');
-        }
-        
-        if (!endDate) {
-            errors.push('endDate');
-        }
-        
-        if (!startTime) {
-            errors.push('startTime');
-        }
-        
-        if (!endTime) {
-            errors.push('endTime');
+        if (!eventDate) {
+            errors.push('eventDate');
         }
 
-        // Validate dates and times
-        const start = new Date(`${startDate}T${startTime}`);
-        const end = new Date(`${endDate}T${endTime}`);
-        const now = new Date();
+        // Validate date
+        const eventDateTime = new Date(eventDate);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0); // Set to start of today
 
-        if (start < now) {
+        if (eventDateTime < today) {
             return fail(400, {
-                message: 'Začiatočný dátum a čas nemôže byť v minulosti',
-                validate: errors
-            });
-        }
-
-        if (end <= start) {
-            return fail(400, {
-                message: 'Konečný dátum a čas musí byť po začiatočnom',
+                message: 'Dátum udalosti nemôže byť v minulosti',
                 validate: errors
             });
         }
@@ -124,17 +130,32 @@ export const actions = {
         }
 
         try {
+            // Create start and end datetime for the event (full day event)
+            const startOfDay = new Date(eventDate);
+            startOfDay.setHours(0, 0, 0, 0);
+            
+            const endOfDay = new Date(eventDate);
+            endOfDay.setHours(23, 59, 59, 999);
+
+            // Generate invitation token if invitations are enabled
+            let invitationToken = null;
+            if (allowInvitations) {
+                invitationToken = crypto.randomUUID();
+            }
+
             // Create the event
             const newEvent = await db.insert(events).values({
                 name: name.trim(),
                 description: description.trim(),
                 hallId: parseInt(hallId),
                 userId: locals.user.id,
-                startDate: start,
-                endDate: end,
+                startDate: startOfDay,
+                endDate: endOfDay,
                 maxParticipants: maxParticipants ? parseInt(maxParticipants) : null,
                 isPublic: isPublic,
                 allowRegistration: allowRegistration,
+                allowInvitations: allowInvitations,
+                invitationToken: invitationToken,
                 status: 'planned',
                 createdAt: new Date(),
                 updatedAt: new Date()

@@ -533,6 +533,23 @@
                         </div>
                         <p class="text-xs text-text-2">Maximálny počet osôb, ktoré sa zmestia do sály</p>
                     </div>
+
+                    <div class="space-y-2">
+                        <label for="min-advance-days" class="text-sm font-medium text-text-main">
+                            Minimálny počet dní vopred
+                        </label>
+                        <div class="relative">
+                            <NumberInput
+                                name="minAdvanceDays"
+                                id="min-advance-days"
+                                placeholder="0"
+                                min={0}
+                                max={365}
+                            />
+                            <span class="absolute right-3 top-1/2 transform -translate-y-1/2 text-text-2 text-sm">dní</span>
+                        </div>
+                        <p class="text-xs text-text-2">Koľko dní vopred sa musí udalosť rezervovať</p>
+                    </div>
                 </div>
             </div>
 
@@ -704,8 +721,28 @@
             <p class="text-text-main">Upraviť sálu</p>
         </div>
     {/snippet}
-    <form class="flex flex-col w-full" onsubmit={handleEditSubmit}>
+    <form 
+        class="flex flex-col w-full" 
+        action="?/update"
+        method="post"
+        use:enhance={() => {
+            return async ({ result }) => {
+                if (result.type === 'failure') {
+                    hallCreateError = result.data?.message as string;
+                    if (Array.isArray(result.data?.validate)) validate = result.data.validate;
+                    console.error(result);
+                } else if (result.type === 'success') {
+                    await invalidateAll();
+                    showEditHall = false;
+                    await applyAction(result);
+                }
+            };
+        }}
+    >
         <div class="flex flex-col p-6 space-y-6">
+            <!-- Hidden field for hall ID -->
+            <input type="hidden" name="id" value={editingId} />
+            
             <!-- Step indicator -->
             <div class="flex items-center gap-2 text-xs text-text-2 mb-2">
                 <span class="w-6 h-6 bg-primary text-white rounded-full flex items-center justify-center text-xs font-medium">1</span>
@@ -755,6 +792,24 @@
                         </div>
                         <p class="text-xs text-text-2">Maximálny počet osôb, ktoré sa zmestia do sály</p>
                     </div>
+
+                    <div class="space-y-2">
+                        <label for="edit-min-advance-days" class="text-sm font-medium text-text-main">
+                            Minimálny počet dní vopred
+                        </label>
+                        <div class="relative">
+                            <NumberInput
+                                name="minAdvanceDays"
+                                id="edit-min-advance-days"
+                                value={currentHall?.minAdvanceDays || 0}
+                                placeholder="0"
+                                min={0}
+                                max={365}
+                            />
+                            <span class="absolute right-3 top-1/2 transform -translate-y-1/2 text-text-2 text-sm">dní</span>
+                        </div>
+                        <p class="text-xs text-text-2">Koľko dní vopred sa musí udalosť rezervovať</p>
+                    </div>
                 </div>
             </div>
 
@@ -795,6 +850,8 @@
                                         { value: '#84cc16', name: 'Limetková' }
                                     ]}
                                 />
+                                <!-- Hidden input for form submission -->
+                                <input type="hidden" name="color_value" value={colorValue} />
                             </div>
                         </div>
                         <p class="text-xs text-text-2">Farba pre rozlíšenie sály v grafoch a zoznamoch</p>

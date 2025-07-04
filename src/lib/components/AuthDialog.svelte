@@ -19,15 +19,32 @@
 		openRegister = $bindable(false)
 	}: { openLogin: boolean; openRegister: boolean } = $props();
 
-	let loginError: string | unknown = $state('');
-	let registerError: string | unknown = $state('');
-	let validate: string[] = $state([]);
+	let fieldErrors: Record<string, string> = $state({});
 
-	$effect(() => {
-		validate.forEach((i) => {
-			(document.getElementById(i) as HTMLInputElement).setCustomValidity('Chybné pole');
-		});
-	});
+	function clearErrors() {
+		fieldErrors = {};
+	}
+
+	function handleFormErrors(result: any, isRegister = false) {
+		if (result.type === 'failure') {
+
+			// Set field-specific errors
+			if (result.data?.errors) {
+				fieldErrors = result.data.errors;
+			}
+
+			console.log(result.data);
+
+			// Handle legacy validate array format
+			if (Array.isArray(result.data?.validate)) {
+				const errors: Record<string, string> = {};
+				result.data.validate.forEach((field: string) => {
+					errors[field] = result.data.message;
+				});
+				fieldErrors = errors;
+			}
+		}
+	}
 </script>
 
 <Dialog bind:open={openLogin}>
@@ -39,13 +56,10 @@
 		action="/api/auth"
 		method="post"
 		use:enhance={() => {
+			clearErrors();
 			return async ({ result }) => {
-				// `result` is an `ActionResult` object
-				if (result.type === 'failure') {
-					loginError = result.data?.message;
-					if (Array.isArray(result.data?.validate)) validate = result.data.validate;
-					console.error(result);
-				} else {
+				handleFormErrors(result, false);
+				if (result.type === 'success') {
 					await invalidateAll();
 					openLogin = false;
 					await applyAction(result);
@@ -55,16 +69,23 @@
 	>
 		<div class="flex flex-col gap-2 p-4">
 			<div>
-				<label for="" class="text-sm text-text-4">E-Mail</label>
-				<TextInput name="email" id="email" placeholder="meno@email.com" />
+				<label for="login-email" class="text-sm text-text-4">E-Mail</label>
+				<TextInput
+					name="email"
+					id="login-email"
+					placeholder="meno@email.com"
+					error={fieldErrors.email}
+				/>
 			</div>
 			<div>
-				<label for="" class="text-sm text-text-4">Heslo</label>
-				<TextInput type="password" name="password" id="password" />
+				<label for="login-password" class="text-sm text-text-4">Heslo</label>
+				<TextInput
+					type="password"
+					name="password"
+					id="login-password"
+					error={fieldErrors.password}
+				/>
 			</div>
-			{#if loginError}
-				<p in:fly={{ x: 10, duration: 600 }} class="text-danger">{loginError}</p>
-			{/if}
 		</div>
 		<div
 			class="flex justify-between w-full p-4 border-t rounded-b bg-background-2 border-border-main/30"
@@ -73,6 +94,7 @@
 				color="transparent"
 				onclick={() => {
 					openLogin = false;
+					clearErrors();
 				}}
 			>
 				<p>Zrušiť</p>
@@ -80,7 +102,11 @@
 			<div class="flex flex-row gap-2">
 				<Button
 					type="button"
-					onclick={() => ((openLogin = false), (openRegister = true))}
+					onclick={() => {
+						openLogin = false;
+						openRegister = true;
+						clearErrors();
+					}}
 					color="secondary"
 				>
 					<Icon scale="small">
@@ -108,13 +134,10 @@
 		action="/api/user"
 		method="post"
 		use:enhance={() => {
+			clearErrors();
 			return async ({ result }) => {
-				// `result` is an `ActionResult` object
-				if (result.type === 'failure') {
-					loginError = result.data?.message;
-					if (Array.isArray(result.data?.validate)) validate = result.data.validate;
-					console.error(result);
-				} else {
+				handleFormErrors(result, true);
+				if (result.type === 'success') {
 					await invalidateAll();
 					openRegister = false;
 					await applyAction(result);
@@ -125,25 +148,42 @@
 		<div class="flex flex-col gap-2 p-4">
 			<div class="grid grid-cols-1 gap-2 md:grid-cols-2">
 				<div>
-					<label for="" class="text-sm text-text-4">Meno</label>
-					<TextInput name="firstName" id="firstName" placeholder="Janko" />
+					<label for="register-firstName" class="text-sm text-text-4">Meno</label>
+					<TextInput
+						name="firstName"
+						id="register-firstName"
+						placeholder="Janko"
+						error={fieldErrors.firstName}
+					/>
 				</div>
 				<div>
-					<label for="" class="text-sm text-text-4">Priezvisko</label>
-					<TextInput name="lastName" id="lastName" placeholder="Mrkvička" />
+					<label for="register-lastName" class="text-sm text-text-4">Priezvisko</label>
+					<TextInput
+						name="lastName"
+						id="register-lastName"
+						placeholder="Mrkvička"
+						error={fieldErrors.lastName}
+					/>
 				</div>
 			</div>
 			<div>
-				<label for="" class="text-sm text-text-4">E-Mail</label>
-				<TextInput name="email" id="email" placeholder="jankomrkva@email.com" />
+				<label for="register-email" class="text-sm text-text-4">E-Mail</label>
+				<TextInput
+					name="email"
+					id="register-email"
+					placeholder="jankomrkva@email.com"
+					error={fieldErrors.email}
+				/>
 			</div>
 			<div>
-				<label for="" class="text-sm text-text-4">Heslo</label>
-				<TextInput type="password" name="password" id="password" />
+				<label for="register-password" class="text-sm text-text-4">Heslo</label>
+				<TextInput
+					type="password"
+					name="password"
+					id="register-password"
+					error={fieldErrors.password}
+				/>
 			</div>
-			{#if registerError}
-				<p in:fly={{ x: 10, duration: 600 }} class="mt-4 text-danger">{registerError}</p>
-			{/if}
 		</div>
 		<div
 			class="flex justify-between w-full p-4 border-t rounded-b bg-background-2 border-slate-400/30"
@@ -151,13 +191,21 @@
 			<Button
 				onclick={() => {
 					openRegister = false;
+					clearErrors();
 				}}
 				color="transparent"
 			>
 				<p>Zrušiť</p>
 			</Button>
 			<div class="flex flex-row gap-2">
-				<Button onclick={() => ((openLogin = true), (openRegister = false))} color="secondary">
+				<Button
+					onclick={() => {
+						openLogin = true;
+						openRegister = false;
+						clearErrors();
+					}}
+					color="secondary"
+				>
 					<Icon scale="small">
 						<LogIn />
 					</Icon>

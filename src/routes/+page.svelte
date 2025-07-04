@@ -2,6 +2,7 @@
     import Button from '$lib/components/Button.svelte';
     import Calendar from '$lib/components/Calendar.svelte';
     import Dialog from '$lib/components/Dialog.svelte';
+    import DatePicker from '$lib/components/DatePicker.svelte';
     import TextInput from '$lib/components/inputs/TextInput.svelte';
     import Textarea from '$lib/components/inputs/Textarea.svelte';
     import Select from '$lib/components/inputs/Select.svelte';
@@ -29,28 +30,31 @@
     let eventName = $state('');
     let eventDescription = $state('');
     let selectedHallId = $state('');
-    let startDate = $state('');
-    let endDate = $state('');
-    let startTime = $state('');
-    let endTime = $state('');
-    let maxParticipants = $state(0); // Change to string for NumberInput
+    let eventDate = $state('');
+    let maxParticipants = $state(0);
     let isPublic = $state(true);
     let allowRegistration = $state(true);
+    let allowInvitations = $state(false);
+
+    // Calendar state
+    let availableDates = $state<string[]>([]);
+    let unavailableDates = $state<string[]>([]);
+    let loadingDates = $state(false);
 
     // Reset form function
     function resetEventForm() {
         eventName = '';
         eventDescription = '';
         selectedHallId = '';
-        startDate = '';
-        endDate = '';
-        startTime = '';
-        endTime = '';
-        maxParticipants = 0; // Reset to empty string
+        eventDate = '';
+        maxParticipants = 0;
         isPublic = true;
         allowRegistration = true;
+        allowInvitations = false;
         eventCreateError = '';
         validate = [];
+        availableDates = [];
+        unavailableDates = [];
     }
 
     // Helper function to get today's date in YYYY-MM-DD format
@@ -59,26 +63,132 @@
         return today.toISOString().split('T')[0];
     }
 
-    // Helper function to get current time in HH:MM format
-    function getCurrentTime() {
-        const now = new Date();
-        return now.toTimeString().slice(0, 5);
+    // Helper function to format date for display
+    function formatEventDate(dateString: string | Date) {
+        const date = new Date(dateString);
+        return date.toLocaleDateString('sk-SK', {
+            day: '2-digit',
+            month: '2-digit',
+            year: 'numeric'
+        });
     }
 
-    // Initialize dates when dialog opens
+    // Helper function to get status display text and styles
+    function getEventStatus(status: string, startDate: string | Date) {
+        const eventDate = new Date(startDate);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        eventDate.setHours(0, 0, 0, 0);
+        
+        if (eventDate < today) {
+            return {
+                text: 'Ukončená',
+                class: 'px-2 py-1 text-text-3 rounded bg-text-3/20'
+            };
+        } else if (eventDate.getTime() === today.getTime()) {
+            return {
+                text: 'Dnes',
+                class: 'px-2 py-1 text-primary rounded bg-primary/20 font-medium'
+            };
+        } else {
+            switch (status) {
+                case 'planned':
+                    return {
+                        text: 'Plánovaná',
+                        class: 'px-2 py-1 text-blue-600 rounded bg-blue-300/40'
+                    };
+                case 'confirmed':
+                    return {
+                        text: 'Potvrdená',
+                        class: 'px-2 py-1 text-green-600 rounded bg-green-300/40'
+                    };
+                case 'cancelled':
+                    return {
+                        text: 'Zrušená',
+                        class: 'px-2 py-1 text-red-600 rounded bg-red-300/40'
+                    };
+                default:
+                    return {
+                        text: 'Plánovaná',
+                        class: 'px-2 py-1 text-blue-600 rounded bg-blue-300/40'
+                    };
+            }
+        }
+    }
+
+    // Fetch available dates for selected hall
+    async function fetchAvailableDates(hallId: string) {
+        if (!hallId) {
+            availableDates = [];
+            unavailableDates = [];
+            return;
+        }
+
+        loadingDates = true;
+        try {
+            const response = await fetch(`/api/halls/${hallId}/available-dates`);
+            if (response.ok) {
+                const data = await response.json();
+                availableDates = data.availableDates || [];
+                unavailableDates = data.unavailableDates || [];
+            } else {
+                console.error('Failed to fetch available dates');
+                availableDates = [];
+                unavailableDates = [];
+            }
+        } catch (error) {
+            console.error('Error fetching available dates:', error);
+            availableDates = [];
+            unavailableDates = [];
+        } finally {
+            loadingDates = false;
+        }
+    }
+
+    // Handle date selection
+    function handleDateSelect(date: string) {
+        eventDate = date;
+    }
+
+    // Calculate statistics
+    const stats = $derived(() => {
+        const events = data.events || [];
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        
+        const totalEvents = events.length;
+        const upcomingEvents = events.filter(event => {
+            const eventDate = new Date(event.startDate);
+            eventDate.setHours(0, 0, 0, 0);
+            return eventDate >= today;
+        }).length;
+        
+        const completedEvents = events.filter(event => {
+            const eventDate = new Date(event.startDate);
+            eventDate.setHours(0, 0, 0, 0);
+            return eventDate < today;
+        }).length;
+        
+        const availableHalls = data.halls?.filter(hall => hall.allow_reservations).length || 0;
+        
+        return {
+            totalEvents,
+            upcomingEvents,
+            completedEvents,
+            availableHalls
+        };
+    });
+
+    // Watch for hall changes to fetch available dates
     $effect(() => {
-        if (showEventDialog && !startDate) {
-            const today = getTodayDate();
-            const currentTime = getCurrentTime();
-            
-            startDate = today;
-            endDate = today;
-            startTime = currentTime;
-            
-            // Set end time 2 hours later
-            const endTimeDate = new Date();
-            endTimeDate.setHours(endTimeDate.getHours() + 2);
-            endTime = endTimeDate.toTimeString().slice(0, 5);
+        if (selectedHallId) {
+            fetchAvailableDates(selectedHallId);
+            // Reset selected date when hall changes
+            eventDate = '';
+        } else {
+            availableDates = [];
+            unavailableDates = [];
+            eventDate = '';
         }
     });
 </script>
@@ -118,16 +228,20 @@
 				<div class="overflow-y-auto">
 					<table class="w-full border-b border-collapse border-border-main/30">
 						<colgroup>
-							<col span="1" style="width: 5%;" />
-							<col span="2" style="width: 70%;" />
-							<col span="1" style="width: 15%;" />
-							<col span="1" style="width: 10%;" />
+							<col span="1" style="width: 8%;" />
+							<col span="1" style="width: 40%;" />
+							<col span="1" style="width: 22%;" />
+							<col span="1" style="width: 18%;" />
+							<col span="1" style="width: 12%;" />
 						</colgroup>
 						<thead>
 							<tr class="bg-background-2">
 								<th></th>
 								<th class="text-[0.65rem] text-left px-4 py-2 text-text-1 font-normal uppercase"
 									>Názov</th
+								>
+								<th class="text-[0.65rem] text-left px-4 py-2 text-text-1 font-normal uppercase"
+									>Sála</th
 								>
 								<th class="text-[0.65rem] text-left px-4 py-2 text-text-1 font-normal uppercase"
 									>Dátum</th
@@ -138,230 +252,73 @@
 							</tr>
 						</thead>
 						<tbody>
-							<tr class="event-table-row">
-								<td>
-									<a href="/" class="event-table-row-modify">
-										<Icon scale="small">
-											<Adjustments />
-										</Icon>
-									</a>
-								</td>
-								<td class="event-table-long-text">Maturitný ples SSOSTA 2024 - 4.B</td>
-								<td class="px-4 py-3 text-sm text-text-4">12.12.2021</td>
-								<td class="px-4 py-3 text-sm">
-									<span class="px-2 py-1 text-blue-600 rounded bg-blue-300/40">Plánovaná</span>
-								</td>
-							</tr>
-							<tr class="event-table-row">
-								<td>
-									<a href="/" class="event-table-row-modify">
-										<Icon scale="small">
-											<Adjustments />
-										</Icon>
-									</a>
-								</td>
-								<td class="event-table-long-text">Maturitný ples SSOSTA 2024 - 4.B</td>
-								<td class="px-4 py-3 text-sm text-text-4">12.12.2021</td>
-								<td class="px-4 py-3 text-sm">
-									<span class="px-2 py-1 rounded text-primary bg-primary-4/40">Plánovaná</span>
-								</td>
-							</tr>
-							<tr class="event-table-row">
-								<td>
-									<a href="/" class="event-table-row-modify">
-										<Icon scale="small">
-											<Adjustments />
-										</Icon>
-									</a>
-								</td>
-								<td class="event-table-long-text">Maturitný ples SSOSTA 2024 - 4.B</td>
-								<td class="px-4 py-3 text-sm text-text-4">12.12.2021</td>
-								<td class="px-4 py-3 text-sm">
-									<span class="px-2 py-1 text-blue-600 rounded bg-blue-300/40">Plánovaná</span>
-								</td>
-							</tr>
-							<tr class="event-table-row">
-								<td>
-									<a href="/" class="event-table-row-modify">
-										<Icon scale="small">
-											<Adjustments />
-										</Icon>
-									</a>
-								</td>
-								<td class="event-table-long-text">Maturitný ples SSOSTA 2024 - 4.B</td>
-								<td class="px-4 py-3 text-sm text-text-4">12.12.2021</td>
-								<td class="px-4 py-3 text-sm">
-									<span class="px-2 py-1 text-blue-600 rounded bg-blue-300/40">Plánovaná</span>
-								</td>
-							</tr>
-							<tr class="event-table-row">
-								<td>
-									<a href="/" class="event-table-row-modify">
-										<Icon scale="small">
-											<Adjustments />
-										</Icon>
-									</a>
-								</td>
-								<td class="event-table-long-text">Maturitný ples SSOSTA 2024 - 4.B</td>
-								<td class="px-4 py-3 text-sm text-text-4">12.12.2021</td>
-								<td class="px-4 py-3 text-sm">
-									<span class="px-2 py-1 text-blue-600 rounded bg-blue-300/40">Plánovaná</span>
-								</td>
-							</tr>
-							<tr class="event-table-row">
-								<td>
-									<a href="/" class="event-table-row-modify">
-										<Icon scale="small">
-											<Adjustments />
-										</Icon>
-									</a>
-								</td>
-								<td class="event-table-long-text">Maturitný ples SSOSTA 2024 - 4.B</td>
-								<td class="px-4 py-3 text-sm text-text-4">12.12.2021</td>
-								<td class="px-4 py-3 text-sm">
-									<span class="px-2 py-1 text-blue-600 rounded bg-blue-300/40">Plánovaná</span>
-								</td>
-							</tr>
-							<tr class="event-table-row">
-								<td>
-									<a href="/" class="event-table-row-modify">
-										<Icon scale="small">
-											<Adjustments />
-										</Icon>
-									</a>
-								</td>
-								<td class="event-table-long-text">Maturitný ples SSOSTA 2024 - 4.B</td>
-								<td class="px-4 py-3 text-sm text-text-4">12.12.2021</td>
-								<td class="px-4 py-3 text-sm">
-									<span class="px-2 py-1 text-blue-600 rounded bg-blue-300/40">Plánovaná</span>
-								</td>
-							</tr>
-							<tr class="event-table-row">
-								<td>
-									<a href="/" class="event-table-row-modify">
-										<Icon scale="small">
-											<Adjustments />
-										</Icon>
-									</a>
-								</td>
-								<td class="event-table-long-text">Maturitný ples SSOSTA 2024 - 4.B</td>
-								<td class="px-4 py-3 text-sm text-text-4">12.12.2021</td>
-								<td class="px-4 py-3 text-sm">
-									<span class="px-2 py-1 text-blue-600 rounded bg-blue-300/40">Plánovaná</span>
-								</td>
-							</tr>
-							<tr class="event-table-row">
-								<td>
-									<a href="/" class="event-table-row-modify">
-										<Icon scale="small">
-											<Adjustments />
-										</Icon>
-									</a>
-								</td>
-								<td class="event-table-long-text">Maturitný ples SSOSTA 2024 - 4.B</td>
-								<td class="px-4 py-3 text-sm text-text-4">12.12.2021</td>
-								<td class="px-4 py-3 text-sm">
-									<span class="px-2 py-1 text-blue-600 rounded bg-blue-300/40">Plánovaná</span>
-								</td>
-							</tr>
-							<tr class="event-table-row">
-								<td>
-									<a href="/" class="event-table-row-modify">
-										<Icon scale="small">
-											<Adjustments />
-										</Icon>
-									</a>
-								</td>
-								<td class="event-table-long-text">Maturitný ples SSOSTA 2024 - 4.B</td>
-								<td class="px-4 py-3 text-sm text-text-4">12.12.2021</td>
-								<td class="px-4 py-3 text-sm">
-									<span class="px-2 py-1 text-blue-600 rounded bg-blue-300/40">Plánovaná</span>
-								</td>
-							</tr>
-							<tr class="event-table-row">
-								<td>
-									<a href="/" class="event-table-row-modify">
-										<Icon scale="small">
-											<Adjustments />
-										</Icon>
-									</a>
-								</td>
-								<td class="event-table-long-text">Maturitný ples SSOSTA 2024 - 4.B</td>
-								<td class="px-4 py-3 text-sm text-text-4">12.12.2021</td>
-								<td class="px-4 py-3 text-sm">
-									<span class="px-2 py-1 text-blue-600 rounded bg-blue-300/40">Plánovaná</span>
-								</td>
-							</tr>
-							<tr class="event-table-row">
-								<td>
-									<a href="/" class="event-table-row-modify">
-										<Icon scale="small">
-											<Adjustments />
-										</Icon>
-									</a>
-								</td>
-								<td class="event-table-long-text">Maturitný ples SSOSTA 2024 - 4.B</td>
-								<td class="px-4 py-3 text-sm text-text-4">12.12.2021</td>
-								<td class="px-4 py-3 text-sm">
-									<span class="px-2 py-1 text-blue-600 rounded bg-blue-300/40">Plánovaná</span>
-								</td>
-							</tr>
-							<tr class="event-table-row">
-								<td>
-									<a href="/" class="event-table-row-modify">
-										<Icon scale="small">
-											<Adjustments />
-										</Icon>
-									</a>
-								</td>
-								<td class="event-table-long-text">Maturitný ples SSOSTA 2024 - 4.B</td>
-								<td class="px-4 py-3 text-sm text-text-4">12.12.2021</td>
-								<td class="px-4 py-3 text-sm">
-									<span class="px-2 py-1 text-blue-600 rounded bg-blue-300/40">Plánovaná</span>
-								</td>
-							</tr>
-							<tr class="event-table-row">
-								<td>
-									<a href="/" class="event-table-row-modify">
-										<Icon scale="small">
-											<Adjustments />
-										</Icon>
-									</a>
-								</td>
-								<td class="event-table-long-text">Maturitný ples SSOSTA 2024 - 4.B</td>
-								<td class="px-4 py-3 text-sm text-text-4">12.12.2021</td>
-								<td class="px-4 py-3 text-sm">
-									<span class="px-2 py-1 text-blue-600 rounded bg-blue-300/40">Plánovaná</span>
-								</td>
-							</tr>
-							<tr class="event-table-row">
-								<td>
-									<a href="/" class="event-table-row-modify">
-										<Icon scale="small">
-											<Adjustments />
-										</Icon>
-									</a>
-								</td>
-								<td class="event-table-long-text">Maturitný ples SSOSTA 2024 - 4.B</td>
-								<td class="px-4 py-3 text-sm text-text-4">12.12.2021</td>
-								<td class="px-4 py-3 text-sm">
-									<span class="px-2 py-1 text-blue-600 rounded bg-blue-300/40">Plánovaná</span>
-								</td>
-							</tr>
-							<tr class="event-table-row">
-								<td>
-									<a href="/" class="event-table-row-modify">
-										<Icon scale="small">
-											<Adjustments />
-										</Icon>
-									</a>
-								</td>
-								<td class="event-table-long-text">Maturitný ples SSOSTA 2024 - 4.A</td>
-								<td class="px-4 py-3 text-sm text-text-4">12.12.2021</td>
-								<td class="px-4 py-3 text-sm">
-									<span class="px-2 py-1 text-black rounded bg-black/30">Ukončená</span>
-								</td>
-							</tr>
+							{#if data.events && data.events.length > 0}
+								{#each data.events as event}
+								{@const eventStatus = getEventStatus(event.status || 'planned', event.startDate)}
+								<tr class="event-table-row">
+									<td class="px-2">
+										<div class="flex gap-1">
+											<a 
+												href="/events/{event.id}"
+												class="event-table-row-modify"
+												title="Správa udalosti"
+											>
+												<Icon scale="small">
+													<Adjustments />
+												</Icon>
+											</a>
+										</div>
+									</td>
+									<td class="px-4 py-3 text-sm text-text-main font-medium" title={event.name}>
+										<div class="max-w-none overflow-hidden text-ellipsis whitespace-nowrap">
+											{event.name}
+										</div>
+									</td>
+									<td class="px-4 py-3 text-sm text-text-2">
+										<div class="flex items-center gap-2">
+											{#if event.hallColor}
+												<div class="w-3 h-3 rounded-full" style="background-color: {event.hallColor}"></div>
+											{/if}
+											{event.hallName || 'Neznáma sála'}
+										</div>
+									</td>
+									<td class="px-4 py-3 text-sm text-text-4">
+										{formatEventDate(event.startDate)}
+									</td>
+									<td class="px-4 py-3 text-sm">
+										<span class={eventStatus.class}>
+											{eventStatus.text}
+										</span>
+									</td>
+								</tr>
+								{/each}
+							{:else}
+								<tr>
+									<td colspan="5" class="px-4 py-12 text-center text-text-3">
+										<div class="flex flex-col items-center gap-3">
+											<Icon scale="big">
+												<CalendarIcon />
+											</Icon>
+											<div class="space-y-1">
+												<p class="text-sm font-medium">Zatiaľ nemáte žiadne udalosti</p>
+												<p class="text-xs text-text-4">Vytvorte svoju prvú udalosť a začnite organizovať</p>
+											</div>
+											<Button 
+												color="primary" 
+												onclick={() => {
+													resetEventForm();
+													showEventDialog = true;
+												}}
+											>
+												<Icon scale="small">
+													<Plus />
+												</Icon>
+												Vytvoriť prvú udalosť
+											</Button>
+										</div>
+									</td>
+								</tr>
+							{/if}
 						</tbody>
 					</table>
 				</div>
@@ -379,20 +336,20 @@
 		</div>
 		<div class="grid w-full grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
 			<div class="flex flex-col w-full p-4 border rounded border-border-main/30 bg-background-1">
-				<h2 class="text-sm text-text-1">Udalosti</h2>
-				<p class="text-3xl font-bold text-text-main">24</p>
+				<h2 class="text-sm text-text-1">Celkový počet udalostí</h2>
+				<p class="text-3xl font-bold text-text-main">{stats().totalEvents}</p>
 			</div>
 			<div class="flex flex-col w-full p-4 border rounded border-border-main/30 bg-background-1">
-				<h2 class="text-sm text-text-1">Naplánované udalosti</h2>
-				<p class="text-3xl font-bold text-text-main">24</p>
+				<h2 class="text-sm text-text-1">Nadchádzajúce udalosti</h2>
+				<p class="text-3xl font-bold text-text-main">{stats().upcomingEvents}</p>
 			</div>
 			<div class="flex flex-col w-full p-4 border rounded border-border-main/30 bg-background-1">
-				<h2 class="text-sm text-text-1">Udalosti</h2>
-				<p class="text-3xl font-bold text-text-main">24</p>
+				<h2 class="text-sm text-text-1">Ukončené udalosti</h2>
+				<p class="text-3xl font-bold text-text-main">{stats().completedEvents}</p>
 			</div>
 			<div class="flex flex-col w-full p-4 border rounded border-border-main/30 bg-background-1">
-				<h2 class="text-sm text-text-1">Udalosti</h2>
-				<p class="text-3xl font-bold text-text-main">24</p>
+				<h2 class="text-sm text-text-1">Dostupné sály</h2>
+				<p class="text-3xl font-bold text-text-main">{stats().availableHalls}</p>
 			</div>
 		</div>
 	</div>
@@ -476,14 +433,14 @@
 				</div>
 			</div>
 
-			<!-- Step 2: Location & Time -->
+			<!-- Step 2: Location & Date -->
 			<div class="space-y-4">
 				<div class="flex items-center gap-2 mb-4">
 					<div class="w-6 h-6 bg-primary text-white rounded-full flex items-center justify-center text-xs font-medium">2</div>
-					<h3 class="text-lg font-medium text-text-main">Miesto a čas</h3>
+					<h3 class="text-lg font-medium text-text-main">Miesto a dátum</h3>
 				</div>
 
-				<div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+				<div class="grid grid-cols-1 gap-6 md:grid-cols-2">
 					<!-- Hall Selection -->
 					<div class="space-y-2">
 						<label for="event-hall" class="text-sm font-medium text-text-main">
@@ -505,87 +462,59 @@
 						/>
 						<input type="hidden" name="hallId" value={selectedHallId} />
 						<p class="text-xs text-text-2">Kde sa bude udalosť konať</p>
+
+						<!-- Max Participants -->
+						{#if selectedHallId && data.halls}
+							{@const selectedHall = data.halls.find(h => h.id.toString() === selectedHallId)}
+							{#if selectedHall}
+								<div class="space-y-2 mt-4">
+									<label for="event-participants" class="text-sm font-medium text-text-main">
+										Maximálny počet účastníkov
+									</label>
+									<NumberInput
+										id="event-participants"
+										name="maxParticipants"
+										bind:value={maxParticipants}
+										min={1}
+										max={selectedHall.capacity || 1000}
+										placeholder={selectedHall.capacity?.toString() || ''}
+									/>
+									<p class="text-xs text-text-2">
+										Kapacita sály: {selectedHall.capacity || 0} osôb
+									</p>
+								</div>
+							{/if}
+						{/if}
 					</div>
 
-					<!-- Max Participants -->
-					{#if selectedHallId && data.halls}
-						{@const selectedHall = data.halls.find(h => h.id.toString() === selectedHallId)}
-						{#if selectedHall}
-							<div class="space-y-2">
-								<label for="event-participants" class="text-sm font-medium text-text-main">
-									Maximálny počet účastníkov
-								</label>
-								<NumberInput
-									id="event-participants"
-									name="maxParticipants"
-									bind:value={maxParticipants}
-									min={1}
-									max={selectedHall.capacity || 1000}
-									placeholder={selectedHall.capacity?.toString() || ''}
-									
+					<!-- Date Selection -->
+					<div class="space-y-2">
+						<div class="text-sm font-medium text-text-main">
+							Dátum udalosti <span class="text-red-500">*</span>
+						</div>
+						{#if selectedHallId}
+							{#if loadingDates}
+								<div class="flex items-center justify-center py-8">
+									<div class="text-sm text-text-2">Načítavam dostupné dátumy...</div>
+								</div>
+							{:else}
+								<DatePicker
+									selectedDate={eventDate}
+									{availableDates}
+									{unavailableDates}
+									onDateSelect={handleDateSelect}
 								/>
-								<p class="text-xs text-text-2">
-									Kapacita sály: {selectedHall.capacity || 0} osôb
-								</p>
+								<input type="hidden" name="eventDate" value={eventDate} />
+								{#if validate.includes('eventDate')}
+									<p class="text-xs text-red-600">Vyberte dátum udalosti</p>
+								{/if}
+							{/if}
+						{:else}
+							<div class="flex items-center justify-center py-8 border border-border-main/30 rounded-lg bg-background-2">
+								<p class="text-sm text-text-3">Najprv vyberte sálu</p>
 							</div>
 						{/if}
-					{/if}
-				</div>
-
-				<!-- Date & Time -->
-				<div class="grid grid-cols-1 gap-4 md:grid-cols-2">
-					<div class="space-y-2">
-						<label for="event-start-date" class="text-sm font-medium text-text-main">
-							Dátum začiatku <span class="text-red-500">*</span>
-						</label>
-						<TextInput
-							id="event-start-date"
-							name="startDate"
-							type="date"
-							bind:value={startDate}
-							min={getTodayDate()}
-							error={validate.includes('startDate') ? 'Dátum začiatku je povinný' : ''}
-						/>
-					</div>
-					
-					<div class="space-y-2">
-						<label for="event-start-time" class="text-sm font-medium text-text-main">
-							Čas začiatku <span class="text-red-500">*</span>
-						</label>
-						<TextInput
-							id="event-start-time"
-							name="startTime"
-							type="time"
-							bind:value={startTime}
-							error={validate.includes('startTime') ? 'Čas začiatku je povinný' : ''}
-						/>
-					</div>
-					
-					<div class="space-y-2">
-						<label for="event-end-date" class="text-sm font-medium text-text-main">
-							Dátum konca <span class="text-red-500">*</span>
-						</label>
-						<TextInput
-							id="event-end-date"
-							name="endDate"
-							type="date"
-							bind:value={endDate}
-							min={startDate || getTodayDate()}
-							error={validate.includes('endDate') ? 'Dátum konca je povinný' : ''}
-						/>
-					</div>
-					
-					<div class="space-y-2">
-						<label for="event-end-time" class="text-sm font-medium text-text-main">
-							Čas konca <span class="text-red-500">*</span>
-						</label>
-						<TextInput
-							id="event-end-time"
-							name="endTime"
-							type="time"
-							bind:value={endTime}
-							error={validate.includes('endTime') ? 'Čas konca je povinný' : ''}
-						/>
+						<p class="text-xs text-text-2">Vyberte dostupný dátum pre vašu udalosť</p>
 					</div>
 				</div>
 			</div>
@@ -624,6 +553,20 @@
 									Povoliť registrácie
 								</label>
 								<p class="text-xs text-text-2">Používatelia sa môžu registrovať na udalosť</p>
+							</div>
+						</div>
+						
+						<div class="flex items-start gap-3">
+							<Switch
+								name="allowInvitations"
+								id="event-invitations"
+								bind:checked={allowInvitations}
+							/>
+							<div class="space-y-1">
+								<label for="event-invitations" class="text-sm text-text-main font-medium cursor-pointer">
+									Povoliť správu pozvánie
+								</label>
+								<p class="text-xs text-text-2">Vytvorí sa odkaz pre pozývanie hostí bez registrácie</p>
 							</div>
 						</div>
 					</div>
