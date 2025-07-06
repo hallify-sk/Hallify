@@ -17,8 +17,16 @@
 	import colors from 'tailwindcss/colors';
 	import Save from '$lib/icons/Save.svelte';
 	import { applyAction, enhance } from '$app/forms';
+	import Dialog from '$lib/components/Dialog.svelte';
+	import TextInput from '$lib/components/inputs/TextInput.svelte';
+	import Checkbox from '$lib/components/inputs/Checkbox.svelte';
 
 	let openColorDropdown: boolean = $state(false);
+	let showSaveDialog: boolean = $state(false);
+	let planName: string = $state('');
+	let makeDefault: boolean = $state(false);
+	let saveError: string = $state('');
+	let isSaving: boolean = $state(false);
 
 	let allowedColors = [
 		{ value: colors.red[500], name: 'red' },
@@ -224,35 +232,20 @@
 				<Redo />
 			</Icon>
 		</Button>
-		<form
-			action="?/savePlan"
-			method="POST"
-			use:enhance={async ({ formData }) => {
-				let screenshot = screenshotStage();
-				formData.append(
-					'plan',
-					JSON.stringify({
-						gridData: $gridData,
-						points: $points,
-						walls: $walls,
-						tables: $tables,
-						zonePoints: $zonePoints,
-						zones: $zones
-					})
-				);
-				formData.append('screenshot', screenshot || '');
-				return async ({ result }) => {
-					applyAction(result);
-				};
+		<Button 
+			color="primary" 
+			onclick={() => {
+				showSaveDialog = true;
+				planName = '';
+				makeDefault = false;
+				saveError = '';
 			}}
 		>
-			<Button color="primary" type="submit">
-				<Icon scale="medium" stroke={2} fill="none" forceCenter={true}>
-					<Save />
-				</Icon>
-				Uložiť
-			</Button>
-		</form>
+			<Icon scale="medium" stroke={2} fill="none" forceCenter={true}>
+				<Save />
+			</Icon>
+			Uložiť
+		</Button>
 	</div>
 </div>
 
@@ -276,6 +269,124 @@
 		{/each}
 	</div>
 </div>
+
+<!-- Save Plan Dialog -->
+<Dialog bind:open={showSaveDialog}>
+	{#snippet header()}
+		<p>Uložiť plán sály</p>
+	{/snippet}
+	
+	<div class="p-6 space-y-4">
+		{#if saveError}
+			<div class="p-3 text-sm text-red-600 bg-red-100 border border-red-300 rounded">
+				{saveError}
+			</div>
+		{/if}
+		
+		<div>
+			<label for="plan-name" class="block text-sm font-medium text-text-main mb-2">
+				Názov plánu
+			</label>
+			<TextInput
+				id="plan-name"
+				bind:value={planName}
+				placeholder="Zadajte názov plánu..."
+				disabled={isSaving}
+			/>
+		</div>
+		
+		<div>
+			<div class="flex items-center gap-2">
+				<Checkbox
+					id="make-default"
+					name="make-default"
+					bind:checked={makeDefault}
+					disabled={isSaving}
+				/>
+				<label for="make-default" class="text-sm text-text-main cursor-pointer">
+					Nastaviť ako predvolený plán pre túto sálu
+				</label>
+			</div>
+		</div>
+	</div>
+	
+	<div class="flex justify-between p-4 border-t border-border-main/30 bg-background-2">
+		<Button 
+			color="transparent" 
+			onclick={() => {
+				showSaveDialog = false;
+				planName = '';
+				makeDefault = false;
+				saveError = '';
+			}}
+			disabled={isSaving}
+		>
+			Zrušiť
+		</Button>
+		<Button 
+			color="primary" 
+			disabled={!planName.trim() || isSaving}
+			onclick={async () => {
+				if (!planName.trim()) {
+					saveError = 'Názov plánu je povinný';
+					return;
+				}
+				
+				isSaving = true;
+				saveError = '';
+				
+				try {
+					const screenshot = screenshotStage();
+					const formData = new FormData();
+					
+					formData.append('plan', JSON.stringify({
+						gridData: $gridData,
+						points: $points,
+						walls: $walls,
+						tables: $tables,
+						zonePoints: $zonePoints,
+						zones: $zones
+					}));
+					formData.append('screenshot', screenshot || '');
+					formData.append('name', planName.trim());
+					formData.append('makeDefault', makeDefault.toString());
+					
+					const response = await fetch('?/savePlan', {
+						method: 'POST',
+						body: formData
+					});
+					
+					if (response.ok) {
+						showSaveDialog = false;
+						planName = '';
+						makeDefault = false;
+						// Optionally show success message or redirect
+					} else {
+						const result = await response.text();
+						saveError = 'Nepodarilo sa uložiť plán';
+					}
+				} catch (error) {
+					saveError = 'Nastala chyba pri ukladaní plánu';
+				} finally {
+					isSaving = false;
+				}
+			}}
+		>
+			{#if isSaving}
+				<svg class="w-4 h-4 mr-2 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+					<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+					<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v16a8 8 0 01-8-8z"></path>
+				</svg>
+				Ukladá sa...
+			{:else}
+				<Icon scale="small">
+					<Save />
+				</Icon>
+				Uložiť plán
+			{/if}
+		</Button>
+	</div>
+</Dialog>
 
 <style lang="postcss">
 	.barButton {

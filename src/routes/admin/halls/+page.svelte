@@ -863,11 +863,11 @@
                         
                         {#if currentHall?.plan}
                             {@const hallData = data.halls.find((h) => h.hall.id == editingId)}
-                            <div class="relative rounded-lg overflow-hidden border-2 border-border-main/30">
+                            <div class="relative rounded-lg overflow-hidden border-2 border-border-main/30 aspect-square">
                                 {#if hallData?.plan}
-                                    <img src={hallData.plan.preview} class="w-full h-40 object-cover" alt="Plán sály" />
+                                    <img src={hallData.plan.preview} class="w-full h-full object-cover" alt="Plán sály" />
                                 {:else}
-                                    <div class="w-full h-40 bg-background-2 flex items-center justify-center">
+                                    <div class="w-full h-full bg-background-2 flex items-center justify-center">
                                         <p class="text-text-2">Náhľad nie je dostupný</p>
                                     </div>
                                 {/if}
@@ -893,8 +893,8 @@
                                 </div>
                             </div>
                         {:else}
-                            <div class="border-2 border-dashed border-border-main/30 rounded-lg p-6 text-center bg-background-2/50">
-                                <div class="flex flex-col items-center gap-3">
+                            <div class="border-2 border-dashed border-border-main/30 rounded-lg text-center bg-background-2/50 aspect-square flex items-center justify-center">
+                                <div class="flex flex-col items-center gap-3 p-6">
                                     <div class="w-12 h-12 bg-background-4 rounded-lg flex items-center justify-center">
                                         <Icon scale="medium">
                                             <Plus />
