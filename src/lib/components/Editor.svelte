@@ -58,6 +58,9 @@
 		zoomBy?: number;
 	} = $props();
 
+	// Track if initialization is complete to avoid re-registering events
+	let isInitialized = $state(false);
+
 	$effect(() => {
 		if (stage) {
 			const stageHandle = stage?.node;
@@ -84,9 +87,11 @@
 				gridWidth,
 				gridHeight
 			};
-			if (tr) {
+			// Only register events once during initial setup
+			if (tr && !isInitialized) {
 				registerWheelEvent(stageHandle);
 				registerPlugin(brushes, stageHandle, 'brushes');
+				isInitialized = true;
 			}
 		}
 	});
