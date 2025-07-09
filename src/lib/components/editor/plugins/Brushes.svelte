@@ -18,15 +18,15 @@
 	import Save from '$lib/icons/Save.svelte';
 	import { applyAction, enhance } from '$app/forms';
 	import Dialog from '$lib/components/Dialog.svelte';
-	import TextInput from '$lib/components/inputs/TextInput.svelte';
-	import Checkbox from '$lib/components/inputs/Checkbox.svelte';
+	import { page } from '$app/stores';
+	import { goto } from '$app/navigation';
 
 	let openColorDropdown: boolean = $state(false);
 	let showSaveDialog: boolean = $state(false);
-	let planName: string = $state('');
-	let makeDefault: boolean = $state(false);
 	let saveError: string = $state('');
 	let isSaving: boolean = $state(false);
+	let showToast: boolean = $state(false);
+	let toastMessage: string = $state('');
 
 	let allowedColors = [
 		{ value: colors.red[500], name: 'red' },
@@ -53,10 +53,134 @@
 			{ name: 'Cursor', id: 'cursor', icon: CursorArrowRays },
 			{ name: 'Wall Painter', id: 'wallPainter', icon: Cube },
 			{ name: 'Zone Painter', id: 'zonePainter', icon: CubeTransparent }
-		]
+		],
+		data
 	}: {
 		allowedBrushes?: { name: string; id: string; icon: Component }[];
+		data?: any;
 	} = $props();
+
+	// Determine if we're creating a new plan or editing existing
+	let isNewPlan = $derived(data?.isNewPlan || false);
+	let hallId = $derived(data?.hall?.id);
+
+	// Toast auto-hide effect
+	$effect(() => {
+		if (showToast) {
+			const timer = setTimeout(() => {
+				showToast = false;
+			}, 3000);
+			return () => clearTimeout(timer);
+		}
+	});
+
+	// Function to show toast
+	function showToastMessage(message: string) {
+		toastMessage = message;
+		showToast = true;
+	}
+
+	// Function to handle saving
+	async function handleSave() {
+		if (isNewPlan) {
+			// For new plans, show dialog
+			showSaveDialog = true;
+			saveError = '';
+		} else {
+			// For existing plans, save directly with toast confirmation
+			await savePlan(false);
+		}
+	}
+
+	// Function to actually save the plan
+	async function savePlan(isFromDialog = true) {
+		isSaving = true;
+		saveError = '';
+		
+		try {
+			const screenshot = screenshotStage();
+			const formData = new FormData();
+			
+			formData.append('plan', JSON.stringify({
+				elements: [], // Ensure we always have elements for validation
+				gridData: $gridData,
+				points: $points,
+				walls: $walls,
+				tables: $tables,
+				zonePoints: $zonePoints,
+				zones: $zones
+			}));
+			formData.append('screenshot', screenshot || '');
+			
+			// For new plans, we need to handle redirect differently
+			if (isNewPlan) {
+				// Create a hidden form for new plans to handle redirect properly
+				const form = document.createElement('form');
+				form.method = 'POST';
+				form.action = '?/savePlan';
+				form.style.display = 'none';
+				
+				// Add plan data
+				const planInput = document.createElement('input');
+				planInput.type = 'hidden';
+				planInput.name = 'plan';
+				planInput.value = JSON.stringify({
+					elements: [],
+					gridData: $gridData,
+					points: $points,
+					walls: $walls,
+					tables: $tables,
+					zonePoints: $zonePoints,
+					zones: $zones
+				});
+				form.appendChild(planInput);
+				
+				// Add screenshot
+				const screenshotInput = document.createElement('input');
+				screenshotInput.type = 'hidden';
+				screenshotInput.name = 'screenshot';
+				screenshotInput.value = screenshot || '';
+				form.appendChild(screenshotInput);
+				
+				// Add to document and submit (this will trigger redirect)
+				document.body.appendChild(form);
+				form.submit();
+				return;
+			} else {
+				// For existing plans, use fetch for AJAX update
+				const response = await fetch('?/savePlan', {
+					method: 'POST',
+					body: formData
+				});
+				
+				const result = await response.json();
+				
+				if (response.ok && result.type === 'success') {
+					showToastMessage('Plán bol úspešne uložený');
+					if (isFromDialog) {
+						showSaveDialog = false;
+					}
+				} else {
+					const errorMsg = result.data?.message || 'Nepodarilo sa uložiť plán';
+					if (isFromDialog) {
+						saveError = errorMsg;
+					} else {
+						showToastMessage('Chyba pri ukladaní plánu: ' + errorMsg);
+					}
+				}
+			}
+		} catch (error) {
+			console.error('Save error:', error);
+			const errorMsg = 'Nastala chyba pri ukladaní plánu';
+			if (isFromDialog) {
+				saveError = errorMsg;
+			} else {
+				showToastMessage(errorMsg);
+			}
+		} finally {
+			isSaving = false;
+		}
+	}
 </script>
 
 <div
@@ -234,17 +358,19 @@
 		</Button>
 		<Button 
 			color="primary" 
-			onclick={() => {
-				showSaveDialog = true;
-				planName = '';
-				makeDefault = false;
-				saveError = '';
-			}}
+			onclick={handleSave}
+			disabled={isSaving}
 		>
 			<Icon scale="medium" stroke={2} fill="none" forceCenter={true}>
 				<Save />
 			</Icon>
-			Uložiť
+			{#if isSaving}
+				Ukladá sa...
+			{:else if isNewPlan}
+				Uložiť
+			{:else}
+				Uložiť zmeny
+			{/if}
 		</Button>
 	</div>
 </div>
@@ -273,7 +399,7 @@
 <!-- Save Plan Dialog -->
 <Dialog bind:open={showSaveDialog}>
 	{#snippet header()}
-		<p>Uložiť plán sály</p>
+		<p>Vytvoriť nový plán sály</p>
 	{/snippet}
 	
 	<div class="p-6 space-y-4">
@@ -283,30 +409,9 @@
 			</div>
 		{/if}
 		
-		<div>
-			<label for="plan-name" class="block text-sm font-medium text-text-main mb-2">
-				Názov plánu
-			</label>
-			<TextInput
-				id="plan-name"
-				bind:value={planName}
-				placeholder="Zadajte názov plánu..."
-				disabled={isSaving}
-			/>
-		</div>
-		
-		<div>
-			<div class="flex items-center gap-2">
-				<Checkbox
-					id="make-default"
-					name="make-default"
-					bind:checked={makeDefault}
-					disabled={isSaving}
-				/>
-				<label for="make-default" class="text-sm text-text-main cursor-pointer">
-					Nastaviť ako predvolený plán pre túto sálu
-				</label>
-			</div>
+		<div class="text-center space-y-2">
+			<p class="text-text-main">Chcete vytvoriť nový plán pre túto sálu?</p>
+			<p class="text-sm text-text-2">Po uložení budete presmerovaný do editora, kde môžete plán ďalej upravovať.</p>
 		</div>
 	</div>
 	
@@ -315,8 +420,6 @@
 			color="transparent" 
 			onclick={() => {
 				showSaveDialog = false;
-				planName = '';
-				makeDefault = false;
 				saveError = '';
 			}}
 			disabled={isSaving}
@@ -325,71 +428,62 @@
 		</Button>
 		<Button 
 			color="primary" 
-			disabled={!planName.trim() || isSaving}
-			onclick={async () => {
-				if (!planName.trim()) {
-					saveError = 'Názov plánu je povinný';
-					return;
-				}
-				
-				isSaving = true;
-				saveError = '';
-				
-				try {
-					const screenshot = screenshotStage();
-					const formData = new FormData();
-					
-					formData.append('plan', JSON.stringify({
-						gridData: $gridData,
-						points: $points,
-						walls: $walls,
-						tables: $tables,
-						zonePoints: $zonePoints,
-						zones: $zones
-					}));
-					formData.append('screenshot', screenshot || '');
-					formData.append('name', planName.trim());
-					formData.append('makeDefault', makeDefault.toString());
-					
-					const response = await fetch('?/savePlan', {
-						method: 'POST',
-						body: formData
-					});
-					
-					if (response.ok) {
-						showSaveDialog = false;
-						planName = '';
-						makeDefault = false;
-						// Optionally show success message or redirect
-					} else {
-						const result = await response.text();
-						saveError = 'Nepodarilo sa uložiť plán';
-					}
-				} catch (error) {
-					saveError = 'Nastala chyba pri ukladaní plánu';
-				} finally {
-					isSaving = false;
-				}
-			}}
+			disabled={isSaving}
+			onclick={() => savePlan(true)}
 		>
 			{#if isSaving}
 				<svg class="w-4 h-4 mr-2 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
 					<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
 					<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v16a8 8 0 01-8-8z"></path>
 				</svg>
-				Ukladá sa...
+				Vytvára sa...
 			{:else}
 				<Icon scale="small">
 					<Save />
 				</Icon>
-				Uložiť plán
+				Vytvoriť plán
 			{/if}
 		</Button>
 	</div>
 </Dialog>
 
+<!-- Toast Notification -->
+{#if showToast}
+	<div 
+		class="fixed bottom-4 right-4 z-50 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg flex items-center gap-2 animate-slide-in"
+	>
+		<Icon scale="small">
+			<Check />
+		</Icon>
+		<span>{toastMessage}</span>
+		<button 
+			onclick={() => showToast = false}
+			class="ml-2 text-white hover:text-green-200"
+		>
+			<Icon scale="small">
+				<Cross />
+			</Icon>
+		</button>
+	</div>
+{/if}
+
 <style lang="postcss">
 	.barButton {
 		@apply flex flex-row items-center h-full gap-1 px-1.5 py-1 rounded hover:bg-slate-300/60 place-items-center text-slate-600 disabled:bg-slate-200 bg-slate-200/70 disabled:text-slate-400;
+	}
+	
+	@keyframes slide-in {
+		from {
+			transform: translateX(100%);
+			opacity: 0;
+		}
+		to {
+			transform: translateX(0);
+			opacity: 1;
+		}
+	}
+	
+	.animate-slide-in {
+		animation: slide-in 0.3s ease-out;
 	}
 </style>

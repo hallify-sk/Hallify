@@ -48,7 +48,8 @@
 		gridWidth = $bindable(20),
 		gridHeight = $bindable(20),
 		windowWidth = $bindable(800),
-		windowHeight = $bindable(800)
+		windowHeight = $bindable(800),
+		data
 	}: {
 		gridSize?: number;
 		gridWidth?: number;
@@ -56,6 +57,7 @@
 		windowWidth?: number;
 		windowHeight?: number;
 		zoomBy?: number;
+		data?: any;
 	} = $props();
 
 	// Track if initialization is complete to avoid re-registering events
@@ -136,7 +138,7 @@
 </script>
 
 {#if $plugins.find((p) => p.name == 'brushes')}
-	<Brushes />
+	<Brushes {data} />
 {/if}
 <div class="fixed top-0 left-0">
 	{#key stageKey}

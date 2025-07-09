@@ -2,6 +2,7 @@
 	//Icons
 	import Icon from '$lib/icons/Icon.svelte';
 	import Plus from '$lib/icons/Plus.svelte';
+	import Cross from '$lib/icons/Cross.svelte';
 
 	//Svelte
 	import { applyAction, enhance } from '$app/forms';
@@ -34,6 +35,31 @@
 	let showEditHall = $state(false);
 	let showPlansDialog = $state(false);
 	let editingId: number = $state(0);
+
+	// Function to delete a plan
+	async function deletePlan(planId: number) {
+		try {
+			const formData = new FormData();
+			formData.set('plan_id', planId.toString());
+			
+			const response = await fetch('?/deletePlan', {
+				method: 'POST',
+				body: formData
+			});
+			
+			const result = await response.json();
+			
+			if (result.type === 'success') {
+				await invalidateAll();
+			} else {
+				hallCreateError = result.data?.message || 'Nepodarilo sa vymazať plán';
+				console.error(result);
+			}
+		} catch (error) {
+			hallCreateError = 'Nastala chyba pri mazaní plánu';
+			console.error(error);
+		}
+	}
 
 	$effect(() => {
 		if (editingId) {
@@ -882,7 +908,7 @@
                                         </Icon>
                                         <span>Zmeniť</span>
                                     </Button>
-                                    <a href="/admin/halls/{editingId}/editor">
+                                    <a href="/admin/halls/{editingId}/editor/{hallData?.plan?.id}">
                                         <Button color="primary">
                                             <Icon scale="small">
                                                 <Plus />
@@ -916,7 +942,7 @@
                                             </Icon>
                                             <span>Vybrať existujúci</span>
                                         </Button>
-                                        <a href="/admin/halls/{editingId}/editor">
+                                        <a href="/admin/halls/{editingId}/editor/new">
                                             <Button color="primary">
                                                 <Icon scale="small">
                                                     <Plus />
@@ -1053,7 +1079,12 @@
 
 <Dialog bind:open={showPlansDialog}>
 	{#snippet header()}
-		<p>Vybrať plan</p>
+		<div class="flex items-center gap-2">
+			<Icon scale="small">
+				<Plus />
+			</Icon>
+			<p class="text-text-main">Vybrať plán sály</p>
+		</div>
 	{/snippet}
 	<div class="flex flex-col w-full">
 		<form
@@ -1074,39 +1105,160 @@
 				};
 			}}
 		>
-			<div class="grid grid-cols-3 gap-4 p-4 auto-rows-fr">
-				{#each data.plans as plan}
-					<fieldset>
-						<input
-							type="radio"
-							name="planId"
-							id={plan.id.toString()}
-							value={plan.id}
-							class="hidden peer"
-						/>
-						<label
-							class="block p-2 rounded cursor-pointer hover:bg-background-4 peer-checked:bg-background-4"
-							for={plan.id.toString()}
-						>
-							<img src={plan.preview} class="rounded-md" alt="Plán sály" />
-						</label>
-					</fieldset>
-				{/each}
+			<div class="p-6 space-y-6">
+				<!-- Instructions -->
+				<div class="text-center space-y-2">
+					<p class="text-text-main">Vyberte existujúci plán alebo vytvorte nový</p>
+					<p class="text-sm text-text-2">Plán definuje rozloženie miestnosti a jej základnú štruktúru</p>
+				</div>
+
+				<!-- Create New Plan Section -->
+				<div class="border-2 border-dashed border-border-main/30 rounded-lg p-6 bg-background-2/30">
+					<div class="flex flex-col items-center gap-4">
+						<div class="w-16 h-16 bg-primary/10 rounded-lg flex items-center justify-center">
+							<Icon scale="big">
+								<Plus />
+							</Icon>
+						</div>
+						<div class="text-center space-y-2">
+							<h3 class="text-lg font-medium text-text-main">Vytvoriť nový plán</h3>
+							<p class="text-sm text-text-2">Vytvorte si vlastný plán pomocou editora</p>
+						</div>
+						<a href="/admin/halls/{editingId}/editor/new">
+							<Button color="primary">
+								<Icon scale="small">
+									<Plus />
+								</Icon>
+								<span>Otvoriť editor</span>
+							</Button>
+						</a>
+					</div>
+				</div>
+
+				<!-- Existing Plans Section -->
+				{#if data.plans && data.plans.length > 0}
+					<div class="space-y-4">
+						<div class="border-t border-border-main/30 pt-6">
+							<h3 class="text-lg font-medium text-text-main mb-4">Existujúce plány</h3>
+							<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 max-h-96 overflow-y-auto">
+								{#each data.plans as plan}
+									<div class="relative group">
+										<fieldset>
+											<input
+												type="radio"
+												name="planId"
+												id={plan.id.toString()}
+												value={plan.id}
+												class="hidden peer"
+											/>
+											<label
+												class="block border-2 border-border-main/30 rounded-lg overflow-hidden cursor-pointer hover:border-primary/50 peer-checked:border-primary peer-checked:bg-primary/5 transition-all duration-200"
+												for={plan.id.toString()}
+											>
+												<!-- Plan Preview -->
+												<div class="relative aspect-video bg-background-2">
+													<img 
+														src={plan.preview} 
+														class="w-full h-full object-cover" 
+														alt="Náhľad plánu" 
+													/>
+													<!-- Selection Indicator -->
+													<div class="selection-indicator absolute inset-0 bg-primary/20 flex items-center justify-center">
+														<div class="plan-selection-circle w-8 h-8 rounded-full flex items-center justify-center">
+															<Icon scale="small">
+																<Plus />
+															</Icon>
+														</div>
+													</div>
+												</div>
+												
+												<!-- Plan Info -->
+												<div class="p-3 bg-background-1">
+													<div class="flex items-center justify-between">
+														<div>
+															<p class="text-sm font-medium text-text-main">Plán #{plan.id}</p>
+															<p class="text-xs text-text-2">
+																Vytvorené: {new Date(plan.created_at).toLocaleDateString('sk')}
+															</p>
+														</div>
+													</div>
+												</div>
+											</label>
+										</fieldset>
+										
+										<!-- Delete Button (shown on hover) -->
+										<div class="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+											<button
+												type="button"
+												class="w-8 h-8 bg-red-500 hover:bg-red-600 text-white rounded-full flex items-center justify-center shadow-lg transition-colors duration-200"
+												title="Vymazať plán"
+												onclick={(e) => {
+													if (confirm('Naozaj chcete vymazať tento plán? Táto akcia sa nedá vrátiť späť.')) {
+														deletePlan(plan.id);
+													}
+												}}
+											>
+												<Icon scale="small">
+													<Cross />
+												</Icon>
+											</button>
+										</div>
+									</div>
+								{/each}
+							</div>
+						</div>
+					</div>
+				{:else}
+					<div class="text-center py-8 space-y-3">
+						<div class="w-16 h-16 bg-background-4 rounded-lg flex items-center justify-center mx-auto">
+							<Icon scale="big">
+								<Plus />
+							</Icon>
+						</div>
+						<h3 class="text-lg font-medium text-text-main">Žiadne plány</h3>
+						<p class="text-sm text-text-2">Zatiaľ nie sú vytvorené žiadne plány. Vytvorte prvý plán pre túto sálu.</p>
+					</div>
+				{/if}
+
+				<!-- Error Display -->
+				{#if hallCreateError}
+					<div class="p-4 bg-red-50 border border-red-200 rounded-lg" in:fly={{ x: 10, duration: 600 }}>
+						<div class="flex items-center gap-2">
+							<svg class="w-5 h-5 text-red-500" fill="currentColor" viewBox="0 0 20 20">
+								<path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path>
+							</svg>
+							<p class="text-sm text-red-800 font-medium">Chyba</p>
+						</div>
+						<p class="text-sm text-red-700 mt-1">{hallCreateError}</p>
+					</div>
+				{/if}
 			</div>
-			<div class="flex justify-between w-full p-4 border-t bg-slate-200 border-border-main/30">
-				<button
-					type="reset"
+
+			<!-- Footer Actions -->
+			<div class="flex justify-between items-center p-4 border-t border-border-main/30 bg-background-2">
+				<Button
+					type="button"
+					color="transparent"
 					onclick={() => (showPlansDialog = false)}
-					class="flex flex-row items-center gap-2 px-4 py-2 text-sm duration-150 rounded hover:bg-slate-100/50 text-slate-500"
 				>
-					<p>Zrušiť</p>
-				</button>
-				<Button type="submit" onclick={() => (showPlansDialog = true)} color="primary">
-					<Icon scale="small">
-						<Plus />
-					</Icon>
-					<p>Nastaviť plan</p>
+					Zrušiť
 				</Button>
+				<div class="flex gap-2">
+					<a href="/admin/halls/{editingId}/editor/new">
+						<Button type="button" color="secondary">
+							<Icon scale="small">
+								<Plus />
+							</Icon>
+							Vytvoriť nový
+						</Button>
+					</a>
+					<Button type="submit" color="primary" disabled={!data.plans || data.plans.length === 0}>
+						<Icon scale="small">
+							<Plus />
+						</Icon>
+						Nastaviť plán
+					</Button>
+				</div>
 			</div>
 		</form>
 	</div>
@@ -1125,6 +1277,20 @@
 	}
 	:global(input[type='radio']:checked + .color-picker-radio svg) {
 		@apply block absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-text-main;
+	}
+
+	/* Plan selection styles */
+	:global(input[type='radio']:checked + label .selection-indicator) {
+		@apply opacity-100 flex;
+	}
+	:global(input[type='radio'] + label .selection-indicator) {
+		@apply opacity-0 hidden;
+	}
+	:global(input[type='radio']:checked + label .plan-selection-circle) {
+		@apply bg-primary border-primary text-white;
+	}
+	:global(input[type='radio'] + label .plan-selection-circle) {
+		@apply bg-white border-border-main/30 text-primary border-2;
 	}
 	.event-table-row {
 		@apply border-t border-border-main/30 hover:bg-background-4 cursor-pointer;

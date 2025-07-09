@@ -65,6 +65,49 @@ export const actions = {
 
 		return { hall: serializeNonPOJOs(updatedHall[0]) };
 	},
+	deletePlan: async function ({ request }) {
+		if (request.method != 'POST') {
+			return fail(405, { message: 'Metóda nie je povolená.' });
+		}
+		const formData = await request.formData();
+		const plan_id = formData.get('plan_id');
+		if (!plan_id || typeof plan_id !== 'string' || plan_id.length < 1) {
+			return fail(400, { message: 'ID plánu je povinné.', validate: ['plan_id'] });
+		}
+		
+		const planIdInt = parseInt(plan_id);
+		
+		// Check if plan exists
+		const plan = (
+			await db
+				.select()
+				.from(plans)
+				.where(eq(plans.id, planIdInt))
+				.limit(1)
+		)[0];
+		if (!plan) {
+			return fail(404, { message: 'Plán neexistuje.', validate: ['plan_id'] });
+		}
+		
+		// Check if plan is currently assigned to any hall
+		const hallWithPlan = (
+			await db
+				.select()
+				.from(halls)
+				.where(eq(halls.plan, planIdInt))
+				.limit(1)
+		)[0];
+		if (hallWithPlan) {
+			return fail(400, { message: 'Nemôžete vymazať plán, ktorý je priradený k sále. Najprv ho odoberte zo sály.', validate: ['plan_id'] });
+		}
+		
+		// Delete the plan
+		await db
+			.delete(plans)
+			.where(eq(plans.id, planIdInt));
+
+		return { success: true, deletedPlanId: planIdInt };
+	},
 	create: async function ({ request }) {
 		if (request.method != 'POST') {
 			return fail(405, { message: 'Metóda nie je povolená.' });
