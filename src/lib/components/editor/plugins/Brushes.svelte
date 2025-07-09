@@ -61,7 +61,7 @@
 	} = $props();
 
 	// Determine if we're creating a new plan or editing existing
-	let isNewPlan = $derived(data?.isNewPlan || false);
+	let isNewPlan = $derived(data?.isNewPlan || $page.params.layout === 'new');
 	let hallId = $derived(data?.hall?.id);
 
 	// Toast auto-hide effect
@@ -112,7 +112,7 @@
 			}));
 			formData.append('screenshot', screenshot || '');
 			
-			// For new plans, we need to handle redirect differently
+			// For new plans, always use form submission to handle redirect properly
 			if (isNewPlan) {
 				// Create a hidden form for new plans to handle redirect properly
 				const form = document.createElement('form');
@@ -153,12 +153,31 @@
 					body: formData
 				});
 				
-				const result = await response.json();
+				let result;
+				try {
+					// Try to parse as JSON first
+					const responseText = await response.text();
+					result = JSON.parse(responseText);
+				} catch (parseError) {
+					// If JSON parsing fails, it might be an HTML error page
+					console.error('Failed to parse response as JSON:', parseError);
+					result = { type: 'error', data: { message: 'Server returned invalid response' } };
+				}
+				
+				console.log('Response status:', response.status, 'Result:', result);
 				
 				if (response.ok && result.type === 'success') {
 					showToastMessage('Plán bol úspešne uložený');
 					if (isFromDialog) {
 						showSaveDialog = false;
+					}
+				} else if(response.redirected) {
+					// Handle redirect for existing plans
+					const redirectUrl = response.url;
+					if (redirectUrl) {
+						await goto(redirectUrl);
+					} else {
+						showToastMessage('Plán bol úspešne uložený, ale došlo k chybe pri presmerovaní.');
 					}
 				} else {
 					const errorMsg = result.data?.message || 'Nepodarilo sa uložiť plán';

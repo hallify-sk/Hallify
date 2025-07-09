@@ -25,7 +25,6 @@ export const actions = {
             return fail(400, { message: 'Neplatný plán.', validate: ['screenshot'] });
         }
 
-        try {
             // Validate hall exists
             const hall = await db
                 .select()
@@ -87,14 +86,7 @@ export const actions = {
                     
                 return { success: true, planId: planId };
             }
-        } catch (e) {
-            // Re-throw redirect errors
-            if (e instanceof Response && e.status === 303) {
-                throw e;
-            }
-            console.error(e);
-            return fail(500, { message: 'Chyba pri ukladaní plánu.', validate: ['plan'] });
-        }
+       
     }
 };
 
