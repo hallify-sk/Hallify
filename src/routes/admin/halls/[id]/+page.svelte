@@ -92,7 +92,7 @@
                 <h2 class="text-lg font-semibold text-text-main">Informácie o sále</h2>
             </div>
             
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
                 <div>
                     <p class="text-sm text-text-2">Kapacita</p>
                     <p class="text-lg font-medium text-text-main">{data.hall.capacity} osôb</p>
@@ -105,7 +105,61 @@
                     <p class="text-sm text-text-2">Rozloženia stolov</p>
                     <p class="text-lg font-medium text-text-main">{data.tablePlacements?.length || 0}</p>
                 </div>
+                <div>
+                    <p class="text-sm text-text-2">Stav plánu</p>
+                    {#if data.currentPlan}
+                        {#if data.currentPlan.finished === true}
+                            <span class="inline-flex items-center px-2 py-1 text-sm rounded text-success bg-success/40">
+                                Dokončený
+                            </span>
+                        {:else}
+                            <span class="inline-flex items-center px-2 py-1 text-sm rounded text-warning bg-warning/40">
+                                Nedokončený
+                            </span>
+                        {/if}
+                    {:else}
+                        <span class="inline-flex items-center px-2 py-1 text-sm rounded text-danger bg-danger/40">
+                            Žiadny plán
+                        </span>
+                    {/if}
+                </div>
             </div>
+            
+            <!-- Plan Actions -->
+            {#if data.currentPlan}
+                <div class="flex gap-2 pt-4 border-t border-border-main/30">
+                    <Button 
+                        color="secondary" 
+                        onclick={() => goto(`/admin/halls/${data.hall.id}/editor/${data.currentPlan?.id}`)}
+                    >
+                        <Icon scale="small">
+                            <Adjustments />
+                        </Icon>
+                        Upraviť plán
+                    </Button>
+                    <Button 
+                        color="primary" 
+                        onclick={() => goto(`/admin/halls/${data.hall.id}/editor/new`)}
+                    >
+                        <Icon scale="small">
+                            <Plus />
+                        </Icon>
+                        Nový plán
+                    </Button>
+                </div>
+            {:else}
+                <div class="flex gap-2 pt-4 border-t border-border-main/30">
+                    <Button 
+                        color="primary" 
+                        onclick={() => goto(`/admin/halls/${data.hall.id}/editor/new`)}
+                    >
+                        <Icon scale="small">
+                            <Plus />
+                        </Icon>
+                        Vytvoriť plán
+                    </Button>
+                </div>
+            {/if}
         </div>
 
         <!-- Hall Layouts -->

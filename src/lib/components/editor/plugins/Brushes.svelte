@@ -27,6 +27,7 @@
 	let isSaving: boolean = $state(false);
 	let showToast: boolean = $state(false);
 	let toastMessage: string = $state('');
+	let planFinished: boolean = $state(false);
 
 	let allowedColors = [
 		{ value: colors.red[500], name: 'red' },
@@ -63,6 +64,16 @@
 	// Determine if we're creating a new plan or editing existing
 	let isNewPlan = $derived(data?.isNewPlan || $page.params.layout === 'new');
 	let hallId = $derived(data?.hall?.id);
+
+	// Initialize planFinished from existing plan data
+	$effect(() => {
+		if (data?.plan?.finished !== undefined) {
+			planFinished = data.plan.finished;
+		} else {
+			// Default to false for existing plans that don't have finished field yet
+			planFinished = false;
+		}
+	});
 
 	// Toast auto-hide effect
 	$effect(() => {
@@ -111,6 +122,7 @@
 				zones: $zones
 			}));
 			formData.append('screenshot', screenshot || '');
+			formData.append('finished', planFinished.toString());
 			
 			// For new plans, always use form submission to handle redirect properly
 			if (isNewPlan) {
@@ -141,6 +153,13 @@
 				screenshotInput.name = 'screenshot';
 				screenshotInput.value = screenshot || '';
 				form.appendChild(screenshotInput);
+				
+				// Add finished status
+				const finishedInput = document.createElement('input');
+				finishedInput.type = 'hidden';
+				finishedInput.name = 'finished';
+				finishedInput.value = planFinished.toString();
+				form.appendChild(finishedInput);
 				
 				// Add to document and submit (this will trigger redirect)
 				document.body.appendChild(form);
@@ -375,6 +394,19 @@
 				<Redo />
 			</Icon>
 		</Button>
+		{#if !isNewPlan}
+			<div class="flex items-center gap-2 mx-2">
+				<input 
+					id="plan-finished-toolbar" 
+					type="checkbox" 
+					bind:checked={planFinished}
+					class="w-4 h-4 text-primary-600 bg-white border-border-main/30 rounded focus:ring-primary-500 focus:ring-2"
+				>
+				<label for="plan-finished-toolbar" class="text-sm text-text-main whitespace-nowrap">
+					Dokončený
+				</label>
+			</div>
+		{/if}
 		<Button 
 			color="primary" 
 			onclick={handleSave}
@@ -431,6 +463,18 @@
 		<div class="text-center space-y-2">
 			<p class="text-text-main">Chcete vytvoriť nový plán pre túto sálu?</p>
 			<p class="text-sm text-text-2">Po uložení budete presmerovaný do editora, kde môžete plán ďalej upravovať.</p>
+		</div>
+		
+		<div class="flex items-center space-x-2">
+			<input 
+				id="plan-finished" 
+				type="checkbox" 
+				bind:checked={planFinished}
+				class="w-4 h-4 text-primary-600 bg-white border-border-main/30 rounded focus:ring-primary-500 focus:ring-2"
+			>
+			<label for="plan-finished" class="text-sm text-text-main">
+				Označiť plán ako dokončený
+			</label>
 		</div>
 	</div>
 	

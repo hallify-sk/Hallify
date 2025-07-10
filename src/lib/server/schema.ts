@@ -75,6 +75,7 @@ export const plans = pgTable('plans', {
 	data: json('data').notNull(),
 	user_id: integer('user_id').notNull(),
 	preview: text('preview').notNull(),
+	finished: boolean('finished').default(false).notNull(),
 	created_at: timestamp('created_at').defaultNow().notNull(),
 	updated_at: timestamp('updated_at').defaultNow().notNull()
 });

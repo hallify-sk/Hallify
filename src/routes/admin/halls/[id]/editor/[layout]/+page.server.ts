@@ -21,6 +21,8 @@ export const actions = {
             return fail(400, { message: 'Neplatný plán.', validate: ['screenshot'] });
         }
         
+        const finished = formData.get('finished') === 'true';
+        
         if (!preview.startsWith('data:image/png;base64,')) {
             return fail(400, { message: 'Neplatný plán.', validate: ['screenshot'] });
         }
@@ -43,7 +45,8 @@ export const actions = {
                     .values({
                         user_id: locals.user.id,
                         data: JSON.parse(planData),
-                        preview
+                        preview,
+                        finished
                     })
                     .returning();
 
@@ -80,6 +83,7 @@ export const actions = {
                     .set({
                         data: JSON.parse(planData),
                         preview,
+                        finished,
                         updated_at: new Date()
                     })
                     .where(eq(plans.id, planId));

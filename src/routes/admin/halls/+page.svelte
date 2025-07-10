@@ -368,7 +368,11 @@
 									<td class="px-4 py-3 text-sm text-text-main">{hall.capacity} ľudí</td>
 									<td class="px-4 py-3 text-sm">
 										{#if hall.plan}
-											<span class="px-2 py-1 rounded text-success bg-success/40">Nastavený</span>
+											{#if data.halls.find(h => h.hall.id === hall.id)?.plan?.finished === true}
+												<span class="px-2 py-1 rounded text-success bg-success/40">Dokončený</span>
+											{:else}
+												<span class="px-2 py-1 rounded text-warning bg-warning/40">Nedokončený</span>
+											{/if}
 										{:else}
 											<span class="px-2 py-1 rounded text-danger bg-danger/40">Nenastavený</span>
 										{/if}
