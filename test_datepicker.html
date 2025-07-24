@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>DatePicker Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        .unavailable { color: red; background-color: #ffcccc; cursor: not-allowed; }
+        .available { color: green; background-color: #ccffcc; cursor: pointer; }
+        .past { color: gray; background-color: #f0f0f0; cursor: not-allowed; }
+        button { padding: 5px; margin: 2px; border: 1px solid #ccc; }
+    </style>
+</head>
+<body>
+    <h1>DatePicker Logic Test</h1>
+    
+    <h2>Test Scenario:</h2>
+    <p>Available dates: 2025-07-25, 2025-07-26, 2025-07-27</p>
+    <p>Unavailable dates: 2025-07-28, 2025-07-29</p>
+    <p>Today: 2025-07-24</p>
+    
+    <h2>Expected Behavior:</h2>
+    <ul>
+        <li>Past dates (2025-07-23 and earlier) should be gray and disabled</li>
+        <li>Available dates (2025-07-25, 26, 27) should be green and clickable</li>
+        <li>Unavailable dates (2025-07-28, 29) should be red and disabled</li>
+        <li>Other dates should be gray and disabled</li>
+    </ul>
+    
+    <div id="calendar"></div>
+    
+    <script>
+        // Simulate DatePicker logic
+        const today = new Date('2025-07-24T00:00:00');
+        const availableDates = ['2025-07-25', '2025-07-26', '2025-07-27'];
+        const unavailableDates = ['2025-07-28', '2025-07-29'];
+        
+        function testDate(dateStr) {
+            const date = new Date(dateStr + 'T00:00:00');
+            const isPast = date < today;
+            const isAvailable = availableDates.includes(dateStr);
+            const isUnavailable = unavailableDates.includes(dateStr);
+            
+            let className = '';
+            let disabled = false;
+            
+            if (isPast) {
+                className = 'past';
+                disabled = true;
+            } else if (isUnavailable) {
+                className = 'unavailable';
+                disabled = true;
+            } else if (isAvailable) {
+                className = 'available';
+                disabled = false;
+            } else {
+                className = 'past'; // fallback styling
+                disabled = true;
+            }
+            
+            return { className, disabled, isPast, isAvailable, isUnavailable };
+        }
+        
+        // Test dates from July 23 to July 30
+        const calendar = document.getElementById('calendar');
+        for (let day = 23; day <= 30; day++) {
+            const dateStr = `2025-07-${day.toString().padStart(2, '0')}`;
+            const result = testDate(dateStr);
+            
+            const button = document.createElement('button');
+            button.textContent = dateStr;
+            button.className = result.className;
+            button.disabled = result.disabled;
+            
+            const info = document.createElement('div');
+            info.textContent = `Past: ${result.isPast}, Available: ${result.isAvailable}, Unavailable: ${result.isUnavailable}, Disabled: ${result.disabled}`;
+            info.style.fontSize = '12px';
+            info.style.color = '#666';
+            
+            const container = document.createElement('div');
+            container.style.marginBottom = '10px';
+            container.appendChild(button);
+            container.appendChild(info);
+            
+            calendar.appendChild(container);
+        }
+    </script>
+</body>
+</html>

@@ -32,6 +32,7 @@
 	import Grid from '$lib/icons/Grid.svelte';
 	import Square2Stack from '$lib/icons/Square2Stack.svelte';
 	import Clock from '$lib/icons/Clock.svelte';
+	import CalendarIcon from '$lib/icons/CalendarIcon.svelte';
 
 	onMount(() => {
 		document.addEventListener('click', (e) => {
@@ -176,26 +177,15 @@
 						<div
 							class="flex flex-col absolute top-[46px] left-0 bg-background-1 border border-border-main/30 rounded-b overflow-hidden py-1"
 						>
-							{#if checkPathPermission('/admin/events', permission)}
+							{#if checkPathPermission('/admin/calendar', permission)}
 								<a
-									href="/admin/events"
+									href="/admin/calendar"
 									class="flex items-center gap-2 px-3 py-2 text-sm w-44 hover:bg-background-4"
 								>
 									<Icon scale="small">
-										<BulletList />
+										<CalendarIcon/>
 									</Icon>
-									<p class="text-text-4">Zobraziť udalosti</p>
-								</a>
-							{/if}
-							{#if checkPathPermission('/admin/events/create', permission)}
-								<a
-									href="/admin/events/create"
-									class="flex items-center gap-2 px-3 py-2 text-sm w-44 hover:bg-background-4"
-								>
-									<Icon scale="small">
-										<Plus />
-									</Icon>
-									<p class="text-text-4">Vytvoriť udalosť</p>
+									<p class="text-text-4">Kalendár</p>
 								</a>
 							{/if}
 							{#if checkPathPermission('/admin/events', permission)}

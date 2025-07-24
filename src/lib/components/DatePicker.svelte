@@ -105,7 +105,11 @@
     }
 
     function selectDate(dateStr: string, isAvailable: boolean, isPast: boolean, isCurrentMonth: boolean) {
-        if (disabled || isPast || !isCurrentMonth || !isAvailable) return;
+        if (disabled || isPast || !isCurrentMonth) return;
+        
+        // Only allow selection of available dates
+        if (!isAvailable) return;
+        
         selectedDate = dateStr;
         onDateSelect(dateStr);
     }
@@ -187,7 +191,7 @@
                 type="button"
                 class={getDayClass(day)}
                 onclick={() => selectDate(day.dateStr, day.isAvailable, day.isPast, day.isCurrentMonth)}
-                disabled={disabled || day.isPast || !day.isCurrentMonth || (!day.isAvailable && !day.isUnavailable)}
+                disabled={disabled || day.isPast || !day.isCurrentMonth || day.isUnavailable || !day.isAvailable}
                 title={
                     day.isUnavailable ? 'Nedostupné' :
                     day.isAvailable ? 'Dostupné' :
