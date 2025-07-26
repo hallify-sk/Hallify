@@ -55,6 +55,16 @@
     let guestPhone = $state('');
     let guestNotes = $state('');
 
+    // Helper function to check if event is in the past
+    function isEventInPast(endDate: string | Date) {
+        const eventEnd = new Date(endDate);
+        const now = new Date();
+        return eventEnd < now;
+    }
+
+    // Check if current event is in the past
+    const isCurrentEventInPast = $derived(() => isEventInPast(data.event.endDate));
+
     // Format date for display
     function formatEventDate(dateString: string) {
         const date = new Date(dateString);
@@ -162,6 +172,11 @@
 
     // Handle edit button click
     function handleEditEvent() {
+        // Prevent editing past events
+        if (isCurrentEventInPast()) {
+            return;
+        }
+        
         initializeEditForm();
         fetchAvailableDates();
         showEditDialog = true;
@@ -225,6 +240,11 @@
 
     // Handle event deletion
     async function handleDeleteEvent() {
+        // Prevent deleting past events
+        if (isCurrentEventInPast()) {
+            return;
+        }
+        
         if (!confirm('Naozaj chcete zmazať túto udalosť?')) return;
 
         editLoading = true;
@@ -269,6 +289,12 @@
 
     // Handle add guest form submission
     async function handleAddGuest() {
+        // Prevent adding guests to past events
+        if (isCurrentEventInPast()) {
+            addGuestError = 'Nemôžete pridať hostí do udalostí, ktoré už prebehli.';
+            return;
+        }
+        
         if (!validateAddGuestForm()) return;
 
         // Check capacity limits
@@ -319,6 +345,11 @@
 
     // Handle removing invitation
     async function handleRemoveInvitation(invitationId: number) {
+        // Prevent removing invitations from past events
+        if (isCurrentEventInPast()) {
+            return;
+        }
+        
         if (!confirm('Naozaj chcete odstrániť túto pozvánku?')) return;
 
         try {
@@ -371,9 +402,21 @@
             <div class="flex flex-col">
                 <p class="uppercase text-[0.65rem] text-text-1">Správa udalosti</p>
                 <h1 class="text-2xl font-bold text-text-main">{data.event.name}</h1>
+                {#if isCurrentEventInPast()}
+                    <p class="text-sm text-orange-600 font-medium mt-1">
+                        <Icon scale="small">
+                            <Clock />
+                        </Icon>
+                        Táto udalosť už prebehla
+                    </p>
+                {/if}
             </div>
             <div class="flex gap-2">
-                <Button color="secondary" onclick={handleEditEvent}>
+                <Button 
+                    color="secondary"
+                    onclick={handleEditEvent}
+                    disabled={isCurrentEventInPast()}
+                >
                     <Icon scale="small">
                         <Adjustments />
                     </Icon>
@@ -479,7 +522,7 @@
                     <Button 
                         color="primary" 
                         onclick={() => showAddGuestDialog = true}
-                        disabled={!!(data.event.maxParticipants && totalParticipants() >= data.event.maxParticipants)}
+                        disabled={!!(data.event.maxParticipants && totalParticipants() >= data.event.maxParticipants) || isCurrentEventInPast()}
                     >
                         <Icon scale="small">
                             <Plus />
@@ -571,8 +614,9 @@
                                                 <button
                                                     type="button"
                                                     onclick={() => handleRemoveInvitation(invitation.id)}
-                                                    class="p-1 text-red-600 hover:text-red-800 hover:bg-red-50 rounded"
-                                                    title="Odstrániť pozvánku"
+                                                    class="p-1 text-red-600 hover:text-red-800 hover:bg-red-50 rounded disabled:opacity-50 disabled:cursor-not-allowed"
+                                                    title={isCurrentEventInPast() ? "Nemôžete odstraňovať pozvánky z udalostí, ktoré už prebehli" : "Odstrániť pozvánku"}
+                                                    disabled={isCurrentEventInPast()}
                                                 >
                                                     <Icon scale="small">
                                                         <Cross />
@@ -653,6 +697,17 @@
             {#if editError}
                 <div class="p-4 mb-4 text-sm text-red-600 bg-red-100 border border-red-300 rounded">
                     {editError}
+                </div>
+            {/if}
+            
+            {#if isCurrentEventInPast()}
+                <div class="p-4 mb-4 text-sm text-orange-700 bg-orange-100 border border-orange-300 rounded">
+                    <div class="flex items-center gap-2">
+                        <Icon scale="small">
+                            <Clock />
+                        </Icon>
+                        <span>Táto udalosť už prebehla a nemôže byť upravovaná ani zmazaná.</span>
+                    </div>
                 </div>
             {/if}
             
@@ -774,7 +829,7 @@
                     <Button 
                         color="danger" 
                         onclick={handleDeleteEvent}
-                        disabled={editLoading}
+                        disabled={editLoading || isCurrentEventInPast()}
                     >
                         <Icon scale="small">
                             <Cross />
@@ -793,7 +848,7 @@
                         <Button 
                             color="primary" 
                             type="submit"
-                            disabled={editLoading}
+                            disabled={editLoading || isCurrentEventInPast()}
                         >
                             <Icon scale="small">
                                 <Save />
