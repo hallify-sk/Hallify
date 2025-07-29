@@ -315,7 +315,7 @@
 <div class="w-full min-h-screen px-4 py-6 bg-background-main md:px-24">
 	<div class="flex flex-row flex-wrap items-center justify-between w-full mx-auto max-w-7xl">
 		<div class="flex flex-col flex-nowrap">
-			<p class="uppercase text-[0.65rem] text-text-1">Prehľad</p>
+			<p class="uppercase text-[0.65rem] text-text-1">Udalosti</p>
 			<p class="text-text-main">Časové výluky</p>
 		</div>
 	</div>

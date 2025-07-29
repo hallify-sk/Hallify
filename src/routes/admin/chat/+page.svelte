@@ -14,9 +14,9 @@
 	import User from '$lib/icons/User.svelte';
 	import BulletList from '$lib/icons/BulletList.svelte';
 	import Plus from '$lib/icons/Plus.svelte';
-	
+
 	export let data;
-	
+
 	let selectedSession: any = null;
 	let messages: any[] = [];
 	let newMessage = '';
@@ -24,15 +24,35 @@
 	let messagesContainer: HTMLElement;
 	let templateDialogOpen = false;
 	let newTemplate = { name: '', content: '' };
-	
+	let templateSidebarVisible = true;
+
 	// Template responses with variable support
 	let templates = [
-		{ id: 1, name: 'Uvítanie', content: 'Dobrý deň {{name}}, ďakujeme za váš záujem o naše služby. Ako vám môžem pomôcť?' },
-		{ id: 2, name: 'Žiadosť o informácie', content: 'Ahoj {{name}}, potrebujem od vás ešte niekoľko informácií. Môžete mi prosím poslať viac detailov o {{predmet}}?' },
-		{ id: 3, name: 'Ukončenie', content: 'Ďakujem {{name}} za váš čas. Ak budete mať ďalšie otázky, neváhajte nás kontaktovať.' },
-		{ id: 4, name: 'Presmerovanie', content: 'Dobrý deň {{name}}, váš prípad budem musieť presunúť k špecialistovi. Niekto sa vám ozve do 24 hodín.' }
+		{
+			id: 1,
+			name: 'Uvítanie',
+			content: 'Dobrý deň {{name}}, ďakujeme za váš záujem o naše služby. Ako vám môžem pomôcť?'
+		},
+		{
+			id: 2,
+			name: 'Žiadosť o informácie',
+			content:
+				'Ahoj {{name}}, potrebujem od vás ešte niekoľko informácií. Môžete mi prosím poslať viac detailov o {{predmet}}?'
+		},
+		{
+			id: 3,
+			name: 'Ukončenie',
+			content:
+				'Ďakujem {{name}} za váš čas. Ak budete mať ďalšie otázky, neváhajte nás kontaktovať.'
+		},
+		{
+			id: 4,
+			name: 'Presmerovanie',
+			content:
+				'Dobrý deň {{name}}, váš prípad budem musieť presunúť k špecialistovi. Niekto sa vám ozve do 24 hodín.'
+		}
 	];
-	
+
 	$: sessions = data?.sessions || [];
 	$: stats = data?.stats || {
 		totalChats: 0,
@@ -73,7 +93,7 @@
 		// Mark messages as read when admin opens the chat
 		await markMessagesAsRead(session.id);
 		startMessagePolling();
-		
+
 		// Scroll to bottom after a brief delay
 		setTimeout(() => {
 			if (messagesContainer) {
@@ -96,15 +116,15 @@
 
 	async function loadMessages() {
 		if (!selectedSession) return;
-		
+
 		const previousMessageCount = messages.length;
-		
+
 		try {
 			const response = await fetch(`/api/chat/messages?sessionId=${selectedSession.id}`);
 			if (response.ok) {
 				const data = await response.json();
 				messages = data.messages;
-				
+
 				// Auto-scroll on new messages
 				if (messages.length > previousMessageCount) {
 					setTimeout(() => {
@@ -140,7 +160,7 @@
 
 	async function sendMessage() {
 		if (!selectedSession || !newMessage.trim()) return;
-		
+
 		try {
 			const response = await fetch('/api/chat/messages', {
 				method: 'POST',
@@ -151,12 +171,12 @@
 					senderType: 'admin'
 				})
 			});
-			
+
 			if (response.ok) {
 				newMessage = '';
 				await loadMessages();
 			}
-			
+
 			// Auto-scroll after sending
 			setTimeout(() => {
 				if (messagesContainer) {
@@ -200,30 +220,30 @@
 		const date = new Date(dateString);
 		const now = new Date();
 		const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
-		
+
 		// If less than a minute ago
 		if (diffInSeconds < 60) {
 			return 'Práve teraz';
 		}
-		
+
 		// If less than an hour ago
 		if (diffInSeconds < 3600) {
 			const minutes = Math.floor(diffInSeconds / 60);
 			return `pred ${minutes} min${minutes === 1 ? '' : ''}`;
 		}
-		
+
 		// If less than a day ago
 		if (diffInSeconds < 86400) {
 			const hours = Math.floor(diffInSeconds / 3600);
 			return `pred ${hours} h`;
 		}
-		
+
 		// If less than a week ago
 		if (diffInSeconds < 604800) {
 			const days = Math.floor(diffInSeconds / 86400);
 			return `pred ${days} dňami`;
 		}
-		
+
 		// Otherwise show date
 		return date.toLocaleDateString('sk-SK', {
 			day: 'numeric',
@@ -252,12 +272,18 @@
 	function insertTemplate(template: any) {
 		const displayName = getDisplayName(selectedSession);
 		let templateContent = template.content;
-		
+
 		// Replace variables
 		templateContent = templateContent.replace(/\{\{name\}\}/g, displayName);
-		templateContent = templateContent.replace(/\{\{email\}\}/g, selectedSession.userEmail || 'neuvedený');
-		templateContent = templateContent.replace(/\{\{predmet\}\}/g, selectedSession.subject || 'všeobecná podpora');
-		
+		templateContent = templateContent.replace(
+			/\{\{email\}\}/g,
+			selectedSession.userEmail || 'neuvedený'
+		);
+		templateContent = templateContent.replace(
+			/\{\{predmet\}\}/g,
+			selectedSession.subject || 'všeobecná podpora'
+		);
+
 		// Add to current message
 		if (newMessage.trim()) {
 			newMessage += '\n\n' + templateContent;
@@ -267,15 +293,15 @@
 	}
 
 	function deleteTemplate(templateId: number) {
-		templates = templates.filter(t => t.id !== templateId);
+		templates = templates.filter((t) => t.id !== templateId);
 	}
 
 	async function createTemplate() {
 		if (!newTemplate.name.trim() || !newTemplate.content.trim()) return;
-		
-		const id = Math.max(...templates.map(t => t.id), 0) + 1;
+
+		const id = Math.max(...templates.map((t) => t.id), 0) + 1;
 		templates = [...templates, { id, ...newTemplate }];
-		
+
 		// Reset form
 		newTemplate = { name: '', content: '' };
 		templateDialogOpen = false;
@@ -293,9 +319,74 @@
 			return 'Hosť';
 		}
 	}
-</script><svelte:head>	<title>Chat Management | Hallify Admin</title></svelte:head><div class="flex flex-col w-full gap-4 mx-auto max-w-7xl">	<!-- Header -->	<div class="flex items-center justify-between w-full">		<div class="flex items-center gap-4">			<Icon scale="medium">				<Chat />			</Icon>			<div>				<p class="uppercase text-[0.65rem] text-text-1">Chat Support</p>				<p class="text-text-main">Správa komunikácie s klientmi</p>			</div>		</div>	</div>		<!-- Statistics Cards -->	<div class="grid w-full grid-cols-1 gap-4 mx-auto max-w-7xl sm:grid-cols-2 lg:grid-cols-4">		<div class="flex flex-col w-full p-4 border border-border-main/30 bg-background-1">			<div class="flex items-center gap-2 mb-2">				<Icon scale="small">					<Chat />				</Icon>				<h2 class="text-sm text-text-1">Aktívne chaty</h2>			</div>			<p class="text-3xl font-bold text-text-main">{stats.activeChats}</p>		</div>		<div class="flex flex-col w-full p-4 border border-border-main/30 bg-background-1">			<div class="flex items-center gap-2 mb-2">				<Icon scale="small">					<Clock />				</Icon>				<h2 class="text-sm text-text-1">Nové dnes</h2>			</div>			<p class="text-3xl font-bold text-text-main">{stats.newChatsToday}</p>		</div>		<div class="flex flex-col w-full p-4 border border-border-main/30 bg-background-1">			<div class="flex items-center gap-2 mb-2">				<Icon scale="small">					<Users />				</Icon>				<h2 class="text-sm text-text-1">Nové tento týždeň</h2>			</div>			<p class="text-3xl font-bold text-text-main">{stats.newChatsThisWeek}</p>		</div>		<div class="flex flex-col w-full p-4 border border-border-main/30 bg-background-1">			<div class="flex items-center gap-2 mb-2">				<Icon scale="small">					<CheckCircle />				</Icon>				<h2 class="text-sm text-text-1">Uzavreté tento týždeň</h2>			</div>			<p class="text-3xl font-bold text-text-main">{stats.closedChatsThisWeek}</p>		</div>	</div></div><!-- Main Content Area with Two Columns --><div class="flex w-full h-[calc(100vh-300px)] mx-auto max-w-7xl gap-4 mt-6">	<!-- Left Column: Sessions List -->	<div class="w-1/3 min-w-[400px]">		<div class="relative w-full h-full overflow-hidden border rounded border-border-main/30 bg-background-1">			<div class="sticky top-0 p-4 border-b border-border-main/30 bg-background-1">				<h2 class="text-text-main">Aktívne chat konverzácie</h2>			</div>			{#if sessions.length === 0}				<div class="flex items-center justify-center h-32">					<p class="text-text-1 text-lg">Žiadne aktívne chat konverzácie</p>				</div>			{:else}				<div class="overflow-y-auto h-full">					{#each sessions as session}
-						<div 
-							class="p-4 border-b border-border-main/30 cursor-pointer hover:bg-background-4 {selectedSession?.id === session.id ? 'bg-background-4 border-l-4 border-l-primary' : ''}"
+</script>
+
+<svelte:head><title>Chat Management | Hallify Admin</title></svelte:head>
+<div class="bg-background-main">
+<div class="flex flex-col w-full gap-4 mx-auto max-w-7xl py-6">
+	<!-- Header -->
+	<div class="flex items-center justify-between w-full">
+		<div class="flex items-center gap-4">
+			<div>
+				<p class="uppercase text-[0.65rem] text-text-1">Chat Support</p>
+				<p class="text-text-main">Správa komunikácie s klientmi</p>
+			</div>
+		</div>
+	</div>
+	<!-- Statistics Cards -->
+	<div class="grid w-full grid-cols-1 gap-4 mx-auto max-w-7xl sm:grid-cols-2 lg:grid-cols-4">
+		<div class="flex flex-col w-full p-4 border border-border-main/30 bg-background-1">
+			<div class="flex items-center gap-2 mb-2">
+				<Icon scale="small"><Chat /></Icon>
+				<h2 class="text-sm text-text-1">Aktívne chaty</h2>
+			</div>
+			<p class="text-3xl font-bold text-text-main">{stats.activeChats}</p>
+		</div>
+		<div class="flex flex-col w-full p-4 border border-border-main/30 bg-background-1">
+			<div class="flex items-center gap-2 mb-2">
+				<Icon scale="small"><Clock /></Icon>
+				<h2 class="text-sm text-text-1">Nové dnes</h2>
+			</div>
+			<p class="text-3xl font-bold text-text-main">{stats.newChatsToday}</p>
+		</div>
+		<div class="flex flex-col w-full p-4 border border-border-main/30 bg-background-1">
+			<div class="flex items-center gap-2 mb-2">
+				<Icon scale="small"><Users /></Icon>
+				<h2 class="text-sm text-text-1">Nové tento týždeň</h2>
+			</div>
+			<p class="text-3xl font-bold text-text-main">{stats.newChatsThisWeek}</p>
+		</div>
+		<div class="flex flex-col w-full p-4 border border-border-main/30 bg-background-1">
+			<div class="flex items-center gap-2 mb-2">
+				<Icon scale="small"><CheckCircle /></Icon>
+				<h2 class="text-sm text-text-1">Uzavreté tento týždeň</h2>
+			</div>
+			<p class="text-3xl font-bold text-text-main">{stats.closedChatsThisWeek}</p>
+		</div>
+	</div>
+</div>
+<!-- Main Content Area with Two Columns -->
+<div class="flex w-full h-[calc(100vh-240px)] mx-auto max-w-7xl gap-4 mt-6">
+	<!-- Left Column: Sessions List -->
+	<div class="w-1/4 min-w-[320px]">
+		<div
+			class="relative w-full h-full overflow-hidden border rounded border-border-main/30 bg-background-1"
+		>
+			<div class="sticky top-0 p-4 border-b border-border-main/30 bg-background-1">
+				<h2 class="text-text-main">Aktívne chat konverzácie</h2>
+			</div>
+			{#if sessions.length === 0}
+				<div class="flex items-center justify-center h-32">
+					<p class="text-text-1 text-lg">Žiadne aktívne chat konverzácie</p>
+				</div>
+			{:else}
+				<div class="overflow-y-auto h-full">
+					{#each sessions as session}
+						<div
+							class="p-4 border-b border-border-main/30 cursor-pointer hover:bg-background-4 {selectedSession?.id ===
+							session.id
+								? 'bg-background-4 border-l-4 border-l-primary'
+								: ''}"
 							on:click={() => selectSession(session)}
 							role="button"
 							tabindex="0"
@@ -311,13 +402,21 @@
 											</span>
 										{/if}
 									</div>
-									<p class="text-sm text-text-2 truncate">{session.subject || 'Všeobecná podpora'}</p>
+									<p class="text-sm text-text-2 truncate">
+										{session.subject || 'Všeobecná podpora'}
+									</p>
 									<div class="flex items-center gap-2 mt-2">
-										<span class="px-2 py-1 text-xs rounded {session.assignedAdminId ? 'text-blue-600 bg-blue-300/40' : 'text-gray-600 bg-gray-300/40'}">
+										<span
+											class="px-2 py-1 text-xs rounded {session.assignedAdminId
+												? 'text-blue-600 bg-blue-300/40'
+												: 'text-gray-600 bg-gray-300/40'}"
+										>
 											{session.assignedAdminId ? 'Priradené' : 'Nepriradené'}
 										</span>
 										<span class="text-xs text-text-2">
-											{session.lastMessageAt ? formatTime(session.lastMessageAt.toString()) : 'Nikdy'}
+											{session.lastMessageAt
+												? formatTime(session.lastMessageAt.toString())
+												: 'Nikdy'}
 										</span>
 									</div>
 								</div>
@@ -337,8 +436,8 @@
 		{#if selectedSession}
 			<div class="flex flex-col h-full bg-background-1 rounded border border-border-main">
 				<!-- Session Info Header -->
-				<div class="border-b border-border-main/30 p-4 bg-background-2">
-					<div class="grid grid-cols-2 gap-4 text-sm">
+				<div class="border-b border-border-main/30 p-3 bg-background-2">
+					<div class="grid grid-cols-2 gap-3 text-sm">
 						<div>
 							<p class="text-text-1 text-xs uppercase mb-1">Používateľ</p>
 							<p class="text-text-main font-medium">{getDisplayName(selectedSession)}</p>
@@ -348,24 +447,20 @@
 						</div>
 						<div>
 							<p class="text-text-1 text-xs uppercase mb-1">Predmet</p>
-							<p class="text-text-main font-medium">{selectedSession.subject || 'Všeobecná podpora'}</p>
-						</div>
-						<div>
-							<p class="text-text-1 text-xs uppercase mb-1">Vytvorené</p>
-							<p class="text-text-main font-medium">{formatFullTime(selectedSession.createdAt.toString())}</p>
-						</div>
-						<div>
-							<p class="text-text-1 text-xs uppercase mb-1">Posledná aktivita</p>
 							<p class="text-text-main font-medium">
-								{selectedSession.lastMessageAt ? formatFullTime(selectedSession.lastMessageAt.toString()) : 'Žiadna'}
+								{selectedSession.subject || 'Všeobecná podpora'}
 							</p>
 						</div>
 					</div>
-					
+
 					<!-- Status and Assignment -->
-					<div class="flex items-center justify-between mt-3 pt-3 border-t border-border-main/30">
+					<div class="flex items-center justify-between mt-2 pt-2 border-t border-border-main/30">
 						<div class="flex items-center gap-2">
-							<span class="px-2 py-1 text-xs rounded {selectedSession.status === 'active' ? 'text-green-600 bg-green-300/40' : 'text-gray-600 bg-gray-300/40'}">
+							<span
+								class="px-2 py-1 text-xs rounded {selectedSession.status === 'active'
+									? 'text-green-600 bg-green-300/40'
+									: 'text-gray-600 bg-gray-300/40'}"
+							>
 								{selectedSession.status === 'active' ? 'Aktívne' : 'Uzavreté'}
 							</span>
 							{#if selectedSession.unreadCount > 0}
@@ -400,23 +495,29 @@
 									<div class="flex {msg.senderType === 'admin' ? 'justify-end' : 'justify-start'}">
 										<div class="flex flex-col max-w-sm">
 											<!-- Message Bubble -->
-											<div class="px-4 py-3 rounded-lg text-sm {
-												msg.senderType === 'admin' 
-													? 'bg-primary text-white rounded-br-sm' 
+											<div
+												class="px-4 py-3 rounded-lg text-sm {msg.senderType === 'admin'
+													? 'bg-primary text-white rounded-br-sm'
 													: msg.senderType === 'user'
-													? 'bg-secondary text-white rounded-bl-sm'
-													: 'bg-background-4 text-text-main border border-border-main rounded-bl-sm'
-											}">
+														? 'bg-secondary text-white rounded-bl-sm'
+														: 'bg-background-4 text-text-main border border-border-main rounded-bl-sm'}"
+											>
 												<div class="whitespace-pre-wrap">{msg.message}</div>
 											</div>
-											
+
 											<!-- Message Meta with Author and Admin Badge -->
-											<div class="flex items-center gap-2 mt-1 px-1 {msg.senderType === 'admin' ? 'justify-end' : 'justify-start'}">
+											<div
+												class="flex items-center gap-2 mt-1 px-1 {msg.senderType === 'admin'
+													? 'justify-end'
+													: 'justify-start'}"
+											>
 												{#if msg.senderType === 'admin'}
 													<span class="text-xs text-blue-600 font-medium">ADMIN</span>
 													{#if msg.senderFirstName && msg.senderLastName}
 														<span class="text-xs text-text-2">•</span>
-														<span class="text-xs text-text-2">{msg.senderFirstName} {msg.senderLastName}</span>
+														<span class="text-xs text-text-2"
+															>{msg.senderFirstName} {msg.senderLastName}</span
+														>
 													{/if}
 												{:else}
 													<span class="text-xs text-text-2">
@@ -439,9 +540,9 @@
 						<div class="border-t border-border-main/30 bg-background-1">
 							<form class="p-4" on:submit|preventDefault={sendMessage}>
 								<div class="flex gap-3">
-									<textarea 
-										class="flex-1 rounded border border-border-main px-3 py-2 bg-background-2 text-text-main text-sm resize-none min-h-[60px] max-h-[120px]" 
-										bind:value={newMessage} 
+									<textarea
+										class="flex-1 rounded border border-border-main px-3 py-2 bg-background-2 text-text-main text-sm resize-none min-h-[60px] max-h-[120px]"
+										bind:value={newMessage}
 										placeholder="Napíšte odpoveď klientovi..."
 										rows="2"
 										on:input={(e) => {
@@ -467,7 +568,7 @@
 									</div>
 								</div>
 							</form>
-							
+
 							<!-- Action Buttons -->
 							<div class="flex justify-between items-center px-4 pb-4">
 								<div class="flex gap-2">
@@ -486,71 +587,78 @@
 										</Button>
 									{/if}
 								</div>
-								<Button color="primary" onclick={() => templateDialogOpen = true}>
+								<Button
+									color="primary"
+									onclick={() => (templateSidebarVisible = !templateSidebarVisible)}
+								>
 									<Icon scale="small">
 										<BulletList />
 									</Icon>
-									Šablóny odpovedí
+									{templateSidebarVisible ? 'Skryť šablóny' : 'Zobraziť šablóny'}
 								</Button>
 							</div>
 						</div>
 					</div>
 
 					<!-- Template Responses Sidebar -->
-					<div class="w-80 border-l border-border-main/30 bg-background-2">
-						<div class="p-4 border-b border-border-main/30">
-							<div class="flex items-center justify-between">
-								<h3 class="text-text-main font-medium">Šablóny odpovedí</h3>
-								<Button color="primary" scale="small" onclick={() => templateDialogOpen = true}>
-									<Icon scale="small">
-										<Plus />
-									</Icon>
-								</Button>
-							</div>
-						</div>
-						<div class="overflow-y-auto h-[calc(100%-60px)]">
-							{#if templates.length === 0}
-								<div class="p-4 text-center">
-									<p class="text-text-2 text-sm">Žiadne šablóny</p>
+					{#if templateSidebarVisible}
+						<div class="w-64 border-l border-border-main/30 bg-background-2">
+							<div class="p-4 border-b border-border-main/30">
+								<div class="flex items-center justify-between">
+									<h3 class="text-text-main font-medium">Šablóny odpovedí</h3>
+									<Button color="primary" scale="small" onclick={() => (templateDialogOpen = true)}>
+										<Icon scale="small">
+											<Plus />
+										</Icon>
+									</Button>
 								</div>
-							{:else}
-								<div class="space-y-2 p-4">
-									{#each templates as template}
-										<div class="bg-background-1 border border-border-main/30 rounded p-3">
-											<div class="flex items-start justify-between">
-												<div class="flex-1 min-w-0">
-													<p class="text-sm font-medium text-text-main mb-1">{template.name}</p>
-													<p class="text-xs text-text-2 truncate mb-2">{template.content}</p>
-													<div class="flex gap-2">
-														<Button 
-															color="secondary" 
-															scale="small" 
-															onclick={() => insertTemplate(template)}
-														>
-															Vložiť
-														</Button>
-														<Button 
-															color="danger" 
-															scale="small" 
-															onclick={() => deleteTemplate(template.id)}
-														>
-															<Icon scale="small">
-																<Cross />
-															</Icon>
-														</Button>
+							</div>
+							<div class="overflow-y-auto h-[calc(100%-60px)]">
+								{#if templates.length === 0}
+									<div class="p-4 text-center">
+										<p class="text-text-2 text-sm">Žiadne šablóny</p>
+									</div>
+								{:else}
+									<div class="space-y-2 p-4">
+										{#each templates as template}
+											<div class="bg-background-1 border border-border-main/30 rounded p-3">
+												<div class="flex items-start justify-between">
+													<div class="flex-1 min-w-0">
+														<p class="text-sm font-medium text-text-main mb-1">{template.name}</p>
+														<p class="text-xs text-text-2 truncate mb-2">{template.content}</p>
+														<div class="flex gap-2">
+															<Button
+																color="secondary"
+																scale="small"
+																onclick={() => insertTemplate(template)}
+															>
+																Vložiť
+															</Button>
+															<Button
+																color="danger"
+																scale="small"
+																onclick={() => deleteTemplate(template.id)}
+															>
+																<Icon scale="small">
+																	<Cross />
+																</Icon>
+															</Button>
+														</div>
 													</div>
 												</div>
 											</div>
-										</div>
-									{/each}
-								</div>
-							{/if}
+										{/each}
+									</div>
+								{/if}
+							</div>
 						</div>
-					</div>
+					{/if}
 				</div>
 			</div>
 		{:else}
-			<div class="flex items-center justify-center h-full bg-background-1 rounded border border-border-main/30">
+			<div
+				class="flex items-center justify-center h-full bg-background-1 rounded border border-border-main/30"
+			>
 				<div class="text-center">
 					<Icon scale="big" class="mx-auto mb-4 text-text-2">
 						<Chat />
@@ -562,7 +670,7 @@
 		{/if}
 	</div>
 </div>
-
+</div>
 <!-- Template Creation Dialog -->
 <Dialog bind:open={templateDialogOpen}>
 	{#snippet header()}
@@ -576,25 +684,29 @@
 			</div>
 		</div>
 	{/snippet}
-	
+
 	<div class="w-full max-w-md mx-auto">
 		<form on:submit|preventDefault={createTemplate}>
 			<div class="space-y-4">
 				<div>
-					<label for="template-name" class="block text-sm font-medium text-text-main mb-2">Názov šablóny</label>
-					<input 
+					<label for="template-name" class="block text-sm font-medium text-text-main mb-2"
+						>Názov šablóny</label
+					>
+					<input
 						id="template-name"
-						type="text" 
+						type="text"
 						bind:value={newTemplate.name}
 						placeholder="napr. Uvítanie nového klienta"
 						class="w-full rounded border border-border-main px-3 py-2 bg-background-2 text-text-main text-sm"
 						required
 					/>
 				</div>
-				
+
 				<div>
-					<label for="template-content" class="block text-sm font-medium text-text-main mb-2">Obsah šablóny</label>
-					<textarea 
+					<label for="template-content" class="block text-sm font-medium text-text-main mb-2"
+						>Obsah šablóny</label
+					>
+					<textarea
 						id="template-content"
 						bind:value={newTemplate.content}
 						placeholder="Dobrý deň {'{{name}}'}, ďakujeme že ste nás kontaktovali..."
@@ -610,9 +722,9 @@
 					</div>
 				</div>
 			</div>
-			
+
 			<div class="flex justify-between pt-4 border-t border-border-main/30">
-				<Button color="secondary" onclick={() => templateDialogOpen = false}>
+				<Button color="secondary" onclick={() => (templateDialogOpen = false)}>
 					<Icon scale="small">
 						<Cross />
 					</Icon>
