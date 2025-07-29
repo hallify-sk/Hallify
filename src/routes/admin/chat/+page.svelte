@@ -366,7 +366,7 @@
 	</div>
 </div>
 <!-- Main Content Area with Two Columns -->
-<div class="flex w-full h-[calc(100vh-240px)] mx-auto max-w-7xl gap-4 mt-6">
+<div class="flex w-full h-[calc(100vh-280px)] mx-auto max-w-7xl gap-4 mt-6">
 	<!-- Left Column: Sessions List -->
 	<div class="w-1/4 min-w-[320px]">
 		<div
@@ -411,7 +411,11 @@
 												? 'text-blue-600 bg-blue-300/40'
 												: 'text-gray-600 bg-gray-300/40'}"
 										>
-											{session.assignedAdminId ? 'Priradené' : 'Nepriradené'}
+											{#if session.assignedAdminId}
+												Priradené: {session.assignedAdminFirstName} {session.assignedAdminLastName}
+											{:else}
+												Nepriradené
+											{/if}
 										</span>
 										<span class="text-xs text-text-2">
 											{session.lastMessageAt
@@ -455,7 +459,7 @@
 
 					<!-- Status and Assignment -->
 					<div class="flex items-center justify-between mt-2 pt-2 border-t border-border-main/30">
-						<div class="flex items-center gap-2">
+						<div class="flex items-center gap-2 flex-wrap">
 							<span
 								class="px-2 py-1 text-xs rounded {selectedSession.status === 'active'
 									? 'text-green-600 bg-green-300/40'
@@ -463,6 +467,15 @@
 							>
 								{selectedSession.status === 'active' ? 'Aktívne' : 'Uzavreté'}
 							</span>
+							{#if selectedSession.assignedAdminId}
+								<span class="px-2 py-1 text-xs rounded text-blue-600 bg-blue-300/40">
+									Priradené: {selectedSession.assignedAdminFirstName} {selectedSession.assignedAdminLastName}
+								</span>
+							{:else}
+								<span class="px-2 py-1 text-xs rounded text-gray-600 bg-gray-300/40">
+									Nepriradené
+								</span>
+							{/if}
 							{#if selectedSession.unreadCount > 0}
 								<span class="bg-danger text-white px-2 py-1 rounded-full text-xs">
 									{selectedSession.unreadCount} nových
@@ -669,8 +682,7 @@
 			</div>
 		{/if}
 	</div>
-</div>
-</div>
+</div></div>
 <!-- Template Creation Dialog -->
 <Dialog bind:open={templateDialogOpen}>
 	{#snippet header()}

@@ -4,6 +4,7 @@ import { page } from '$app/stores';
 import Button from './Button.svelte';
 import Dialog from './Dialog.svelte';
 import Chat from '$lib/icons/Chat.svelte';
+import Cross from '$lib/icons/Cross.svelte';
 import Icon from '$lib/icons/Icon.svelte';
 
 let open = false;
@@ -12,8 +13,13 @@ let guestIdentifier = '';
 let messages: any[] = [];
 let sessionStatus: string = 'active';
 let newMessage = '';
+let subject = '';
 let polling: any;
 let isConnected = false;
+let chatStep: 'subject' | 'message' | 'chat' | 'closed-options' = 'subject';
+let closedSessionId: string | null = null;
+let isReopeningChat = false;
+let closedByClient = false;
 
 $: user = $page.data.user;
 
@@ -29,6 +35,7 @@ onMount(() => {
 			// Validate the session exists by loading messages
 			loadMessages().then(() => {
 				if (sessionId) {
+					chatStep = 'chat';
 					startPolling();
 				}
 			});
@@ -58,7 +65,7 @@ async function linkGuestChats() {
 }
 
 async function startChat() {
-	if (!newMessage.trim()) return;
+	if (!newMessage.trim() || !subject.trim()) return;
 	
 	try {
 		const res = await fetch('/api/chat/sessions', {
@@ -67,7 +74,7 @@ async function startChat() {
 			body: JSON.stringify({ 
 				message: newMessage, 
 				guestIdentifier,
-				subject: 'New Chat Request'
+				subject: subject
 			})
 		});
 		
@@ -79,6 +86,8 @@ async function startChat() {
 			}
 			sessionStatus = 'active';
 			newMessage = '';
+			subject = '';
+			chatStep = 'chat';
 			await loadMessages();
 			startPolling();
 			isConnected = true;
@@ -107,6 +116,8 @@ async function sendMessage() {
 			if (sessionStatus === 'closed') {
 				sessionStatus = 'active';
 			}
+			// Reset the reopening flag since message was sent successfully
+			isReopeningChat = false;
 			newMessage = '';
 			await loadMessages();
 		} else {
@@ -136,12 +147,19 @@ async function loadMessages() {
 			const data = await res.json();
 			messages = data.messages || data; // Handle both old and new response formats
 			sessionStatus = data.sessionStatus || 'active';
+			
+			// If session was closed, show closed options (unless user is actively reopening)
+			if (sessionStatus === 'closed' && !isReopeningChat) {
+				chatStep = 'closed-options';
+				closedSessionId = sessionId;
+			}
 		} else if (res.status === 404) {
 			// Session doesn't exist, clear localStorage
 			localStorage.removeItem('chat_session_id');
 			sessionId = null;
 			messages = [];
 			sessionStatus = 'active';
+			chatStep = 'subject';
 			console.log('Session not found during load, cleared local storage');
 		}
 	} catch (error) {
@@ -161,11 +179,72 @@ function startPolling() {
 function formatTime(dateString: string) {
 	return new Date(dateString).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
+
+function proceedToMessage() {
+	if (!subject.trim()) return;
+	chatStep = 'message';
+}
+
+function startNewChat() {
+	sessionId = null;
+	closedSessionId = null;
+	isReopeningChat = false;
+	closedByClient = false;
+	localStorage.removeItem('chat_session_id');
+	messages = [];
+	sessionStatus = 'active';
+	chatStep = 'subject';
+	subject = '';
+	newMessage = '';
+	clearInterval(polling);
+}
+
+async function reopenOldChat() {
+	if (!closedSessionId) return;
+	
+	// Set flag to prevent polling from overriding the reopen attempt
+	isReopeningChat = true;
+	closedByClient = false;
+	sessionId = closedSessionId;
+	chatStep = 'chat';
+	
+	// Start polling for the reopened session
+	startPolling();
+}
+
+async function closeChat() {
+	if (!sessionId) return;
+	
+	try {
+		const res = await fetch(`/api/chat/sessions/${sessionId}`, {
+			method: 'PUT',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ 
+				status: 'closed',
+				guestIdentifier: guestIdentifier
+			})
+		});
+		
+		if (res.ok) {
+			sessionStatus = 'closed';
+			chatStep = 'closed-options';
+			closedByClient = true;
+			clearInterval(polling);
+		}
+	} catch (error) {
+		console.error('Error closing chat:', error);
+	}
+}
 </script>
 
 <!-- Floating Chat Button -->
 <div class="fixed bottom-6 right-6 z-50">
-	<Button color="primary" onclick={() => { open = true; if (sessionId) startPolling(); }}>
+	<Button color="primary" onclick={() => { 
+		open = true; 
+		if (sessionId && chatStep === 'chat') {
+			startPolling(); 
+		}
+	}}>
 		<div class="flex items-center gap-2">
 			<Icon scale="small">
 				<Chat />
@@ -181,27 +260,79 @@ function formatTime(dateString: string) {
 	{/snippet}
 	
 	<div class="flex flex-col h-[500px] w-[420px] bg-background-1 rounded shadow-lg border border-border-main">
-		{#if !sessionId}
-			<!-- Initial chat form -->
+		{#if chatStep === 'subject'}
+			<!-- Subject input step -->
 			<div class="p-4 border-b border-border-main">
-				<p class="text-text-main text-sm mb-3">Ahoj! Ako vám môžeme pomôcť?</p>
+				<p class="text-text-main text-sm mb-3">Ahoj! Aký je predmet vašej otázky?</p>
+			</div>
+			<div class="flex-1 p-4">
+				<form class="flex flex-col gap-4" on:submit|preventDefault={proceedToMessage}>
+					<input 
+						type="text"
+						class="w-full rounded border border-border-main px-3 py-2 bg-background-2 text-text-main text-sm" 
+						bind:value={subject} 
+						placeholder="napr. Technická podpora, Otázka k objednávke..."
+						required
+					/>
+					<Button color="primary" type="submit" disabled={!subject.trim()}>
+						Pokračovať
+					</Button>
+				</form>
+			</div>
+		{:else if chatStep === 'message'}
+			<!-- Message input step -->
+			<div class="p-4 border-b border-border-main">
+				<p class="text-text-main text-sm mb-1">Predmet: <strong>{subject}</strong></p>
+				<p class="text-text-2 text-xs mb-3">Opíšte vašu otázku alebo problém:</p>
 			</div>
 			<div class="flex-1 p-4">
 				<form class="flex flex-col gap-4" on:submit|preventDefault={startChat}>
 					<textarea 
 						class="w-full rounded border border-border-main px-3 py-2 bg-background-2 text-text-main text-sm resize-none" 
 						bind:value={newMessage} 
-						placeholder="Opíšte váš problém alebo otázku..."
+						placeholder="Opíšte váš problém alebo otázku podrobne..."
 						rows="4"
 						required
 					></textarea>
-					<Button color="primary" type="submit">
-						Začať chat
-					</Button>
+					<div class="flex gap-2">
+						<Button color="secondary" onclick={() => chatStep = 'subject'}>
+							Späť
+						</Button>
+						<Button color="primary" type="submit" disabled={!newMessage.trim()}>
+							Začať chat
+						</Button>
+					</div>
 				</form>
 			</div>
-		{:else}
-			<!-- Chat interface -->
+		{:else if chatStep === 'closed-options'}
+			<!-- Closed chat options -->
+			<div class="p-4 border-b border-border-main">
+				<p class="text-text-main text-sm mb-3">
+					{#if closedByClient}
+						Váš chat bol ukončený.
+					{:else}
+						Vaša konverzácia bola ukončená adminom.
+					{/if}
+				</p>
+			</div>
+			<div class="flex-1 p-4">
+				<div class="flex flex-col gap-4">
+					<div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+						<div class="text-yellow-800 text-sm font-medium mb-2">Chat ukončený</div>
+						<div class="text-yellow-700 text-xs mb-3">Čo by ste chceli robiť ďalej?</div>
+					</div>
+					
+					<Button color="primary" onclick={startNewChat}>
+						Začať nový chat
+					</Button>
+					
+					<Button color="secondary" onclick={reopenOldChat}>
+						Znovu otvoriť posledný chat
+					</Button>
+				</div>
+			</div>
+		{:else if chatStep === 'chat'}
+			<!-- Active chat interface -->
 			<div class="flex-1 overflow-y-auto p-4 space-y-4">
 				{#each messages as msg}
 					<div class="flex {msg.senderType === 'guest' || msg.senderType === 'user' ? 'justify-end' : 'justify-start'}">
@@ -237,12 +368,7 @@ function formatTime(dateString: string) {
 					</div>
 				{/each}
 				
-				{#if sessionStatus === 'closed'}
-					<div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4 text-center">
-						<div class="text-yellow-800 text-sm font-medium mb-1">Chat ukončený</div>
-						<div class="text-yellow-700 text-xs">Túto konverzáciu ukončil admin. Môžete odoslať novú správu a znovu ju otvoriť.</div>
-					</div>
-				{:else if messages.length === 0}
+				{#if messages.length === 0}
 					<div class="text-center text-text-1 py-8">
 						<p>Odošlite správu pre začatie konverzácie!</p>
 					</div>
@@ -254,21 +380,26 @@ function formatTime(dateString: string) {
 			</div>
 			
 			<div class="border-t border-border-main p-4">
-				{#if sessionStatus === 'closed'}
-					<div class="text-center text-text-1 text-xs mb-3">
-						Odošlite správu pre znovuotvorenie konverzácie
-					</div>
-				{/if}
-				<form class="flex gap-3" on:submit|preventDefault={sendMessage}>
+				<form class="flex gap-3 mb-3" on:submit|preventDefault={sendMessage}>
 					<input 
 						class="flex-1 rounded border border-border-main px-3 py-2 bg-background-2 text-text-main text-sm" 
 						bind:value={newMessage} 
-						placeholder={sessionStatus === 'closed' ? 'Napíšte pre znovuotvorenie...' : 'Napíšte správu...'} 
+						placeholder="Napíšte správu..." 
 					/>
-					<Button color="primary" type="submit">
-						{sessionStatus === 'closed' ? 'Otvoriť' : 'Odoslať'}
+					<Button color="primary" type="submit" disabled={!newMessage.trim()}>
+						Odoslať
 					</Button>
 				</form>
+				
+				<!-- Close chat button -->
+				<div class="flex justify-center">
+					<Button color="warning" onclick={closeChat}>
+						<Icon scale="small">
+							<Cross />
+						</Icon>
+						Ukončiť chat
+					</Button>
+				</div>
 			</div>
 		{/if}
 	</div>

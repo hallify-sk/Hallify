@@ -28,10 +28,14 @@ export const load: ServerLoad = async ({ locals }) => {
 			userFirstName: users.first_name,
 			userLastName: users.last_name,
 			userEmail: users.email,
+			assignedAdminFirstName: sql<string>`assigned_admin.first_name`,
+			assignedAdminLastName: sql<string>`assigned_admin.last_name`,
+			assignedAdminEmail: sql<string>`assigned_admin.email`,
 			unreadCount: sql<number>`COUNT(CASE WHEN ${chatMessages.isRead} = false AND ${chatMessages.senderType} != 'admin' THEN 1 END)`
 		})
 		.from(chatSessions)
 		.leftJoin(users, eq(chatSessions.userId, users.id))
+		.leftJoin(sql`users AS assigned_admin`, sql`${chatSessions.assignedAdminId} = assigned_admin.id`)
 		.leftJoin(chatMessages, eq(chatSessions.id, chatMessages.sessionId))
 		.where(eq(chatSessions.status, 'active'))
 		.groupBy(
@@ -45,7 +49,10 @@ export const load: ServerLoad = async ({ locals }) => {
 			chatSessions.createdAt,
 			users.first_name, 
 			users.last_name,
-			users.email
+			users.email,
+			sql`assigned_admin.first_name`,
+			sql`assigned_admin.last_name`,
+			sql`assigned_admin.email`
 		)
 		.orderBy(desc(chatSessions.lastMessageAt));
 

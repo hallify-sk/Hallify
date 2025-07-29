@@ -62,7 +62,7 @@
 		});
 
 		// Start polling for chat notifications if user is admin
-		if (permission?.name === 'admin') {
+		if (checkPathPermission('/admin/chat', permission) || checkPathPermission('/admin/chat/create', permission)) {
 			// Initial load
 			startAdminChatPolling();
 			// Set up polling every 10 seconds
