@@ -170,84 +170,103 @@ function formatTime(dateString: string) {
 			<Icon scale="small">
 				<Chat />
 			</Icon>
-			Chat with us
+			Napíšte nám
 		</div>
 	</Button>
 </div>
 
 <Dialog bind:open>
 	{#snippet header()}
-		💬 Chat Support
+		💬 Chat podpora
 	{/snippet}
 	
-	<div class="flex flex-col h-96 w-80 bg-background-1 rounded shadow-lg border border-border-main">
+	<div class="flex flex-col h-[500px] w-[420px] bg-background-1 rounded shadow-lg border border-border-main">
 		{#if !sessionId}
 			<!-- Initial chat form -->
 			<div class="p-4 border-b border-border-main">
-				<p class="text-text-main text-sm mb-3">Hi! How can we help you today?</p>
+				<p class="text-text-main text-sm mb-3">Ahoj! Ako vám môžeme pomôcť?</p>
 			</div>
 			<div class="flex-1 p-4">
-				<form class="flex flex-col gap-3" on:submit|preventDefault={startChat}>
+				<form class="flex flex-col gap-4" on:submit|preventDefault={startChat}>
 					<textarea 
 						class="w-full rounded border border-border-main px-3 py-2 bg-background-2 text-text-main text-sm resize-none" 
 						bind:value={newMessage} 
-						placeholder="Describe your question or issue..."
+						placeholder="Opíšte váš problém alebo otázku..."
 						rows="4"
 						required
 					></textarea>
 					<Button color="primary" type="submit">
-						Start Chat
+						Začať chat
 					</Button>
 				</form>
 			</div>
 		{:else}
 			<!-- Chat interface -->
-			<div class="flex-1 overflow-y-auto p-3 space-y-3">
+			<div class="flex-1 overflow-y-auto p-4 space-y-4">
 				{#each messages as msg}
-					<div class="flex {msg.senderType === 'guest' ? 'justify-end' : 'justify-start'}">
-						<div class="px-3 py-2 rounded-lg max-w-xs text-sm {
-							msg.senderType === 'guest' 
-								? 'bg-primary text-white' 
-								: msg.senderType === 'admin'
-								? 'bg-secondary text-white'
-								: 'bg-background-4 text-text-main border border-border-main'
-						}">
-							<div>{msg.message}</div>
-							<div class="text-xs opacity-70 mt-1">{formatTime(msg.createdAt)}</div>
+					<div class="flex {msg.senderType === 'guest' || msg.senderType === 'user' ? 'justify-end' : 'justify-start'}">
+						<div class="flex flex-col max-w-xs">
+							<!-- Message Bubble -->
+							<div class="px-4 py-3 rounded-lg text-sm {
+								msg.senderType === 'guest' || msg.senderType === 'user'
+									? 'bg-primary text-white rounded-br-sm' 
+									: msg.senderType === 'admin'
+									? 'bg-secondary text-white rounded-bl-sm'
+									: 'bg-background-4 text-text-main border border-border-main rounded-bl-sm'
+							}">
+								<div class="whitespace-pre-wrap">{msg.message}</div>
+							</div>
+							
+							<!-- Message Meta with Author Info -->
+							<div class="flex items-center gap-2 mt-1 px-1 {msg.senderType === 'guest' || msg.senderType === 'user' ? 'justify-end' : 'justify-start'}">
+								{#if msg.senderType === 'admin'}
+									<span class="text-xs text-blue-600 font-medium">ADMIN</span>
+									{#if msg.senderFirstName && msg.senderLastName}
+										<span class="text-xs text-text-2">•</span>
+										<span class="text-xs text-text-2">{msg.senderFirstName} {msg.senderLastName}</span>
+									{/if}
+								{:else}
+									<span class="text-xs text-text-2">
+										{msg.senderType === 'user' ? 'Vy' : 'Vy'}
+									</span>
+								{/if}
+								<span class="text-xs text-text-2">•</span>
+								<span class="text-xs text-text-2">{formatTime(msg.createdAt)}</span>
+							</div>
 						</div>
 					</div>
 				{/each}
 				
 				{#if sessionStatus === 'closed'}
-					<div class="bg-yellow-50 border border-yellow-200 rounded-lg p-3 text-center">
-						<div class="text-yellow-800 text-sm font-medium mb-1">Chat Session Closed</div>
-						<div class="text-yellow-700 text-xs">This conversation was closed by an admin. You can send a new message to reopen it.</div>
+					<div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4 text-center">
+						<div class="text-yellow-800 text-sm font-medium mb-1">Chat ukončený</div>
+						<div class="text-yellow-700 text-xs">Túto konverzáciu ukončil admin. Môžete odoslať novú správu a znovu ju otvoriť.</div>
 					</div>
 				{:else if messages.length === 0}
 					<div class="text-center text-text-1 py-8">
-						<p>Send a message to start the conversation!</p>
+						<p>Odošlite správu pre začatie konverzácie!</p>
 					</div>
 				{:else if messages.length > 0 && !messages.some(m => m.senderType === 'admin')}
 					<div class="text-center text-text-1 py-4">
-						<p class="text-xs">An admin will respond shortly.</p>
+						<p class="text-xs">Admin vám čoskoro odpovie.</p>
 					</div>
 				{/if}
 			</div>
 			
-			<div class="border-t border-border-main p-3">
+			<div class="border-t border-border-main p-4">
 				{#if sessionStatus === 'closed'}
-					<div class="text-center text-text-1 text-xs mb-2">
-						Send a message to reopen this conversation
+					<div class="text-center text-text-1 text-xs mb-3">
+						Odošlite správu pre znovuotvorenie konverzácie
 					</div>
 				{/if}
-				<form class="flex gap-2" on:submit|preventDefault={sendMessage}>
+				<form class="flex gap-3" on:submit|preventDefault={sendMessage}>
 					<input 
 						class="flex-1 rounded border border-border-main px-3 py-2 bg-background-2 text-text-main text-sm" 
 						bind:value={newMessage} 
-						placeholder={sessionStatus === 'closed' ? 'Type to reopen chat...' : 'Type your message...'} 
+						placeholder={sessionStatus === 'closed' ? 'Napíšte pre znovuotvorenie...' : 'Napíšte správu...'} 
 					/>
 					<Button color="primary" type="submit">
-						{sessionStatus === 'closed' ? 'Reopen' : 'Send'}
+						{sessionStatus === 'closed' ? 'Otvoriť' : 'Odoslať'}
 					</Button>
 				</form>
 			</div>

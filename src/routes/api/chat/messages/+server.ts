@@ -1,6 +1,6 @@
 import { json, type RequestEvent } from '@sveltejs/kit';
 import { db } from '$lib/server/db';
-import { chatMessages, chatSessions } from '$lib/server/schema';
+import { chatMessages, chatSessions, users } from '$lib/server/schema';
 import { eq, and, gt } from 'drizzle-orm';
 
 // Get messages for a session (with polling support)
@@ -25,7 +25,19 @@ export async function GET({ url }: RequestEvent) {
 			whereConditions.push(gt(chatMessages.createdAt, new Date(since)));
 		}
 
-		const messages = await db.select().from(chatMessages)
+		const messages = await db.select({
+			id: chatMessages.id,
+			sessionId: chatMessages.sessionId,
+			senderId: chatMessages.senderId,
+			senderType: chatMessages.senderType,
+			message: chatMessages.message,
+			isRead: chatMessages.isRead,
+			createdAt: chatMessages.createdAt,
+			senderFirstName: users.first_name,
+			senderLastName: users.last_name,
+			senderEmail: users.email
+		}).from(chatMessages)
+			.leftJoin(users, eq(chatMessages.senderId, users.id))
 			.where(and(...whereConditions))
 			.orderBy(chatMessages.createdAt);
 		
