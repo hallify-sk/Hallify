@@ -75,6 +75,11 @@
 				windowWidth = window.innerWidth;
 				windowHeight = window.innerHeight;
 				stageHandle.size({ width: windowWidth, height: windowHeight });
+				
+				// Re-center when window is resized
+				if (isInitialized) {
+					centerStage();
+				}
 			};
 			//Register things to be used by other plugins;
 			const attributes = stageHandle.attrs as StageAttrs;
@@ -93,6 +98,10 @@
 			if (tr && !isInitialized) {
 				registerWheelEvent(stageHandle);
 				registerPlugin(brushes, stageHandle, 'brushes');
+				
+				// Center the stage on initial load
+				centerStage();
+				
 				isInitialized = true;
 			}
 		}
@@ -125,12 +134,36 @@
 		};
 	}
 
+	function centerStage() {
+		if (!stage?.node) return;
+		
+		const stageHandle = stage.node;
+		const scale = stageHandle.scaleX() || 1;
+		
+		// Calculate center position
+		const centerX = (windowWidth - gridWidth * gridSize * scale) / 2;
+		const centerY = (windowHeight - gridHeight * gridSize * scale) / 2;
+		
+		// Set the stage position to center the grid
+		stageHandle.position({
+			x: centerX,
+			y: centerY
+		});
+		
+		stageHandle.draw();
+	}
+
 	$effect(() => {
 		if (gridWidth || gridHeight) {
 			gridData.set({
 				width: gridWidth,
 				height: gridHeight
 			});
+			
+			// Re-center when grid dimensions change
+			if (isInitialized) {
+				centerStage();
+			}
 		}
 	});
 
