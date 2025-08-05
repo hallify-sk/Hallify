@@ -322,8 +322,8 @@
 </script>
 
 <svelte:head><title>Chat Management | Hallify Admin</title></svelte:head>
-<div class="bg-background-main">
-<div class="flex flex-col w-full gap-4 mx-auto max-w-7xl py-6">
+<div class="w-full min-h-screen px-4 py-6 bg-background-main md:px-24">
+<div class="flex flex-col w-full gap-4 mx-auto max-w-7xl">
 	<!-- Header -->
 	<div class="flex items-center justify-between w-full">
 		<div class="flex items-center gap-4">
@@ -366,14 +366,14 @@
 	</div>
 </div>
 <!-- Main Content Area with Two Columns -->
-<div class="flex w-full h-[calc(100vh-280px)] mx-auto max-w-7xl gap-4 mt-6">
+<div class="flex flex-col lg:flex-row w-full h-fit mx-auto max-w-7xl gap-4 mt-6">
 	<!-- Left Column: Sessions List -->
-	<div class="w-1/4 min-w-[320px]">
+	<div class="w-full lg:w-1/4 lg:min-w-[320px] h-64 lg:h-full">
 		<div
 			class="relative w-full h-full overflow-hidden border rounded border-border-main/30 bg-background-1"
 		>
 			<div class="sticky top-0 p-4 border-b border-border-main/30 bg-background-1">
-				<h2 class="text-text-main">Aktívne chat konverzácie</h2>
+				<h2 class="text-text-main font-medium">Aktívne chat konverzácie</h2>
 			</div>
 			{#if sessions.length === 0}
 				<div class="flex items-center justify-center h-32">
@@ -436,12 +436,12 @@
 	</div>
 
 	<!-- Right Column: Chat Interface -->
-	<div class="flex-1">
+	<div class="flex-1 h-full lg:h-auto">
 		{#if selectedSession}
 			<div class="flex flex-col h-full bg-background-1 rounded border border-border-main">
 				<!-- Session Info Header -->
 				<div class="border-b border-border-main/30 p-3 bg-background-2">
-					<div class="grid grid-cols-2 gap-3 text-sm">
+					<div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
 						<div>
 							<p class="text-text-1 text-xs uppercase mb-1">Používateľ</p>
 							<p class="text-text-main font-medium">{getDisplayName(selectedSession)}</p>
@@ -494,97 +494,97 @@
 				<div class="flex-1 flex overflow-hidden">
 					<!-- Messages Container -->
 					<div class="flex-1 flex flex-col">
-						<div class="flex-1 overflow-y-auto p-4 space-y-4" bind:this={messagesContainer}>
+						<div class="flex-1 overflow-y-auto bg-background-2 p-4 space-y-4" bind:this={messagesContainer}>
 							{#if messages.length === 0}
 								<div class="text-center py-12">
-									<Icon scale="big">
-										<Chat />
-									</Icon>
-									<p class="text-text-1 mt-2">Zatiaľ žiadne správy</p>
+									<div class="w-16 h-16 bg-primary-1 rounded border border-primary-2/30 flex items-center justify-center mx-auto mb-4">
+										<Icon scale="big">
+											<Chat />
+										</Icon>
+									</div>
+									<h4 class="font-medium text-text-main mb-2">Zatiaľ žiadne správy</h4>
 									<p class="text-text-2 text-sm">Buďte prvý, kto odpovedá klientovi</p>
 								</div>
 							{:else}
 								{#each messages as msg}
 									<div class="flex {msg.senderType === 'admin' ? 'justify-end' : 'justify-start'}">
-										<div class="flex flex-col max-w-sm">
+										<div class="flex flex-col">
 											<!-- Message Bubble -->
-											<div
-												class="px-4 py-3 rounded-lg text-sm {msg.senderType === 'admin'
-													? 'bg-primary text-white rounded-br-sm'
+											<div class="px-4 py-3 rounded text-sm border {
+												msg.senderType === 'admin'
+													? 'bg-primary text-white border-primary-4/30 rounded-br-sm'
 													: msg.senderType === 'user'
-														? 'bg-secondary text-white rounded-bl-sm'
-														: 'bg-background-4 text-text-main border border-border-main rounded-bl-sm'}"
-											>
-												<div class="whitespace-pre-wrap">{msg.message}</div>
+														? 'bg-background-1 text-text-main border-border-main/30 rounded-bl-sm'
+														: 'bg-background-1 text-text-main border-border-main/30 rounded-bl-sm'
+											}">
+												<div class="whitespace-pre-wrap leading-relaxed">{msg.message}</div>
 											</div>
 
 											<!-- Message Meta with Author and Admin Badge -->
-											<div
-												class="flex items-center gap-2 mt-1 px-1 {msg.senderType === 'admin'
-													? 'justify-end'
-													: 'justify-start'}"
-											>
+											<div class="flex items-center gap-2 mt-1 px-2 {msg.senderType === 'admin' ? 'justify-end' : 'justify-start'}">
 												{#if msg.senderType === 'admin'}
-													<span class="text-xs text-blue-600 font-medium">ADMIN</span>
-													{#if msg.senderFirstName && msg.senderLastName}
-														<span class="text-xs text-text-2">•</span>
-														<span class="text-xs text-text-2"
-															>{msg.senderFirstName} {msg.senderLastName}</span
-														>
-													{/if}
+													<div class="flex items-center gap-1">
+														<div class="w-2 h-2 bg-success rounded-full"></div>
+														<span class="text-xs text-primary font-medium">ADMIN</span>
+														{#if msg.senderFirstName && msg.senderLastName}
+															<span class="text-xs text-text-1">•</span>
+															<span class="text-xs text-text-2">{msg.senderFirstName} {msg.senderLastName}</span>
+														{/if}
+													</div>
 												{:else}
-													<span class="text-xs text-text-2">
+													<span class="text-xs text-text-1">
 														{msg.senderType === 'user' ? 'Používateľ' : 'Hosť'}
 													</span>
 												{/if}
-												<span class="text-xs text-text-2">•</span>
-												<span class="text-xs text-text-2">{formatTime(msg.createdAt)}</span>
+												<span class="text-xs text-text-1">•</span>
+												<span class="text-xs text-text-1">{formatTime(msg.createdAt)}</span>
 												{#if msg.senderType !== 'admin' && msg.isRead}
-													<span class="text-xs text-text-2">• Prečítané</span>
+													<span class="text-xs text-text-1">• Prečítané</span>
 												{/if}
 											</div>
 										</div>
 									</div>
 								{/each}
+								
+								{#if messages.length > 0 && !messages.some(m => m.senderType === 'admin')}
+									<div class="bg-primary-1 border border-primary-2/30 rounded p-4">
+										<div class="flex items-center gap-3">
+											<div class="flex space-x-1">
+												<div class="w-2 h-2 bg-primary rounded-full animate-pulse"></div>
+												<div class="w-2 h-2 bg-primary rounded-full animate-pulse" style="animation-delay: 0.2s"></div>
+												<div class="w-2 h-2 bg-primary rounded-full animate-pulse" style="animation-delay: 0.4s"></div>
+											</div>
+											<p class="text-text-main text-sm font-medium">Čaká na odpoveď od administrátora...</p>
+										</div>
+									</div>
+								{/if}
 							{/if}
 						</div>
 
 						<!-- Input Area -->
-						<div class="border-t border-border-main/30 bg-background-1">
-							<form class="p-4" on:submit|preventDefault={sendMessage}>
-								<div class="flex gap-3">
-									<textarea
-										class="flex-1 rounded border border-border-main px-3 py-2 bg-background-2 text-text-main text-sm resize-none min-h-[60px] max-h-[120px]"
-										bind:value={newMessage}
-										placeholder="Napíšte odpoveď klientovi..."
-										rows="2"
-										on:input={(e) => {
-											const target = e.target as HTMLTextAreaElement;
-											if (target) {
-												target.style.height = 'auto';
-												target.style.height = Math.min(target.scrollHeight, 120) + 'px';
-											}
-										}}
-										on:keydown={(e) => {
-											if (e.key === 'Enter' && !e.shiftKey) {
-												e.preventDefault();
-												sendMessage();
-											}
-										}}
-									></textarea>
-									<div class="flex flex-col gap-2">
-										<Button color="primary" type="submit" disabled={!newMessage.trim()}>
-											<Icon scale="small">
-												<ArrowRight />
-											</Icon>
-										</Button>
-									</div>
+						<div class="bg-background-1 border-t border-border-main/30 p-4">
+							<form class="flex gap-3 mb-4" on:submit|preventDefault={sendMessage}>
+								<div class="flex-1 relative">
+									<input 
+										class="w-full rounded border border-border-main/30 px-4 py-3 bg-background-2 text-text-main text-sm focus:ring-2 focus:ring-primary focus:border-primary transition-all duration-150 pr-12" 
+										bind:value={newMessage} 
+										placeholder="Napíšte odpoveď klientovi..." 
+									/>
+									<button
+										type="submit"
+										disabled={!newMessage.trim()}
+										class="absolute right-2 top-1/2 transform -translate-y-1/2 w-8 h-8 bg-primary hover:bg-primary-2 disabled:bg-text-1 text-white rounded border border-primary-4/30 flex items-center justify-center transition-colors duration-150"
+									>
+										<Icon scale="small">
+											<ArrowRight />
+										</Icon>
+									</button>
 								</div>
 							</form>
 
 							<!-- Action Buttons -->
-							<div class="flex justify-between items-center px-4 pb-4">
-								<div class="flex gap-2">
+							<div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 px-4 pb-4">
+								<div class="flex flex-wrap gap-2">
 									<Button color="warning" onclick={() => closeSession(selectedSession.id)}>
 										<Icon scale="small">
 											<Cross />
@@ -615,7 +615,7 @@
 
 					<!-- Template Responses Sidebar -->
 					{#if templateSidebarVisible}
-						<div class="w-64 border-l border-border-main/30 bg-background-2">
+						<div class="w-64 lg:w-64 md:w-56 sm:w-48 border-l border-border-main/30 bg-background-2">
 							<div class="p-4 border-b border-border-main/30">
 								<div class="flex items-center justify-between">
 									<h3 class="text-text-main font-medium">Šablóny odpovedí</h3>
@@ -673,16 +673,19 @@
 				class="flex items-center justify-center h-full bg-background-1 rounded border border-border-main/30"
 			>
 				<div class="text-center">
-					<Icon scale="big" class="mx-auto mb-4 text-text-2">
-						<Chat />
-					</Icon>
-					<p class="text-text-1 text-lg mb-2">Vyberte konverzáciu</p>
-					<p class="text-text-2">Kliknite na konverzáciu v ľavom paneli pre začatie chatu</p>
+					<div class="w-16 h-16 bg-primary-1 rounded border border-primary-2/30 flex items-center justify-center mx-auto mb-4">
+						<Icon scale="big">
+							<Chat />
+						</Icon>
+					</div>
+					<h4 class="font-medium text-text-main mb-2">Vyberte konverzáciu</h4>
+					<p class="text-text-2 text-sm">Kliknite na konverzáciu v ľavom paneli pre začatie chatu</p>
 				</div>
 			</div>
 		{/if}
 	</div>
-</div></div>
+</div>
+</div>
 <!-- Template Creation Dialog -->
 <Dialog bind:open={templateDialogOpen}>
 	{#snippet header()}
