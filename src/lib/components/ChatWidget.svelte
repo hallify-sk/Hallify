@@ -5,6 +5,8 @@ import Button from './Button.svelte';
 import Dialog from './Dialog.svelte';
 import Chat from '$lib/icons/Chat.svelte';
 import Cross from '$lib/icons/Cross.svelte';
+import Check from '$lib/icons/Check.svelte';
+import ArrowRight from '$lib/icons/ArrowRight.svelte';
 import Icon from '$lib/icons/Icon.svelte';
 
 let open = false;
@@ -176,6 +178,21 @@ function startPolling() {
 	}, 3000);
 }
 
+function handleProceedToMessage(e: Event) {
+	e.preventDefault();
+	proceedToMessage();
+}
+
+function handleStartChat(e: Event) {
+	e.preventDefault();
+	startChat();
+}
+
+function handleSendMessage(e: Event) {
+	e.preventDefault();
+	sendMessage();
+}
+
 function formatTime(dateString: string) {
 	return new Date(dateString).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
@@ -239,166 +256,245 @@ async function closeChat() {
 
 <!-- Floating Chat Button -->
 <div class="fixed bottom-6 right-6 z-50">
-	<Button color="primary" onclick={() => { 
-		open = true; 
-		if (sessionId && chatStep === 'chat') {
-			startPolling(); 
-		}
-	}}>
-		<div class="flex items-center gap-2">
+	<button
+		class="group bg-primary hover:bg-primary-2 text-white px-6 py-4 rounded border border-primary-4/30 shadow-lg hover:shadow-xl transition-all duration-150 transform hover:scale-105 flex items-center gap-3"
+		onclick={() => { 
+			open = true; 
+			if (sessionId && chatStep === 'chat') {
+				startPolling(); 
+			}
+		}}
+	>
+		<div class="relative">
 			<Icon scale="small">
 				<Chat />
 			</Icon>
-			Napíšte nám
+			{#if messages.some(m => m.senderType === 'admin' && !m.isRead)}
+				<div class="absolute -top-1 -right-1 w-3 h-3 bg-danger rounded-full animate-pulse"></div>
+			{/if}
 		</div>
-	</Button>
+		<span class="font-medium">Napíšte nám</span>
+	</button>
 </div>
 
 <Dialog bind:open>
 	{#snippet header()}
-		💬 Chat podpora
+		<div class="flex items-center gap-2">
+			<Icon scale="small">
+				<Chat />
+			</Icon>
+			<p class="text-text-main">Chat podpora</p>
+		</div>
 	{/snippet}
 	
-	<div class="flex flex-col h-[500px] w-[420px] bg-background-1 rounded shadow-lg border border-border-main">
+	<div class="flex flex-col h-[600px] bg-background-1 rounded border border-border-main/30 overflow-hidden">
 		{#if chatStep === 'subject'}
 			<!-- Subject input step -->
-			<div class="p-4 border-b border-border-main">
-				<p class="text-text-main text-sm mb-3">Ahoj! Aký je predmet vašej otázky?</p>
+			<div class="p-6 bg-background-2 border-b border-border-main/30">
+				<div class="flex items-start gap-3">
+					<div class="w-8 h-8 bg-primary-1 rounded border border-primary-2/30 flex items-center justify-center flex-shrink-0 mt-1">
+						<Icon scale="small">
+							<Chat />
+						</Icon>
+					</div>
+					<div>
+						<h4 class="font-medium text-text-main mb-1">Vitajte v našej podpore!</h4>
+						<p class="text-text-2 text-sm">Aký je predmet vašej otázky?</p>
+					</div>
+				</div>
 			</div>
-			<div class="flex-1 p-4">
-				<form class="flex flex-col gap-4" on:submit|preventDefault={proceedToMessage}>
-					<input 
-						type="text"
-						class="w-full rounded border border-border-main px-3 py-2 bg-background-2 text-text-main text-sm" 
-						bind:value={subject} 
-						placeholder="napr. Technická podpora, Otázka k objednávke..."
-						required
-					/>
+			<div class="flex-1 p-6">
+				<form class="space-y-4" onsubmit={handleProceedToMessage}>
+					<div>
+						<label for="subject-input" class="block text-sm font-medium text-text-main mb-2">Predmet</label>
+						<input 
+							id="subject-input"
+							type="text"
+							class="w-full rounded border border-border-main/30 px-4 py-3 bg-background-1 text-text-main text-sm focus:ring-2 focus:ring-primary focus:border-primary transition-all duration-150" 
+							bind:value={subject} 
+							placeholder="napr. Technická podpora, Otázka k objednávke..."
+							required
+						/>
+					</div>
 					<Button color="primary" type="submit" disabled={!subject.trim()}>
-						Pokračovať
+						<span class="font-medium">Pokračovať</span>
 					</Button>
 				</form>
 			</div>
 		{:else if chatStep === 'message'}
 			<!-- Message input step -->
-			<div class="p-4 border-b border-border-main">
-				<p class="text-text-main text-sm mb-1">Predmet: <strong>{subject}</strong></p>
-				<p class="text-text-2 text-xs mb-3">Opíšte vašu otázku alebo problém:</p>
+			<div class="p-6 bg-background-2 border-b border-border-main/30">
+				<div class="flex items-start gap-3">
+					<div class="w-8 h-8 bg-success-1 rounded border border-success-2/30 flex items-center justify-center flex-shrink-0">
+						<Icon scale="small">
+							<Check />
+						</Icon>
+					</div>
+					<div>
+						<h4 class="font-medium text-text-main mb-1">Predmet: <span class="text-primary">{subject}</span></h4>
+						<p class="text-text-2 text-sm">Teraz opíšte vašu otázku alebo problém:</p>
+					</div>
+				</div>
 			</div>
-			<div class="flex-1 p-4">
-				<form class="flex flex-col gap-4" on:submit|preventDefault={startChat}>
-					<textarea 
-						class="w-full rounded border border-border-main px-3 py-2 bg-background-2 text-text-main text-sm resize-none" 
-						bind:value={newMessage} 
-						placeholder="Opíšte váš problém alebo otázku podrobne..."
-						rows="4"
-						required
-					></textarea>
-					<div class="flex gap-2">
+			<div class="flex-1 p-6">
+				<form class="space-y-4" onsubmit={handleStartChat}>
+					<div>
+						<label for="message-input" class="block text-sm font-medium text-text-main mb-2">Vaša správa</label>
+						<textarea 
+							id="message-input"
+							class="w-full rounded border border-border-main/30 px-4 py-3 bg-background-1 text-text-main text-sm focus:ring-2 focus:ring-primary focus:border-primary transition-all duration-150 resize-none" 
+							bind:value={newMessage} 
+							placeholder="Opíšte váš problém alebo otázku podrobne..."
+							rows="5"
+							required
+						></textarea>
+					</div>
+					<div class="flex gap-3">
 						<Button color="secondary" onclick={() => chatStep = 'subject'}>
 							Späť
 						</Button>
 						<Button color="primary" type="submit" disabled={!newMessage.trim()}>
-							Začať chat
+							<span class="font-medium">Začať chat</span>
 						</Button>
 					</div>
 				</form>
 			</div>
 		{:else if chatStep === 'closed-options'}
 			<!-- Closed chat options -->
-			<div class="p-4 border-b border-border-main">
-				<p class="text-text-main text-sm mb-3">
-					{#if closedByClient}
-						Váš chat bol ukončený.
-					{:else}
-						Vaša konverzácia bola ukončená adminom.
-					{/if}
-				</p>
+			<div class="p-6 bg-warning-1 border-b border-warning-2/30">
+				<div class="flex items-start gap-3">
+					<div class="w-8 h-8 bg-warning-2 rounded border border-warning-4/30 flex items-center justify-center flex-shrink-0">
+						<Icon scale="small">
+							<Cross />
+						</Icon>
+					</div>
+					<div>
+						<h4 class="font-medium text-text-main mb-1">Chat ukončený</h4>
+						<p class="text-text-2 text-sm">
+							{#if closedByClient}
+								Váš chat bol úspešne ukončený.
+							{:else}
+								Vaša konverzácia bola ukončená adminom.
+							{/if}
+						</p>
+					</div>
+				</div>
 			</div>
-			<div class="flex-1 p-4">
-				<div class="flex flex-col gap-4">
-					<div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-						<div class="text-yellow-800 text-sm font-medium mb-2">Chat ukončený</div>
-						<div class="text-yellow-700 text-xs mb-3">Čo by ste chceli robiť ďalej?</div>
+			<div class="flex-1 p-6">
+				<div class="space-y-4">
+					<div class="bg-primary-1 border border-primary-2/30 rounded p-4">
+						<div class="text-text-main text-sm font-medium mb-2">Čo by ste chceli robiť ďalej?</div>
+						<div class="text-text-2 text-xs">Môžete začať novú konverzáciu alebo pokračovať v predchádzajúcej.</div>
 					</div>
 					
-					<Button color="primary" onclick={startNewChat}>
-						Začať nový chat
-					</Button>
-					
-					<Button color="secondary" onclick={reopenOldChat}>
-						Znovu otvoriť posledný chat
-					</Button>
+					<div class="space-y-3">
+						<Button color="primary" onclick={startNewChat}>
+							<span class="font-medium">Začať nový chat</span>
+						</Button>
+						
+						<Button color="secondary" onclick={reopenOldChat}>
+							Znovu otvoriť posledný chat
+						</Button>
+					</div>
 				</div>
 			</div>
 		{:else if chatStep === 'chat'}
 			<!-- Active chat interface -->
-			<div class="flex-1 overflow-y-auto p-4 space-y-4">
-				{#each messages as msg}
-					<div class="flex {msg.senderType === 'guest' || msg.senderType === 'user' ? 'justify-end' : 'justify-start'}">
-						<div class="flex flex-col max-w-xs">
-							<!-- Message Bubble -->
-							<div class="px-4 py-3 rounded-lg text-sm {
-								msg.senderType === 'guest' || msg.senderType === 'user'
-									? 'bg-primary text-white rounded-br-sm' 
-									: msg.senderType === 'admin'
-									? 'bg-secondary text-white rounded-bl-sm'
-									: 'bg-background-4 text-text-main border border-border-main rounded-bl-sm'
-							}">
-								<div class="whitespace-pre-wrap">{msg.message}</div>
-							</div>
-							
-							<!-- Message Meta with Author Info -->
-							<div class="flex items-center gap-2 mt-1 px-1 {msg.senderType === 'guest' || msg.senderType === 'user' ? 'justify-end' : 'justify-start'}">
-								{#if msg.senderType === 'admin'}
-									<span class="text-xs text-blue-600 font-medium">ADMIN</span>
-									{#if msg.senderFirstName && msg.senderLastName}
-										<span class="text-xs text-text-2">•</span>
-										<span class="text-xs text-text-2">{msg.senderFirstName} {msg.senderLastName}</span>
+			<div class="flex-1 overflow-y-auto bg-background-2">
+				<!-- Chat messages -->
+				<div class="p-4 space-y-4">
+					{#each messages as msg}
+						<div class="flex {msg.senderType === 'guest' || msg.senderType === 'user' ? 'justify-end' : 'justify-start'}">
+							<div class="flex flex-col">
+								<!-- Message Bubble -->
+								<div class="px-4 py-3 rounded text-sm border {
+									msg.senderType === 'guest' || msg.senderType === 'user'
+										? 'bg-primary text-white border-primary-4/30 rounded-br-sm' 
+										: msg.senderType === 'admin'
+										? 'bg-background-1 text-text-main border-border-main/30 rounded-bl-sm'
+										: 'bg-background-4 text-text-main border-border-main/30 rounded-bl-sm'
+								}">
+									<div class="whitespace-pre-wrap leading-relaxed">{msg.message}</div>
+								</div>
+								
+								<!-- Message Meta with Author Info -->
+								<div class="flex items-center gap-2 mt-1 px-2 {msg.senderType === 'guest' || msg.senderType === 'user' ? 'justify-end' : 'justify-start'}">
+									{#if msg.senderType === 'admin'}
+										<div class="flex items-center gap-1">
+											<div class="w-2 h-2 bg-success rounded-full"></div>
+											<span class="text-xs text-primary font-medium">ADMIN</span>
+											{#if msg.senderFirstName && msg.senderLastName}
+												<span class="text-xs text-text-1">•</span>
+												<span class="text-xs text-text-2">{msg.senderFirstName} {msg.senderLastName}</span>
+											{/if}
+										</div>
+									{:else}
+										<span class="text-xs text-text-1">Vy</span>
 									{/if}
-								{:else}
-									<span class="text-xs text-text-2">
-										{msg.senderType === 'user' ? 'Vy' : 'Vy'}
-									</span>
-								{/if}
-								<span class="text-xs text-text-2">•</span>
-								<span class="text-xs text-text-2">{formatTime(msg.createdAt)}</span>
+									<span class="text-xs text-text-1">•</span>
+									<span class="text-xs text-text-1">{formatTime(msg.createdAt)}</span>
+								</div>
 							</div>
 						</div>
-					</div>
-				{/each}
-				
-				{#if messages.length === 0}
-					<div class="text-center text-text-1 py-8">
-						<p>Odošlite správu pre začatie konverzácie!</p>
-					</div>
-				{:else if messages.length > 0 && !messages.some(m => m.senderType === 'admin')}
-					<div class="text-center text-text-1 py-4">
-						<p class="text-xs">Admin vám čoskoro odpovie.</p>
-					</div>
-				{/if}
+					{/each}
+					
+					{#if messages.length === 0}
+						<div class="text-center py-12">
+							<div class="w-16 h-16 bg-primary-1 rounded border border-primary-2/30 flex items-center justify-center mx-auto mb-4">
+								<Icon scale="big">
+									<Chat />
+								</Icon>
+							</div>
+							<h4 class="font-medium text-text-main mb-2">Začnite konverzáciu</h4>
+							<p class="text-text-2 text-sm">Odošlite správu a naši operátori vám čoskoro odpovedia!</p>
+						</div>
+					{:else if messages.length > 0 && !messages.some(m => m.senderType === 'admin')}
+						<div class="bg-primary-1 border border-primary-2/30 rounded p-4 mx-4">
+							<div class="flex items-center gap-3">
+								<div class="flex space-x-1">
+									<div class="w-2 h-2 bg-primary rounded-full animate-pulse"></div>
+									<div class="w-2 h-2 bg-primary rounded-full animate-pulse" style="animation-delay: 0.2s"></div>
+									<div class="w-2 h-2 bg-primary rounded-full animate-pulse" style="animation-delay: 0.4s"></div>
+								</div>
+								<p class="text-text-main text-sm font-medium">Admin vám čoskoro odpovie...</p>
+							</div>
+						</div>
+					{/if}
+				</div>
 			</div>
 			
-			<div class="border-t border-border-main p-4">
-				<form class="flex gap-3 mb-3" on:submit|preventDefault={sendMessage}>
-					<input 
-						class="flex-1 rounded border border-border-main px-3 py-2 bg-background-2 text-text-main text-sm" 
-						bind:value={newMessage} 
-						placeholder="Napíšte správu..." 
-					/>
-					<Button color="primary" type="submit" disabled={!newMessage.trim()}>
-						Odoslať
-					</Button>
+			<!-- Message input area -->
+			<div class="bg-background-1 border-t border-border-main/30 p-4">
+				<form class="flex gap-3 mb-4" onsubmit={handleSendMessage}>
+					<div class="flex-1 relative">
+						<input 
+							class="w-full rounded border border-border-main/30 px-4 py-3 bg-background-2 text-text-main text-sm focus:ring-2 focus:ring-primary focus:border-primary transition-all duration-150 pr-12" 
+							bind:value={newMessage} 
+							placeholder="Napíšte správu..." 
+						/>
+						<button
+							type="submit"
+							disabled={!newMessage.trim()}
+							class="absolute right-2 top-1/2 transform -translate-y-1/2 w-8 h-8 bg-primary hover:bg-primary-2 disabled:bg-text-1 text-white rounded border border-primary-4/30 flex items-center justify-center transition-colors duration-150"
+						>
+							<Icon scale="small">
+								<ArrowRight />
+							</Icon>
+						</button>
+					</div>
 				</form>
 				
 				<!-- Close chat button -->
 				<div class="flex justify-center">
-					<Button color="warning" onclick={closeChat}>
+					<button
+						onclick={closeChat}
+						class="flex items-center gap-2 px-4 py-2 text-danger hover:text-danger-2 hover:bg-danger-1 rounded border border-transparent hover:border-danger-2/30 transition-all duration-150 text-sm"
+					>
 						<Icon scale="small">
 							<Cross />
 						</Icon>
-						Ukončiť chat
-					</Button>
+						<span>Ukončiť chat</span>
+					</button>
 				</div>
 			</div>
 		{/if}
