@@ -25,6 +25,10 @@
 	let templateDialogOpen = false;
 	let newTemplate = { name: '', content: '' };
 	let templateSidebarVisible = true;
+	let activeTab: 'active' | 'closed' = 'active';
+	let closedSessions: any[] = [];
+	let selectedClosedSession: any = null;
+	let closedMessages: any[] = [];
 
 	// Template responses with variable support
 	let templates = [
@@ -65,11 +69,24 @@
 
 	onMount(() => {
 		pollSessions();
+		loadClosedSessions();
 	});
 
 	onDestroy(() => {
 		clearInterval(polling);
 	});
+
+	async function loadClosedSessions() {
+		try {
+			const response = await fetch('/api/chat/sessions?status=closed');
+			if (response.ok) {
+				const data = await response.json();
+				closedSessions = data;
+			}
+		} catch (error) {
+			console.error('Error loading closed sessions:', error);
+		}
+	}
 
 	async function pollSessions() {
 		// Poll for new sessions every 5 seconds
@@ -116,6 +133,7 @@
 
 	async function selectSession(session: any) {
 		selectedSession = { ...session }; // Create a copy to prevent reference issues
+		selectedClosedSession = null; // Clear closed session selection
 		await loadMessages();
 		// Mark messages as read when admin opens the chat
 		await markMessagesAsRead(session.id);
@@ -127,6 +145,31 @@
 				messagesContainer.scrollTop = messagesContainer.scrollHeight;
 			}
 		}, 150);
+	}
+
+	async function selectClosedSession(session: any) {
+		selectedClosedSession = { ...session };
+		selectedSession = null; // Clear active session selection
+		await loadClosedMessages(session.id);
+		
+		// Scroll to bottom after loading messages
+		setTimeout(() => {
+			if (messagesContainer) {
+				messagesContainer.scrollTop = messagesContainer.scrollHeight;
+			}
+		}, 150);
+	}
+
+	async function loadClosedMessages(sessionId: string) {
+		try {
+			const response = await fetch(`/api/chat/messages?sessionId=${sessionId}`);
+			if (response.ok) {
+				const data = await response.json();
+				closedMessages = data.messages;
+			}
+		} catch (error) {
+			console.error('Error loading closed messages:', error);
+		}
 	}
 
 	async function markMessagesAsRead(sessionId: string) {
@@ -290,32 +333,54 @@
 	}
 
 	function getDisplayName(session: any) {
+		if (session.userFirstName && session.userLastName) {
+			return `${session.userFirstName} ${session.userLastName}`;
+		}else if( session.userEmail) {
+			return session.userEmail;
+		}
+		
+		return `Hosť ${session.guestIdentifier.slice(-6)}`;
+	}
+
+	function getTemplateName(session: any) {
+		// For templates, prioritize first/last name over email
+		if (session.userFirstName || session.userLastName) {
+			const firstName = session.userFirstName || '';
+			const lastName = session.userLastName || '';
+			return `${firstName} ${lastName}`.trim();
+		}
+		
+		// If no name available but has email, use email
 		if (session.userEmail) {
 			return session.userEmail;
 		}
+		
+		// For guests, use a friendly guest identifier
 		return `Hosť ${session.guestIdentifier.slice(-6)}`;
 	}
 
 	function insertTemplate(template: any) {
-		const displayName = getDisplayName(selectedSession);
+		const templateName = getTemplateName(selectedSession || selectedClosedSession);
 		let templateContent = template.content;
 
 		// Replace variables
-		templateContent = templateContent.replace(/\{\{name\}\}/g, displayName);
+		templateContent = templateContent.replace(/\{\{name\}\}/g, templateName);
 		templateContent = templateContent.replace(
 			/\{\{email\}\}/g,
-			selectedSession.userEmail || 'neuvedený'
+			(selectedSession || selectedClosedSession).userEmail || 'neuvedený'
 		);
 		templateContent = templateContent.replace(
 			/\{\{predmet\}\}/g,
-			selectedSession.subject || 'všeobecná podpora'
+			(selectedSession || selectedClosedSession).subject || 'všeobecná podpora'
 		);
 
-		// Add to current message
-		if (newMessage.trim()) {
-			newMessage += '\n\n' + templateContent;
-		} else {
-			newMessage = templateContent;
+		// Add to current message (only for active sessions)
+		if (selectedSession) {
+			if (newMessage.trim()) {
+				newMessage += '\n\n' + templateContent;
+			} else {
+				newMessage = templateContent;
+			}
 		}
 	}
 
@@ -399,89 +464,173 @@
 		<div
 			class="relative w-full h-full overflow-hidden border rounded border-border-main/30 bg-background-1"
 		>
-			<div class="sticky top-0 p-4 border-b border-border-main/30 bg-background-1">
-				<h2 class="text-text-main font-medium">Aktívne chat konverzácie</h2>
-			</div>
-			{#if sessions.length === 0}
-				<div class="flex items-center justify-center h-32">
-					<p class="text-text-1 text-lg">Žiadne aktívne chat konverzácie</p>
+			<!-- Tab Navigation -->
+			<div class="sticky top-0 border-b border-border-main/30 bg-background-1">
+				<div class="flex">
+					<button
+						class="flex-1 px-4 py-3 text-sm font-medium border-b-2 transition-colors {activeTab === 'active'
+							? 'text-primary border-primary bg-background-4'
+							: 'text-text-2 border-transparent hover:text-text-main'}"
+						on:click={() => (activeTab = 'active')}
+					>
+						Aktívne ({sessions.length})
+					</button>
+					<button
+						class="flex-1 px-4 py-3 text-sm font-medium border-b-2 transition-colors {activeTab === 'closed'
+							? 'text-primary border-primary bg-background-4'
+							: 'text-text-2 border-transparent hover:text-text-main'}"
+						on:click={() => {
+							activeTab = 'closed';
+							if (closedSessions.length === 0) loadClosedSessions();
+						}}
+					>
+						Uzavreté ({closedSessions.length})
+					</button>
 				</div>
-			{:else}
-				<div class="overflow-y-auto h-full">
-					{#each sessions as session}
-						<div
-							class="p-4 border-b border-border-main/30 cursor-pointer hover:bg-background-4 {selectedSession?.id ===
-							session.id
-								? 'bg-background-4 border-l-4 border-l-primary'
-								: ''}"
-							on:click={() => selectSession(session)}
-							role="button"
-							tabindex="0"
-							on:keydown={(e) => e.key === 'Enter' && selectSession(session)}
-						>
-							<div class="flex items-start justify-between">
-								<div class="flex-1 min-w-0">
-									<div class="flex items-center gap-2 mb-1">
-										<p class="font-medium text-text-main truncate">{getDisplayName(session)}</p>
-										{#if session.unreadCount > 0}
-											<span class="bg-danger text-white px-2 py-1 rounded-full text-xs">
-												{session.unreadCount}
-											</span>
-										{/if}
-									</div>
-									<p class="text-sm text-text-2 truncate">
-										{session.subject || 'Všeobecná podpora'}
-									</p>
-									<div class="flex items-center gap-2 mt-2">
-										<span
-											class="px-2 py-1 text-xs rounded {session.assignedAdminId
-												? 'text-blue-600 bg-blue-300/40'
-												: 'text-gray-600 bg-gray-300/40'}"
-										>
-											{#if session.assignedAdminId}
-												Priradené: {session.assignedAdminFirstName} {session.assignedAdminLastName}
-											{:else}
-												Nepriradené
+			</div>
+
+			<!-- Active Sessions -->
+			{#if activeTab === 'active'}
+				{#if sessions.length === 0}
+					<div class="flex items-center justify-center h-32">
+						<p class="text-text-1 text-lg">Žiadne aktívne chat konverzácie</p>
+					</div>
+				{:else}
+					<div class="overflow-y-auto h-full">
+						{#each sessions as session}
+							<div
+								class="p-4 border-b border-border-main/30 cursor-pointer hover:bg-background-4 {selectedSession?.id ===
+								session.id
+									? 'bg-background-4 border-l-4 border-l-primary'
+									: ''}"
+								on:click={() => selectSession(session)}
+								role="button"
+								tabindex="0"
+								on:keydown={(e) => e.key === 'Enter' && selectSession(session)}
+							>
+								<div class="flex items-start justify-between">
+									<div class="flex-1 min-w-0">
+										<div class="flex items-center gap-2 mb-1">
+											<p class="font-medium text-text-main truncate">{getDisplayName(session)}</p>
+											{#if session.unreadCount > 0}
+												<span class="bg-danger text-white px-2 py-1 rounded-full text-xs">
+													{session.unreadCount}
+												</span>
 											{/if}
-										</span>
-										<span class="text-xs text-text-2">
-											{session.lastMessageAt
-												? formatTime(session.lastMessageAt.toString())
-												: 'Nikdy'}
-										</span>
+										</div>
+										<p class="text-sm text-text-2 truncate">
+											{session.subject || 'Všeobecná podpora'}
+										</p>
+										<div class="flex items-center gap-2 mt-2">
+											<span
+												class="px-2 py-1 text-xs rounded {session.assignedAdminId
+													? 'text-blue-600 bg-blue-300/40'
+													: 'text-gray-600 bg-gray-300/40'}"
+											>
+												{#if session.assignedAdminId}
+													Priradené: {session.assignedAdminFirstName} {session.assignedAdminLastName}
+												{:else}
+													Nepriradené
+												{/if}
+											</span>
+											<span class="text-xs text-text-2">
+												{session.lastMessageAt
+													? formatTime(session.lastMessageAt.toString())
+													: 'Nikdy'}
+											</span>
+										</div>
 									</div>
-								</div>
-								<div class="text-text-2 mt-1">
-									<Icon scale="small">
-										<ArrowRight />
-									</Icon>
+									<div class="text-text-2 mt-1">
+										<Icon scale="small">
+											<ArrowRight />
+										</Icon>
+									</div>
 								</div>
 							</div>
-						</div>
-					{/each}
-				</div>
+						{/each}
+					</div>
+				{/if}
+			{/if}
+
+			<!-- Closed Sessions -->
+			{#if activeTab === 'closed'}
+				{#if closedSessions.length === 0}
+					<div class="flex items-center justify-center h-32">
+						<p class="text-text-1 text-lg">Žiadne uzavreté chat konverzácie</p>
+					</div>
+				{:else}
+					<div class="overflow-y-auto h-full">
+						{#each closedSessions as session}
+							<div
+								class="p-4 border-b border-border-main/30 cursor-pointer hover:bg-background-4 {selectedClosedSession?.id ===
+								session.id
+									? 'bg-background-4 border-l-4 border-l-primary'
+									: ''}"
+								on:click={() => selectClosedSession(session)}
+								role="button"
+								tabindex="0"
+								on:keydown={(e) => e.key === 'Enter' && selectClosedSession(session)}
+							>
+								<div class="flex items-start justify-between">
+									<div class="flex-1 min-w-0">
+										<div class="flex items-center gap-2 mb-1">
+											<p class="font-medium text-text-main truncate">{getDisplayName(session)}</p>
+											<span class="px-2 py-1 text-xs rounded text-gray-600 bg-gray-300/40">
+												Uzavreté
+											</span>
+										</div>
+										<p class="text-sm text-text-2 truncate">
+											{session.subject || 'Všeobecná podpora'}
+										</p>
+										<div class="flex items-center gap-2 mt-2">
+											{#if session.assignedAdminId}
+												<span class="px-2 py-1 text-xs rounded text-blue-600 bg-blue-300/40">
+													{session.assignedAdminFirstName} {session.assignedAdminLastName}
+												</span>
+											{/if}
+											<span class="text-xs text-text-2">
+												{session.lastMessageAt
+													? formatTime(session.lastMessageAt.toString())
+													: 'Nikdy'}
+											</span>
+										</div>
+									</div>
+									<div class="text-text-2 mt-1">
+										<Icon scale="small">
+											<BulletList />
+										</Icon>
+									</div>
+								</div>
+							</div>
+						{/each}
+					</div>
+				{/if}
 			{/if}
 		</div>
 	</div>
 
 	<!-- Right Column: Chat Interface -->
 	<div class="flex-1 h-full lg:h-auto max-h-[700px]">
-		{#if selectedSession}
+		{#if selectedSession || selectedClosedSession}
+			{@const currentSession = selectedSession || selectedClosedSession}
+			{@const currentMessages = selectedSession ? messages : closedMessages}
+			{@const isActiveSession = !!selectedSession}
+			
 			<div class="flex flex-col h-full bg-background-1 rounded border border-slate-400/40">
 				<!-- Session Info Header -->
 				<div class="border-b border-border-main/30 p-3 bg-background-1">
 					<div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
 						<div>
 							<p class="text-text-1 text-xs uppercase mb-1">Používateľ</p>
-							<p class="text-text-main font-medium">{getDisplayName(selectedSession)}</p>
-							{#if selectedSession.userEmail}
-								<p class="text-text-1 text-xs">{selectedSession.userEmail}</p>
+							<p class="text-text-main font-medium">{getDisplayName(currentSession)}</p>
+							{#if currentSession.userEmail}
+								<p class="text-text-1 text-xs">{currentSession.userEmail}</p>
 							{/if}
 						</div>
 						<div>
 							<p class="text-text-1 text-xs uppercase mb-1">Predmet</p>
 							<p class="text-text-main font-medium">
-								{selectedSession.subject || 'Všeobecná podpora'}
+								{currentSession.subject || 'Všeobecná podpora'}
 							</p>
 						</div>
 					</div>
@@ -490,28 +639,33 @@
 					<div class="flex items-center justify-between mt-2 pt-2 border-t border-border-main/30">
 						<div class="flex items-center gap-2 flex-wrap">
 							<span
-								class="px-2 py-1 text-xs rounded {selectedSession.status === 'active'
+								class="px-2 py-1 text-xs rounded {currentSession.status === 'active'
 									? 'text-green-600 bg-green-300/40'
 									: 'text-gray-600 bg-gray-300/40'}"
 							>
-								{selectedSession.status === 'active' ? 'Aktívne' : 'Uzavreté'}
+								{currentSession.status === 'active' ? 'Aktívne' : 'Uzavreté'}
 							</span>
-							{#if selectedSession.assignedAdminId}
+							{#if currentSession.assignedAdminId}
 								<span class="px-2 py-1 text-xs rounded text-blue-600 bg-blue-300/40">
-									Priradené: {selectedSession.assignedAdminFirstName} {selectedSession.assignedAdminLastName}
+									Priradené: {currentSession.assignedAdminFirstName} {currentSession.assignedAdminLastName}
 								</span>
 							{:else}
 								<span class="px-2 py-1 text-xs rounded text-gray-600 bg-gray-300/40">
 									Nepriradené
 								</span>
 							{/if}
-							{#if selectedSession.unreadCount > 0}
+							{#if isActiveSession && selectedSession.unreadCount > 0}
 								<span class="bg-danger text-white px-2 py-1 rounded-full text-xs">
 									{selectedSession.unreadCount} nových
 								</span>
 							{/if}
+							{#if !isActiveSession}
+								<span class="px-2 py-1 text-xs rounded text-orange-600 bg-orange-300/40">
+									Transkript
+								</span>
+							{/if}
 						</div>
-						{#if !selectedSession.assignedAdminId}
+						{#if isActiveSession && !selectedSession.assignedAdminId}
 							<Button color="secondary" onclick={() => assignToMe(selectedSession.id)}>
 								Priradiť si
 							</Button>
@@ -519,23 +673,43 @@
 					</div>
 				</div>
 
-				<!-- Messages Area with Template Sidebar -->
+				<!-- Messages Area -->
 				<div class="flex-1 flex overflow-hidden">
 					<!-- Messages Container -->
 					<div class="flex-1 flex flex-col">
 						<div class="flex-1 overflow-y-auto bg-background-2 p-4 space-y-4" bind:this={messagesContainer}>
-							{#if messages.length === 0}
+							{#if currentMessages.length === 0}
 								<div class="text-center py-12">
 									<div class="w-16 h-16 bg-primary-1 rounded border border-primary-2/30 flex items-center justify-center mx-auto mb-4">
 										<Icon scale="big">
 											<Chat />
 										</Icon>
 									</div>
-									<h4 class="font-medium text-text-main mb-2">Zatiaľ žiadne správy</h4>
-									<p class="text-text-2 text-sm">Buďte prvý, kto odpovedá klientovi</p>
+									<h4 class="font-medium text-text-main mb-2">
+										{isActiveSession ? 'Zatiaľ žiadne správy' : 'Žiadne správy v tomto transke'}
+									</h4>
+									<p class="text-text-2 text-sm">
+										{isActiveSession ? 'Buďte prvý, kto odpovedá klientovi' : 'Tento chat neobsahuje žiadne správy'}
+									</p>
 								</div>
 							{:else}
-								{#each messages as msg}
+								{#if !isActiveSession}
+									<div class="bg-background-4 border border-border-main/30 rounded p-3 mb-4">
+										<div class="flex items-center gap-2">
+											<Icon scale="small">
+												<BulletList />
+											</Icon>
+											<div>
+												<p class="text-text-main text-sm font-medium">Transkript uzavretého chatu</p>
+												<p class="text-text-2 text-xs">
+													Uzavreté: {formatFullTime(currentSession.lastMessageAt)}
+												</p>
+											</div>
+										</div>
+									</div>
+								{/if}
+								
+								{#each currentMessages as msg}
 									<div class="flex {msg.senderType === 'admin' ? 'justify-end' : 'justify-start'}">
 										<div class="flex flex-col">
 											<!-- Message Bubble -->
@@ -575,7 +749,7 @@
 									</div>
 								{/each}
 								
-								{#if messages.length > 0 && !messages.some(m => m.senderType === 'admin')}
+								{#if isActiveSession && messages.length > 0 && !messages.some(m => m.senderType === 'admin')}
 									<div class="bg-primary-1 border border-primary-2/30 rounded p-4">
 										<div class="flex items-center gap-3">
 											<div class="flex space-x-1">
@@ -590,60 +764,72 @@
 							{/if}
 						</div>
 
-						<!-- Input Area -->
-						<div class="bg-background-1 border-t border-border-main/30 p-4">
-							<form class="flex gap-3 mb-4" on:submit|preventDefault={sendMessage}>
-								<div class="flex-1 relative">
-									<input 
-										class="w-full rounded border border-border-main/30 px-4 py-3 bg-background-2 text-text-main text-sm focus:ring-2 focus:ring-primary focus:border-primary transition-all duration-150 pr-12" 
-										bind:value={newMessage} 
-										placeholder="Napíšte odpoveď klientovi..." 
-									/>
-									<button
-										type="submit"
-										disabled={!newMessage.trim()}
-										class="absolute right-2 top-1/2 transform -translate-y-1/2 w-8 h-8 bg-primary hover:bg-primary-2 disabled:bg-text-1 text-white rounded border border-primary-4/30 flex items-center justify-center transition-colors duration-150"
+						<!-- Input Area - Only for Active Sessions -->
+						{#if isActiveSession}
+							<div class="bg-background-1 border-t border-border-main/30 p-4">
+								<form class="flex gap-3 mb-4" on:submit|preventDefault={sendMessage}>
+									<div class="flex-1 relative">
+										<input 
+											class="w-full rounded border border-border-main/30 px-4 py-3 bg-background-2 text-text-main text-sm focus:ring-2 focus:ring-primary focus:border-primary transition-all duration-150 pr-12" 
+											bind:value={newMessage} 
+											placeholder="Napíšte odpoveď klientovi..." 
+										/>
+										<button
+											type="submit"
+											disabled={!newMessage.trim()}
+											class="absolute right-2 top-1/2 transform -translate-y-1/2 w-8 h-8 bg-primary hover:bg-primary-2 disabled:bg-text-1 text-white rounded border border-primary-4/30 flex items-center justify-center transition-colors duration-150"
+										>
+											<Icon scale="small">
+												<ArrowRight />
+											</Icon>
+										</button>
+									</div>
+								</form>
+
+								<!-- Action Buttons -->
+								<div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 px-4 pb-4">
+									<div class="flex flex-wrap gap-2">
+										<Button color="warning" onclick={() => closeSession(selectedSession.id)}>
+											<Icon scale="small">
+												<Cross />
+											</Icon>
+											Uzavrieť chat
+										</Button>
+										{#if !selectedSession.assignedAdminId}
+											<Button color="secondary" onclick={() => assignToMe(selectedSession.id)}>
+												<Icon scale="small">
+													<User />
+												</Icon>
+												Priradiť si
+											</Button>
+										{/if}
+									</div>
+									<Button
+										color="primary"
+										onclick={() => (templateSidebarVisible = !templateSidebarVisible)}
 									>
 										<Icon scale="small">
-											<ArrowRight />
+											<BulletList />
 										</Icon>
-									</button>
-								</div>
-							</form>
-
-							<!-- Action Buttons -->
-							<div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 px-4 pb-4">
-								<div class="flex flex-wrap gap-2">
-									<Button color="warning" onclick={() => closeSession(selectedSession.id)}>
-										<Icon scale="small">
-											<Cross />
-										</Icon>
-										Uzavrieť chat
+										{templateSidebarVisible ? 'Skryť šablóny' : 'Zobraziť šablóny'}
 									</Button>
-									{#if !selectedSession.assignedAdminId}
-										<Button color="secondary" onclick={() => assignToMe(selectedSession.id)}>
-											<Icon scale="small">
-												<User />
-											</Icon>
-											Priradiť si
-										</Button>
-									{/if}
 								</div>
-								<Button
-									color="primary"
-									onclick={() => (templateSidebarVisible = !templateSidebarVisible)}
-								>
-									<Icon scale="small">
-										<BulletList />
-									</Icon>
-									{templateSidebarVisible ? 'Skryť šablóny' : 'Zobraziť šablóny'}
-								</Button>
 							</div>
-						</div>
+						{:else}
+							<!-- Read-only footer for closed sessions -->
+							<div class="bg-background-4 border-t border-border-main/30 p-4">
+								<div class="flex items-center justify-center gap-2">
+									<Icon scale="small">
+										<CheckCircle />
+									</Icon>
+									<p class="text-text-2 text-sm">Tento chat je uzavretý - transkript je iba na čítanie</p>
+								</div>
+							</div>
+						{/if}
 					</div>
 
-					<!-- Template Responses Sidebar -->
-					{#if templateSidebarVisible}
+					<!-- Template Responses Sidebar - Only for Active Sessions -->
+					{#if isActiveSession && templateSidebarVisible}
 						<div class="w-64 lg:w-64 md:w-56 sm:w-48 border-l border-border-main/30 bg-background-2">
 							<div class="p-4 border-b border-border-main/30">
 								<div class="flex items-center justify-between">
@@ -706,7 +892,11 @@
 						</Icon>
 					</div>
 					<h4 class="font-medium text-text-main mb-2">Vyberte konverzáciu</h4>
-					<p class="text-text-2 text-sm">Kliknite na konverzáciu v ľavom paneli pre začatie chatu</p>
+					<p class="text-text-2 text-sm">
+						{activeTab === 'active' 
+							? 'Kliknite na konverzáciu v ľavom paneli pre začatie chatu'
+							: 'Kliknite na uzavretý chat pre zobrazenie transkriptu'}
+					</p>
 				</div>
 			</div>
 		{/if}
@@ -758,7 +948,7 @@
 					></textarea>
 					<div class="mt-2 text-xs text-text-2">
 						<p class="font-medium mb-1">Dostupné premenné:</p>
-						<p>{'{{name}}'} - nahradí sa menom používateľa</p>
+						<p>{'{{name}}'} - nahradí sa menom používateľa (meno a priezvisko, alebo email ak nie je meno k dispozícii)</p>
 						<p>{'{{email}}'} - nahradí sa emailom používateľa</p>
 						<p>{'{{predmet}}'} - nahradí sa predmetom chatu</p>
 					</div>
@@ -783,14 +973,4 @@
 	</div>
 </Dialog>
 
-<style lang="postcss">
-	.chat-table-row {
-		@apply border-t border-border-main/30 hover:bg-background-4;
-	}
-	.chat-table-row-modify {
-		@apply mx-2 border-border-main/30 border w-8 h-8 flex justify-center text-text-4 items-center rounded duration-150 hover:bg-background-5;
-	}
-	.chat-table-long-text {
-		@apply text-sm px-4 py-3 text-text-4 max-w-40 overflow-ellipsis overflow-hidden whitespace-nowrap text-nowrap h-12;
-	}
-</style>
+

@@ -1,6 +1,6 @@
 import { json, type RequestEvent } from '@sveltejs/kit';
 import { db } from '$lib/server/db';
-import { chatSessions, chatMessages } from '$lib/server/schema';
+import { chatSessions, chatMessages, users } from '$lib/server/schema';
 import { eq, desc, sql } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
 
@@ -21,9 +21,17 @@ export async function GET({ locals, url }: RequestEvent) {
 		subject: chatSessions.subject,
 		lastMessageAt: chatSessions.lastMessageAt,
 		createdAt: chatSessions.createdAt,
+		userFirstName: users.first_name,
+		userLastName: users.last_name,
+		userEmail: users.email,
+		assignedAdminFirstName: sql<string>`assigned_admin.first_name`,
+		assignedAdminLastName: sql<string>`assigned_admin.last_name`,
+		assignedAdminEmail: sql<string>`assigned_admin.email`,
 		unreadCount: sql<number>`COUNT(CASE WHEN ${chatMessages.isRead} = false AND ${chatMessages.senderType} != 'admin' THEN 1 END)`
 	})
 	.from(chatSessions)
+	.leftJoin(users, eq(chatSessions.userId, users.id))
+	.leftJoin(sql`users AS assigned_admin`, sql`${chatSessions.assignedAdminId} = assigned_admin.id`)
 	.leftJoin(chatMessages, eq(chatSessions.id, chatMessages.sessionId))
 	.where(eq(chatSessions.status, status))
 	.groupBy(
@@ -34,7 +42,13 @@ export async function GET({ locals, url }: RequestEvent) {
 		chatSessions.status,
 		chatSessions.subject,
 		chatSessions.lastMessageAt,
-		chatSessions.createdAt
+		chatSessions.createdAt,
+		users.first_name,
+		users.last_name,
+		users.email,
+		sql`assigned_admin.first_name`,
+		sql`assigned_admin.last_name`,
+		sql`assigned_admin.email`
 	)
 	.orderBy(desc(chatSessions.lastMessageAt));
 
