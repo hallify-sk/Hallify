@@ -78,8 +78,35 @@
 				const response = await fetch('/api/chat/sessions');
 				if (response.ok) {
 					const newSessions = await response.json();
+					
+					// Preserve existing session data by merging with new data
+					const mergedSessions = newSessions.map((newSession: any) => {
+						const existingSession = sessions.find((s: any) => s.id === newSession.id);
+						if (existingSession) {
+							// Preserve important properties that might be lost during polling
+							return {
+								...newSession,
+								// Preserve user data
+								userEmail: existingSession.userEmail || newSession.userEmail,
+								// Preserve admin assignment data
+								assignedAdminId: existingSession.assignedAdminId || newSession.assignedAdminId,
+								assignedAdminFirstName: existingSession.assignedAdminFirstName || newSession.assignedAdminFirstName,
+								assignedAdminLastName: existingSession.assignedAdminLastName || newSession.assignedAdminLastName
+							};
+						}
+						return newSession;
+					});
+					
+					// If we have a selected session, find and update it from the merged data
+					if (selectedSession) {
+						const updatedSelectedSession = mergedSessions.find((s: any) => s.id === selectedSession.id);
+						if (updatedSelectedSession) {
+							selectedSession = updatedSelectedSession;
+						}
+					}
+					
 					// Update sessions reactively
-					data.sessions = newSessions;
+					data.sessions = mergedSessions;
 				}
 			} catch (error) {
 				console.error('Error polling sessions:', error);
@@ -88,7 +115,7 @@
 	}
 
 	async function selectSession(session: any) {
-		selectedSession = session;
+		selectedSession = { ...session }; // Create a copy to prevent reference issues
 		await loadMessages();
 		// Mark messages as read when admin opens the chat
 		await markMessagesAsRead(session.id);
@@ -424,9 +451,11 @@
 										</span>
 									</div>
 								</div>
-								<Icon scale="small" class="text-text-2 mt-1">
-									<ArrowRight />
-								</Icon>
+								<div class="text-text-2 mt-1">
+									<Icon scale="small">
+										<ArrowRight />
+									</Icon>
+								</div>
 							</div>
 						</div>
 					{/each}
@@ -436,11 +465,11 @@
 	</div>
 
 	<!-- Right Column: Chat Interface -->
-	<div class="flex-1 h-full lg:h-auto">
+	<div class="flex-1 h-full lg:h-auto max-h-[700px]">
 		{#if selectedSession}
-			<div class="flex flex-col h-full bg-background-1 rounded border border-border-main">
+			<div class="flex flex-col h-full bg-background-1 rounded border border-slate-400/40">
 				<!-- Session Info Header -->
-				<div class="border-b border-border-main/30 p-3 bg-background-2">
+				<div class="border-b border-border-main/30 p-3 bg-background-1">
 					<div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
 						<div>
 							<p class="text-text-1 text-xs uppercase mb-1">Používateľ</p>
@@ -619,7 +648,7 @@
 							<div class="p-4 border-b border-border-main/30">
 								<div class="flex items-center justify-between">
 									<h3 class="text-text-main font-medium">Šablóny odpovedí</h3>
-									<Button color="primary" scale="small" onclick={() => (templateDialogOpen = true)}>
+									<Button color="primary" onclick={() => (templateDialogOpen = true)}>
 										<Icon scale="small">
 											<Plus />
 										</Icon>
@@ -642,14 +671,12 @@
 														<div class="flex gap-2">
 															<Button
 																color="secondary"
-																scale="small"
 																onclick={() => insertTemplate(template)}
 															>
 																Vložiť
 															</Button>
 															<Button
 																color="danger"
-																scale="small"
 																onclick={() => deleteTemplate(template.id)}
 															>
 																<Icon scale="small">
