@@ -33,6 +33,7 @@
 	import Dialog from './Dialog.svelte';
 	import Icon from '$lib/icons/Icon.svelte';
 	import Plus from '$lib/icons/Plus.svelte';
+	import Tables from './editor/plugins/Tables.svelte';
 
 	let openConfirmDeleteDialog = $state(false);
 
@@ -50,6 +51,7 @@
 		gridHeight = $bindable(20),
 		windowWidth = $bindable(800),
 		windowHeight = $bindable(800),
+		userMode = $bindable(false),
 		data
 	}: {
 		gridSize?: number;
@@ -58,6 +60,7 @@
 		windowWidth?: number;
 		windowHeight?: number;
 		zoomBy?: number;
+		userMode?: boolean;
 		data?: any;
 	} = $props();
 
@@ -290,6 +293,9 @@
 		</Stage>
 	{/key}
 </div>
+{#if userMode}
+	<Tables />
+{:else}
 <div
 	class="fixed top-0 right-0 block h-screen pt-40 border-l border-solid w-96 bg-background-1 border-border-main/40"
 >
@@ -321,6 +327,7 @@
 		<hr class="border-solid bg-none border-background-4" />
 	</Accordion>
 </div>
+{/if}
 
 <Dialog open={openConfirmDeleteDialog}>
 	{#snippet header()}
