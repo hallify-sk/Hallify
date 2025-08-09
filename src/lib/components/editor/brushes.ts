@@ -13,7 +13,7 @@ import {
 	snapToGrid,
 	tables
 } from '$lib/components/editor/lib';
-import { registerClickEvent } from './events/click';
+import { registerClickEvent, removeClickEvent } from './events/click';
 import type { Node, NodeConfig } from 'konva/lib/Node';
 import { get, writable } from 'svelte/store';
 import { points, walls, zonePoints, zones } from '$lib/util';
@@ -58,6 +58,14 @@ export function brushes(stageRef: Konva.Stage) {
 	setTimeout(() => {
 		tables.set(tablesReinit);
 	}, 1);
+}
+
+export function reregisterClickEvent() {
+	if (stage && stage.attrs.tr) {
+		const uiLayer = stage.attrs.layers?.uiLayer;
+		const gridLayer = stage.attrs.layers?.gridLayer;
+		registerClickEvent(stage, stage.attrs.tr, { uiLayer, gridLayer });
+	}
 }
 
 export const dragStart = async (e: KonvaDragTransformEvent) => {

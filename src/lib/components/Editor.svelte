@@ -19,7 +19,8 @@
 		dragStart,
 		transformRotate,
 		transformRotateEnd,
-		transformRotateStart
+		transformRotateStart,
+		reregisterClickEvent
 	} from './editor/brushes';
 	import Brushes from './editor/plugins/Brushes.svelte';
 	import { currentColor, points, walls, zonePoints, zones } from '$lib/util';
@@ -76,8 +77,9 @@
 				windowHeight = window.innerHeight;
 				stageHandle.size({ width: windowWidth, height: windowHeight });
 				
-				// Re-center when window is resized
+				// Re-register click event listener when stage is resized
 				if (isInitialized) {
+					reregisterClickEvent();
 					centerStage();
 				}
 			};
@@ -160,8 +162,9 @@
 				height: gridHeight
 			});
 			
-			// Re-center when grid dimensions change
+			// Re-register click event and re-center when grid dimensions change
 			if (isInitialized) {
+				reregisterClickEvent();
 				centerStage();
 			}
 		}
