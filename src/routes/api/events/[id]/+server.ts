@@ -29,6 +29,7 @@ export const GET: RequestHandler = async ({ params, locals }) => {
             allowRegistration: events.allowRegistration,
             status: events.status,
             notes: events.notes,
+            tableLayoutData: events.tableLayoutData,
             hallName: halls.name,
             hallColor: halls.color
         }).from(events)
@@ -183,6 +184,50 @@ export const DELETE: RequestHandler = async ({ params, locals }) => {
         return json({ success: true });
     } catch (error) {
         console.error('Error deleting event:', error);
+        return json({ error: 'Internal server error' }, { status: 500 });
+    }
+};
+
+export const PATCH: RequestHandler = async ({ params, request, locals }) => {
+    const eventId = parseInt(params.id);
+    
+    if (isNaN(eventId)) {
+        return json({ error: 'Invalid event ID' }, { status: 400 });
+    }
+
+    if (!locals.user) {
+        return json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    try {
+        const body = await request.json();
+        const { tableLayoutData } = body;
+
+        // Check if event exists and belongs to user
+        const existingEvent = await db.select().from(events)
+        .where(
+            and(
+                eq(events.id, eventId),
+                eq(events.userId, locals.user.id)
+            )
+        )
+        .limit(1);
+
+        if (existingEvent.length === 0) {
+            return json({ error: 'Event not found' }, { status: 404 });
+        }
+
+        // Update only the table layout data
+        await db.update(events)
+        .set({
+            tableLayoutData: tableLayoutData,
+            updatedAt: new Date()
+        })
+        .where(eq(events.id, eventId));
+
+        return json({ success: true });
+    } catch (error) {
+        console.error('Error updating event table layout:', error);
         return json({ error: 'Internal server error' }, { status: 500 });
     }
 };

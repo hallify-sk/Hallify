@@ -166,7 +166,7 @@
 				
 				console.log('Response status:', response.status, 'Result:', result);
 				
-				if (response.ok && result.type === 'success') {
+				if (response.ok && (result.type === 'success' || result.success === true)) {
 					showToastMessage('Plán bol úspešne uložený');
 					if (isFromDialog) {
 						showSaveDialog = false;
@@ -180,7 +180,7 @@
 						showToastMessage('Plán bol úspešne uložený, ale došlo k chybe pri presmerovaní.');
 					}
 				} else {
-					const errorMsg = result.data?.message || 'Nepodarilo sa uložiť plán';
+					const errorMsg = result.data?.message || result.message || 'Nepodarilo sa uložiť plán';
 					if (isFromDialog) {
 						saveError = errorMsg;
 					} else {

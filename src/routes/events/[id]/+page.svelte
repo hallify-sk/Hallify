@@ -16,6 +16,7 @@
     import Cross from '$lib/icons/Cross.svelte';
     import Plus from '$lib/icons/Plus.svelte';
     import Adjustments from '$lib/icons/Adjustments.svelte';
+    import CubeTransparent from '$lib/icons/CubeTransparent.svelte';
     import { page } from '$app/stores';
     import { goto } from '$app/navigation';
 
@@ -120,7 +121,7 @@
 
     // Calculate totals
     const totalParticipants = $derived(() => {
-        return data.registrations.length + data.invitations.filter(inv => inv.status === 'confirmed').length;
+        return data.registrations.length + data.invitations.filter((inv: any) => inv.status === 'confirmed').length;
     });
 
     // Initialize edit form with current event data
@@ -473,7 +474,7 @@
                                     <span>Registrácie: {data.registrations.length}</span>
                                 {/if}
                                 {#if data.event.allowInvitations}
-                                    <span>Pozvánky: {data.invitations.filter(inv => inv.status === 'confirmed').length}</span>
+                                    <span>Pozvánky: {data.invitations.filter((inv: any) => inv.status === 'confirmed').length}</span>
                                 {/if}
                             </div>
                         </div>
@@ -507,11 +508,146 @@
                     <div class="bg-background-1 border border-border-main/30 rounded-lg p-4">
                         <h3 class="text-sm font-medium text-text-1 mb-2">Potvrdené pozvánky</h3>
                         <p class="text-xl font-bold text-text-main">
-                            {data.invitations.filter(inv => inv.status === 'confirmed').length}
+                            {data.invitations.filter((inv: any) => inv.status === 'confirmed').length}
                         </p>
                     </div>
                 {/if}
             </div>
+        </div>
+
+        <!-- Table Layout Management -->
+        <div class="bg-background-1 border border-border-main/30 rounded-lg p-6 mb-6">
+            <div class="flex items-center justify-between mb-4">
+                <div>
+                    <h2 class="text-lg font-semibold text-text-main">Rozloženie stolov</h2>
+                    <p class="text-sm text-text-2">
+                        {#if data.event.tableLayoutData}
+                            Používa sa vlastné rozloženie pre túto udalosť
+                        {:else}
+                            Používa sa základné rozloženie z plánu sály
+                        {/if}
+                    </p>
+                </div>
+                <div class="flex gap-2">
+                    <Button 
+                        color="secondary"
+                        onclick={() => {
+                            // Open table editor in same tab
+                            goto(`/events/${data.event.id}/table-editor`);
+                        }}
+                        disabled={isCurrentEventInPast()}
+                    >
+                        <Icon scale="small">
+                            <Adjustments />
+                        </Icon>
+                        Upraviť rozloženie
+                    </Button>
+                    {#if data.event.tableLayoutData}
+                        <Button 
+                            color="transparent"
+                            onclick={async () => {
+                                if (!confirm('Naozaj chcete resetovať rozloženie stolov na základné nastavenie sály?')) return;
+                                
+                                try {
+                                    const response = await fetch(`/api/events/${data.event.id}`, {
+                                        method: 'PATCH',
+                                        headers: {
+                                            'Content-Type': 'application/json'
+                                        },
+                                        body: JSON.stringify({
+                                            tableLayoutData: null
+                                        })
+                                    });
+                                    
+                                    if (response.ok) {
+                                        location.reload();
+                                    } else {
+                                        alert('Chyba pri resetovaní rozloženia');
+                                    }
+                                } catch (error) {
+                                    alert('Chyba pri resetovaní rozloženia');
+                                }
+                            }}
+                            disabled={isCurrentEventInPast()}
+                        >
+                            <Icon scale="small">
+                                <Cross />
+                            </Icon>
+                            Resetovať
+                        </Button>
+                    {/if}
+                </div>
+            </div>
+            
+            <!-- Table Layout Preview -->
+            <div class="bg-white border border-border-main/20 rounded-lg p-4 mb-3">
+                <div class="flex items-center justify-between mb-3">
+                    <h4 class="text-sm font-medium text-text-main">Aktuálne rozloženie stolov</h4>
+                    {#if data.event.tableLayoutData?.tables}
+                        <span class="text-xs text-green-700 bg-green-100 px-2 py-1 rounded">
+                            {data.event.tableLayoutData.tables.length} stolov (vlastné)
+                        </span>
+                    {:else}
+                        <span class="text-xs text-gray-600 bg-gray-100 px-2 py-1 rounded">Používa sa plán sály</span>
+                    {/if}
+                </div>
+                
+                <!-- Mini table layout visualization -->
+                <div class="relative bg-gray-50 rounded border h-40 overflow-hidden">
+                    {#if data.event.tableLayoutData?.tables}
+                        {#each data.event.tableLayoutData.tables as table}
+                            <div 
+                                class="absolute bg-blue-500 rounded border border-blue-600 flex items-center justify-center text-white text-xs font-medium shadow-sm hover:bg-blue-600 transition-colors"
+                                style="
+                                    left: {Math.max(0, Math.min(85, (table.x || 0) / 10))}%; 
+                                    top: {Math.max(0, Math.min(75, (table.y || 0) / 10))}%; 
+                                    width: 16px; 
+                                    height: 16px;
+                                "
+                                title="Stôl {table.name || table.id} - {table.seats || table.capacity || 0} miest"
+                            >
+                                {table.seats || table.capacity || '?'}
+                            </div>
+                        {/each}
+                        
+                        <!-- Show table count and total capacity -->
+                        <div class="absolute bottom-2 right-2 bg-white/90 backdrop-blur-sm px-2 py-1 rounded text-xs text-gray-700">
+                            {data.event.tableLayoutData.tables.length} stolov, 
+                            {data.event.tableLayoutData.tables.reduce((sum: number, t: any) => sum + (t.seats || t.capacity || 0), 0)} miest
+                        </div>
+                    {:else}
+                        <div class="flex items-center justify-center h-full text-text-3 text-sm">
+                            <div class="text-center">
+                                <Icon scale="small">
+                                    <CubeTransparent />
+                                </Icon>
+                                <p class="mt-2">Používa sa rozloženie z plánu sály</p>
+                                <p class="text-xs mt-1 opacity-70">Kliknite na "Upraviť rozloženie" pre vlastné nastavenie</p>
+                            </div>
+                        </div>
+                    {/if}
+                </div>
+            </div>
+
+            {#if data.event.tableLayoutData}
+                <div class="p-3 bg-green-50 border border-green-200 rounded-lg">
+                    <div class="flex items-center gap-2">
+                        <div class="w-2 h-2 bg-green-500 rounded-full"></div>
+                        <p class="text-sm text-green-800">
+                            Táto udalosť má vlastné rozloženie stolov odlišné od základného plánu sály
+                        </p>
+                    </div>
+                </div>
+            {:else}
+                <div class="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                    <div class="flex items-center gap-2">
+                        <div class="w-2 h-2 bg-blue-500 rounded-full"></div>
+                        <p class="text-sm text-blue-800">
+                            Táto udalosť používa základné rozloženie stolov z plánu sály
+                        </p>
+                    </div>
+                </div>
+            {/if}
         </div>
 
         <!-- Invitation Management -->
@@ -575,7 +711,7 @@
                             <div>
                                 <h2 class="text-lg font-semibold text-text-main">Pozvaní hostia</h2>
                                 <p class="text-sm text-text-2">
-                                    {data.invitations.filter(inv => inv.status === 'confirmed').length} potvrdených pozvánie
+                                    {data.invitations.filter((inv: any) => inv.status === 'confirmed').length} potvrdených pozvánie
                                 </p>
                             </div>
                             {#if data.event.allowRegistration}
@@ -822,6 +958,89 @@
                             <p class="text-xs text-red-600">Vyberte dátum udalosti</p>
                         {/if}
                     {/if}
+                </div>
+
+                <!-- Table Layout Section -->
+                <div class="space-y-4">
+                    <h3 class="text-lg font-medium text-text-main">Rozloženie stolov</h3>
+                    
+                    <div class="p-4 bg-background-2 rounded-lg">
+                        <div class="flex items-center justify-between mb-4">
+                            <div>
+                                <p class="text-sm font-medium text-text-main">Úprava rozloženia stolov</p>
+                                <p class="text-xs text-text-2">Nastavte rozloženie stolov pre túto udalosť</p>
+                            </div>
+                            <Button 
+                                color="secondary"
+                                onclick={() => {
+                                    // Open table editor in new tab/window
+                                    window.open(`/events/${data.event.id}/table-editor`, '_blank');
+                                }}
+                            >
+                                <Icon scale="small">
+                                    <Adjustments />
+                                </Icon>
+                                Upraviť rozloženie
+                            </Button>
+                        </div>
+
+                        <!-- Table Layout Preview -->
+                        <div class="bg-white border border-border-main/20 rounded-lg p-4 mb-3">
+                            <div class="flex items-center justify-between mb-3">
+                                <h4 class="text-sm font-medium text-text-main">Náhľad rozloženia</h4>
+                                {#if data.event.tableLayoutData?.tables}
+                                    <span class="text-xs text-text-2">
+                                        {data.event.tableLayoutData.tables.length} stolov
+                                    </span>
+                                {:else}
+                                    <span class="text-xs text-text-2">Plán sály</span>
+                                {/if}
+                            </div>
+                            
+                            <!-- Mini table layout visualization -->
+                            <div class="relative bg-gray-50 rounded border h-32 overflow-hidden">
+                                {#if data.event.tableLayoutData?.tables}
+                                    {#each data.event.tableLayoutData.tables as table}
+                                        <div 
+                                            class="absolute bg-blue-500 rounded-sm border border-blue-600 flex items-center justify-center text-white text-xs font-medium shadow-sm"
+                                            style="
+                                                left: {Math.max(0, Math.min(85, (table.x || 0) / 10))}%; 
+                                                top: {Math.max(0, Math.min(75, (table.y || 0) / 10))}%; 
+                                                width: 12px; 
+                                                height: 12px;
+                                            "
+                                            title="Stôl {table.name || table.id} - {table.seats || table.capacity || 0} miest"
+                                        >
+                                            {table.seats || table.capacity || '?'}
+                                        </div>
+                                    {/each}
+                                {:else}
+                                    <div class="flex items-center justify-center h-full text-text-3 text-sm">
+                                        <div class="text-center">
+                                            <Icon scale="small">
+                                                <CubeTransparent />
+                                            </Icon>
+                                            <p class="mt-1">Plán sály</p>
+                                        </div>
+                                    </div>
+                                {/if}
+                            </div>
+                        </div>
+                        
+                        {#if data.event.tableLayoutData}
+                            <div class="mt-3 pt-3 border-t border-border-main/30">
+                                <p class="text-xs text-green-700 bg-green-50 px-2 py-1 rounded">
+                                    ✓ Pre túto udalosť je nastavené vlastné rozloženie stolov
+                                </p>
+                            </div>
+                        {:else}
+                            <div class="mt-3 pt-3 border-t border-border-main/30">
+                                <p class="text-xs text-blue-700 bg-blue-50 px-2 py-1 rounded">
+                                    Používa sa základné rozloženie z plánu sály
+                                </p>
+                            </div>
+                        {/if}
+                    </div>
                 </div>
 
                 <!-- Actions -->

@@ -50,6 +50,56 @@ export const actions = {
             console.error(e);
             return fail(500, { message: 'Chyba pri ukladaní rozloženia stolov.', validate: ['plan'] });
         }
+    },
+
+    savePlan: async function ({ request, locals, params }) {
+        if (!locals.user) {
+            return fail(401, { message: 'Nie ste prihlásený.', validate: ['user'] });
+        }
+        
+        const formData = await request.formData();
+        const planData = formData.get('plan')?.toString();
+        if (!planData) {
+            return fail(400, { message: 'Neplatný plán.', validate: ['plan'] });
+        }
+
+        try {
+            // Get the event and verify the user has access
+            const event = await db
+                .select()
+                .from(events)
+                .where(eq(events.id, parseInt(params.id)))
+                .limit(1);
+                
+            if (!event[0]) {
+                return fail(404, { message: 'Event neexistuje.', validate: ['event'] });
+            }
+
+            // Check if user owns the event or is admin
+            const userOwnsEvent = event[0].userId === locals.user.id;
+            const isAdmin = locals.user.permission_id === 1; // Assuming 1 is admin permission
+            
+            if (!userOwnsEvent && !isAdmin) {
+                return fail(403, { message: 'Nemáte oprávnenie upravovať toto rozloženie.', validate: ['permission'] });
+            }
+
+            // Parse the plan data
+            const parsedPlan = JSON.parse(planData);
+            
+            // Update the event with the table layout data (extract tables from the plan)
+            await db
+                .update(events)
+                .set({ 
+                    tableLayoutData: parsedPlan,
+                    updatedAt: new Date()
+                })
+                .where(eq(events.id, parseInt(params.id)));
+
+            return { success: true };
+        } catch (e) {
+            console.error(e);
+            return fail(500, { message: 'Chyba pri ukladaní plánu.', validate: ['plan'] });
+        }
     }
 };
 

@@ -33,6 +33,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
             invitationToken: events.invitationToken,
             status: events.status,
             notes: events.notes,
+            tableLayoutData: events.tableLayoutData,
             createdAt: events.createdAt,
             hallName: halls.name,
             hallColor: halls.color,

@@ -106,6 +106,20 @@ export const hallLayouts = pgTable('hall_layouts', {
 	updatedAt: timestamp('updated_at').defaultNow().notNull()
 });
 
+export const tablePlacements = pgTable('table_placements', {
+	id: serial('id').primaryKey(),
+	name: varchar('name', { length: 255 }).notNull(),
+	description: text('description'),
+	hallLayoutId: integer('hall_layout_id').notNull().references(() => hallLayouts.id, { onDelete: 'cascade' }),
+	tableData: json('table_data').notNull(),
+	thumbnail: text('thumbnail'),
+	userId: integer('user_id').references(() => users.id, { onDelete: 'set null' }),
+	isPublic: boolean('is_public').default(true),
+	isDefault: boolean('is_default').default(false),
+	createdAt: timestamp('created_at').defaultNow().notNull(),
+	updatedAt: timestamp('updated_at').defaultNow().notNull()
+});
+
 export const events = pgTable('events', {
 	id: serial('id').primaryKey(),
 	name: varchar('name', { length: 255 }).notNull(),
@@ -151,6 +165,29 @@ export const eventInvitations = pgTable('event_invitations', {
 	status: varchar('status', { length: 50 }).default('confirmed'), // 'confirmed', 'cancelled'
 	confirmedAt: timestamp('confirmed_at', { withTimezone: true }).defaultNow(),
 	notes: text('notes')
+});
+
+// Table for tracking chat sessions - both guest and authenticated user sessions
+export const chatSessions = pgTable('chat_sessions', {
+	id: serial('id').primaryKey(),
+	userId: integer('user_id').references(() => users.id, { onDelete: 'cascade' }),
+	guestIdentifier: varchar('guest_identifier', { length: 255 }),
+	status: varchar('status', { length: 50 }).default('active'), // 'active', 'closed'
+	sessionData: json('session_data'), // Store any chat-specific data
+	lastActivity: timestamp('last_activity', { withTimezone: true }).defaultNow(),
+	createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+	updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow()
+});
+
+// Table for storing chat messages
+export const chatMessages = pgTable('chat_messages', {
+	id: serial('id').primaryKey(),
+	sessionId: integer('session_id').references(() => chatSessions.id, { onDelete: 'cascade' }).notNull(),
+	content: text('content').notNull(),
+	role: varchar('role', { length: 20 }).notNull(), // 'user', 'assistant', 'system'
+	metadata: json('metadata'), // Store any message-specific data
+	createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+	updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow()
 });
 
 // Relations
@@ -262,6 +299,12 @@ export type NewPlan = typeof plans.$inferInsert;
 export type EventBlock = typeof eventBlocks.$inferSelect;
 export type NewEventBlock = typeof eventBlocks.$inferInsert;
 
+export type HallLayout = typeof hallLayouts.$inferSelect;
+export type NewHallLayout = typeof hallLayouts.$inferInsert;
+
+export type TablePlacement = typeof tablePlacements.$inferSelect;
+export type NewTablePlacement = typeof tablePlacements.$inferInsert;
+
 export type Event = typeof events.$inferSelect;
 export type NewEvent = typeof events.$inferInsert;
 
@@ -270,3 +313,9 @@ export type NewEventRegistration = typeof eventRegistrations.$inferInsert;
 
 export type EventInvitation = typeof eventInvitations.$inferSelect;
 export type NewEventInvitation = typeof eventInvitations.$inferInsert;
+
+export type ChatSession = typeof chatSessions.$inferSelect;
+export type NewChatSession = typeof chatSessions.$inferInsert;
+
+export type ChatMessage = typeof chatMessages.$inferSelect;
+export type NewChatMessage = typeof chatMessages.$inferInsert;

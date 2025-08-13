@@ -47,6 +47,23 @@
 					zones: []
 				}));
 				
+				// Generate a simple screenshot placeholder (required by savePlan action)
+				const canvas = document.createElement('canvas');
+				canvas.width = 800;
+				canvas.height = 600;
+				const ctx = canvas.getContext('2d');
+				if (ctx) {
+					ctx.fillStyle = '#f3f4f6';
+					ctx.fillRect(0, 0, 800, 600);
+					ctx.fillStyle = '#374151';
+					ctx.font = '16px Arial';
+					ctx.textAlign = 'center';
+					ctx.fillText('Table Layout Preview', 400, 300);
+					ctx.fillText(`${$tables.length} tables configured`, 400, 330);
+				}
+				const screenshot = canvas.toDataURL('image/png');
+				formData.append('screenshot', screenshot);
+				
 				// Use the hall plan save action
 				const response = await fetch('/admin/halls/' + data.hall?.id + '/editor?/savePlan', {
 					method: 'POST',
@@ -92,8 +109,6 @@
 			isSaving = false;
 		}
 	}
-
-	let { stage }: { stage: any } = $props();
 
 	// Define table type interface
 	interface TableType {
