@@ -10,7 +10,10 @@ services:
     env_file:
       - .env
     environment:
-      - DATABASE_URL=${DATABASE_URL}
+      - DATABASE_URL=postgresql://hallify:hallify_secure_password_2024@hallify-db:5432/hallify
+      - POSTGRES_DB=hallify
+      - POSTGRES_USER=hallify
+      - POSTGRES_PASSWORD=hallify_secure_password_2024
       - NODE_ENV=production
     depends_on:
       hallify-db:

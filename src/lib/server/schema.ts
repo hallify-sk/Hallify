@@ -169,12 +169,15 @@ export const eventInvitations = pgTable('event_invitations', {
 
 // Table for tracking chat sessions - both guest and authenticated user sessions
 export const chatSessions = pgTable('chat_sessions', {
-	id: serial('id').primaryKey(),
+	id: varchar('id', { length: 255 }).primaryKey(), // Use string ID for nanoid
 	userId: integer('user_id').references(() => users.id, { onDelete: 'cascade' }),
 	guestIdentifier: varchar('guest_identifier', { length: 255 }),
+	assignedAdminId: integer('assigned_admin_id').references(() => users.id, { onDelete: 'set null' }),
 	status: varchar('status', { length: 50 }).default('active'), // 'active', 'closed'
+	subject: varchar('subject', { length: 500 }),
 	sessionData: json('session_data'), // Store any chat-specific data
 	lastActivity: timestamp('last_activity', { withTimezone: true }).defaultNow(),
+	lastMessageAt: timestamp('last_message_at', { withTimezone: true }).defaultNow(),
 	createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
 	updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow()
 });
@@ -182,10 +185,11 @@ export const chatSessions = pgTable('chat_sessions', {
 // Table for storing chat messages
 export const chatMessages = pgTable('chat_messages', {
 	id: serial('id').primaryKey(),
-	sessionId: integer('session_id').references(() => chatSessions.id, { onDelete: 'cascade' }).notNull(),
-	content: text('content').notNull(),
-	role: varchar('role', { length: 20 }).notNull(), // 'user', 'assistant', 'system'
-	metadata: json('metadata'), // Store any message-specific data
+	sessionId: varchar('session_id', { length: 255 }).references(() => chatSessions.id, { onDelete: 'cascade' }).notNull(),
+	senderId: integer('sender_id').references(() => users.id, { onDelete: 'set null' }),
+	senderType: varchar('sender_type', { length: 20 }).notNull(), // 'user', 'admin', 'guest'
+	message: text('message').notNull(),
+	isRead: boolean('is_read').default(false),
 	createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
 	updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow()
 });
