@@ -7,8 +7,11 @@ services:
       dockerfile: Dockerfile
     ports:
       - '8007:3000'
+    env_file:
+      - .env
     environment:
       - DATABASE_URL=${DATABASE_URL}
+      - NODE_ENV=production
     depends_on:
       hallify-db:
         condition: service_healthy
@@ -19,6 +22,8 @@ services:
     container_name: hallify_postgres
     ports:
       - '5432:5432'
+    env_file:
+      - .env
     environment:
       - POSTGRES_DB=${POSTGRES_DB}
       - POSTGRES_USER=${POSTGRES_USER}
