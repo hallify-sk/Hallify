@@ -8,21 +8,29 @@ services:
     ports:
       - '8007:3000'
     environment:
-      - SQLURI=${SQLURI}
+      - DATABASE_URL=${DATABASE_URL}
     depends_on:
-      - mysql
+      postgres:
+        condition: service_healthy
     restart: always
-  mysql:
-    image: mysql:8.0
-    container_name: hallify_mysql
+    
+  hallify-db:
+    image: postgres
+    container_name: hallify_postgres
     ports:
-      - '3308:3306'
-    env_file:
-      - .env
+      - '5432:5432'
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
     volumes:
-      - mysql_data:/var/lib/mysql
-      - ./db.sql:/docker-entrypoint-initdb.d/db.sql
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
     restart: always
 
 volumes:
-  mysql_data:
+  postgres_data:
