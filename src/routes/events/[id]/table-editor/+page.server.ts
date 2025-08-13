@@ -1,81 +1,94 @@
 import { db } from '$lib/server/db.js';
-import { halls, plans, type Hall, type Plan } from '$lib/server/schema.js';
+import { events, halls, plans, type Event, type Hall, type Plan } from '$lib/server/schema.js';
 import { serializeNonPOJOs } from '$lib/util.js';
 import { fail, error } from '@sveltejs/kit';
 import { eq } from 'drizzle-orm';
 
 export const actions = {
-    savePlan: async function ({ request, locals, params }) {
+    saveTableLayout: async function ({ request, locals, params }) {
         if (!locals.user) {
             return fail(401, { message: 'Nie ste prihlásený.', validate: ['user'] });
         }
+        
         const formData = await request.formData();
-        const planData = formData.get('plan')?.toString();
-        if (!planData) {
-            return fail(400, { message: 'Neplatný plán.', validate: ['plan'] });
+        const tableLayoutData = formData.get('plan')?.toString();
+        if (!tableLayoutData) {
+            return fail(400, { message: 'Neplatné rozloženie stolov.', validate: ['plan'] });
         }
-        const preview = formData.get('screenshot')?.toString();
-        if (!preview) {
-            return fail(400, { message: 'Neplatný plán.', validate: ['screenshot'] });
-        }
-        if (!preview.startsWith('data:image/png;base64,')) {
-            return fail(400, { message: 'Neplatný plán.', validate: ['screenshot'] });
-        }
-        try {
-            // Create new plan
-            const newPlan = await db
-                .insert(plans)
-                .values({
-                    user_id: locals.user.id,
-                    data: JSON.parse(planData),
-                    preview
-                })
-                .returning();
 
-            // Find the hall
-            const hall = (
-                await db
-                    .select()
-                    .from(halls)
-                    .where(eq(halls.id, parseInt(params.id)))
-                    .limit(1)
-            )[0];
-            if (!hall) {
-                return fail(404, { message: 'Neplatná sála.', validate: ['hall'] });
+        try {
+            // Get the event and verify the user has access
+            const event = await db
+                .select()
+                .from(events)
+                .where(eq(events.id, parseInt(params.id)))
+                .limit(1);
+                
+            if (!event[0]) {
+                return fail(404, { message: 'Event neexistuje.', validate: ['event'] });
             }
 
-            // Update hall to reference the new plan
+            // Check if user owns the event or is admin
+            const userOwnsEvent = event[0].userId === locals.user.id;
+            const isAdmin = locals.user.permission_id === 1; // Assuming 1 is admin permission
+            
+            if (!userOwnsEvent && !isAdmin) {
+                return fail(403, { message: 'Nemáte oprávnenie upravovať toto rozloženie.', validate: ['permission'] });
+            }
+
+            // Update the event with the table layout data
             await db
-                .update(halls)
-                .set({ plan: newPlan[0].id })
-                .where(eq(halls.id, parseInt(params.id)));
+                .update(events)
+                .set({ 
+                    tableLayoutData: JSON.parse(tableLayoutData),
+                    updatedAt: new Date()
+                })
+                .where(eq(events.id, parseInt(params.id)));
+
+            return { success: true };
         } catch (e) {
             console.error(e);
-            return fail(500, { message: 'Neplatný plán.', validate: ['plan'] });
+            return fail(500, { message: 'Chyba pri ukladaní rozloženia stolov.', validate: ['plan'] });
         }
-
-        return { success: true };
     }
 };
 
-export const load = async function ({ params }) {
-    // Get hall with its plan using a join
-    const hallWithPlan = await db
+export const load = async function ({ params, locals }) {
+    // Get event with its hall and hall's plan
+    const eventWithHall = await db
         .select({
+            event: events,
             hall: halls,
             plan: plans
         })
-        .from(halls)
+        .from(events)
+        .leftJoin(halls, eq(events.hallId, halls.id))
         .leftJoin(plans, eq(halls.plan, plans.id))
-        .where(eq(halls.id, parseInt(params.id)))
+        .where(eq(events.id, parseInt(params.id)))
         .limit(1);
 
-    if (!hallWithPlan[0]) {
-        throw error(404, 'Neplatná sála.');
+    if (!eventWithHall[0]) {
+        throw error(404, 'Event neexistuje.');
+    }
+
+    // Create a combined plan data structure
+    // Use event's table layout if it exists, otherwise use hall's plan data
+    let planData = null;
+    if (eventWithHall[0].event.tableLayoutData) {
+        // Event has its own table layout
+        planData = {
+            data: eventWithHall[0].event.tableLayoutData
+        };
+    } else if (eventWithHall[0].plan?.data) {
+        // Use hall's plan data as base
+        planData = eventWithHall[0].plan;
     }
 
     return {
-        hall: serializeNonPOJOs(hallWithPlan[0].hall) as Hall,
-        plan: hallWithPlan[0].plan ? (serializeNonPOJOs(hallWithPlan[0].plan) as Plan) : null
+        event: serializeNonPOJOs(eventWithHall[0].event) as Event,
+        hall: eventWithHall[0].hall ? (serializeNonPOJOs(eventWithHall[0].hall) as Hall) : null,
+        plan: planData ? serializeNonPOJOs(planData) as Plan : null,
+        user: locals.user ? serializeNonPOJOs(locals.user) : null,
+        permission: locals.user?.permission_id || null
     };
 };

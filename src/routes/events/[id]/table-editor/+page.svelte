@@ -8,12 +8,11 @@
 	let MyCanvas: typeof Editor;
 
 	// Define the expected shape of plan data for type safety
-
 	type Plan = {
 		data?: HistoryState;
 	};
 
-	export let data: { plan?: Plan };
+	export let data: { plan?: Plan; event?: any; hall?: any; user?: any; permission?: any };
 
 	console.log(data);
 
@@ -39,4 +38,10 @@
 
 <Navbar permission={data.permission} user={data.user} />
 
-<svelte:component userMode={true} this={MyCanvas} bind:gridWidth bind:gridHeight></svelte:component>
+<svelte:component 
+	userMode={true} 
+	this={MyCanvas} 
+	bind:gridWidth 
+	bind:gridHeight 
+	{data}
+/>

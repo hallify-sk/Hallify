@@ -1,7 +1,97 @@
 <script lang="ts">
-	import { tables } from '../lib.js';
+	import { tables, screenshotStage } from '../lib.js';
 	import { onMount } from 'svelte';
 	import { v4 as uuidv4 } from 'uuid';
+	import Button from '$lib/components/Button.svelte';
+	import Icon from '$lib/icons/Icon.svelte';
+	import Save from '$lib/icons/Save.svelte';
+
+	let { stage, data }: { stage: any; data?: any } = $props();
+
+	let isSaving = $state(false);
+	let saveMessage = $state('');
+	let showSaveMessage = $state(false);
+	let saveToHall = $state(false); // Option for admins to save to hall instead of event
+
+	// Check if user is admin
+	const isAdmin = data?.permission === 1;
+
+	// Load existing table data when component mounts
+	onMount(() => {
+		// If event has table layout data, load it
+		if (data?.event?.tableLayoutData?.tables) {
+			tables.set(data.event.tableLayoutData.tables);
+		} else if (data?.plan?.data?.tables) {
+			// Otherwise, load from hall's plan if available
+			tables.set(data.plan.data.tables);
+		}
+	});
+
+	// Function to save table layout
+	async function saveTableLayout() {
+		isSaving = true;
+		saveMessage = '';
+		
+		try {
+			const formData = new FormData();
+			
+			if (saveToHall && isAdmin) {
+				// Admin saving to hall - create a full plan
+				formData.append('plan', JSON.stringify({
+					elements: [],
+					gridData: { width: 20, height: 20 }, // Default grid
+					points: [],
+					walls: [],
+					tables: $tables,
+					zonePoints: [],
+					zones: []
+				}));
+				
+				// Use the hall plan save action
+				const response = await fetch('/admin/halls/' + data.hall?.id + '/editor?/savePlan', {
+					method: 'POST',
+					body: formData
+				});
+				
+				if (response.ok) {
+					saveMessage = 'Rozloženie stolov bolo uložené ako základný plán sály';
+				} else {
+					saveMessage = 'Chyba pri ukladaní do základného plánu sály';
+				}
+			} else {
+				// Regular user or admin saving to event only
+				formData.append('plan', JSON.stringify({
+					tables: $tables
+				}));
+
+				const response = await fetch('?/saveTableLayout', {
+					method: 'POST',
+					body: formData
+				});
+
+				if (response.ok) {
+					saveMessage = 'Rozloženie stolov bolo uložené pre tento event';
+				} else {
+					saveMessage = 'Chyba pri ukladaní rozloženia stolov';
+				}
+			}
+			
+			showSaveMessage = true;
+			setTimeout(() => {
+				showSaveMessage = false;
+			}, 3000);
+			
+		} catch (error) {
+			console.error('Save error:', error);
+			saveMessage = 'Nastala chyba pri ukladaní';
+			showSaveMessage = true;
+			setTimeout(() => {
+				showSaveMessage = false;
+			}, 5000);
+		} finally {
+			isSaving = false;
+		}
+	}
 
 	let { stage }: { stage: any } = $props();
 
@@ -286,10 +376,43 @@
 	</div>
 	
 	<!-- Table Count Display -->
-	<div class="p-4 border-t border-border-main/30 bg-background-2">
-		<p class="text-sm text-text-2">
-			Počet stolov na pláne: <span class="font-medium text-text-main">{$tables.length}</span>
-		</p>
+	<div class="p-4 border-t border-border-main/30 bg-background-2 space-y-3">
+		<div class="flex justify-between items-center">
+			<p class="text-sm text-text-2">
+				Počet stolov na pláne: <span class="font-medium text-text-main">{$tables.length}</span>
+			</p>
+			<Button 
+				color="primary" 
+				onclick={saveTableLayout}
+				disabled={isSaving || $tables.length === 0}
+			>
+				<Icon scale="small" stroke={2} fill="none">
+					<Save />
+				</Icon>
+				{#if isSaving}
+					Ukladá sa...
+				{:else}
+					Uložiť {saveToHall && isAdmin ? 'do základného plánu' : 'pre event'}
+				{/if}
+			</Button>
+		</div>
+		
+		{#if isAdmin}
+			<label class="flex items-center gap-2 text-sm text-gray-600 mt-2">
+				<input
+					type="checkbox"
+					bind:checked={saveToHall}
+					class="rounded border-gray-300"
+				/>
+				Uložiť ako základný plán sály (adminov režim)
+			</label>
+		{/if}
+		
+		{#if showSaveMessage}
+			<div class="p-2 text-sm rounded {saveMessage.includes('úspešne') ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}">
+				{saveMessage}
+			</div>
+		{/if}
 	</div>
 </div>
 

@@ -35,4 +35,4 @@
 	});
 </script>
 
-<svelte:component this={MyCanvas} bind:gridWidth bind:gridHeight {data}></svelte:component>
+<svelte:component this={MyCanvas} bind:gridWidth bind:gridHeight></svelte:component>

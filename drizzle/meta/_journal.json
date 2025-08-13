@@ -15,6 +15,13 @@
       "when": 1753618637294,
       "tag": "0001_fat_silver_fox",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1755111476958,
+      "tag": "0002_blue_praxagora",
+      "breakpoints": true
     }
   ]
 }

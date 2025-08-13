@@ -8,8 +8,7 @@ import {
 	serial,
 	json,
 	date,
-	unique,
-	uuid
+	unique
 } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 
@@ -76,7 +75,6 @@ export const plans = pgTable('plans', {
 	data: json('data').notNull(),
 	user_id: integer('user_id').notNull(),
 	preview: text('preview').notNull(),
-	finished: boolean('finished').default(false).notNull(),
 	created_at: timestamp('created_at').defaultNow().notNull(),
 	updated_at: timestamp('updated_at').defaultNow().notNull()
 });
@@ -124,6 +122,7 @@ export const events = pgTable('events', {
 	invitationToken: varchar('invitation_token', { length: 255 }),
 	status: varchar('status', { length: 50 }).default('planned'), // 'planned', 'active', 'completed', 'cancelled'
 	layoutId: integer('layout_id').references(() => hallLayouts.id, { onDelete: 'set null' }),
+	tableLayoutData: json('table_layout_data'), // Store table arrangement data for this event
 	notes: text('notes'),
 	createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
 	updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow()
@@ -152,29 +151,6 @@ export const eventInvitations = pgTable('event_invitations', {
 	status: varchar('status', { length: 50 }).default('confirmed'), // 'confirmed', 'cancelled'
 	confirmedAt: timestamp('confirmed_at', { withTimezone: true }).defaultNow(),
 	notes: text('notes')
-});
-
-// Chat system tables
-export const chatSessions = pgTable('chat_sessions', {
-	id: varchar('id', { length: 255 }).primaryKey(),
-	guestIdentifier: varchar('guest_identifier', { length: 255 }), // For anonymous users
-	userId: integer('user_id').references(() => users.id, { onDelete: 'set null' }), // Linked when user signs in
-	assignedAdminId: integer('assigned_admin_id').references(() => users.id, { onDelete: 'set null' }),
-	status: varchar('status', { length: 50 }).default('active'), // 'active', 'closed', 'resolved'
-	subject: varchar('subject', { length: 255 }),
-	lastMessageAt: timestamp('last_message_at', { withTimezone: true }),
-	createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
-	updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow()
-});
-
-export const chatMessages = pgTable('chat_messages', {
-	id: serial('id').primaryKey(),
-	sessionId: varchar('session_id', { length: 255 }).notNull().references(() => chatSessions.id, { onDelete: 'cascade' }),
-	senderId: integer('sender_id').references(() => users.id, { onDelete: 'set null' }), // null for guest messages
-	senderType: varchar('sender_type', { length: 50 }).notNull(), // 'guest', 'user', 'admin'
-	message: text('message').notNull(),
-	isRead: boolean('is_read').default(false),
-	createdAt: timestamp('created_at', { withTimezone: true }).defaultNow()
 });
 
 // Relations
@@ -264,29 +240,6 @@ export const eventInvitationsRelations = relations(eventInvitations, ({ one }) =
 	})
 }));
 
-export const chatSessionsRelations = relations(chatSessions, ({ one, many }) => ({
-	user: one(users, {
-		fields: [chatSessions.userId],
-		references: [users.id]
-	}),
-	assignedAdmin: one(users, {
-		fields: [chatSessions.assignedAdminId],
-		references: [users.id]
-	}),
-	messages: many(chatMessages)
-}));
-
-export const chatMessagesRelations = relations(chatMessages, ({ one }) => ({
-	session: one(chatSessions, {
-		fields: [chatMessages.sessionId],
-		references: [chatSessions.id]
-	}),
-	sender: one(users, {
-		fields: [chatMessages.senderId],
-		references: [users.id]
-	})
-}));
-
 // Type exports for use in your application
 export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
@@ -317,9 +270,3 @@ export type NewEventRegistration = typeof eventRegistrations.$inferInsert;
 
 export type EventInvitation = typeof eventInvitations.$inferSelect;
 export type NewEventInvitation = typeof eventInvitations.$inferInsert;
-
-export type ChatSession = typeof chatSessions.$inferSelect;
-export type NewChatSession = typeof chatSessions.$inferInsert;
-
-export type ChatMessage = typeof chatMessages.$inferSelect;
-export type NewChatMessage = typeof chatMessages.$inferInsert;

@@ -294,7 +294,7 @@
 	{/key}
 </div>
 {#if userMode}
-	<Tables {stage} />
+	<Tables {stage} {data} />
 {:else}
 <div
 	class="fixed top-0 right-0 block h-screen pt-40 border-l border-solid w-96 bg-background-1 border-border-main/40"
