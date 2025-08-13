@@ -1,5 +1,7 @@
 <script lang="ts">
 	//Icons
+	import Icon from '$lib/icons/Icon.svelte';
+	import Clock from '$lib/icons/Clock.svelte';
 
 	//Components
 	import Switch from '$lib/components/inputs/Switch.svelte';
@@ -60,6 +62,12 @@
 
 	let showTempEventBlocksDialog: boolean = $state(false);
 	let eventBlockError: string | null = $state(null);
+
+	// Conflict checking state
+	let showConflictWarning: boolean = $state(false);
+	let conflictData: any = $state(null);
+	let checkingConflicts: boolean = $state(false);
+	let proceedWithConflicts: boolean = $state(false);
 
 	const halls = $derived(
 		data.halls.map((hall) => ({
@@ -240,12 +248,74 @@
 		permanentBlocksChanges = initialState;
 		permanentBlocksError = null;
 	}
+
+	async function checkForConflicts() {
+		if (!selectedValue || !startDate || !endDate) {
+			return false;
+		}
+
+		checkingConflicts = true;
+		eventBlockError = null; // Clear any previous errors
+		
+		try {
+			// Get selected days from checkboxes
+			const selectedDays: string[] = [];
+			const dayNames = ['pon', 'uto', 'str', 'stv', 'pia', 'sob', 'ned'];
+			
+			dayNames.forEach(day => {
+				const checkbox = document.getElementById(day) as HTMLInputElement;
+				if (checkbox?.checked) {
+					selectedDays.push(day);
+				}
+			});
+
+			// Calculate if it's a short period (< 7 days) or long period
+			const diffTime = endDate.getTime() - startDate.getTime();
+			const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+			const blockedDays = diffDays < 7 ? dayNames : selectedDays;
+
+			const response = await fetch('/api/event-blocks/check-conflicts', {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json'
+				},
+				body: JSON.stringify({
+					hallId: selectedValue,
+					startDate: startDate.toISOString(),
+					endDate: endDate.toISOString(),
+					blockedDays
+				})
+			});
+
+			if (response.ok) {
+				const data = await response.json();
+				conflictData = data;
+				
+				if (data.conflictCount > 0) {
+					showConflictWarning = true;
+					return true; // Has conflicts
+				}
+				
+				return false; // No conflicts
+			} else {
+				const errorData = await response.json().catch(() => ({ error: 'Neznáma chyba' }));
+				eventBlockError = `Chyba pri kontrole konfliktov: ${errorData.error}`;
+				return false;
+			}
+		} catch (error) {
+			console.error('Error checking conflicts:', error);
+			eventBlockError = 'Chyba pri kontrole konfliktov. Skúste to znova.';
+			return false;
+		} finally {
+			checkingConflicts = false;
+		}
+	}
 </script>
 
 <div class="w-full min-h-screen px-4 py-6 bg-background-main md:px-24">
 	<div class="flex flex-row flex-wrap items-center justify-between w-full mx-auto max-w-7xl">
 		<div class="flex flex-col flex-nowrap">
-			<p class="uppercase text-[0.65rem] text-text-1">Prehľad</p>
+			<p class="uppercase text-[0.65rem] text-text-1">Udalosti</p>
 			<p class="text-text-main">Časové výluky</p>
 		</div>
 	</div>
@@ -657,6 +727,7 @@
 						}))
 					)
 				);
+				
 				return async ({ result }) => {
 					if (result.type === 'failure') {
 						eventBlockError = result.data?.message as string;
@@ -665,11 +736,14 @@
 					} else if (result.type === 'success') {
 						await invalidateAll();
 						showTempEventBlocksDialog = false;
+						showConflictWarning = false;
 						// Reset form
 						selectedValue = '';
 						startDate = null;
 						endDate = null;
 						eventBlockError = null;
+						conflictData = null;
+						proceedWithConflicts = false;
 						await applyAction(result);
 					}
 				};
@@ -863,8 +937,32 @@
 					Zrušiť
 				</button>
 
-				<Button type="submit" color="primary" disabled={!selectedValue || !startDate || !endDate}>
-					Vytvoriť výluku
+				<Button 
+					type="button" 
+					color="primary" 
+					disabled={!selectedValue || !startDate || !endDate || checkingConflicts}
+					onclick={async () => {
+						if (!proceedWithConflicts) {
+							const hasConflicts = await checkForConflicts();
+							if (!hasConflicts) {
+								// No conflicts, can proceed directly
+								proceedWithConflicts = true;
+								const form = document.querySelector('form[action="?/createEventBlock"]') as HTMLFormElement;
+								form?.requestSubmit();
+							}
+							// If there are conflicts, the warning dialog will be shown
+						} else {
+							// User already confirmed to proceed with conflicts
+							const form = document.querySelector('form[action="?/createEventBlock"]') as HTMLFormElement;
+							form?.requestSubmit();
+						}
+					}}
+				>
+					{#if checkingConflicts}
+						Kontrolujem konflikty...
+					{:else}
+						Vytvoriť výluku
+					{/if}
 				</Button>
 			</div>
 		</form>
@@ -1121,6 +1219,109 @@
 			</div>
 		</form>
 	</div>
+</Dialog>
+
+<!-- Conflict Warning Dialog -->
+<Dialog bind:open={showConflictWarning}>
+	{#snippet header()}
+		<div class="flex items-center gap-2">
+			<Icon scale="small">
+				<Clock />
+			</Icon>
+			<p class="text-text-main">Varovanie - Konflikty s udalosťami</p>
+		</div>
+	{/snippet}
+	
+	{#if conflictData}
+		<div class="flex flex-col max-w-2xl w-full">
+			<!-- Header -->
+			<div class="p-6 border-b border-border-main/30">
+				<div class="space-y-2">
+					<h2 class="text-xl font-semibold text-text-main">
+						Táto výluka ovplyvní existujúce udalosti
+					</h2>
+					<p class="text-text-2">
+						V sále <strong>{conflictData.hallName}</strong> je naplánovaných 
+						<strong>{conflictData.conflictCount}</strong> 
+						{conflictData.conflictCount === 1 ? 'udalosť' : 
+						 conflictData.conflictCount < 5 ? 'udalosti' : 'udalostí'}, 
+						ktoré sa prekrývajú s navrhovanou výlukou.
+					</p>
+				</div>
+			</div>
+
+			<!-- Conflict List -->
+			<div class="p-6 max-h-96 overflow-y-auto">
+				<h3 class="text-lg font-medium text-text-main mb-4">Ovplyvnené udalosti:</h3>
+				<div class="space-y-4">
+					{#each conflictData.conflicts as event}
+						<div class="p-4 border border-border-main/30 rounded-lg bg-background-2">
+							<div class="flex justify-between items-start mb-2">
+								<h4 class="font-medium text-text-main">{event.name}</h4>
+								<div class="text-sm text-text-2">
+									ID: {event.id}
+								</div>
+							</div>
+							
+							<p class="text-sm text-text-2 mb-2">{event.description}</p>
+							
+							<div class="grid grid-cols-2 gap-4 text-sm">
+								<div>
+									<span class="font-medium text-text-3">Dátum:</span>
+									<div class="text-text-2">
+										{#if event.startDate === event.endDate}
+											{new Date(event.startDate).toLocaleDateString('sk-SK')}
+										{:else}
+											{new Date(event.startDate).toLocaleDateString('sk-SK')} - 
+											{new Date(event.endDate).toLocaleDateString('sk-SK')}
+										{/if}
+									</div>
+								</div>
+								<div>
+									<span class="font-medium text-text-3">Účastníci:</span>
+									<div class="text-text-2">{event.participants}</div>
+								</div>
+								<div class="col-span-2">
+									<span class="font-medium text-text-3">Organizátor:</span>
+									<div class="text-text-2">
+										{event.organizer} ({event.organizerEmail})
+									</div>
+								</div>
+							</div>
+						</div>
+					{/each}
+				</div>
+			</div>
+
+			<!-- Actions -->
+			<div class="p-6 border-t border-border-main/30 flex justify-between">
+				<Button 
+					color="transparent" 
+					onclick={() => {
+						showConflictWarning = false;
+						conflictData = null;
+					}}
+				>
+					Zrušiť
+				</Button>
+				
+				<div class="flex gap-2">
+					<Button 
+						color="danger" 
+						onclick={() => {
+							proceedWithConflicts = true;
+							showConflictWarning = false;
+							// Re-submit the form
+							const form = document.querySelector('form[action="?/createEventBlock"]') as HTMLFormElement;
+							form?.requestSubmit();
+						}}
+					>
+						Pokračovať napriek konfliktom
+					</Button>
+				</div>
+			</div>
+		</div>
+	{/if}
 </Dialog>
 
 <style lang="postcss">

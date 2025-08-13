@@ -30,6 +30,7 @@
 	import Collapsible from './NavCollapsible.svelte';
 	import NavCollapsibleNoButton from './NavCollapsibleNoButton.svelte';
 	import AuthDialog from './AuthDialog.svelte';
+	import CalendarIcon from '$lib/icons/CalendarIcon.svelte';
 
 	onMount(() => {
 		document.addEventListener('click', (e) => {
@@ -175,7 +176,7 @@
 				</Icon>
 				<p class="text-text-4">Domov</p>
 			</a>
-			{#if checkPathPermission('/events', permission) || checkPathPermission('/events/create', permission)}
+			<!--{#if checkPathPermission('/events', permission) || checkPathPermission('/events/create', permission)}
 				<Collapsible id="event">
 					<Icon scale="small">
 						<Calendar />
@@ -217,6 +218,17 @@
 						</div>
 					{/if}
 				</Collapsible>
+			{/if}-->
+			{#if checkPathPermission("/calendar", permission)}
+			<a
+				href="/calendar"
+				class="flex items-center gap-2 px-3 py-3 text-sm border-b-2 border-b-transparent hover:border-b-primary"
+			>
+				<Icon scale="small">
+					<CalendarIcon/>
+				</Icon>
+				<p class="text-text-4">Kalendár</p>
+			</a>
 			{/if}
 			{#if checkPathPermission('/contact', permission)}
 				<a

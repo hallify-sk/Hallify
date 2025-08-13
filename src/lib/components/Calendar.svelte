@@ -8,6 +8,7 @@
     import X from '$lib/icons/Cross.svelte';
     import Shield from '$lib/icons/Shield.svelte';
     import Clock from '$lib/icons/Clock.svelte';
+    import Adjustments from '$lib/icons/Adjustments.svelte';
 
     //Components
     import Dialog from '$lib/components/Dialog.svelte';
@@ -25,7 +26,8 @@
         eventBlocks = [],
         permanentBlocks = [],
         selectedHallId = null,
-        halls = []
+        halls = [],
+        events = []
     }: {
         eventBlocks?: Array<{
             id: number;
@@ -48,6 +50,16 @@
             id: number;
             name: string;
             color: string;
+        }>;
+        events?: Array<{
+            id: number;
+            name: string;
+            startDate: string;
+            endDate: string;
+            hallId?: number;
+            hallName?: string;
+            hallColor?: string;
+            status?: string;
         }>;
     } = $props();
 
@@ -209,6 +221,37 @@
         return [...temporary, ...permanent].some(blocked => blocked.hallId === hallId);
     }
 
+    // Get events for a specific date
+    function getEventsForDate(date: Date): Array<{
+        id: number;
+        name: string;
+        startDate: string;
+        endDate: string;
+        hallId?: number;
+        hallName?: string;
+        hallColor?: string;
+        status?: string;
+    }> {
+        // Use local date comparison to avoid timezone issues
+        const targetYear = date.getFullYear();
+        const targetMonth = date.getMonth();
+        const targetDay = date.getDate();
+        
+        return events.filter(event => {
+            const eventStartDate = new Date(event.startDate);
+            
+            // Compare using local date components
+            return eventStartDate.getFullYear() === targetYear &&
+                   eventStartDate.getMonth() === targetMonth &&
+                   eventStartDate.getDate() === targetDay;
+        });
+    }
+
+    // Check if date has any events
+    function hasEvents(date: Date): boolean {
+        return getEventsForDate(date).length > 0;
+    }
+
     function updateCalendar() {
         currentYear = selectedDate.getFullYear();
         currentMonth = selectedDate.getMonth();
@@ -265,8 +308,9 @@
     function handleDayClick(day: any) {
         const dayDate = day.value.date.toJSDate();
         const { temporary, permanent } = getAllBlockedHallsForDate(dayDate);
+        const dayEvents = getEventsForDate(dayDate);
         
-        if (temporary.length > 0 || permanent.length > 0) {
+        if (temporary.length > 0 || permanent.length > 0 || dayEvents.length > 0) {
             clickedDate = dayDate;
             showBlocksDialog = true;
         }
@@ -275,8 +319,9 @@
     function handleDayHover(event: MouseEvent, day: any) {
         const dayDate = day.value.date.toJSDate();
         const { temporary, permanent } = getAllBlockedHallsForDate(dayDate);
+        const dayEvents = getEventsForDate(dayDate);
         
-        if (temporary.length > 0 || permanent.length > 0) {
+        if (temporary.length > 0 || permanent.length > 0 || dayEvents.length > 0) {
             hoveredDate = dayDate;
             const rect = (event.target as HTMLElement).getBoundingClientRect();
             popupPosition = {
@@ -299,13 +344,23 @@
     // Get popup data for hovered date
     const popupData = $derived(() => {
         if (!hoveredDate) return null;
-        return getAllBlockedHallsForDate(hoveredDate);
+        const blockedHalls = getAllBlockedHallsForDate(hoveredDate);
+        const dayEvents = getEventsForDate(hoveredDate);
+        return {
+            ...blockedHalls,
+            events: dayEvents
+        };
     });
 
     // Get dialog data for clicked date
     const dialogData = $derived(() => {
         if (!clickedDate) return null;
-        return getAllBlockedHallsForDate(clickedDate);
+        const blockedHalls = getAllBlockedHallsForDate(clickedDate);
+        const dayEvents = getEventsForDate(clickedDate);
+        return {
+            ...blockedHalls,
+            events: dayEvents
+        };
     });
 </script>
 
@@ -366,9 +421,13 @@
                             >
                                 {day.value.dayNumber}
                                 <!-- Block indicator dots -->
-                                {#if hasBlockedHalls(day.value.date.toJSDate())}
+                                {#if hasBlockedHalls(day.value.date.toJSDate()) || hasEvents(day.value.date.toJSDate())}
                                     {@const { temporary, permanent } = getAllBlockedHallsForDate(day.value.date.toJSDate())}
+                                    {@const dayEvents = getEventsForDate(day.value.date.toJSDate())}
                                     <div class="absolute top-1 right-1 flex gap-0.5">
+                                        {#if dayEvents.length > 0}
+                                            <div class="w-1.5 h-1.5 bg-blue-500 rounded-full"></div>
+                                        {/if}
                                         {#if temporary.length > 0}
                                             <div class="w-1.5 h-1.5 bg-orange-400 rounded-full"></div>
                                         {/if}
@@ -390,9 +449,13 @@
                             >
                                 {day.value.dayNumber}
                                 <!-- Block indicator dots -->
-                                {#if hasBlockedHalls(day.value.date.toJSDate())}
+                                {#if hasBlockedHalls(day.value.date.toJSDate()) || hasEvents(day.value.date.toJSDate())}
                                     {@const { temporary, permanent } = getAllBlockedHallsForDate(day.value.date.toJSDate())}
+                                    {@const dayEvents = getEventsForDate(day.value.date.toJSDate())}
                                     <div class="absolute top-1 right-1 flex gap-0.5">
+                                        {#if dayEvents.length > 0}
+                                            <div class="w-1.5 h-1.5 bg-blue-500 rounded-full"></div>
+                                        {/if}
                                         {#if temporary.length > 0}
                                             <div class="w-1.5 h-1.5 bg-orange-400 rounded-full"></div>
                                         {/if}
@@ -414,9 +477,13 @@
                             >
                                 {day.value.dayNumber}
                                 <!-- Block indicator dots -->
-                                {#if hasBlockedHalls(day.value.date.toJSDate())}
+                                {#if hasBlockedHalls(day.value.date.toJSDate()) || hasEvents(day.value.date.toJSDate())}
                                     {@const { temporary, permanent } = getAllBlockedHallsForDate(day.value.date.toJSDate())}
+                                    {@const dayEvents = getEventsForDate(day.value.date.toJSDate())}
                                     <div class="absolute top-1 right-1 flex gap-0.5">
+                                        {#if dayEvents.length > 0}
+                                            <div class="w-1.5 h-1.5 bg-blue-500 rounded-full"></div>
+                                        {/if}
                                         {#if temporary.length > 0}
                                             <div class="w-1.5 h-1.5 bg-orange-400 rounded-full"></div>
                                         {/if}
@@ -446,8 +513,8 @@
         {/if}
     </div>
 
-    <!-- Hover Popup for Blocked Halls -->
-    {#if hoveredDate && popupData() && (popupData().temporary.length > 0 || popupData().permanent.length > 0)}
+    <!-- Hover Popup for Events and Blocked Halls -->
+    {#if hoveredDate && popupData() && (popupData().temporary.length > 0 || popupData().permanent.length > 0 || popupData().events.length > 0)}
         <div 
             class="fixed z-50 pointer-events-none"
             style="left: {popupPosition.x}px; top: {popupPosition.y}px; transform: translateX(-50%) translateY(-100%);"
@@ -466,23 +533,26 @@
                             month: 'long' 
                         })}
                     </p>
-                    <p class="text-xs text-text-2">
-                        Blokované sály ({popupData().temporary.length + popupData().permanent.length})
-                    </p>
                 </div>
 
                 <!-- Quick Preview -->
                 <div class="space-y-1">
+                    {#if popupData().events.length > 0}
+                        <div class="flex items-center gap-1 text-xs text-blue-600">
+                            <div class="w-2 h-2 bg-blue-500 rounded-full"></div>
+                            <span>{popupData().events.length} {popupData().events.length === 1 ? 'udalosť' : 'udalosti'}</span>
+                        </div>
+                    {/if}
                     {#if popupData().temporary.length > 0}
                         <div class="flex items-center gap-1 text-xs text-orange-600">
                             <div class="w-2 h-2 bg-orange-400 rounded-full"></div>
-                            <span>{popupData().temporary.length} dočasne</span>
+                            <span>{popupData().temporary.length} dočasne blokované</span>
                         </div>
                     {/if}
                     {#if popupData().permanent.length > 0}
                         <div class="flex items-center gap-1 text-xs text-red-600">
                             <div class="w-2 h-2 bg-red-500 rounded-full"></div>
-                            <span>{popupData().permanent.length} trvale</span>
+                            <span>{popupData().permanent.length} trvale blokované</span>
                         </div>
                     {/if}
                 </div>
@@ -493,14 +563,14 @@
     {/if}
 </div>
 
-<!-- Blocked Halls Detail Dialog -->
+<!-- Events and Blocked Halls Detail Dialog -->
 <Dialog bind:open={showBlocksDialog}>
     {#snippet header()}
         <div class="flex items-center gap-2">
             <Icon scale="small">
-                <Shield />
+                <Calendar />
             </Icon>
-            <p class="text-text-main">Blokované sály</p>
+            <p class="text-text-main">Detaily dňa</p>
         </div>
     {/snippet}
     
@@ -517,14 +587,91 @@
                             year: 'numeric'
                         })}
                     </h2>
-                    <p class="text-text-2">
-                        Celkom blokovaných sál: {dialogData().temporary.length + dialogData().permanent.length}
-                    </p>
+                    <div class="flex gap-4 text-sm text-text-2">
+                        {#if dialogData().events.length > 0}
+                            <span>{dialogData().events.length} {dialogData().events.length === 1 ? 'udalosť' : 'udalosti'}</span>
+                        {/if}
+                        {#if dialogData().temporary.length + dialogData().permanent.length > 0}
+                            <span>{dialogData().temporary.length + dialogData().permanent.length} blokovaných sál</span>
+                        {/if}
+                    </div>
                 </div>
             </div>
 
             <!-- Content -->
             <div class="p-6 space-y-6 max-h-96 overflow-y-auto">
+                <!-- Events Section -->
+                {#if dialogData().events.length > 0}
+                    <div class="space-y-4">
+                        <div class="flex items-center gap-2">
+                            <div class="w-3 h-3 bg-blue-500 rounded-full"></div>
+                            <h3 class="text-lg font-medium text-text-main">Naplánované udalosti</h3>
+                            <span class="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">
+                                {dialogData().events.length}
+                            </span>
+                        </div>
+                        
+                        <div class="space-y-3">
+                            {#each dialogData().events as event}
+                                <div class="p-4 border border-blue-200 bg-blue-50 rounded-lg">
+                                    <div class="flex items-start justify-between gap-4">
+                                        <div class="flex items-center gap-3 flex-1">
+                                            <!-- Hall color indicator -->
+                                            {#if event.hallColor}
+                                                <div 
+                                                    class="w-4 h-4 rounded-full border-2 border-white shadow-sm flex-shrink-0"
+                                                    style="background-color: {event.hallColor};"
+                                                ></div>
+                                            {/if}
+                                            
+                                            <div class="flex-1">
+                                                <h4 class="font-medium text-text-main">{event.name}</h4>
+                                                {#if event.hallName}
+                                                    <p class="text-sm text-text-2 mt-1">{event.hallName}</p>
+                                                {/if}
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="flex items-center gap-3">
+                                            <div class="text-right flex-shrink-0">
+                                                <div class="flex items-center gap-1 text-xs text-blue-700 mb-1">
+                                                    <Icon scale="tiny">
+                                                        <Calendar />
+                                                    </Icon>
+                                                    <span>Udalosť</span>
+                                                </div>
+                                                <p class="text-xs text-text-2">
+                                                    {#if new Date(event.startDate).toDateString() === new Date(event.endDate).toDateString()}
+                                                        {new Date(event.startDate).toLocaleTimeString('sk', { 
+                                                            hour: '2-digit', 
+                                                            minute: '2-digit' 
+                                                        })} - {new Date(event.endDate).toLocaleTimeString('sk', { 
+                                                            hour: '2-digit', 
+                                                            minute: '2-digit' 
+                                                        })}
+                                                    {:else}
+                                                        {new Date(event.startDate).toLocaleDateString('sk')} - {new Date(event.endDate).toLocaleDateString('sk')}
+                                                    {/if}
+                                                </p>
+                                            </div>
+                                            
+                                            <!-- Edit button -->
+                                            <a 
+                                                href="/events/{event.id}"
+                                                class="flex items-center justify-center w-8 h-8 text-blue-600 hover:text-blue-800 hover:bg-blue-100 rounded-md transition-colors duration-150"
+                                                title="Upraviť udalosť"
+                                            >
+                                                <Icon scale="small">
+                                                    <Adjustments />
+                                                </Icon>
+                                            </a>
+                                        </div>
+                                    </div>
+                                </div>
+                            {/each}
+                        </div>
+                    </div>
+                {/if}
                 <!-- Temporary Blocks Section -->
                 {#if dialogData().temporary.length > 0}
                     <div class="space-y-4">
@@ -645,15 +792,15 @@
                 {/if}
 
                 <!-- Empty State -->
-                {#if dialogData().temporary.length === 0 && dialogData().permanent.length === 0}
+                {#if dialogData().events.length === 0 && dialogData().temporary.length === 0 && dialogData().permanent.length === 0}
                     <div class="text-center py-8">
-                        <div class="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                            <svg class="w-8 h-8 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-                            </svg>
+                        <div class="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                            <Icon scale="big">
+                                <Calendar />
+                            </Icon>
                         </div>
-                        <h3 class="text-lg font-medium text-text-main mb-2">Žiadne blokovania</h3>
-                        <p class="text-text-2">Na tento dátum nie sú blokované žiadne sály.</p>
+                        <h3 class="text-lg font-medium text-text-main mb-2">Žiadne udalosti</h3>
+                        <p class="text-text-2">Na tento dátum nie sú naplánované žiadne udalosti ani blokovania.</p>
                     </div>
                 {/if}
             </div>

@@ -67,6 +67,7 @@
 		"konva": "^9.3.20",
 		"minimatch": "^10.0.1",
 		"mysql2": "^3.14.1",
+		"nanoid": "^5.1.5",
 		"oslo": "^1.2.1",
 		"pg": "^8.16.0",
 		"svelte-eslint-parser": "^1.2.0",

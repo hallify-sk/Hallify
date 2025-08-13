@@ -330,7 +330,14 @@
 					<h2 class="text-text-main">Naplánované udalosti</h2>
 				</div>
 				<div class="block h-full">
-					<Calendar />
+					<Calendar 
+						events={data.events}
+						halls={data.halls?.map(hall => ({
+							id: hall.id,
+							name: hall.name,
+							color: hall.color || '#6B7280'
+						})) || []}
+					/>
 				</div>
 			</div>
 		</div>

@@ -10,9 +10,10 @@
 	import UserIcon from '$lib/icons/User.svelte';
 	import Logout from '$lib/icons/Logout.svelte';
 	import ArrowRight from '$lib/icons/ArrowRight.svelte';
+	import Chat from '$lib/icons/Chat.svelte';
 
 	//Svelte
-	import { onMount } from 'svelte';
+	import { onMount, onDestroy } from 'svelte';
 	import { applyAction, enhance } from '$app/forms';
 	import { invalidateAll } from '$app/navigation';
 
@@ -32,6 +33,26 @@
 	import Grid from '$lib/icons/Grid.svelte';
 	import Square2Stack from '$lib/icons/Square2Stack.svelte';
 	import Clock from '$lib/icons/Clock.svelte';
+	import CalendarIcon from '$lib/icons/CalendarIcon.svelte';
+
+	// Chat notifications
+	import { unreadChatCount } from '$lib/stores/chatNotifications';
+
+	let chatPollingInterval: any;
+
+	async function startAdminChatPolling() {
+		if (typeof window === 'undefined') return;
+		
+		try {
+			const response = await fetch('/api/chat/notifications/admin');
+			if (response.ok) {
+				const data = await response.json();
+				unreadChatCount.set(data.unreadCount || 0);
+			}
+		} catch (error) {
+			console.error('Chat notification error:', error);
+		}
+	}
 
 	onMount(() => {
 		document.addEventListener('click', (e) => {
@@ -39,6 +60,20 @@
 				collapsibleOpen.set('');
 			}
 		});
+
+		// Start polling for chat notifications if user is admin
+		if (checkPathPermission('/admin/chat', permission) || checkPathPermission('/admin/chat/create', permission)) {
+			// Initial load
+			startAdminChatPolling();
+			// Set up polling every 10 seconds
+			chatPollingInterval = setInterval(startAdminChatPolling, 10000);
+		}
+	});
+
+	onDestroy(() => {
+		if (chatPollingInterval) {
+			clearInterval(chatPollingInterval);
+		}
 	});
 
 	let {
@@ -176,26 +211,15 @@
 						<div
 							class="flex flex-col absolute top-[46px] left-0 bg-background-1 border border-border-main/30 rounded-b overflow-hidden py-1"
 						>
-							{#if checkPathPermission('/admin/events', permission)}
+							{#if checkPathPermission('/admin/calendar', permission)}
 								<a
-									href="/admin/events"
+									href="/admin/calendar"
 									class="flex items-center gap-2 px-3 py-2 text-sm w-44 hover:bg-background-4"
 								>
 									<Icon scale="small">
-										<BulletList />
+										<CalendarIcon/>
 									</Icon>
-									<p class="text-text-4">Zobraziť udalosti</p>
-								</a>
-							{/if}
-							{#if checkPathPermission('/admin/events/create', permission)}
-								<a
-									href="/admin/events/create"
-									class="flex items-center gap-2 px-3 py-2 text-sm w-44 hover:bg-background-4"
-								>
-									<Icon scale="small">
-										<Plus />
-									</Icon>
-									<p class="text-text-4">Vytvoriť udalosť</p>
+									<p class="text-text-4">Kalendár</p>
 								</a>
 							{/if}
 							{#if checkPathPermission('/admin/events', permission)}
@@ -255,6 +279,22 @@
 						</div>
 					{/if}
 				</Collapsible>
+			{/if}
+			{#if checkPathPermission('/admin/chat', permission)}
+				<a
+					href="/admin/chat"
+					class="flex items-center gap-2 px-3 py-3 text-sm border-b-2 border-b-transparent hover:border-b-primary relative"
+				>
+					<Icon scale="small">
+						<Chat />
+					</Icon>
+					<p class="text-text-4">Chat Support</p>
+					{#if $unreadChatCount > 0}
+						<span class="absolute -top-1 -right-1 bg-danger text-white text-xs rounded-full px-1.5 py-0.5 min-w-5 h-5 flex items-center justify-center">
+							{$unreadChatCount}
+						</span>
+					{/if}
+				</a>
 			{/if}
 			{#if checkPathPermission('/admin/halls', permission)}
 				<a

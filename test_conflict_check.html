@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Event Block Conflict Check Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        .form-group { margin: 10px 0; }
+        label { display: block; margin-bottom: 5px; }
+        input, select { padding: 5px; margin-bottom: 10px; width: 200px; }
+        button { padding: 10px 20px; background: #007bff; color: white; border: none; cursor: pointer; }
+        button:disabled { background: #ccc; }
+        .results { margin-top: 20px; padding: 10px; background: #f5f5f5; }
+        .conflict { background: #ffeeee; border: 1px solid #ffcccc; padding: 10px; margin: 5px 0; }
+    </style>
+</head>
+<body>
+    <h1>Event Block Conflict Check Test</h1>
+    
+    <form id="testForm">
+        <div class="form-group">
+            <label>Hall ID:</label>
+            <input type="number" id="hallId" value="1" required>
+        </div>
+        
+        <div class="form-group">
+            <label>Start Date:</label>
+            <input type="date" id="startDate" required>
+        </div>
+        
+        <div class="form-group">
+            <label>End Date:</label>
+            <input type="date" id="endDate" required>
+        </div>
+        
+        <div class="form-group">
+            <label>Blocked Days:</label>
+            <div>
+                <input type="checkbox" id="pon" value="pon"> Monday (pon)
+                <input type="checkbox" id="uto" value="uto"> Tuesday (uto)
+                <input type="checkbox" id="str" value="str"> Wednesday (str)
+                <input type="checkbox" id="stv" value="stv"> Thursday (stv)
+                <input type="checkbox" id="pia" value="pia"> Friday (pia)
+                <input type="checkbox" id="sob" value="sob"> Saturday (sob)
+                <input type="checkbox" id="ned" value="ned"> Sunday (ned)
+            </div>
+        </div>
+        
+        <button type="submit" id="checkBtn">Check for Conflicts</button>
+    </form>
+    
+    <div id="results" class="results" style="display: none;">
+        <h3>Results:</h3>
+        <div id="resultsContent"></div>
+    </div>
+    
+    <script>
+        // Set default dates (tomorrow to next week)
+        const tomorrow = new Date();
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        const nextWeek = new Date();
+        nextWeek.setDate(nextWeek.getDate() + 7);
+        
+        document.getElementById('startDate').value = tomorrow.toISOString().split('T')[0];
+        document.getElementById('endDate').value = nextWeek.toISOString().split('T')[0];
+        
+        // Check all days by default
+        ['pon', 'uto', 'str', 'stv', 'pia', 'sob', 'ned'].forEach(day => {
+            document.getElementById(day).checked = true;
+        });
+        
+        document.getElementById('testForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const checkBtn = document.getElementById('checkBtn');
+            const results = document.getElementById('results');
+            const resultsContent = document.getElementById('resultsContent');
+            
+            checkBtn.disabled = true;
+            checkBtn.textContent = 'Checking...';
+            results.style.display = 'none';
+            
+            try {
+                const hallId = document.getElementById('hallId').value;
+                const startDate = document.getElementById('startDate').value;
+                const endDate = document.getElementById('endDate').value;
+                
+                const blockedDays = [];
+                ['pon', 'uto', 'str', 'stv', 'pia', 'sob', 'ned'].forEach(day => {
+                    if (document.getElementById(day).checked) {
+                        blockedDays.push(day);
+                    }
+                });
+                
+                const response = await fetch('/api/event-blocks/check-conflicts', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        hallId,
+                        startDate: new Date(startDate).toISOString(),
+                        endDate: new Date(endDate).toISOString(),
+                        blockedDays
+                    })
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    
+                    resultsContent.innerHTML = `
+                        <p><strong>Hall:</strong> ${data.hallName} (ID: ${data.hallId})</p>
+                        <p><strong>Block Period:</strong> ${data.blockStartDate} to ${data.blockEndDate}</p>
+                        <p><strong>Blocked Days:</strong> ${data.blockedDays?.join(', ') || 'All days'}</p>
+                        <p><strong>Conflicts Found:</strong> ${data.conflictCount}</p>
+                        
+                        ${data.conflicts?.length > 0 ? `
+                            <h4>Conflicting Events:</h4>
+                            ${data.conflicts.map(conflict => `
+                                <div class="conflict">
+                                    <strong>${conflict.name}</strong><br>
+                                    ${conflict.description}<br>
+                                    <small>
+                                        Date: ${new Date(conflict.startDate).toLocaleDateString()} - ${new Date(conflict.endDate).toLocaleDateString()}<br>
+                                        Organizer: ${conflict.organizer} (${conflict.organizerEmail})<br>
+                                        Participants: ${conflict.participants}
+                                    </small>
+                                </div>
+                            `).join('')}
+                        ` : '<p>No conflicts found!</p>'}
+                    `;
+                    
+                    results.style.display = 'block';
+                } else {
+                    const error = await response.json();
+                    resultsContent.innerHTML = `<p style="color: red;">Error: ${error.error}</p>`;
+                    results.style.display = 'block';
+                }
+            } catch (error) {
+                resultsContent.innerHTML = `<p style="color: red;">Error: ${error.message}</p>`;
+                results.style.display = 'block';
+            } finally {
+                checkBtn.disabled = false;
+                checkBtn.textContent = 'Check for Conflicts';
+            }
+        });
+    </script>
+</body>
+</html>

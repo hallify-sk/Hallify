@@ -281,7 +281,7 @@ export interface TableChairs {
 }
 
 export interface Table {
-	shape: 'rect'; // Currently only rect is used, but could be expanded for other shapes
+	shape: 'rect' | 'circle'; // Support both rectangle and circle shapes
 	name: string;
 	rotation: number;
 	x: number;

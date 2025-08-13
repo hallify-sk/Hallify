@@ -19,7 +19,8 @@
 		dragStart,
 		transformRotate,
 		transformRotateEnd,
-		transformRotateStart
+		transformRotateStart,
+		reregisterClickEvent
 	} from './editor/brushes';
 	import Brushes from './editor/plugins/Brushes.svelte';
 	import { currentColor, points, walls, zonePoints, zones } from '$lib/util';
@@ -32,6 +33,7 @@
 	import Dialog from './Dialog.svelte';
 	import Icon from '$lib/icons/Icon.svelte';
 	import Plus from '$lib/icons/Plus.svelte';
+	import Tables from './editor/plugins/Tables.svelte';
 
 	let openConfirmDeleteDialog = $state(false);
 
@@ -49,6 +51,7 @@
 		gridHeight = $bindable(20),
 		windowWidth = $bindable(800),
 		windowHeight = $bindable(800),
+		userMode = $bindable(false),
 		data
 	}: {
 		gridSize?: number;
@@ -57,6 +60,7 @@
 		windowWidth?: number;
 		windowHeight?: number;
 		zoomBy?: number;
+		userMode?: boolean;
 		data?: any;
 	} = $props();
 
@@ -75,6 +79,12 @@
 				windowWidth = window.innerWidth;
 				windowHeight = window.innerHeight;
 				stageHandle.size({ width: windowWidth, height: windowHeight });
+				
+				// Re-register click event listener when stage is resized
+				if (isInitialized) {
+					reregisterClickEvent();
+					centerStage();
+				}
 			};
 			//Register things to be used by other plugins;
 			const attributes = stageHandle.attrs as StageAttrs;
@@ -93,6 +103,10 @@
 			if (tr && !isInitialized) {
 				registerWheelEvent(stageHandle);
 				registerPlugin(brushes, stageHandle, 'brushes');
+				
+				// Center the stage on initial load
+				centerStage();
+				
 				isInitialized = true;
 			}
 		}
@@ -125,12 +139,37 @@
 		};
 	}
 
+	function centerStage() {
+		if (!stage?.node) return;
+		
+		const stageHandle = stage.node;
+		const scale = stageHandle.scaleX() || 1;
+		
+		// Calculate center position
+		const centerX = (windowWidth - gridWidth * gridSize * scale) / 2;
+		const centerY = (windowHeight - gridHeight * gridSize * scale) / 2;
+		
+		// Set the stage position to center the grid
+		stageHandle.position({
+			x: centerX,
+			y: centerY
+		});
+		
+		stageHandle.draw();
+	}
+
 	$effect(() => {
 		if (gridWidth || gridHeight) {
 			gridData.set({
 				width: gridWidth,
 				height: gridHeight
 			});
+			
+			// Re-register click event and re-center when grid dimensions change
+			if (isInitialized) {
+				reregisterClickEvent();
+				centerStage();
+			}
 		}
 	});
 
@@ -186,7 +225,7 @@
 			</Layer>
 			<Layer bind:this={collisionLayer}>
 				{#each $tables as table}
-					{@render tableRect(table.name, table.rotation, table.x, table.y, table.chairs)}
+					{@render tableShape(table.name, table.rotation, table.x, table.y, table.chairs, table.shape)}
 				{/each}
 				{#each $walls as wall}
 					{@render wallPoly(wall.name, wall.points)}
@@ -254,6 +293,9 @@
 		</Stage>
 	{/key}
 </div>
+{#if userMode}
+	<Tables {stage} />
+{:else}
 <div
 	class="fixed top-0 right-0 block h-screen pt-40 border-l border-solid w-96 bg-background-1 border-border-main/40"
 >
@@ -285,6 +327,7 @@
 		<hr class="border-solid bg-none border-background-4" />
 	</Accordion>
 </div>
+{/if}
 
 <Dialog open={openConfirmDeleteDialog}>
 	{#snippet header()}
@@ -332,12 +375,13 @@
 	</div>
 </Dialog>
 
-{#snippet tableRect(
+{#snippet tableShape(
 	name: string,
 	rotation: number,
 	x: number,
 	y: number,
-	chairs: { left: string[]; right: string[] }
+	chairs: { left: string[]; right: string[] },
+	shape: 'rect' | 'circle'
 )}
 	<Group
 		{name}
@@ -355,47 +399,98 @@
 		ontransform={$plugins.find((p) => p.name == 'brushes') ? transformRotate : undefined}
 		ontransformend={$plugins.find((p) => p.name == 'brushes') ? transformRotateEnd : undefined}
 	>
-		{#each chairs.left as chair, i}
-			<Rect
-				name={chair}
-				x={gridSize * 0.1}
-				y={(4 * gridSize - chairs.left.length * gridSize) / 2 + i * gridSize + gridSize * 0.1}
-				width={0.8 * gridSize}
-				height={0.8 * gridSize}
-				fill={colors.slate[500]}
-				defaultFill={colors.slate[500]}
-				cornerRadius={4}
+		{#if shape === 'circle'}
+			<!-- Round table -->
+			<Circle
+				radius={2 * gridSize}
+				fill={colors.slate[700]}
+				selectDisabled={true}
+				draggable={false}
 				perfectDrawEnabled={false}
-				isChair={true}
-				rotateEnabled={false}
 			/>
-		{/each}
-		<Rect
-			x={gridSize}
-			selectDisabled={true}
-			width={2 * gridSize}
-			height={4 * gridSize}
-			fill={colors.slate[700]}
-			defaultFill={colors.slate[700]}
-			cornerRadius={4}
-			draggable={false}
-			perfectDrawEnabled={false}
-		/>
-		{#each chairs.right as chair, i}
+			
+			<!-- Chairs around circle -->
+			{@const totalChairs = chairs.left.length + chairs.right.length}
+			{#each chairs.left as chair, i}
+				{@const angle = (i / totalChairs) * Math.PI * 2 - Math.PI / 2}
+				{@const chairX = Math.cos(angle) * (2.5 * gridSize)}
+				{@const chairY = Math.sin(angle) * (2.5 * gridSize)}
+				<Rect
+					name={chair}
+					x={chairX - gridSize * 0.4}
+					y={chairY - gridSize * 0.4}
+					width={0.8 * gridSize}
+					height={0.8 * gridSize}
+					fill={colors.slate[500]}
+					defaultFill={colors.slate[500]}
+					cornerRadius={4}
+					perfectDrawEnabled={false}
+					isChair={true}
+					rotateEnabled={false}
+				/>
+			{/each}
+			{#each chairs.right as chair, i}
+				{@const angle = ((i + chairs.left.length) / totalChairs) * Math.PI * 2 - Math.PI / 2}
+				{@const chairX = Math.cos(angle) * (2.5 * gridSize)}
+				{@const chairY = Math.sin(angle) * (2.5 * gridSize)}
+				<Rect
+					name={chair}
+					x={chairX - gridSize * 0.4}
+					y={chairY - gridSize * 0.4}
+					width={0.8 * gridSize}
+					height={0.8 * gridSize}
+					fill={colors.slate[500]}
+					defaultFill={colors.slate[500]}
+					cornerRadius={4}
+					perfectDrawEnabled={false}
+					isChair={true}
+					rotateEnabled={false}
+				/>
+			{/each}
+		{:else}
+			<!-- Rectangular table -->
+			{#each chairs.left as chair, i}
+				<Rect
+					name={chair}
+					x={gridSize * 0.1}
+					y={(4 * gridSize - chairs.left.length * gridSize) / 2 + i * gridSize + gridSize * 0.1}
+					width={0.8 * gridSize}
+					height={0.8 * gridSize}
+					fill={colors.slate[500]}
+					defaultFill={colors.slate[500]}
+					cornerRadius={4}
+					perfectDrawEnabled={false}
+					isChair={true}
+					rotateEnabled={false}
+				/>
+			{/each}
 			<Rect
-				name={chair}
-				x={gridSize * 2 + gridSize + gridSize * 0.1}
-				y={(4 * gridSize - chairs.right.length * gridSize) / 2 + i * gridSize + gridSize * 0.1}
-				width={0.8 * gridSize}
-				height={0.8 * gridSize}
-				fill={colors.slate[500]}
-				defaultFill={colors.slate[500]}
+				x={gridSize}
+				selectDisabled={true}
+				width={2 * gridSize}
+				height={4 * gridSize}
+				fill={colors.slate[700]}
+				defaultFill={colors.slate[700]}
 				cornerRadius={4}
+				draggable={false}
 				perfectDrawEnabled={false}
-				isChair={true}
-				rotateEnabled={false}
 			/>
-		{/each}
+			{#each chairs.right as chair, i}
+				<Rect
+					name={chair}
+					x={gridSize * 2 + gridSize + gridSize * 0.1}
+					y={(4 * gridSize - chairs.right.length * gridSize) / 2 + i * gridSize + gridSize * 0.1}
+					width={0.8 * gridSize}
+					height={0.8 * gridSize}
+					fill={colors.slate[500]}
+					defaultFill={colors.slate[500]}
+					cornerRadius={4}
+					perfectDrawEnabled={false}
+					isChair={true}
+					rotateEnabled={false}
+				/>
+			{/each}
+		{/if}
 	</Group>
 {/snippet}
 {#snippet wallPoly(name: string, points: number[])}

@@ -5,11 +5,20 @@ import { get } from 'svelte/store';
 import { v4 as uuidv4 } from 'uuid';
 import { circleBounds, gridData, pointsToVector2D, pushHistory, snapToGrid, tables } from '../lib';
 
+// Store the click handler so it can be removed later
+let clickHandler: ((e: any) => void) | null = null;
+
 export function registerClickEvent(
 	stage: Konva.Stage,
 	tr: Konva.Transformer | undefined,
 	layers: { [key: string]: Konva.Layer | undefined }
 ) {
+	// Remove existing click event if it exists
+	if (clickHandler) {
+		stage.off('click tap', clickHandler);
+		clickHandler = null;
+	}
+
 	const stageBounds = [
 		0,
 		0,
@@ -21,7 +30,8 @@ export function registerClickEvent(
 		stage.attrs.grid.gridHeight * stage.attrs.grid.gridSize
 	];
 
-	stage.on('click tap', function (e) {
+	// Create the click handler function
+	clickHandler = function (e) {
 		switch (get(selectedBrush)) {
 			case 'zonePainter':
 				{
@@ -110,7 +120,17 @@ export function registerClickEvent(
 				}
 			}
 		}
-	});
+	};
+
+	// Register the new click handler
+	stage.on('click tap', clickHandler);
+}
+
+export function removeClickEvent(stage: Konva.Stage) {
+	if (clickHandler) {
+		stage.off('click tap', clickHandler);
+		clickHandler = null;
+	}
 }
 
 function deselectNodes(tr: Konva.Transformer) {

@@ -148,10 +148,15 @@ export const GET: RequestHandler = async ({ params, url }) => {
             // Check if date conflicts with existing events
             if (isAvailable) {
                 for (const event of existingEvents) {
-                    const eventStart = new Date(event.startDate + 'T00:00:00');
-                    const eventEnd = new Date(event.endDate + 'T00:00:00');
+                    // Convert timestamp dates to local dates for comparison
+                    const eventStart = new Date(event.startDate);
+                    const eventEnd = new Date(event.endDate);
                     
-                    if (currentDate >= eventStart && currentDate <= eventEnd) {
+                    // Extract just the date parts for comparison (ignore time)
+                    const eventStartDate = new Date(eventStart.getFullYear(), eventStart.getMonth(), eventStart.getDate());
+                    const eventEndDate = new Date(eventEnd.getFullYear(), eventEnd.getMonth(), eventEnd.getDate());
+                    
+                    if (currentDate >= eventStartDate && currentDate <= eventEndDate) {
                         isAvailable = false;
                         break;
                     }
