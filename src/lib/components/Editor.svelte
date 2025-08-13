@@ -225,7 +225,7 @@
 			</Layer>
 			<Layer bind:this={collisionLayer}>
 				{#each $tables as table}
-					{@render tableRect(table.name, table.rotation, table.x, table.y, table.chairs)}
+					{@render tableShape(table.name, table.rotation, table.x, table.y, table.chairs, table.shape)}
 				{/each}
 				{#each $walls as wall}
 					{@render wallPoly(wall.name, wall.points)}
@@ -294,7 +294,7 @@
 	{/key}
 </div>
 {#if userMode}
-	<Tables />
+	<Tables {stage} />
 {:else}
 <div
 	class="fixed top-0 right-0 block h-screen pt-40 border-l border-solid w-96 bg-background-1 border-border-main/40"
@@ -375,12 +375,13 @@
 	</div>
 </Dialog>
 
-{#snippet tableRect(
+{#snippet tableShape(
 	name: string,
 	rotation: number,
 	x: number,
 	y: number,
-	chairs: { left: string[]; right: string[] }
+	chairs: { left: string[]; right: string[] },
+	shape: 'rect' | 'circle'
 )}
 	<Group
 		{name}
@@ -398,47 +399,98 @@
 		ontransform={$plugins.find((p) => p.name == 'brushes') ? transformRotate : undefined}
 		ontransformend={$plugins.find((p) => p.name == 'brushes') ? transformRotateEnd : undefined}
 	>
-		{#each chairs.left as chair, i}
-			<Rect
-				name={chair}
-				x={gridSize * 0.1}
-				y={(4 * gridSize - chairs.left.length * gridSize) / 2 + i * gridSize + gridSize * 0.1}
-				width={0.8 * gridSize}
-				height={0.8 * gridSize}
-				fill={colors.slate[500]}
-				defaultFill={colors.slate[500]}
-				cornerRadius={4}
+		{#if shape === 'circle'}
+			<!-- Round table -->
+			<Circle
+				radius={2 * gridSize}
+				fill={colors.slate[700]}
+				selectDisabled={true}
+				draggable={false}
 				perfectDrawEnabled={false}
-				isChair={true}
-				rotateEnabled={false}
 			/>
-		{/each}
-		<Rect
-			x={gridSize}
-			selectDisabled={true}
-			width={2 * gridSize}
-			height={4 * gridSize}
-			fill={colors.slate[700]}
-			defaultFill={colors.slate[700]}
-			cornerRadius={4}
-			draggable={false}
-			perfectDrawEnabled={false}
-		/>
-		{#each chairs.right as chair, i}
+			
+			<!-- Chairs around circle -->
+			{@const totalChairs = chairs.left.length + chairs.right.length}
+			{#each chairs.left as chair, i}
+				{@const angle = (i / totalChairs) * Math.PI * 2 - Math.PI / 2}
+				{@const chairX = Math.cos(angle) * (2.5 * gridSize)}
+				{@const chairY = Math.sin(angle) * (2.5 * gridSize)}
+				<Rect
+					name={chair}
+					x={chairX - gridSize * 0.4}
+					y={chairY - gridSize * 0.4}
+					width={0.8 * gridSize}
+					height={0.8 * gridSize}
+					fill={colors.slate[500]}
+					defaultFill={colors.slate[500]}
+					cornerRadius={4}
+					perfectDrawEnabled={false}
+					isChair={true}
+					rotateEnabled={false}
+				/>
+			{/each}
+			{#each chairs.right as chair, i}
+				{@const angle = ((i + chairs.left.length) / totalChairs) * Math.PI * 2 - Math.PI / 2}
+				{@const chairX = Math.cos(angle) * (2.5 * gridSize)}
+				{@const chairY = Math.sin(angle) * (2.5 * gridSize)}
+				<Rect
+					name={chair}
+					x={chairX - gridSize * 0.4}
+					y={chairY - gridSize * 0.4}
+					width={0.8 * gridSize}
+					height={0.8 * gridSize}
+					fill={colors.slate[500]}
+					defaultFill={colors.slate[500]}
+					cornerRadius={4}
+					perfectDrawEnabled={false}
+					isChair={true}
+					rotateEnabled={false}
+				/>
+			{/each}
+		{:else}
+			<!-- Rectangular table -->
+			{#each chairs.left as chair, i}
+				<Rect
+					name={chair}
+					x={gridSize * 0.1}
+					y={(4 * gridSize - chairs.left.length * gridSize) / 2 + i * gridSize + gridSize * 0.1}
+					width={0.8 * gridSize}
+					height={0.8 * gridSize}
+					fill={colors.slate[500]}
+					defaultFill={colors.slate[500]}
+					cornerRadius={4}
+					perfectDrawEnabled={false}
+					isChair={true}
+					rotateEnabled={false}
+				/>
+			{/each}
 			<Rect
-				name={chair}
-				x={gridSize * 2 + gridSize + gridSize * 0.1}
-				y={(4 * gridSize - chairs.right.length * gridSize) / 2 + i * gridSize + gridSize * 0.1}
-				width={0.8 * gridSize}
-				height={0.8 * gridSize}
-				fill={colors.slate[500]}
-				defaultFill={colors.slate[500]}
+				x={gridSize}
+				selectDisabled={true}
+				width={2 * gridSize}
+				height={4 * gridSize}
+				fill={colors.slate[700]}
+				defaultFill={colors.slate[700]}
 				cornerRadius={4}
+				draggable={false}
 				perfectDrawEnabled={false}
-				isChair={true}
-				rotateEnabled={false}
 			/>
-		{/each}
+			{#each chairs.right as chair, i}
+				<Rect
+					name={chair}
+					x={gridSize * 2 + gridSize + gridSize * 0.1}
+					y={(4 * gridSize - chairs.right.length * gridSize) / 2 + i * gridSize + gridSize * 0.1}
+					width={0.8 * gridSize}
+					height={0.8 * gridSize}
+					fill={colors.slate[500]}
+					defaultFill={colors.slate[500]}
+					cornerRadius={4}
+					perfectDrawEnabled={false}
+					isChair={true}
+					rotateEnabled={false}
+				/>
+			{/each}
+		{/if}
 	</Group>
 {/snippet}
 {#snippet wallPoly(name: string, points: number[])}
