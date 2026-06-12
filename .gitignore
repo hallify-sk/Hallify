@@ -1,0 +1,27 @@
+# Dependencies
+node_modules/
+
+# Environment — never commit real secrets
+.env
+.env.local
+.env.*.local
+
+# SvelteKit build output
+.svelte-kit/
+build/
+dist/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Claude Code — machine-local settings only; skills are shared
+.claude/settings.local.json
+
+# Editor
+.vscode/settings.json
+.idea/
+
+# Logs
+*.log
+npm-debug.log*

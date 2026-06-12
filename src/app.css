@@ -1,0 +1,288 @@
+*, *::before, *::after {
+	box-sizing: border-box;
+	margin: 0;
+	padding: 0;
+}
+
+/* ─── Design tokens: Slate (default) ─────────────────────────────── */
+:root {
+	--sidebar-width: 240px;
+
+	--bg-base:    #f3f4f6;
+	--bg-panel:   #ffffff;
+	--bg-panel2:  #f9fafb;
+	--bg-hover:   #f0f2f5;
+	--border:     #e3e6ed;
+	--border-subtle: #eef0f5;
+
+	--accent:             #4f6ef7;
+	--accent-dim:         #eef1fe;
+	--accent-hover:       #3d5ce8;
+	--accent-action:      #4f6ef7;
+	--accent-action-dim:  #eef1fe;
+
+	--text-base:   #111827;
+	--text-muted:  #6b7280;
+	--text-subtle: #9ca3af;
+
+	--danger:      #ef4444;
+	--danger-dim:  #fef2f2;
+	--success:     #22c55e;
+	--success-dim: #f0fdf4;
+	--warning:     #f59e0b;
+	--warning-dim: #fefce8;
+
+	--shadow-xs: 0 1px 2px rgba(0,0,0,.05);
+	--shadow-sm: 0 1px 4px rgba(0,0,0,.06), 0 1px 2px rgba(0,0,0,.04);
+	--shadow:    0 4px 12px rgba(0,0,0,.08), 0 1px 3px rgba(0,0,0,.04);
+
+	--radius-sm: 5px;
+	--radius:    8px;
+	--radius-lg: 12px;
+
+	font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
+}
+
+/* ─── Theme: Dark ─────────────────────────────────────────────────── */
+[data-theme="dark"] {
+	--bg-base:    #0f1117;
+	--bg-panel:   #16181f;
+	--bg-panel2:  #1e2028;
+	--bg-hover:   #22242e;
+	--border:     #2a2c36;
+	--border-subtle: #1e202a;
+
+	--accent:             #818cf8;
+	--accent-dim:         #1e2140;
+	--accent-hover:       #6366f1;
+	--accent-action:      #818cf8;
+	--accent-action-dim:  #1e2140;
+
+	--text-base:   #e8eaf0;
+	--text-muted:  #8892a4;
+	--text-subtle: #4e5464;
+
+	--danger:      #f87171;
+	--danger-dim:  #2d1212;
+	--success:     #4ade80;
+	--success-dim: #0d2110;
+	--warning:     #fbbf24;
+	--warning-dim: #2d1f00;
+
+	--shadow-xs: 0 1px 2px rgba(0,0,0,.3);
+	--shadow-sm: 0 1px 4px rgba(0,0,0,.4), 0 1px 2px rgba(0,0,0,.3);
+	--shadow:    0 4px 12px rgba(0,0,0,.5), 0 1px 3px rgba(0,0,0,.3);
+}
+
+/* ─── Theme: Warm Violet ──────────────────────────────────────────── */
+[data-theme="warm"] {
+	--bg-base:    #faf9f7;
+	--bg-panel:   #ffffff;
+	--bg-panel2:  #f5f3ef;
+	--bg-hover:   #f0ece7;
+	--border:     #e5e0d8;
+	--border-subtle: #ede9e3;
+
+	--accent:             #7c3aed;
+	--accent-dim:         #f5f0ff;
+	--accent-hover:       #6d28d9;
+	--accent-action:      #7c3aed;
+	--accent-action-dim:  #f5f0ff;
+
+	--text-base:   #1c1917;
+	--text-muted:  #78716c;
+	--text-subtle: #a8a29e;
+}
+
+/* ─── Base ────────────────────────────────────────────────────────── */
+
+html, body {
+	height: 100%;
+	background: var(--bg-base);
+	color: var(--text-base);
+}
+
+a {
+	color: var(--accent);
+	text-decoration: none;
+}
+a:hover { text-decoration: underline; }
+
+button {
+	cursor: pointer;
+	border: none;
+	background: none;
+	color: inherit;
+	font: inherit;
+}
+
+input[type="range"] {
+	accent-color: var(--accent);
+}
+
+input[type="number"],
+input[type="text"],
+input[type="email"],
+input[type="password"],
+input[type="date"],
+input[type="time"],
+input[type="color"],
+select,
+textarea {
+	background: var(--bg-panel2);
+	border: 1px solid var(--border);
+	color: var(--text-base);
+	border-radius: var(--radius);
+	padding: 9px 13px;
+	font: inherit;
+	outline: none;
+	width: 100%;
+	font-size: 14px;
+	transition: border-color .15s, box-shadow .15s;
+}
+
+input[type="color"] {
+	padding: 4px;
+	height: 40px;
+	cursor: pointer;
+}
+
+textarea {
+	resize: vertical;
+	min-height: 60px;
+}
+
+input[type="number"]:focus,
+input[type="text"]:focus,
+input[type="email"]:focus,
+input[type="password"]:focus,
+input[type="date"]:focus,
+input[type="time"]:focus,
+select:focus,
+textarea:focus {
+	border-color: var(--accent);
+	box-shadow: 0 0 0 3px var(--accent-dim);
+}
+
+label {
+	color: var(--text-muted);
+	font-size: 12px;
+	font-weight: 600;
+	letter-spacing: .01em;
+}
+
+/* ─── Buttons ─────────────────────────────────────────────────────── */
+
+.btn-action {
+	display: inline-flex;
+	align-items: center;
+	gap: 7px;
+	padding: 9px 20px;
+	border-radius: var(--radius);
+	background: var(--accent);
+	color: #fff;
+	font-size: 13px;
+	font-weight: 600;
+	border: none;
+	cursor: pointer;
+	font-family: inherit;
+	transition: background .15s;
+	white-space: nowrap;
+}
+.btn-action:hover { background: var(--accent-hover); }
+
+.btn-outline {
+	display: inline-flex;
+	align-items: center;
+	gap: 7px;
+	padding: 9px 20px;
+	border-radius: var(--radius);
+	background: var(--bg-panel);
+	color: var(--text-base);
+	font-size: 13px;
+	font-weight: 500;
+	border: 1px solid var(--border);
+	cursor: pointer;
+	font-family: inherit;
+	transition: background .15s, border-color .15s;
+	white-space: nowrap;
+}
+.btn-outline:hover { background: var(--bg-hover); border-color: var(--text-subtle); }
+
+.btn-sm {
+	padding: 5px 12px;
+	font-size: 12px;
+	border-radius: var(--radius-sm);
+}
+
+.btn-danger {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	padding: 5px 12px;
+	border-radius: var(--radius-sm);
+	background: var(--danger-dim);
+	color: var(--danger);
+	font-size: 12px;
+	font-weight: 600;
+	border: 1px solid color-mix(in srgb, var(--danger) 20%, transparent);
+	cursor: pointer;
+	font-family: inherit;
+	transition: background .15s;
+}
+.btn-danger:hover { background: color-mix(in srgb, var(--danger) 15%, transparent); }
+
+/* ─── Card ────────────────────────────────────────────────────────── */
+
+.card {
+	background: var(--bg-panel);
+	border: 1px solid var(--border);
+	border-radius: var(--radius-lg);
+	padding: 20px 24px;
+}
+
+/* ─── Alerts ──────────────────────────────────────────────────────── */
+
+.alert-error {
+	background: var(--danger-dim);
+	border: 1px solid color-mix(in srgb, var(--danger) 25%, transparent);
+	color: var(--danger);
+	border-radius: var(--radius);
+	padding: 10px 14px;
+	font-size: 13px;
+	margin-bottom: 16px;
+}
+
+.alert-warning {
+	background: var(--warning-dim);
+	border: 1px solid color-mix(in srgb, var(--warning) 35%, transparent);
+	color: color-mix(in srgb, var(--warning) 70%, var(--text-base));
+	border-radius: var(--radius);
+	padding: 10px 14px;
+	font-size: 13px;
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+/* ─── Form layout helpers ─────────────────────────────────────────── */
+
+.field {
+	display: flex;
+	flex-direction: column;
+	gap: 5px;
+	margin-bottom: 14px;
+}
+
+.field-row {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 12px;
+}
+
+/* ─── Scrollbar ───────────────────────────────────────────────────── */
+
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-subtle); }
