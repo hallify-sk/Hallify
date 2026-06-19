@@ -635,7 +635,7 @@ export const sk = {
 		forGuestsPrefix: "pre",
 		guestsWord: "hostí",
 		autoApproveNote: "Vaša rezervácia bude automaticky schválená.",
-		reviewNote: "Vašu žiadosť posúdi priestor. Po jej potvrdení vás upozorníme.",
+		reviewNote: "Vašu žiadosť posúdi prevádzka. Po jej potvrdení vás upozorníme.",
 		sendRequest: "Odoslať žiadosť o rezerváciu",
 		holdingDate: "Podržiava sa dátum…",
 		holdExpired: "Vaše podržanie tohto dátumu vypršalo alebo bolo obsadené — vyberte iný.",
