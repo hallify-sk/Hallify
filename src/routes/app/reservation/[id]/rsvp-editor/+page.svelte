@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
-	import { t } from '$lib/i18n';
+	import { t } from '$lib/i18n.svelte';
 	import type { PageData, ActionData } from './$types';
 	import type { RsvpConfig } from '$lib/db/index';
 
@@ -14,6 +14,7 @@
 	let bgImage = $state(initial.bgImage ?? '');
 	let description = $state(initial.description ?? '');
 	let arrivalTime = $state(initial.arrivalTime ?? '');
+	let maxExtraGuests = $state(initial.maxExtraGuests ?? 0);
 	let fields = $state<NonNullable<RsvpConfig['fields']>>(
 		initial.fields && initial.fields.length > 0 && initial.fields[0].name === 'name'
 			? initial.fields
@@ -70,11 +71,12 @@
 		fields = arr;
 	}
 
-	const defaultAllergens = t.rsvpEditor.defaultAllergens.split(',').map(s => s.trim());
+	const defaultAllergens = $derived(t.rsvpEditor.defaultAllergens.split(',').map(s => s.trim()));
 
 	const configJson = $derived(JSON.stringify({
 		enabled: initial.enabled,
 		primaryColor, bgColor, bgImage, description, style: rsvpStyle, arrivalTime: arrivalTime || undefined,
+		maxExtraGuests: Math.max(0, Math.min(20, Number(maxExtraGuests) || 0)),
 		fields: fields.map(f => ({
 			name: f.name, label: f.label, type: f.type,
 			required: f.required,
@@ -92,6 +94,7 @@
 		description = c.description ?? '';
 		rsvpStyle = c.style ?? 'default';
 		arrivalTime = c.arrivalTime ?? '';
+		maxExtraGuests = c.maxExtraGuests ?? 0;
 		fields = c.fields ?? [
 			{ name: 'name', label: t.rsvp.fullName, type: 'text', required: true },
 			{ name: 'email', label: t.rsvp.email, type: 'email', required: false },
@@ -115,20 +118,22 @@
 		{t.common.back}
 	</a>
 	<h1 class="toolbar-title">{t.rsvpEditor.title}</h1>
-	<form method="POST" action="?/save" use:enhance={() => {
-		saving = true;
-		return async ({ update }) => {
-			await update({ reset: false });
-		};
-	}}>
-		<input type="hidden" name="config" value={configJson} />
-		<button type="submit" class="btn-action btn-sm toolbar-save" disabled={saving}>
-			{#if saving}
-				<span class="spinner"></span>
-			{/if}
-			{t.rsvpEditor.save}
-		</button>
-	</form>
+	{#if data.advancedRsvp}
+		<form method="POST" action="?/save" use:enhance={() => {
+			saving = true;
+			return async ({ update }) => {
+				await update({ reset: false });
+			};
+		}}>
+			<input type="hidden" name="config" value={configJson} />
+			<button type="submit" class="btn-action btn-sm toolbar-save" disabled={saving}>
+				{#if saving}
+					<span class="spinner"></span>
+				{/if}
+				{t.rsvpEditor.save}
+			</button>
+		</form>
+	{/if}
 </div>
 
 <!-- Success toast -->
@@ -139,6 +144,14 @@
 	</div>
 {/if}
 
+{#if !data.advancedRsvp}
+	<div class="rsvp-upsell">
+		<svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+		<h2>Advanced RSVP editing is a paid feature</h2>
+		<p>Your Free plan collects basic RSVPs (name &amp; email). Upgrade to customise the RSVP form — add custom fields, allergies, styling and templates.</p>
+		<a href="/app/billing" class="btn-action">View plans</a>
+	</div>
+{:else}
 <div class="editor-grid">
 	<!-- Left: Settings -->
 	<div class="settings-col">
@@ -221,10 +234,15 @@
 				<textarea id="description" bind:value={description} rows="3"
 					placeholder={t.rsvpEditor.descriptionPlaceholder}></textarea>
 			</div>
-			<div class="field compact" style="margin-bottom:0">
+			<div class="field compact">
 				<label for="arrivalTime">{t.rsvpEditor.arrivalTime}</label>
 				<input id="arrivalTime" type="time" bind:value={arrivalTime} />
 				<p class="field-hint">{t.rsvpEditor.arrivalTimeHint}</p>
+			</div>
+			<div class="field compact" style="margin-bottom:0">
+				<label for="maxExtra">Extra guests per invite</label>
+				<input id="maxExtra" type="number" min="0" max="20" bind:value={maxExtraGuests} />
+				<p class="field-hint">How many extra people each invitee can bring (0 = they come alone).</p>
 			</div>
 		</div>
 
@@ -413,6 +431,7 @@
 		</div>
 	</div>
 </div>
+{/if}
 
 <!-- Fullscreen preview overlay -->
 {#if fullscreenPreview}
@@ -481,6 +500,16 @@
 {/if}
 
 <style>
+	.rsvp-upsell {
+		max-width: 460px; margin: 60px auto; text-align: center;
+		display: flex; flex-direction: column; align-items: center; gap: 12px;
+		padding: 32px 28px; background: var(--bg-panel); border: 1px solid var(--border); border-radius: 16px;
+	}
+	.rsvp-upsell svg { color: var(--accent); }
+	.rsvp-upsell h2 { font-size: 17px; font-weight: 700; margin: 0; }
+	.rsvp-upsell p { font-size: 13px; color: var(--text-muted); line-height: 1.5; margin: 0; }
+	.rsvp-upsell .btn-action { margin-top: 6px; text-decoration: none; }
+
 	/* ===== Toolbar ===== */
 	.toolbar {
 		position: sticky;

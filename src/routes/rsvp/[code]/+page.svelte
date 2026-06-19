@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
-	import { t } from '$lib/i18n';
+	import { t } from '$lib/i18n.svelte';
 	import type { PageData, ActionData } from './$types';
 	import type { RsvpConfig } from '$lib/db/index';
 
@@ -151,6 +151,17 @@
 						<div class="field">
 							<label for="email">{t.rsvp.email}</label>
 							<input id="email" name="email" type="email" />
+						</div>
+					{/if}
+					{#if data.maxExtraGuests > 0}
+						<div class="field">
+							<label for="extra_guests">Bringing extra guests?</label>
+							<select id="extra_guests" name="extra_guests">
+								<option value="0">Just me</option>
+								{#each Array(data.maxExtraGuests) as _, i}
+									<option value={i + 1}>+{i + 1} {i + 1 === 1 ? 'guest' : 'guests'}</option>
+								{/each}
+							</select>
 						</div>
 					{/if}
 					<button type="submit" class="btn-submit" style="background:{btnColor}">

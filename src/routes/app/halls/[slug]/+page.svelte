@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { t } from '$lib/i18n.svelte';
 	import type { PageData } from './$types';
 
 	interface Props { data: PageData; }
@@ -6,7 +7,15 @@
 
 	const { hall } = data;
 
-	const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+	const DAYS = $derived([
+		t.appHalls.daySunday,
+		t.appHalls.dayMonday,
+		t.appHalls.dayTuesday,
+		t.appHalls.dayWednesday,
+		t.appHalls.dayThursday,
+		t.appHalls.dayFriday,
+		t.appHalls.daySaturday,
+	]);
 
 	let activeImg = $state<string | null>(null);
 </script>
@@ -16,12 +25,15 @@
 <!-- Lightbox -->
 {#if activeImg}
 	<div class="lightbox" role="button" tabindex="-1" onclick={() => (activeImg = null)} onkeydown={e => e.key === 'Escape' && (activeImg = null)}>
-		<img src={activeImg} alt="Gallery" />
+		<img src={activeImg} alt={t.appHalls.gallery} />
 	</div>
 {/if}
 
 <div class="page">
-	<a href="/app/halls" class="back">← Back to halls</a>
+	<a href="/app/halls" class="back">
+		<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="15 18 9 12 15 6"/></svg>
+		{t.appHalls.backToHalls}
+	</a>
 
 	<!-- Hero -->
 	<div
@@ -40,7 +52,7 @@
 			{/if}
 			<p class="hero-meta">
 				<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-				Up to {hall.max_people} guests
+				{t.appHalls.upTo} {hall.max_people} {t.appHalls.guestsWord}
 			</p>
 		</div>
 	</div>
@@ -50,7 +62,7 @@
 			<!-- Description -->
 			{#if hall.description}
 				<section class="section">
-					<h2>About</h2>
+					<h2>{t.appHalls.about}</h2>
 					<p class="desc-text">{hall.description}</p>
 				</section>
 			{/if}
@@ -58,11 +70,11 @@
 			<!-- Gallery -->
 			{#if hall.gallery_images?.length}
 				<section class="section">
-					<h2>Gallery</h2>
+					<h2>{t.appHalls.gallery}</h2>
 					<div class="gallery-grid">
 						{#each hall.gallery_images as img}
 							<button class="gallery-thumb" onclick={() => (activeImg = img)} type="button">
-								<img src={img} alt="Hall" />
+								<img src={img} alt={t.appHalls.hallImageAlt} />
 							</button>
 						{/each}
 					</div>
@@ -72,7 +84,7 @@
 			<!-- Amenities -->
 			{#if hall.amenities?.length}
 				<section class="section">
-					<h2>Amenities</h2>
+					<h2>{t.appHalls.amenities}</h2>
 					<div class="amenity-chips">
 						{#each hall.amenities as a}
 							<span class="chip">{a}</span>
@@ -84,7 +96,7 @@
 			<!-- Opening hours -->
 			{#if hall.opening_hours && Object.keys(hall.opening_hours).length}
 				<section class="section">
-					<h2>Opening hours</h2>
+					<h2>{t.appHalls.openingHours}</h2>
 					<div class="hours-list">
 						{#each DAYS as day, i}
 							{@const hours = hall.opening_hours[i.toString()]}
@@ -92,7 +104,7 @@
 								<div class="hours-row">
 									<span class="hours-day">{day}</span>
 									<span class="hours-val">
-										{hours.open ? `${hours.from} – ${hours.to}` : 'Closed'}
+										{hours.open ? `${hours.from} – ${hours.to}` : t.appHalls.closed}
 									</span>
 								</div>
 							{/if}
@@ -107,7 +119,7 @@
 			<!-- Pricing -->
 			{#if hall.pricing_info}
 				<div class="sidebar-card">
-					<h3>Pricing</h3>
+					<h3>{t.appHalls.pricing}</h3>
 					<p class="pricing-text">{hall.pricing_info}</p>
 				</div>
 			{/if}
@@ -115,7 +127,7 @@
 			<!-- Contact -->
 			{#if hall.contact_phone || hall.contact_email || hall.contact_website}
 				<div class="sidebar-card">
-					<h3>Contact</h3>
+					<h3>{t.appHalls.contact}</h3>
 					<div class="contact-list">
 						{#if hall.contact_phone}
 							<a href="tel:{hall.contact_phone}" class="contact-row">
@@ -142,14 +154,14 @@
 			<!-- CTA -->
 			<div class="sidebar-card cta-card">
 				{#if !data.isLoggedIn}
-					<p class="cta-hint">Sign in to request a reservation</p>
-					<a href="/app/login?redirect=/app/halls/{hall.slug ?? hall.id}" class="cta-btn">Sign in to book</a>
-					<a href="/app/register" class="cta-link">No account? Create one</a>
+					<p class="cta-hint">{t.appHalls.signInToReserveHint}</p>
+					<a href="/app/login?redirect=/app/halls/{hall.slug ?? hall.id}" class="cta-btn">{t.appHalls.signInToBook}</a>
+					<a href="/app/register" class="cta-link">{t.appHalls.noAccountCreate}</a>
 				{:else if data.isClient}
-					<p class="cta-hint">Ready to book?</p>
-					<a href="/app/halls/{hall.slug ?? hall.id}/book" class="cta-btn">Request reservation</a>
+					<p class="cta-hint">{t.appHalls.readyToBook}</p>
+					<a href="/app/halls/{hall.slug ?? hall.id}/book" class="cta-btn">{t.appHalls.requestReservation}</a>
 				{:else}
-					<p class="cta-hint cta-org">You're signed in as an organization account. Switch to a client account to make reservations.</p>
+					<p class="cta-hint cta-org">{t.appHalls.orgAccountNote}</p>
 				{/if}
 			</div>
 		</aside>
@@ -157,9 +169,14 @@
 </div>
 
 <style>
-	.page { display: flex; flex-direction: column; gap: 24px; max-width: 900px; margin: 0 auto; }
+	.page { display: flex; flex-direction: column; gap: 20px; max-width: 960px; margin: 0 auto; padding: 24px 28px; }
 
-	.back { font-size: 13px; color: var(--accent); text-decoration: none; font-weight: 500; }
+	.back {
+		display: inline-flex; align-items: center; gap: 5px; align-self: flex-start;
+		font-size: 13px; color: var(--text-muted); text-decoration: none; font-weight: 600;
+		transition: color .12s;
+	}
+	.back:hover { color: var(--accent); }
 
 	.hero {
 		height: 280px;
@@ -194,7 +211,7 @@
 	.main-col { display: flex; flex-direction: column; gap: 28px; }
 
 	.section { display: flex; flex-direction: column; gap: 12px; }
-	.section h2 { font-size: 16px; font-weight: 700; color: var(--text-base); }
+	.section h2 { font-size: 15px; font-weight: 700; color: var(--text-base); }
 
 	.desc-text { font-size: 14px; color: var(--text-muted); line-height: 1.6; white-space: pre-wrap; }
 
@@ -218,11 +235,11 @@
 
 	.amenity-chips { display: flex; flex-wrap: wrap; gap: 6px; }
 	.chip {
-		padding: 5px 10px;
+		padding: 5px 12px;
 		border-radius: 99px;
 		font-size: 12px;
-		font-weight: 500;
-		background: var(--bg);
+		font-weight: 600;
+		background: var(--bg-panel2, var(--bg-base));
 		border: 1px solid var(--border);
 		color: var(--text-muted);
 	}
@@ -235,12 +252,12 @@
 	.sidebar { display: flex; flex-direction: column; gap: 16px; position: sticky; top: 80px; }
 
 	.sidebar-card {
-		border-radius: 12px;
+		border-radius: 14px;
 		border: 1px solid var(--border);
-		background: var(--surface);
-		padding: 16px;
+		background: var(--bg-panel);
+		padding: 16px 18px;
 	}
-	.sidebar-card h3 { font-size: 14px; font-weight: 700; color: var(--text-base); margin-bottom: 10px; }
+	.sidebar-card h3 { font-size: 13px; font-weight: 700; color: var(--text-base); margin-bottom: 10px; }
 
 	.pricing-text { font-size: 14px; color: var(--text-muted); white-space: pre-wrap; line-height: 1.5; }
 

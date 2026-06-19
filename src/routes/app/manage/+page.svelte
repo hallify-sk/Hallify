@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from '$lib/i18n.svelte';
   import type { PageData } from './$types';
 
   interface Props { data: PageData; }
@@ -6,8 +7,8 @@
 
   // ── Bar chart ─────────────────────────────────────────────────────────────
   const BAR_H = 120;
-  const BAR_W = 36;
-  const BAR_GAP = 10;
+  const BAR_W = 80;
+  const BAR_GAP = 28;
   const CHART_W = (BAR_W + BAR_GAP) * data.monthly.length - BAR_GAP;
   const maxCount  = $derived(Math.max(...data.monthly.map(m => m.count), 1));
   const maxHallRes = $derived(Math.max(...data.halls.map(h => h.reservation_count), 1));
@@ -23,14 +24,14 @@
     cancelled:       'var(--text-subtle)',
     waiting_payment: '#f97316',
   };
-  const STATUS_LABELS: Record<string, string> = {
-    pending:         'Pending',
-    approved:        'Approved',
-    planned:         'Planned',
-    completed:       'Completed',
-    cancelled:       'Cancelled',
-    waiting_payment: 'Awaiting payment',
-  };
+  const STATUS_LABELS: Record<string, string> = $derived({
+    pending:         t.status.pending,
+    approved:        t.status.approved,
+    planned:         t.status.planned,
+    completed:       t.status.completed,
+    cancelled:       t.status.cancelled,
+    waiting_payment: t.status.waiting_payment,
+  });
   const totalReservations = $derived(data.byStatus.reduce((s, r) => s + r.count, 0) || 1);
   const donutSegments = $derived(() => {
     let offset = 0;
@@ -54,11 +55,11 @@
   function timeAgo(d: Date | string) {
     const diff = Date.now() - new Date(d).getTime();
     const mins = Math.floor(diff / 60000);
-    if (mins < 1) return 'just now';
-    if (mins < 60) return `${mins}m ago`;
+    if (mins < 1) return t.settingsPages.justNow;
+    if (mins < 60) return `${mins}${t.settingsPages.minutesAgo}`;
     const hrs = Math.floor(mins / 60);
-    if (hrs < 24) return `${hrs}h ago`;
-    return `${Math.floor(hrs / 24)}d ago`;
+    if (hrs < 24) return `${hrs}${t.settingsPages.hoursAgo}`;
+    return `${Math.floor(hrs / 24)}${t.settingsPages.daysAgo}`;
   }
 
   const STATUS_DOT: Record<string, string> = {
@@ -78,24 +79,24 @@
   function daysUntil(d: Date | string) {
     const diff = new Date(d).setHours(0,0,0,0) - today.setHours(0,0,0,0);
     const days = Math.round(diff / 86400000);
-    if (days === 0) return 'Today';
-    if (days === 1) return 'Tomorrow';
-    return `in ${days}d`;
+    if (days === 0) return t.adminPages.today;
+    if (days === 1) return t.adminPages.tomorrow;
+    return `${t.adminPages.inDaysPrefix}${days}${t.adminPages.inDaysSuffix}`;
   }
 </script>
 
-<svelte:head><title>Dashboard – Hallify</title></svelte:head>
+<svelte:head><title>{t.nav.dashboard} – Hallify</title></svelte:head>
 
 <div class="page">
 
   <!-- ─── Header ────────────────────────────────────────────────────────── -->
   <div class="dash-header">
     <div>
-      <p class="dash-overline">Management</p>
-      <h1 class="dash-title">Dashboard</h1>
+      <p class="dash-overline">{t.adminReservations.manage}</p>
+      <h1 class="dash-title">{t.nav.dashboard}</h1>
     </div>
     <div class="header-actions">
-      <a href="/app/manage/reservations" class="btn-primary">+ New reservation</a>
+      <a href="/app/manage/reservations" class="btn-primary">+ {t.adminPages.newReservation}</a>
     </div>
   </div>
 
@@ -107,7 +108,7 @@
       </div>
       <div class="kpi-body">
         <span class="kpi-value">{data.stats.total_reservations}</span>
-        <span class="kpi-label">Total reservations</span>
+        <span class="kpi-label">{t.adminPages.totalReservations}</span>
       </div>
     </div>
 
@@ -117,10 +118,10 @@
       </div>
       <div class="kpi-body">
         <span class="kpi-value">{data.stats.pending}</span>
-        <span class="kpi-label">Awaiting approval</span>
+        <span class="kpi-label">{t.adminPages.awaitingApproval}</span>
       </div>
       {#if parseInt(data.stats.pending) > 0}
-        <a href="/app/manage/reservations?status=pending" class="kpi-link">Review →</a>
+        <a href="/app/manage/reservations?status=pending" class="kpi-link">{t.adminPages.review} →</a>
       {/if}
     </div>
 
@@ -130,7 +131,7 @@
       </div>
       <div class="kpi-body">
         <span class="kpi-value">{data.stats.upcoming_7d}</span>
-        <span class="kpi-label">Upcoming this week</span>
+        <span class="kpi-label">{t.adminPages.upcomingThisWeek}</span>
       </div>
     </div>
 
@@ -140,10 +141,10 @@
       </div>
       <div class="kpi-body">
         <span class="kpi-value">{data.stats.open_tickets}</span>
-        <span class="kpi-label">Open support threads</span>
+        <span class="kpi-label">{t.adminPages.openSupportThreads}</span>
       </div>
       {#if parseInt(data.stats.open_tickets) > 0}
-        <a href="/app/manage/messages" class="kpi-link">View →</a>
+        <a href="/app/manage/messages" class="kpi-link">{t.adminPages.view} →</a>
       {/if}
     </div>
   </div>
@@ -155,12 +156,12 @@
     <div class="card chart-card">
       <div class="card-header">
         <div>
-          <h2 class="card-title">Reservations by month</h2>
-          <p class="card-sub">Last 6 months, excluding cancelled</p>
+          <h2 class="card-title">{t.adminPages.reservationsByMonth}</h2>
+          <p class="card-sub">{t.adminPages.last6MonthsExclCancelled}</p>
         </div>
       </div>
       {#if data.monthly.every(m => m.count === 0)}
-        <div class="chart-empty">No reservation data yet</div>
+        <div class="chart-empty">{t.adminPages.noReservationData}</div>
       {:else}
         <div class="bar-chart-wrap">
           <svg
@@ -168,7 +169,7 @@
             width="100%"
             class="bar-svg"
             role="img"
-            aria-label="Monthly reservations bar chart"
+            aria-label={t.adminPages.monthlyReservationsChart}
           >
             <!-- Horizontal grid lines -->
             {#each [0.25, 0.5, 0.75, 1] as frac}
@@ -206,10 +207,10 @@
     <!-- Status donut -->
     <div class="card donut-card">
       <div class="card-header">
-        <h2 class="card-title">By status</h2>
+        <h2 class="card-title">{t.adminPages.byStatus}</h2>
       </div>
       {#if data.byStatus.length === 0}
-        <div class="chart-empty">No data</div>
+        <div class="chart-empty">{t.common.noData}</div>
       {:else}
         <div class="donut-wrap">
           <svg viewBox="0 0 100 100" class="donut-svg">
@@ -230,7 +231,7 @@
             {/each}
             <!-- Center label -->
             <text x="50" y="47" text-anchor="middle" font-size="13" font-weight="700" fill="var(--text-base)">{data.stats.total_reservations}</text>
-            <text x="50" y="57" text-anchor="middle" font-size="7" fill="var(--text-subtle)">total</text>
+            <text x="50" y="57" text-anchor="middle" font-size="7" fill="var(--text-subtle)">{t.adminPages.total}</text>
           </svg>
 
           <div class="donut-legend">
@@ -254,15 +255,15 @@
     <!-- Recent activity -->
     <div class="card activity-card">
       <div class="card-header">
-        <h2 class="card-title">Recent reservations</h2>
-        <a href="/app/manage/reservations" class="card-link">View all</a>
+        <h2 class="card-title">{t.adminPages.recentReservations}</h2>
+        <a href="/app/manage/reservations" class="card-link">{t.adminPages.viewAll}</a>
       </div>
       {#if data.recent.length === 0}
-        <div class="list-empty">No reservations yet</div>
+        <div class="list-empty">{t.adminReservations.noReservations}</div>
       {:else}
         <div class="activity-list">
           {#each data.recent as r}
-            <a href="/app/manage/reservations/{r.id}" class="activity-row">
+            <a href="/app/reservation/{r.id}" class="activity-row">
               <span class="activity-dot" style="background:{r.hall_color}"></span>
               <div class="activity-info">
                 <span class="activity-title">{r.title}</span>
@@ -281,15 +282,15 @@
     <!-- Upcoming events -->
     <div class="card upcoming-card">
       <div class="card-header">
-        <h2 class="card-title">Upcoming · 14 days</h2>
+        <h2 class="card-title">{t.adminPages.upcoming14Days}</h2>
         <span class="kpi-badge">{data.upcoming.length}</span>
       </div>
       {#if data.upcoming.length === 0}
-        <div class="list-empty">No events in the next 14 days</div>
+        <div class="list-empty">{t.adminPages.noEventsNext14Days}</div>
       {:else}
         <div class="upcoming-list">
           {#each data.upcoming as ev}
-            <a href="/app/manage/reservations/{ev.id}" class="upcoming-row">
+            <a href="/app/reservation/{ev.id}" class="upcoming-row">
               <div class="upcoming-date-col">
                 <span class="upcoming-day">{new Date(ev.event_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }).replace(' ', '\n')}</span>
               </div>
@@ -310,18 +311,18 @@
   <!-- ─── Halls overview ─────────────────────────────────────────────────── -->
   <div class="card halls-card">
     <div class="card-header">
-      <h2 class="card-title">Halls</h2>
-      <a href="/app/manage/halls" class="card-link">Manage</a>
+      <h2 class="card-title">{t.nav.halls}</h2>
+      <a href="/app/manage/halls" class="card-link">{t.hallAdmin.manageAction}</a>
     </div>
     {#if data.halls.length === 0}
-      <div class="list-empty">No halls configured yet. <a href="/app/manage/halls/new" class="inline-link">Add one →</a></div>
+      <div class="list-empty">{t.adminPages.noHallsConfigured} <a href="/app/manage/halls/new" class="inline-link">{t.adminPages.addOne} →</a></div>
     {:else}
       <div class="halls-table">
         <div class="halls-thead">
-          <span>Hall</span>
-          <span>Capacity</span>
-          <span>All-time bookings</span>
-          <span>Upcoming</span>
+          <span>{t.dashboard.hall}</span>
+          <span>{t.common.capacity}</span>
+          <span>{t.hallAdmin.allTimeBookings}</span>
+          <span>{t.hallAdmin.upcoming}</span>
           <span></span>
         </div>
         {#each data.halls as h}
@@ -330,7 +331,7 @@
               <span class="halls-color-strip" style="background:{h.color}"></span>
               <span class="halls-name-text">{h.name}</span>
             </div>
-            <span class="halls-cap-cell">{h.max_people} people</span>
+            <span class="halls-cap-cell">{h.max_people} {t.common.people}</span>
             <div class="halls-bar-cell">
               <span class="halls-bar-count">{h.reservation_count}</span>
               <div class="halls-bar-track">
@@ -355,22 +356,22 @@
   <div class="footer-stats">
     <div class="footer-stat">
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
-      <span><strong>{data.stats.total_halls}</strong> halls</span>
+      <span><strong>{data.stats.total_halls}</strong> {t.adminPages.hallsLower}</span>
     </div>
     <div class="footer-sep"></div>
     <div class="footer-stat">
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-      <span><strong>{data.stats.total_members}</strong> team members</span>
+      <span><strong>{data.stats.total_members}</strong> {t.adminPages.teamMembers}</span>
     </div>
     <div class="footer-sep"></div>
     <div class="footer-stat">
       <span class="online-dot-sm"></span>
-      <span><strong>{data.onlineCount}</strong> online now</span>
+      <span><strong>{data.onlineCount}</strong> {t.adminPages.onlineNow}</span>
     </div>
     <div class="footer-sep"></div>
     <div class="footer-stat">
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg>
-      <span><strong>{data.stats.completed}</strong> completed events</span>
+      <span><strong>{data.stats.completed}</strong> {t.adminPages.completedEvents}</span>
     </div>
   </div>
 
@@ -486,7 +487,9 @@
   /* Bar chart */
   .chart-card { padding-bottom: 16px; }
   .bar-chart-wrap { padding: 4px 18px 0; overflow-x: auto; }
-  .bar-svg { display: block; overflow: visible; }
+  /* width="100%" with a viewBox would otherwise scale the height to the card
+     width (huge on wide screens) — cap it to a sane chart size. */
+  .bar-svg { display: block; overflow: visible; width: 100%; max-width: 920px; height: auto; max-height: 230px; margin: 0 auto; }
   .bar-rect { transition: opacity .12s; }
   .bar-rect:hover { opacity: .8; }
   .chart-empty { padding: 40px 18px; text-align: center; font-size: 13px; color: var(--text-subtle); }

@@ -1,10 +1,59 @@
-import postgres from 'postgres';
-import { DATABASE_URL } from '$env/static/private';
+import type { D1Database, D1Result } from '@cloudflare/workers-types';
 
-// Singleton connection pool
-const sql = postgres(DATABASE_URL, { max: 10 });
+// ─── Query helpers ────────────────────────────────────────────────────────────
 
-export default sql;
+export async function dbAll<T>(
+  db: D1Database,
+  sql: string,
+  ...params: unknown[]
+): Promise<T[]> {
+  const result = await db.prepare(sql).bind(...params).all<T>();
+  return result.results ?? [];
+}
+
+export async function dbFirst<T>(
+  db: D1Database,
+  sql: string,
+  ...params: unknown[]
+): Promise<T | null> {
+  return db.prepare(sql).bind(...params).first<T>();
+}
+
+export async function dbRun(
+  db: D1Database,
+  sql: string,
+  ...params: unknown[]
+): Promise<D1Result> {
+  return db.prepare(sql).bind(...params).run();
+}
+
+// ─── JSON helpers ─────────────────────────────────────────────────────────────
+
+export function toJson(value: unknown): string | null {
+  if (value === null || value === undefined) return null;
+  return JSON.stringify(value);
+}
+
+export function fromJson<T = Record<string, unknown>>(value: string | null | unknown): T {
+  if (value === null || value === undefined || value === '') return {} as T;
+  if (typeof value === 'object') return value as T;
+  try {
+    return JSON.parse(value as string) as T;
+  } catch {
+    return {} as T;
+  }
+}
+
+export function fromJsonArr(value: string | null | unknown): unknown[] {
+  if (value === null || value === undefined || value === '') return [];
+  if (Array.isArray(value)) return value;
+  try {
+    const parsed = JSON.parse(value as string);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
 
 // ─── Typed row shapes ─────────────────────────────────────────────────────────
 
@@ -15,17 +64,18 @@ export interface UserRow {
   first_name: string;
   last_name: string;
   role: 'user' | 'admin'; // legacy column, kept for compat
-  is_platform_admin: boolean;
+  is_platform_admin: number;
   account_type: 'client' | 'organization';
-  created_at: Date;
+  org_id: string | null; // NULL for org/platform users; set for client accounts (the bubble they belong to)
+  created_at: string;
 }
 
 export interface SessionRow {
   id: string;
   user_id: string;
   current_org_id: string | null;
-  expires_at: Date;
-  created_at: Date;
+  expires_at: string;
+  created_at: string;
 }
 
 export interface OrganizationRow {
@@ -33,8 +83,8 @@ export interface OrganizationRow {
   name: string;
   slug: string;
   logo_url: string | null;
-  suspended_at: Date | null;
-  created_at: Date;
+  suspended_at: string | null;
+  created_at: string;
 }
 
 export interface OrgMemberRow {
@@ -42,7 +92,7 @@ export interface OrgMemberRow {
   org_id: string;
   user_id: string;
   role: 'owner' | 'admin' | 'member';
-  joined_at: Date;
+  joined_at: string;
   // joined fields
   user_email?: string;
   user_first_name?: string;
@@ -56,9 +106,9 @@ export interface OrgInviteRow {
   role: 'admin' | 'member';
   token: string;
   invited_by: string;
-  created_at: Date;
-  expires_at: Date;
-  accepted_at: Date | null;
+  created_at: string;
+  expires_at: string;
+  accepted_at: string | null;
 }
 
 export type SubscriptionStatus = 'active' | 'trialing' | 'past_due' | 'cancelled' | 'paused';
@@ -70,16 +120,16 @@ export interface SubscriptionRow {
   status: SubscriptionStatus;
   stripe_customer_id: string | null;
   stripe_subscription_id: string | null;
-  current_period_end: Date | null;
-  created_at: Date;
-  updated_at: Date;
+  current_period_end: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface OrgSettingRow {
   org_id: string;
   key: string;
   value: unknown;
-  updated_at: Date;
+  updated_at: string;
 }
 
 export interface HallDayHours {
@@ -96,27 +146,28 @@ export interface HallRow {
   max_people: number;
   floorplan_json: unknown;
   color: string;
-  allow_reservations: boolean;
-  custom_layouts: boolean;
-  force_layouts: boolean;
-  allow_feedback: boolean;
+  allow_reservations: number;
+  custom_layouts: number;
+  force_layouts: number;
+  allow_feedback: number;
   min_days_advance: number;
   address: string | null;
   pre_reservation_text: string | null;
-  auto_approve: boolean;
+  auto_approve: number;
   min_cancel_days: number;
-  created_at: Date;
+  created_at: string;
   // Public profile fields
-  is_public: boolean;
+  is_public: number;
   slug: string | null;
   cover_image_url: string | null;
-  gallery_images: string[];
-  amenities: string[];
+  gallery_images: string;
+  amenities: string;
   pricing_info: string | null;
   contact_phone: string | null;
   contact_email: string | null;
   contact_website: string | null;
-  opening_hours: Record<string, HallDayHours>;
+  opening_hours: string;
+  plan_locked: number;
 }
 
 export interface TableTypeRow {
@@ -129,7 +180,8 @@ export interface TableTypeRow {
   radius: number;
   max_chairs: number;
   amount: number;
-  created_at: Date;
+  color: string;
+  created_at: string;
 }
 
 export interface TemplateRow {
@@ -138,18 +190,18 @@ export interface TemplateRow {
   name: string;
   event_type: string | null;
   layout_json: unknown;
-  created_at: Date;
+  created_at: string;
 }
 
 export interface HallBlockRow {
   id: string;
   hall_id: string;
   block_type: 'date_range' | 'weekly';
-  date_from: Date | null;
-  date_to: Date | null;
-  days_of_week: number[] | null;
+  date_from: string | null;
+  date_to: string | null;
+  days_of_week: string | null;
   reason: string | null;
-  created_at: Date;
+  created_at: string;
 }
 
 export interface RsvpConfig {
@@ -160,6 +212,7 @@ export interface RsvpConfig {
   description?: string;
   style?: string;
   arrivalTime?: string;
+  maxExtraGuests?: number;   // how many extra people an invitee may bring (0 = none)
   fields?: {
     name: string;
     label: string;
@@ -178,14 +231,16 @@ export interface ReservationRow {
   user_id: string;
   title: string;
   description: string | null;
-  event_date: Date;
+  event_date: string;
   start_time: string | null;
   end_time: string | null;
   status: ReservationStatus;
   invite_code: string;
   layout_json: unknown;
-  rsvp_config: RsvpConfig;
-  created_at: Date;
+  rsvp_config: string;
+  num_guests: number | null;
+  extras_json: string | null;
+  created_at: string;
   // joined fields
   hall_name?: string;
   user_first_name?: string;
@@ -193,13 +248,23 @@ export interface ReservationRow {
   user_email?: string;
 }
 
+export interface HallExtraRow {
+  id: string;
+  hall_id: string;
+  name: string;
+  description: string | null;
+  price_cents: number;
+  pricing: 'fixed' | 'per_guest';
+  created_at: string;
+}
+
 export interface RsvpTemplateRow {
   id: string;
   org_id: string;
   name: string;
   event_type: string | null;
-  config: RsvpConfig;
-  created_at: Date;
+  config: string;
+  created_at: string;
 }
 
 export interface RsvpRow {
@@ -207,7 +272,9 @@ export interface RsvpRow {
   reservation_id: string;
   name: string;
   email: string | null;
-  created_at: Date;
+  extra_guests: number;
+  responses: string | null;   // JSON map of custom RSVP field answers
+  created_at: string;
 }
 
 export interface TicketRow {
@@ -216,8 +283,9 @@ export interface TicketRow {
   user_id: string;
   subject: string;
   status: 'open' | 'closed';
-  created_at: Date;
-  updated_at: Date;
+  created_at: string;
+  updated_at: string;
+  reservation_id?: string | null;
   // joined fields
   user_first_name?: string;
   user_last_name?: string;
@@ -230,13 +298,13 @@ export interface MessageRow {
   id: string;
   ticket_id: string;
   sender_id: string;
-  body: string;
+  body: string | null;
   message_type: 'text' | 'system';
   attachment_url: string | null;
   attachment_name: string | null;
   attachment_type: string | null;
-  edited_at: Date | null;
-  created_at: Date;
+  edited_at: string | null;
+  created_at: string;
   // joined fields
   sender_first_name?: string;
   sender_last_name?: string;
@@ -246,16 +314,16 @@ export interface MessageRow {
 export interface SystemSettingRow {
   key: string;
   value: unknown;
-  updated_at: Date;
+  updated_at: string;
 }
 
 export interface PasswordResetRow {
   id: string;
   user_id: string;
   token: string;
-  expires_at: Date;
-  used: boolean;
-  created_at: Date;
+  expires_at: string;
+  used: number;
+  created_at: string;
 }
 
 export interface EmailLogRow {
@@ -265,7 +333,7 @@ export interface EmailLogRow {
   template: string | null;
   status: 'sent' | 'failed';
   error: string | null;
-  created_at: Date;
+  created_at: string;
 }
 
 // ─── Channels (team messaging) ────────────────────────────────────────────────
@@ -277,12 +345,12 @@ export interface ChannelRow {
   description: string | null;
   type: 'general' | 'announcement';
   created_by: string | null;
-  archived_at: Date | null;
-  created_at: Date;
+  archived_at: string | null;
+  created_at: string;
   // joined / computed
   unread_count?: number;
   last_message?: string | null;
-  last_message_at?: Date | null;
+  last_message_at?: string | null;
 }
 
 export interface ChannelMessageRow {
@@ -291,9 +359,9 @@ export interface ChannelMessageRow {
   org_id: string;
   sender_id: string;
   body: string;
-  edited_at: Date | null;
-  deleted_at: Date | null;
-  created_at: Date;
+  edited_at: string | null;
+  deleted_at: string | null;
+  created_at: string;
   // joined
   sender_first_name?: string;
   sender_last_name?: string;
@@ -305,7 +373,7 @@ export interface ChannelMessageRow {
 export interface UserPresenceRow {
   user_id: string;
   org_id: string;
-  last_seen_at: Date;
+  last_seen_at: string;
 }
 
 // ─── Webhooks ─────────────────────────────────────────────────────────────────
@@ -322,10 +390,10 @@ export interface OrgWebhookRow {
   org_id: string;
   name: string;
   url: string;
-  events: WebhookEvent[];
+  events: string;
   secret: string | null;
-  enabled: boolean;
-  created_at: Date;
+  enabled: number;
+  created_at: string;
 }
 
 export interface WebhookDeliveryRow {
@@ -336,5 +404,5 @@ export interface WebhookDeliveryRow {
   status: 'delivered' | 'failed' | 'pending';
   response_code: number | null;
   error: string | null;
-  delivered_at: Date;
+  delivered_at: string;
 }

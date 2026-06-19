@@ -1,22 +1,38 @@
 import { error, fail, redirect } from '@sveltejs/kit';
-import sql from '$lib/db/index';
-import type { HallRow } from '$lib/db/index';
+import { dbAll, dbFirst, dbRun, fromJsonArr } from '$lib/db/index';
+import type { HallRow, HallBlockRow, HallExtraRow } from '$lib/db/index';
 import type { Actions, PageServerLoad } from './$types';
+import { st } from '$lib/i18n-server';
+import { assertCanBook, getTakenDates, getHeldDatesByOthers, releaseHold, earliestBookableISO, isoLocal, addDays, HOLD_MINUTES } from '$lib/availability';
+
+const RANGE_DAYS = 540;
+
+async function findHall(db: App.Locals['db'], slug: string) {
+	return dbFirst<HallRow>(db,
+		`SELECT * FROM halls WHERE is_public = 1 AND allow_reservations = 1 AND (slug = ? OR id = ?) LIMIT 1`,
+		slug, slug);
+}
 
 export const load: PageServerLoad = async ({ params, locals }) => {
 	if (!locals.user) redirect(303, `/app/login?redirect=/app/halls/${params.slug}/book`);
 	if (locals.user.account_type !== 'client') redirect(303, `/app/halls/${params.slug}`);
 
-	const [hall] = await sql<HallRow[]>`
-		SELECT * FROM halls
-		WHERE is_public = true AND allow_reservations = true
-		  AND (slug = ${params.slug} OR id::text = ${params.slug})
-		LIMIT 1
-	`;
+	const hall = await findHall(locals.db, params.slug);
+	if (!hall) error(404, st(locals.locale).serverErrors.hallNotFoundOrNotAccepting);
 
-	if (!hall) error(404, 'Hall not found or not accepting reservations');
+	const fromISO = isoLocal(new Date());
+	const toISO = isoLocal(addDays(new Date(), RANGE_DAYS));
+	const blocksRaw = await dbAll<HallBlockRow>(locals.db, 'SELECT * FROM hall_blocks WHERE hall_id = ?', hall.id);
 
-	return { hall };
+	return {
+		hall,
+		extras: await dbAll<HallExtraRow>(locals.db, 'SELECT * FROM hall_extras WHERE hall_id = ? ORDER BY created_at', hall.id),
+		blocks: blocksRaw.map(b => ({ ...b, days_of_week: fromJsonArr(b.days_of_week as string | null) })),
+		takenDates: await getTakenDates(locals.db, hall.id, fromISO, toISO),
+		heldDates: await getHeldDatesByOthers(locals.db, hall.id, locals.user.id),
+		earliestDate: earliestBookableISO(hall.min_days_advance),
+		holdMinutes: HOLD_MINUTES,
+	};
 };
 
 export const actions: Actions = {
@@ -24,13 +40,8 @@ export const actions: Actions = {
 		if (!locals.user) redirect(303, '/app/login');
 		if (locals.user.account_type !== 'client') redirect(303, '/app/');
 
-		const [hall] = await sql<HallRow[]>`
-			SELECT * FROM halls
-			WHERE is_public = true AND allow_reservations = true
-			  AND (slug = ${params.slug} OR id::text = ${params.slug})
-			LIMIT 1
-		`;
-		if (!hall) error(404, 'Hall not found');
+		const hall = await findHall(locals.db, params.slug);
+		if (!hall) error(404, st(locals.locale).serverErrors.hallNotFound);
 
 		const data = await request.formData();
 		const title = String(data.get('title') ?? '').trim();
@@ -38,43 +49,37 @@ export const actions: Actions = {
 		const startTime = String(data.get('startTime') ?? '').trim() || null;
 		const endTime = String(data.get('endTime') ?? '').trim() || null;
 		const description = String(data.get('description') ?? '').trim() || null;
+		const numGuests = parseInt(String(data.get('numGuests') ?? ''), 10) || null;
 
-		if (!title) return fail(400, { error: 'Event name is required.' });
-		if (!eventDate) return fail(400, { error: 'Event date is required.' });
+		if (!title) return fail(400, { error: st(locals.locale).serverErrors.eventNameRequired });
+		if (!eventDate) return fail(400, { error: st(locals.locale).serverErrors.pleaseChooseDate });
 
-		const today = new Date().toISOString().split('T')[0];
-		if (eventDate < today) return fail(400, { error: 'Event date cannot be in the past.' });
+		const check = await assertCanBook(locals.db, hall, eventDate, locals.user.id, numGuests, locals.locale);
+		if (!check.ok) return fail(400, { error: check.reason });
 
-		if (hall.min_days_advance > 0) {
-			const minDate = new Date();
-			minDate.setDate(minDate.getDate() + hall.min_days_advance);
-			if (eventDate < minDate.toISOString().split('T')[0]) {
-				return fail(400, { error: `Reservations must be made at least ${hall.min_days_advance} day(s) in advance.` });
-			}
-		}
+		const requested = data.getAll('extras').map(String);
+		const valid = requested.length
+			? (await dbAll<{ id: string }>(locals.db, 'SELECT id FROM hall_extras WHERE hall_id = ?', hall.id)).map(e => e.id)
+			: [];
+		const extrasIds = requested.filter(id => valid.includes(id));
+		const extrasJson = extrasIds.length ? JSON.stringify(extrasIds) : null;
 
-		// Check for date conflicts (approved/planned reservations on same date)
-		const [conflict] = await sql`
-			SELECT id FROM reservations
-			WHERE hall_id = ${hall.id}
-			  AND event_date = ${eventDate}::date
-			  AND status IN ('approved', 'planned', 'pending')
-		`;
-		if (conflict) {
-			return fail(400, { error: 'This hall is already booked on that date. Please choose another date.' });
-		}
-
-		const inviteCode = Math.random().toString(36).slice(2, 10).toUpperCase();
+		const inviteCode = crypto.randomUUID().replace(/-/g, '').slice(0, 8).toUpperCase();
 		const status = hall.auto_approve ? 'approved' : 'pending';
+		const reservationId = crypto.randomUUID();
 
-		await sql`
-			INSERT INTO reservations
-				(org_id, hall_id, user_id, title, description, event_date, start_time, end_time, status, invite_code)
-			VALUES
-				(${hall.org_id}, ${hall.id}, ${locals.user.id}, ${title}, ${description},
-				 ${eventDate}::date, ${startTime}, ${endTime}, ${status}, ${inviteCode})
-		`;
+		try {
+			await dbRun(locals.db,
+				`INSERT INTO reservations
+					(id, org_id, hall_id, user_id, title, description, event_date, start_time, end_time, status, invite_code, num_guests, extras_json)
+				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+				reservationId, hall.org_id, hall.id, locals.user.id, title, description, eventDate, startTime, endTime, status, inviteCode, numGuests, extrasJson
+			);
+		} catch {
+			return fail(409, { error: st(locals.locale).serverErrors.hallJustBooked });
+		}
 
+		await releaseHold(locals.db, hall.id, eventDate, locals.user.id);
 		redirect(303, '/app/client/reservations?booked=1');
 	}
 };

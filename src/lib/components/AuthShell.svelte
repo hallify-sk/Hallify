@@ -26,7 +26,7 @@
         </li>
         <li class="brand-anim" style="animation-delay: 280ms">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
-          Streamline bookings and RSVPs
+          Streamline bookings and seating
         </li>
         <li class="brand-anim" style="animation-delay: 360ms">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>

@@ -1,13 +1,14 @@
 <script lang="ts">
+  import { t } from '$lib/i18n.svelte';
   import type { PageData, ActionData } from './$types';
   let { data, form }: { data: PageData; form: ActionData } = $props();
 </script>
 
 <div class="auth-shell">
   <div class="card auth-card">
-    <h1>You've been invited</h1>
+    <h1>{t.authPages.inviteTitle}</h1>
     <p class="subtitle">
-      You've been invited to join <strong>{data.invite.org_name}</strong> as a
+      {t.authPages.inviteIntro} <strong>{data.invite.org_name}</strong> {t.authPages.inviteAsRole}
       <strong>{data.invite.role}</strong>.
     </p>
 
@@ -16,16 +17,16 @@
     {/if}
 
     {#if data.user}
-      <p class="info">Accepting as <strong>{data.user.email}</strong>.</p>
+      <p class="info">{t.authPages.inviteAcceptingAs} <strong>{data.user.email}</strong>.</p>
       <form method="POST" action="?/accept">
         <button type="submit" class="btn-action" style="width:100%">
-          Accept invitation
+          {t.authPages.inviteAccept}
         </button>
       </form>
     {:else}
-      <p class="info">Please log in first to accept this invitation.</p>
+      <p class="info">{t.authPages.inviteLoginFirst}</p>
       <a href="/login?redirect=/invite/{data.invite.id}" class="btn-action" style="display:block;text-align:center">
-        Log in to accept
+        {t.authPages.inviteLoginToAccept}
       </a>
     {/if}
   </div>

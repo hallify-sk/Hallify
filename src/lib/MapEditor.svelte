@@ -1,7 +1,8 @@
 <script lang="ts">
 	import { onMount, untrack } from 'svelte';
+	import { t as tr } from '$lib/i18n.svelte';
 	import { migrateToMultiFloor } from '$lib/floorplan-types';
-	import type { FloorData, MultiFloorState, WallObj, ZoneObj, TableObj, Guest, BoundsRect, Point, TableShape } from '$lib/floorplan-types';
+	import type { FloorData, MultiFloorState, WallObj, ZoneObj, TableObj, SeatObj, Guest, BoundsRect, Point, TableShape } from '$lib/floorplan-types';
 
 	// ─── Props ────────────────────────────────────────────────────────────────
 	interface TableType {
@@ -15,8 +16,17 @@
 		tableTypes?: TableType[];            // Predefined table inventory from admin
 		hiddenTools?: Tool[];                // Tools to hide from toolbar
 		protectWallsZones?: boolean;         // Prevent erasing/selecting walls & zones
+		allowZones?: boolean;                // …but still allow zones (e.g. clients organising space)
+		lockFloors?: boolean;                // Hide add/remove-floor controls (reservation editor)
+		tablesFromTypesOnly?: boolean;       // Only place defined admin table types (no freeform)
 	}
-	const { initialState, onchange, tableTypes, hiddenTools = [], protectWallsZones = false }: Props = $props();
+	const { initialState, onchange, tableTypes, hiddenTools = [], protectWallsZones = false, allowZones = false, lockFloors = false, tablesFromTypesOnly = false }: Props = $props();
+
+	// Walls (the venue shell) can be protected while zones stay editable.
+	const wallsLocked = $derived(protectWallsZones);
+	const zonesLocked = $derived(protectWallsZones && !allowZones);
+	// The room boundary is part of the venue shell — locked whenever walls are.
+	const boundsLocked = $derived(protectWallsZones);
 
 	// ─── Undo / Redo ──────────────────────────────────────────────────────────
 	interface Snapshot { floors: FloorData[]; guests: Guest[]; activeFloorIdx: number }
@@ -27,7 +37,7 @@
 	function takeSnapshot(): string {
 		// Flush working copy into floors before snapshotting
 		const currentFloors = floors.map((f, i) =>
-			i === activeFloorIdx ? { ...f, walls, zones, tables, bounds } : f
+			i === activeFloorIdx ? { ...f, walls, zones, tables, seats, bounds } : f
 		);
 		return JSON.stringify({ floors: currentFloors, guests, activeFloorIdx });
 	}
@@ -55,7 +65,7 @@
 			const s = JSON.parse(json) as Snapshot;
 			floors = s.floors; guests = s.guests; activeFloorIdx = s.activeFloorIdx;
 			const f = floors[activeFloorIdx];
-			walls = f.walls; zones = f.zones; tables = f.tables; bounds = f.bounds;
+			walls = f.walls; zones = f.zones; tables = f.tables; seats = f.seats ?? []; bounds = f.bounds;
 		} catch { /* ignore */ }
 		suppressHistory = false;
 	}
@@ -74,8 +84,9 @@
 	});
 
 	// ─── Types ────────────────────────────────────────────────────────────────
-	type Tool       = 'select' | 'wall' | 'zone' | 'table' | 'eraser' | 'bounds' | 'measure';
-	type ChairPopover = { tableId: string; chairIdx: number; x: number; y: number };
+	type Tool       = 'select' | 'wall' | 'zone' | 'table' | 'chair' | 'eraser' | 'bounds' | 'measure';
+	// A popover targets either a table chair (tableId+chairIdx) or a standalone seat (seatId).
+	type ChairPopover = { tableId?: string; chairIdx?: number; seatId?: string; x: number; y: number };
 
 	// ─── Map state ────────────────────────────────────────────────────────────
 	let zoom     = $state(60);
@@ -91,6 +102,10 @@
 	let walls  = $state<WallObj[]>([]);
 	let zones  = $state<ZoneObj[]>([]);
 	let tables = $state<TableObj[]>([]);
+	let seats  = $state<SeatObj[]>([]);   // standalone chairs on the active floor
+	// Tracks a press on a seat that hasn't moved yet — pointerup turns it into an
+	// assignment-popover open (a drag past threshold cancels it and moves instead).
+	let seatClickCandidate = $state<{ id: string; x: number; y: number } | null>(null);
 
 	// Drawing
 	let drawPts   = $state<Point[]>([]);
@@ -106,7 +121,7 @@
 	let tChairsBottom       = $state(3);
 	let tChairsLeft         = $state(0);
 	let tChairsRight        = $state(0);
-	let tChairSpacing       = $state(0.05);
+	let tChairSpacing       = $state(0.15);
 
 	// Zone config
 	let zoneColor = $state('#a78bfa');
@@ -159,14 +174,24 @@
 	let newFirst     = $state('');
 	let newLast      = $state('');
 	let newGroup     = $state('');
+	let groupDropOpen = $state(false);
+	// Existing group/family names for the combobox suggestions.
+	const existingGroups = $derived(
+		[...new Set(guests.map(g => g.group?.trim()).filter((x): x is string => !!x))].sort((a, b) => a.localeCompare(b))
+	);
+	const groupSuggestions = $derived.by(() => {
+		const q = newGroup.trim().toLowerCase();
+		return existingGroups.filter(g => q ? (g.toLowerCase().includes(q) && g.toLowerCase() !== q) : true).slice(0, 6);
+	});
 	let guestSearch  = $state('');
+	let noteEditId   = $state<string | null>(null);
 	let chairPopover = $state<ChairPopover | null>(null);
 	let activeTab    = $state<'props' | 'guests'>('props');
 
 	// ─── Floor management ────────────────────────────────────────────────────
 	/** Flush working copy back into floors array */
 	function saveCurrentFloor() {
-		floors[activeFloorIdx] = { ...floors[activeFloorIdx], walls, zones, tables, bounds };
+		floors[activeFloorIdx] = { ...floors[activeFloorIdx], walls, zones, tables, seats, bounds };
 	}
 
 	/** Switch to a different floor */
@@ -174,24 +199,26 @@
 		saveCurrentFloor();
 		activeFloorIdx = idx;
 		const f = floors[idx];
-		walls = f.walls; zones = f.zones; tables = f.tables; bounds = f.bounds;
+		walls = f.walls; zones = f.zones; tables = f.tables; seats = f.seats ?? []; bounds = f.bounds;
 		selectedId = null; chairPopover = null;
 	}
 
 	function addFloor() {
+		if (lockFloors) return;
 		pushUndo();
 		saveCurrentFloor();
 		const newFloor: FloorData = {
 			id: crypto.randomUUID(), name: `Floor ${floors.length + 1}`,
-			walls: [], zones: [], tables: [], bounds: null,
+			walls: [], zones: [], tables: [], seats: [], bounds: null,
 		};
 		floors = [...floors, newFloor];
 		activeFloorIdx = floors.length - 1;
-		walls = []; zones = []; tables = []; bounds = null;
+		walls = []; zones = []; tables = []; seats = []; bounds = null;
 		selectedId = null; chairPopover = null;
 	}
 
 	function removeFloor(idx: number) {
+		if (lockFloors) return;
 		if (floors.length <= 1) return;
 		pushUndo();
 		saveCurrentFloor();
@@ -199,12 +226,12 @@
 		if (activeFloorIdx >= floors.length) activeFloorIdx = floors.length - 1;
 		else if (idx < activeFloorIdx) activeFloorIdx--;
 		const f = floors[activeFloorIdx];
-		walls = f.walls; zones = f.zones; tables = f.tables; bounds = f.bounds;
+		walls = f.walls; zones = f.zones; tables = f.tables; seats = f.seats ?? []; bounds = f.bounds;
 		selectedId = null; chairPopover = null;
 	}
 
 	function renameFloor(idx: number) {
-		const name = prompt('Floor name:', floors[idx].name);
+		const name = prompt(tr.editor.floorNamePrompt, floors[idx].name);
 		if (name && name.trim()) {
 			floors = floors.map((f, i) => i === idx ? { ...f, name: name.trim() } : f);
 		}
@@ -220,7 +247,7 @@
 			floors = state.floors;
 			guests = state.guests;
 			activeFloorIdx = 0;
-			walls = f0.walls; zones = f0.zones; tables = f0.tables; bounds = f0.bounds;
+			walls = f0.walls; zones = f0.zones; tables = f0.tables; seats = f0.seats ?? []; bounds = f0.bounds;
 		} catch { /* ignore parse errors */ }
 	});
 
@@ -228,7 +255,7 @@
 	$effect(() => {
 		if (!onchange) return;
 		// Access reactive working copy to create dependency
-		const snap = { walls, zones, tables, bounds, guests };
+		const snap = { walls, zones, tables, seats, bounds, guests };
 		// Read floors without creating deep dependency — use untrack for floors array
 		const currentFloors = untrack(() => floors).map((f, i) =>
 			i === untrack(() => activeFloorIdx) ? { ...f, ...snap } : f
@@ -444,7 +471,30 @@
 		if (tableOutOfBounds(candidate)) return true;
 		const others = otherTables ?? tables;
 		const filtered = excludeId ? others.filter(o => o.id !== excludeId) : others;
-		return filtered.some(o => hitboxesOverlap(hb, tableHitbox(o)));
+		if (filtered.some(o => hitboxesOverlap(hb, tableHitbox(o)))) return true;
+		// Tables must also clear any standalone chairs.
+		return seats.some(s => hitboxesOverlap(hb, seatHitbox(s)));
+	}
+
+	// ─── Standalone seat collision ─────────────────────────────────────────────
+	const SEAT_R = 0.26;   // collision radius for a standalone chair (metres)
+	function seatHitbox(s: SeatObj): Hitbox {
+		return { type: 'circle', cx: Number(s.x), cy: Number(s.y), r: SEAT_R };
+	}
+	function seatOutOfBounds(s: SeatObj): boolean {
+		if (!bounds) return false;
+		const ext = hitboxAABB(seatHitbox(s));
+		const bx = Number(bounds.x), by = Number(bounds.y), bw = Number(bounds.w), bh = Number(bounds.h);
+		return ext.minX < bx || ext.minY < by || ext.maxX > bx + bw || ext.maxY > by + bh;
+	}
+	/** A standalone chair must clear walls, bounds, tables, and other chairs. */
+	function seatHasCollision(candidate: SeatObj, excludeId?: string): boolean {
+		const hb = seatHitbox(candidate);
+		if (hitboxCollidesWalls(hb)) return true;
+		if (seatOutOfBounds(candidate)) return true;
+		if (tables.some(t => hitboxesOverlap(hb, tableHitbox(t)))) return true;
+		const others = excludeId ? seats.filter(s => s.id !== excludeId) : seats;
+		return others.some(o => hitboxesOverlap(hb, seatHitbox(o)));
 	}
 
 	// Hit the table BODY only (used for initiating drag + collision)
@@ -534,47 +584,69 @@
 		newFirst = ''; newLast = ''; newGroup = '';
 	}
 
+	function updateGuestNote(id: string, note: string) {
+		const v = note.trim();
+		guests = guests.map(g => g.id === id ? { ...g, note: v || undefined } : g);
+	}
+
 	function removeGuest(id: string) {
 		guests = guests.filter(g => g.id !== id);
-		// Clear from current floor
+		// Clear from current floor (tables + standalone seats)
 		tables = tables.map(t => ({ ...t, assignments: t.assignments.map(a => a === id ? null : a) }));
+		seats = seats.map(s => s.assignment === id ? { ...s, assignment: null } : s);
 		// Clear from other floors
 		floors = floors.map((f, i) => i === activeFloorIdx ? f : ({
-			...f, tables: f.tables.map(t => ({ ...t, assignments: t.assignments.map(a => a === id ? null : a) }))
+			...f,
+			tables: f.tables.map(t => ({ ...t, assignments: t.assignments.map(a => a === id ? null : a) })),
+			seats: (f.seats ?? []).map(s => s.assignment === id ? { ...s, assignment: null } : s)
 		}));
 	}
 
 	function assignGuest(guestId: string) {
 		if (!chairPopover) return;
-		const { tableId, chairIdx } = chairPopover;
-		// Remove guest from ALL floors' tables first
+		const { tableId, chairIdx, seatId } = chairPopover;
+		pushUndo();
+		// Remove guest from ALL floors' tables AND standalone seats first
 		floors = floors.map((f, fi) => {
-			const floorTables = fi === activeFloorIdx ? tables : f.tables;
-			const updated = floorTables.map(t => {
-				const a = [...t.assignments];
-				for (let i = 0; i < a.length; i++) if (a[i] === guestId) a[i] = null;
-				return { ...t, assignments: a };
-			});
-			return fi === activeFloorIdx ? f : { ...f, tables: updated };
+			if (fi === activeFloorIdx) return f;
+			return {
+				...f,
+				tables: f.tables.map(t => {
+					const a = [...t.assignments];
+					for (let i = 0; i < a.length; i++) if (a[i] === guestId) a[i] = null;
+					return { ...t, assignments: a };
+				}),
+				seats: (f.seats ?? []).map(s => s.assignment === guestId ? { ...s, assignment: null } : s)
+			};
 		});
-		// Now assign on current floor
+		// Now (re)assign on the current floor
 		tables = tables.map(t => {
 			const a = [...t.assignments];
 			for (let i = 0; i < a.length; i++) if (a[i] === guestId) a[i] = null;
-			if (t.id === tableId) a[chairIdx] = guestId;
+			if (tableId && t.id === tableId && chairIdx != null) a[chairIdx] = guestId;
 			return { ...t, assignments: a };
+		});
+		seats = seats.map(s => {
+			let assignment = s.assignment === guestId ? null : s.assignment;
+			if (seatId && s.id === seatId) assignment = guestId;
+			return { ...s, assignment };
 		});
 		chairPopover = null; guestSearch = '';
 	}
 
 	function clearChairAssignment() {
 		if (!chairPopover) return;
-		const { tableId, chairIdx } = chairPopover;
-		tables = tables.map(t => {
-			if (t.id !== tableId) return t;
-			const a = [...t.assignments]; a[chairIdx] = null;
-			return { ...t, assignments: a };
-		});
+		const { tableId, chairIdx, seatId } = chairPopover;
+		pushUndo();
+		if (seatId) {
+			seats = seats.map(s => s.id === seatId ? { ...s, assignment: null } : s);
+		} else if (tableId && chairIdx != null) {
+			tables = tables.map(t => {
+				if (t.id !== tableId) return t;
+				const a = [...t.assignments]; a[chairIdx] = null;
+				return { ...t, assignments: a };
+			});
+		}
 		chairPopover = null;
 	}
 
@@ -643,6 +715,7 @@
 
 	function clearAllAssignments() {
 		tables = tables.map(t => ({ ...t, assignments: Array(totalChairs(t)).fill(null) }));
+		seats = seats.map(s => ({ ...s, assignment: null }));
 	}
 
 	// Smart auto-seating: group by group field then by surname, seat groups together
@@ -728,25 +801,40 @@
 
 	const assignedIds      = $derived(new Set([
 		...tables.flatMap(t => t.assignments.filter(Boolean) as string[]),
-		...floors.flatMap((f, i) => i === activeFloorIdx ? [] : f.tables.flatMap(t => t.assignments.filter(Boolean) as string[]))
+		...seats.map(s => s.assignment).filter(Boolean) as string[],
+		...floors.flatMap((f, i) => i === activeFloorIdx ? [] : [
+			...f.tables.flatMap(t => t.assignments.filter(Boolean) as string[]),
+			...(f.seats ?? []).map(s => s.assignment).filter(Boolean) as string[]
+		])
 	]));
 	const totalAssigned    = $derived(assignedIds.size);
-	const totalSeats       = $derived(tables.reduce((s, t) => s + totalChairs(t), 0));
+	const totalSeats       = $derived(tables.reduce((s, t) => s + totalChairs(t), 0) + seats.length);
 
 	const popoverTable = $derived.by(() => {
 		const cp = chairPopover;
-		return cp ? tables.find(t => t.id === cp.tableId) ?? null : null;
+		return cp?.tableId ? tables.find(t => t.id === cp.tableId) ?? null : null;
+	});
+	const popoverSeat = $derived.by(() => {
+		const cp = chairPopover;
+		return cp?.seatId ? seats.find(s => s.id === cp.seatId) ?? null : null;
+	});
+	// The guest id currently in the popover's target (table chair or standalone seat).
+	const popoverCurrentId = $derived.by(() => {
+		const cp = chairPopover;
+		if (!cp) return null;
+		if (cp.seatId) return popoverSeat?.assignment ?? null;
+		if (cp.tableId && cp.chairIdx != null) return popoverTable?.assignments[cp.chairIdx] ?? null;
+		return null;
 	});
 	const popoverChairGuest = $derived.by(() => {
-		const cp = chairPopover, pt = popoverTable;
-		if (!pt || !cp) return null;
-		return guests.find(g => g.id === pt.assignments[cp.chairIdx]) ?? null;
+		const id = popoverCurrentId;
+		return id ? guests.find(g => g.id === id) ?? null : null;
 	});
 	const filteredPopoverGuests = $derived.by(() => {
-		const cp = chairPopover, pt = popoverTable;
+		const curId = popoverCurrentId;
 		return guests
 			.filter(g => {
-				const isCurrent = cp && pt ? pt.assignments[cp.chairIdx] === g.id : false;
+				const isCurrent = curId === g.id;
 				return isCurrent || !assignedIds.has(g.id);
 			})
 			.filter(g => !guestSearch ||
@@ -802,6 +890,22 @@
 			const newPts = polyOrigPoints.map(p => ({ x: p.x + actualDx, y: p.y + actualDy }));
 			walls = walls.map(w => w.id === selectedId ? { ...w, points: newPts } : w);
 			zones = zones.map(z => z.id === selectedId ? { ...z, points: newPts } : z);
+			return;
+		}
+
+		// Standalone seat dragging (a press that moves past the threshold)
+		if (isDragging && selectedId && seats.some(s => s.id === selectedId)) {
+			const dx = raw.x - dragStart.x, dy = raw.y - dragStart.y;
+			if (seatClickCandidate && Math.hypot(dx, dy) > 0.05) { pushUndo(); seatClickCandidate = null; }
+			if (!seatClickCandidate) {
+				const sb = seats.find(s => s.id === selectedId)!;
+				const p = snap({ x: elemStart.x + dx, y: elemStart.y + dy });
+				const candidate: SeatObj = { ...sb, x: p.x, y: p.y };
+				// Only move into a clear spot (no walls / tables / chairs / out-of-bounds).
+				if (!seatHasCollision(candidate, selectedId)) {
+					seats = seats.map(s => s.id === selectedId ? candidate : s);
+				}
+			}
 			return;
 		}
 
@@ -870,6 +974,9 @@
 		}
 
 		if (tool === 'table') {
+			// In reservation mode only defined admin table types may be placed —
+			// no freeform tables (which would otherwise use the tShape/tWidth fallback).
+			if (tablesFromTypesOnly && !selectedType) return;
 			pushUndo();
 			const st = selectedType;
 			const useShape = st ? st.shape : tShape;
@@ -893,14 +1000,31 @@
 			return;
 		}
 
+		if (tool === 'chair') {
+			const seat: SeatObj = { id: crypto.randomUUID(), x: pos.x, y: pos.y, rotation: 0, assignment: null };
+			// Only drop the chair if it clears walls, tables, bounds and other chairs.
+			if (seatHasCollision(seat)) return;
+			pushUndo();
+			seats = [...seats, seat];
+			selectedId = seat.id;
+			tool = 'select';
+			return;
+		}
+
 		if (tool === 'eraser') {
+			const SR = 0.26; // standalone-seat hit radius (metres)
+			for (let i = seats.length - 1; i >= 0; i--) {
+				if (Math.hypot(raw.x - seats[i].x, raw.y - seats[i].y) <= SR) { pushUndo(); seats = seats.filter((_, j) => j !== i); return; }
+			}
 			for (let i = tables.length - 1; i >= 0; i--) {
 				if (tableHit(tables[i], raw)) { pushUndo(); tables = tables.filter((_, j) => j !== i); return; }
 			}
-			if (!protectWallsZones) {
+			if (!zonesLocked) {
 				for (let i = zones.length - 1; i >= 0; i--) {
 					if (pointInPoly(raw, zones[i].points)) { pushUndo(); zones = zones.filter((_, j) => j !== i); return; }
 				}
+			}
+			if (!wallsLocked) {
 				for (let i = walls.length - 1; i >= 0; i--) {
 					if (pointInPoly(raw, walls[i].points)) { pushUndo(); walls = walls.filter((_, j) => j !== i); return; }
 				}
@@ -928,9 +1052,9 @@
 
 		if (tool === 'select') {
 			// Check vertex handles on selected wall/zone first
-			if (selectedId && !protectWallsZones) {
-				const selWall = walls.find(w => w.id === selectedId);
-				const selZone = zones.find(z => z.id === selectedId);
+			if (selectedId && (!wallsLocked || !zonesLocked)) {
+				const selWall = wallsLocked ? undefined : walls.find(w => w.id === selectedId);
+				const selZone = zonesLocked ? undefined : zones.find(z => z.id === selectedId);
 				const pts = selWall?.points ?? selZone?.points;
 				if (pts) {
 					const hitR = 8 / zoom; // vertex handle radius in world coords
@@ -965,7 +1089,7 @@
 				}
 			}
 			// Zones — select + drag
-			if (!protectWallsZones) {
+			if (!zonesLocked) {
 				for (let i = zones.length - 1; i >= 0; i--) {
 					if (pointInPoly(raw, zones[i].points)) {
 						pushUndo(); selectedId = zones[i].id;
@@ -977,7 +1101,7 @@
 				}
 			}
 			// Walls — select + drag
-			if (!protectWallsZones) {
+			if (!wallsLocked) {
 				for (let i = walls.length - 1; i >= 0; i--) {
 					if (pointInPoly(raw, walls[i].points)) {
 						pushUndo(); selectedId = walls[i].id;
@@ -993,6 +1117,12 @@
 	}
 
 	function onPointerUp(e: PointerEvent) {
+		// A press on a seat that never moved → open its assignment popover.
+		if (seatClickCandidate) {
+			const c = seatClickCandidate; seatClickCandidate = null;
+			chairPopover = { seatId: c.id, x: c.x, y: c.y };
+			guestSearch = '';
+		}
 		isPanning = isDragging = isRotating = isPolyDragging = isVertexDragging = false;
 		vertexDragIdx = -1;
 		svgEl?.releasePointerCapture(e.pointerId);
@@ -1027,6 +1157,12 @@
 	}
 
 	function onKeyDown(e: KeyboardEvent) {
+		// Don't run canvas shortcuts (Delete/Backspace removes a table, etc.) while
+		// the user is typing in a field — let the input handle the key normally.
+		const el = e.target as HTMLElement | null;
+		if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable)) {
+			return;
+		}
 		if (e.key === 'Escape') {
 			if (chairPopover) { chairPopover = null; guestSearch = ''; return; }
 			if (measureStart || measureEnd) { measureStart = null; measureEnd = null; return; }
@@ -1039,6 +1175,7 @@
 			tables = tables.filter(t => t.id !== selectedId);
 			walls  = walls.filter(w => w.id !== selectedId);
 			zones  = zones.filter(z => z.id !== selectedId);
+			seats  = seats.filter(s => s.id !== selectedId);
 			selectedId = null;
 		}
 		// Undo / Redo
@@ -1083,19 +1220,42 @@
 	// ─── Constants ────────────────────────────────────────────────────────────
 	const ZONE_PRESETS = ['#a78bfa','#22d3ee','#34d399','#fb923c','#f472b6','#facc15','#60a5fa','#f87171'];
 
-	const TOOL_LABELS: Record<Tool, string> = {
-		select: 'Grab', wall: 'Wall painter', zone: 'Zone painter', table: 'Place table', eraser: 'Eraser',
-		bounds: 'Bounds', measure: 'Measure',
-	};
+	const TOOL_LABELS: Record<Tool, string> = $derived({
+		select: tr.editor.toolGrab, wall: tr.editor.toolWall, zone: tr.editor.toolZone, table: tr.editor.toolTable, chair: tr.editor.toolChair, eraser: tr.editor.toolEraser,
+		bounds: tr.editor.toolBounds, measure: tr.editor.toolMeasure,
+	});
 	const ICONS: Record<Tool, string> = {
 		select: 'M5 3l14 9-7 1.5L9 20z',
 		wall:   'M3 5h18M3 12h18M3 19h18',
 		zone:   'M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z',
 		table:  'M3 6h18M3 18h18M8 6v12M16 6v12',
+		chair:  'M7 4v9M7 13h9M16 13v7M7 13v7M6 4h2',
 		eraser: 'M20 20H7L3 16l11-11 6 6M6 17l-3-3',
 		bounds: 'M3 3h18v18H3zM7 3v18M3 7h18',
 		measure: 'M2 2l20 20M2 8V2h6M22 16v6h-6',
 	};
+
+	// Word-wrap a zone label to roughly fit the zone's width (SVG text has no
+	// auto-wrap). Falls back to hard-breaking a single over-long word.
+	function wrapLabel(text: string, maxChars: number): string[] {
+		const words = text.trim().split(/\s+/).filter(Boolean);
+		const lines: string[] = [];
+		let cur = '';
+		for (const w of words) {
+			if (!cur) cur = w;
+			else if ((cur + ' ' + w).length <= maxChars) cur += ' ' + w;
+			else { lines.push(cur); cur = w; }
+		}
+		if (cur) lines.push(cur);
+		// Only hard-break a genuinely long single word — never split normal words.
+		const hard = Math.max(maxChars, 16);
+		const out: string[] = [];
+		for (const l of lines) {
+			if (l.length <= hard) out.push(l);
+			else for (let i = 0; i < l.length; i += hard) out.push(l.slice(i, i + hard));
+		}
+		return out.length ? out : [text];
+	}
 
 	function closeSnapDrop(e: MouseEvent) {
 		if (!(e.target as HTMLElement).closest('.custom-select')) snapDropOpen = false;
@@ -1117,12 +1277,12 @@
 	<header>
 		<div class="header-controls">
 			<div class="ctrl">
-				<label for="zoom-sl">Zoom</label>
+				<label for="zoom-sl">{tr.editor.zoom}</label>
 				<input id="zoom-sl" type="range" min="15" max="200" bind:value={zoom} style="width:90px"/>
-				<span class="val">{Math.round(zoom)} px/m</span>
+				<span class="val">{Math.round(zoom)} {tr.editor.pxPerM}</span>
 			</div>
 			<div class="ctrl">
-				<label>Snap</label>
+				<label>{tr.editor.snap}</label>
 				<div class="custom-select" role="listbox" tabindex="0"
 					onclick={(e) => { e.stopPropagation(); snapDropOpen = !snapDropOpen; }}
 					onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); snapDropOpen = !snapDropOpen; } }}>
@@ -1142,15 +1302,15 @@
 			</div>
 			<button class="snap-toggle" class:active={snapToElements}
 				onclick={() => snapToElements = !snapToElements}
-				title={snapToElements ? 'Element snapping ON' : 'Element snapping OFF'}>
+				title={snapToElements ? tr.editor.elementSnappingOn : tr.editor.elementSnappingOff}>
 				<svg width="16" height="16" viewBox="0 0 24 24" fill="none"
 					stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
 					<path d="M6 2v4M6 18v4M18 2v4M18 18v4M2 6h4M18 6h4M2 18h4M18 18h4"/>
 					<rect x="6" y="6" width="12" height="12" rx="1"/>
 				</svg>
-				Snap
+				{tr.editor.snap}
 			</button>
-			<span class="hint-text">Alt+drag or middle-click to pan · Scroll = zoom</span>
+			<span class="hint-text">{tr.editor.panHint}</span>
 
 			<!-- Floor tabs -->
 			<div class="floor-tabs">
@@ -1161,9 +1321,11 @@
 						{floor.name}
 					</button>
 				{/each}
-				<button class="floor-tab floor-tab-add" onclick={addFloor} title="Add floor">+</button>
-				{#if floors.length > 1}
-					<button class="floor-tab floor-tab-del" onclick={() => removeFloor(activeFloorIdx)} title="Remove current floor">✕</button>
+				{#if !lockFloors}
+					<button class="floor-tab floor-tab-add" onclick={addFloor} title={tr.editor.addFloor}>+</button>
+					{#if floors.length > 1}
+						<button class="floor-tab floor-tab-del" onclick={() => removeFloor(activeFloorIdx)} title={tr.editor.removeFloor}>✕</button>
+					{/if}
 				{/if}
 			</div>
 		</div>
@@ -1172,7 +1334,7 @@
 	<div class="body">
 		<!-- Left toolbar -->
 		<nav class="toolbar">
-			{#each (['select','wall','zone','table','eraser','bounds','measure'] as Tool[]) as t}
+			{#each (['select','wall','zone','table','chair','eraser','bounds','measure'] as Tool[]) as t}
 				{#if !hiddenTools.includes(t)}
 					<button class="tool-btn" class:active={tool === t}
 						onclick={() => { tool = t; if (t !== 'select') selectedId = null; if (t !== 'wall' && t !== 'zone') cancelDrawing(); if (t !== 'bounds') boundsStart = null; }}>
@@ -1188,19 +1350,19 @@
 			<div class="sep"></div>
 
 			<!-- Undo / Redo -->
-			<button class="tool-btn" onclick={undo} disabled={undoStack.length === 0} title="Undo (Ctrl+Z)">
+			<button class="tool-btn" onclick={undo} disabled={undoStack.length === 0} title={tr.editor.undoTitle}>
 				<svg width="18" height="18" viewBox="0 0 24 24" fill="none"
 					stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
 					<polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 105.64-8.36L1 10"/>
 				</svg>
-				Undo
+				{tr.editor.undo}
 			</button>
-			<button class="tool-btn" onclick={redo} disabled={redoStack.length === 0} title="Redo (Ctrl+Y)">
+			<button class="tool-btn" onclick={redo} disabled={redoStack.length === 0} title={tr.editor.redoTitle}>
 				<svg width="18" height="18" viewBox="0 0 24 24" fill="none"
 					stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
 					<polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-5.64-8.36L23 10"/>
 				</svg>
-				Redo
+				{tr.editor.redo}
 			</button>
 
 			{#if isDrawing}
@@ -1209,13 +1371,13 @@
 					<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
 						<polyline points="20 6 9 17 4 12"/>
 					</svg>
-					Close shape
+					{tr.editor.closeShape}
 				</button>
 				<button class="tool-btn cancel" onclick={cancelDrawing}>
 					<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
 						<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
 					</svg>
-					Cancel
+					{tr.common.cancel}
 				</button>
 			{/if}
 		</nav>
@@ -1225,7 +1387,7 @@
 		<main class="canvas-wrap" role="application">
 			<!-- svelte-ignore a11y_no_static_element_interactions -->
 			<svg bind:this={svgEl} class="map-svg"
-				class:c-cross={tool === 'wall' || tool === 'zone' || tool === 'table' || tool === 'bounds' || tool === 'measure'}
+				class:c-cross={tool === 'wall' || tool === 'zone' || tool === 'table' || tool === 'chair' || tool === 'bounds' || tool === 'measure'}
 				class:c-cell={tool === 'eraser'}
 				onpointermove={onPointerMove} onpointerdown={onPointerDown}
 				onpointerup={onPointerUp} ondblclick={onDblClick} onwheel={onWheel}
@@ -1233,18 +1395,18 @@
 				<defs>
 					<pattern id="sg" width={ws(gridSnap)} height={ws(gridSnap)} patternUnits="userSpaceOnUse">
 						<path d={`M ${ws(gridSnap)} 0 L 0 0 0 ${ws(gridSnap)}`}
-							fill="none" stroke="rgba(0,0,0,0.05)" stroke-width="0.5"/>
+							fill="none" stroke="var(--editor-grid)" stroke-width="0.5"/>
 					</pattern>
 					<pattern id="mg" width={zoom} height={zoom} patternUnits="userSpaceOnUse"
 						x={patternX} y={patternY}>
 						<rect width={zoom} height={zoom} fill="url(#sg)"/>
 						<path d={`M ${zoom} 0 L 0 0 0 ${zoom}`}
-							fill="none" stroke="rgba(0,0,0,0.12)" stroke-width="1"/>
+							fill="none" stroke="var(--editor-grid-strong)" stroke-width="1"/>
 					</pattern>
 				</defs>
 
 				<!-- Floor -->
-				<rect width="100%" height="100%" fill="#f8f9fc"/>
+				<rect width="100%" height="100%" fill="var(--editor-canvas)"/>
 				<rect width="100%" height="100%" fill="url(#mg)"/>
 
 				<!-- ── Ghost outline of floor below ── -->
@@ -1304,16 +1466,9 @@
 					{@const sel = zone.id === selectedId}
 					<polygon points={pts} fill={zone.color} fill-opacity={sel ? 0.5 : 0.28}
 						stroke={zone.color} stroke-width={sel ? 2.5 : 1.5} stroke-opacity="0.7"
-						style={tool === 'select' && !protectWallsZones ? 'cursor:move' : ''}
+						style={tool === 'select' && !zonesLocked ? 'cursor:move' : ''}
 						pointer-events={tool === 'select' || tool === 'eraser' ? 'auto' : 'none'}/>
-					{@const cx = zone.points.reduce((s,p)=>s+p.x,0)/zone.points.length}
-					{@const cy = zone.points.reduce((s,p)=>s+p.y,0)/zone.points.length}
-					<text x={wx(cx)} y={wy(cy)} text-anchor="middle" dominant-baseline="middle"
-						font-size="12" font-weight="600" fill={zone.color} pointer-events="none"
-						style="paint-order:stroke" stroke="rgba(255,255,255,0.7)" stroke-width="3">
-						{zone.label}
-					</text>
-					{#if sel && !protectWallsZones}
+					{#if sel && !zonesLocked}
 						{#each zone.points as p, vi}
 							<circle cx={wx(p.x)} cy={wy(p.y)} r="6"
 								fill={vertexDragIdx === vi && isVertexDragging ? zone.color : 'white'}
@@ -1327,17 +1482,36 @@
 				{#each walls as wall}
 					{@const pts = wall.points.map(p => `${wx(p.x)},${wy(p.y)}`).join(' ')}
 					{@const sel = wall.id === selectedId}
-					<polygon points={pts} fill="#2b3462" stroke={sel ? '#7b6cf0' : 'none'}
+					<polygon points={pts} fill="var(--editor-wall)" stroke={sel ? '#7b6cf0' : 'none'}
 						stroke-width={sel ? 3 : 0}
-						style={tool === 'select' && !protectWallsZones ? 'cursor:move' : ''}
+						style={tool === 'select' && !wallsLocked ? 'cursor:move' : ''}
 						pointer-events={tool === 'select' || tool === 'eraser' ? 'auto' : 'none'}/>
-					{#if sel && !protectWallsZones}
+					{#if sel && !wallsLocked}
 						{#each wall.points as p, vi}
 							<circle cx={wx(p.x)} cy={wy(p.y)} r="6"
 								fill={vertexDragIdx === vi && isVertexDragging ? '#5b4cd0' : '#7b6cf0'}
 								stroke="white" stroke-width="2" style="cursor:grab"
 								pointer-events="auto"/>
 						{/each}
+					{/if}
+				{/each}
+
+				<!-- ── Zone labels (drawn ON TOP of walls so they're never hidden; word-wrapped to the zone width) ── -->
+				{#each zones as zone}
+					{#if zone.label}
+						{@const xs = zone.points.map(p => p.x)}
+						{@const ys = zone.points.map(p => p.y)}
+						{@const cx = xs.reduce((s, v) => s + v, 0) / xs.length}
+						{@const cy = ys.reduce((s, v) => s + v, 0) / ys.length}
+						{@const widthPx = (Math.max(...xs) - Math.min(...xs)) * zoom}
+						{@const lines = wrapLabel(zone.label, Math.max(4, Math.floor((widthPx - 8) / 7)))}
+						<text x={wx(cx)} y={wy(cy)} text-anchor="middle" dominant-baseline="middle"
+							font-size="12" font-weight="600" fill={zone.color} pointer-events="none"
+							style="paint-order:stroke" stroke="rgba(255,255,255,0.85)" stroke-width="3">
+							{#each lines as line, i}
+								<tspan x={wx(cx)} dy={i === 0 ? -((lines.length - 1) * 13) / 2 : 13}>{line}</tspan>
+							{/each}
+						</text>
 					{/if}
 				{/each}
 
@@ -1373,8 +1547,8 @@
 
 						<!-- Label -->
 						<text x={0} y={ws(0.1)} text-anchor="middle" dominant-baseline="middle"
-							font-size={Math.max(8,Math.min(ws(0.28),18))}
-							font-family="system-ui,sans-serif" font-weight="700"
+							font-size={Math.max(6,Math.min(ws(0.18),12))}
+							font-family="system-ui,sans-serif" font-weight="600"
 							fill="rgba(255,250,240,0.95)" pointer-events="none">
 							{table.label}
 						</text>
@@ -1420,6 +1594,46 @@
 								fill="#7b6cf0" stroke="white" stroke-width="2"
 								style="cursor:grab"
 								onpointerdown={(e) => startRotate(e, table)}/>
+						{/if}
+					</g>
+				{/each}
+
+				<!-- ── Standalone chairs ── -->
+				{#each seats as seat}
+					{@const sg = seat.assignment ? guests.find(x => x.id === seat.assignment) : null}
+					{@const ssel = selectedId === seat.id}
+					<!-- svelte-ignore a11y_no_static_element_interactions -->
+					<g transform={`translate(${wx(seat.x)},${wy(seat.y)}) rotate(${seat.rotation})`}
+						style="cursor:{tool==='select'?'pointer':tool==='eraser'?'inherit':'inherit'}"
+						onpointerdown={(e) => {
+							if (e.button !== 0) return;
+							e.stopPropagation();
+							if (tool === 'eraser') { pushUndo(); seats = seats.filter(s => s.id !== seat.id); return; }
+							if (tool === 'select') {
+								selectedId = seat.id;
+								isDragging = true;
+								dragStart = svgCoords(e);
+								elemStart = { x: seat.x, y: seat.y };
+								const r = svgEl.getBoundingClientRect();
+								seatClickCandidate = { id: seat.id, x: e.clientX - r.left, y: e.clientY - r.top };
+							}
+						}}>
+						{#if ssel}
+							<circle cx={0} cy={0} r={ws(0.32)} fill="none" stroke="#7b6cf0" stroke-width="2.5"/>
+						{/if}
+						<!-- Chair back bar -->
+						<rect x={-ws(0.21)} y={-ws(0.24)} width={ws(0.42)} height={ws(0.09)}
+							rx={ws(0.04)} fill={sg ? '#15803d' : '#475569'}/>
+						<!-- Chair seat -->
+						<rect x={-ws(0.21)} y={-ws(0.15)} width={ws(0.42)} height={ws(0.36)}
+							rx={ws(0.05)} fill={sg ? '#16a34a' : '#94a3b8'}
+							stroke={sg ? '#14532d' : '#475569'} stroke-width="1"/>
+						{#if sg && zoom >= 55}
+							<text x={0} y={ws(0.05)} text-anchor="middle" dominant-baseline="middle"
+								font-size={Math.max(6, ws(0.18))} font-weight="800"
+								fill="white" pointer-events="none">
+								{sg.firstName[0]}{sg.lastName[0]}
+							</text>
 						{/if}
 					</g>
 				{/each}
@@ -1562,8 +1776,10 @@
 					style="left:{Math.min(chairPopover.x+12, 9999)}px; top:{Math.min(chairPopover.y-8, 9999)}px">
 					<div class="pop-header">
 						<span>
-							{#if popoverTable}
-								{popoverTable.label} · seat {chairPopover.chairIdx + 1}
+							{#if popoverTable && chairPopover.chairIdx != null}
+								{popoverTable.label} · {tr.editor.seat} {chairPopover.chairIdx + 1}
+							{:else if popoverSeat}
+								{tr.editor.chair}
 							{/if}
 						</span>
 						<button class="pop-close" onclick={() => { chairPopover = null; guestSearch = ''; }}>✕</button>
@@ -1572,15 +1788,21 @@
 						<div class="pop-assigned">
 							<span class="pop-name">{popoverChairGuest.firstName} {popoverChairGuest.lastName}</span>
 							{#if popoverChairGuest.group}<span class="pop-group">{popoverChairGuest.group}</span>{/if}
-							<button class="pop-clear" onclick={clearChairAssignment}>Remove</button>
+							<button class="pop-clear" onclick={clearChairAssignment}>{tr.editor.remove}</button>
 						</div>
+						{#if popoverChairGuest.note}
+							<div class="pop-note">
+								<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+								<span>{popoverChairGuest.note}</span>
+							</div>
+						{/if}
 					{:else}
-						<div class="pop-empty">Unassigned</div>
+						<div class="pop-empty">{tr.editor.unassigned}</div>
 					{/if}
-					<input class="pop-search" type="text" placeholder="Search guests…" bind:value={guestSearch} />
+					<input class="pop-search" type="text" placeholder={tr.editor.searchGuests} bind:value={guestSearch} />
 					<div class="pop-list">
 						{#each filteredPopoverGuests as g}
-							{@const isCurrent = popoverTable?.assignments[chairPopover.chairIdx] === g.id}
+							{@const isCurrent = popoverCurrentId === g.id}
 							<button class="pop-guest" class:current={isCurrent}
 								onclick={() => isCurrent ? clearChairAssignment() : assignGuest(g.id)}>
 								<span class="pop-gname">{g.lastName}, {g.firstName}</span>
@@ -1588,7 +1810,7 @@
 								{#if isCurrent}<span class="pop-check">✓</span>{/if}
 							</button>
 						{:else}
-							<div class="pop-empty" style="padding:8px 12px">No unassigned guests</div>
+							<div class="pop-empty" style="padding:8px 12px">{tr.editor.noUnassignedGuests}</div>
 						{/each}
 					</div>
 				</div>
@@ -1598,21 +1820,21 @@
 			<div class="status-bar">
 				<span>
 					{#if tool === 'measure'}
-						{measureStart && !measureEnd ? 'Click second point to measure' : measureEnd ? 'Click to start new measurement · Esc to clear' : 'Click first point'} · Esc to cancel
+						{measureStart && !measureEnd ? tr.editor.statusMeasureSecond : measureEnd ? tr.editor.statusMeasureNew : tr.editor.statusMeasureFirst} · {tr.editor.escToCancel}
 					{:else if tool === 'bounds'}
-						{boundsStart ? 'Click second corner to finish bounds' : 'Click first corner of boundary rectangle'} · Esc to cancel
+						{boundsStart ? tr.editor.statusBoundsSecond : tr.editor.statusBoundsFirst} · {tr.editor.escToCancel}
 					{:else if isDrawing}
-						● Drawing {tool} — {drawPts.length} pts · Click start to close · Enter · Esc
+						● {tr.editor.statusDrawing} {tool} — {drawPts.length} {tr.editor.pts} · {tr.editor.statusDrawingHint}
 					{:else if tool === 'table'}
-						Click to place table · {ghostValid ? 'Valid position' : 'Blocked by wall'}
+						{tr.editor.statusPlaceTable} · {ghostValid ? tr.editor.validPosition : tr.editor.blockedByWall}
 					{:else if tool === 'select' && selectedTable}
-						{selectedTable.label} · rotate handle above · Delete to remove
+						{selectedTable.label} · {tr.editor.statusSelectedTable}
 					{:else}
 						{TOOL_LABELS[tool]}
 					{/if}
 				</span>
 				<span class="status-coords">
-					{cursorPos.x.toFixed(2)} m, {cursorPos.y.toFixed(2)} m · snap {gridSnap} m
+					{cursorPos.x.toFixed(2)} m, {cursorPos.y.toFixed(2)} m · {tr.editor.snap} {gridSnap} m
 				</span>
 			</div>
 		</main>
@@ -1621,9 +1843,9 @@
 		<aside class="panel">
 			<!-- Tabs -->
 			<div class="tabs">
-				<button class="tab" class:active={activeTab==='props'} onclick={() => activeTab='props'}>Properties</button>
+				<button class="tab" class:active={activeTab==='props'} onclick={() => activeTab='props'}>{tr.editor.properties}</button>
 				<button class="tab" class:active={activeTab==='guests'} onclick={() => activeTab='guests'}>
-					Guests
+					{tr.editor.guests}
 					{#if guests.length > 0}
 						<span class="tab-badge">{totalAssigned}/{guests.length}</span>
 					{/if}
@@ -1636,7 +1858,7 @@
 				<!-- Table inventory selector (when types provided) -->
 				{#if tableTypes && tableTypes.length > 0 && tool === 'table' && !selectedTable}
 					<section>
-						<div class="sec-title">Inventory</div>
+						<div class="sec-title">{tr.editor.inventory}</div>
 						<div class="inventory-list">
 							{#each tableTypes as tt}
 								<button class="inventory-item" class:active={selectedTypeId === tt.id}
@@ -1651,8 +1873,8 @@
 									<div class="inv-info">
 										<span class="inv-name">{tt.name}</span>
 										<span class="inv-detail">
-											{tt.shape === 'round' ? 'Round' : 'Rect'}
-											· {tt.max_chairs} chairs
+											{tt.shape === 'round' ? tr.editor.shapeRound : tr.editor.shapeRect}
+											· {tt.max_chairs} {tr.editor.chairsWord}
 										</span>
 									</div>
 								</button>
@@ -1661,7 +1883,7 @@
 						{#if selectedType}
 							<div class="inv-selected-info">
 								{selectedType.shape === 'round' ? `r=${selectedType.radius}m` : `${selectedType.width}×${selectedType.height}m`}
-								· {selectedType.max_chairs} chairs
+								· {selectedType.max_chairs} {tr.editor.chairsWord}
 							</div>
 						{/if}
 					</section>
@@ -1673,11 +1895,11 @@
 					{@const isInventoryTable = T?.typeId && tableTypes?.find(tt => tt.id === T.typeId)}
 					{@const maxChairs = isInventoryTable ? Number((tableTypes?.find(tt => tt.id === T?.typeId))?.max_chairs ?? 999) : 999}
 					<section>
-						<div class="sec-title">{T ? T.label : 'New table'}</div>
+						<div class="sec-title">{T ? T.label : tr.editor.newTable}</div>
 
 						{#if T}
 							<div class="field">
-								<label for="t-lbl">Name</label>
+								<label for="t-lbl">{tr.common.name}</label>
 								<input id="t-lbl" type="text" value={T.label}
 									oninput={(e) => updateTable({ label: (e.target as HTMLInputElement).value })}/>
 							</div>
@@ -1685,27 +1907,27 @@
 
 						{#if !isInventoryTable}
 							<div class="field">
-								<label for="t-shp">Shape</label>
+								<label for="t-shp">{tr.editor.shape}</label>
 								<select id="t-shp" value={T?.shape ?? tShape}
 									onchange={(e) => {
 										const v = (e.target as HTMLSelectElement).value as TableShape;
 										if (T) updateTable({ shape: v }); else tShape = v;
 									}}>
-									<option value="rect">Rectangular</option>
-									<option value="round">Round</option>
+									<option value="rect">{tr.editor.rectangular}</option>
+									<option value="round">{tr.editor.round}</option>
 								</select>
 							</div>
 
 							{#if (T?.shape ?? tShape) === 'rect'}
 								<div class="field-row">
 									<div class="field">
-										<label for="t-w">Width (m)</label>
+										<label for="t-w">{tr.editor.widthM}</label>
 										<input id="t-w" type="number" min="0.5" max="12" step="0.5"
 											value={T?.width ?? tWidth}
 											oninput={(e) => { const v=+((e.target as HTMLInputElement).value); if(T) updateTable({width:v}); else tWidth=v; }}/>
 									</div>
 									<div class="field">
-										<label for="t-h">Depth (m)</label>
+										<label for="t-h">{tr.editor.depthM}</label>
 										<input id="t-h" type="number" min="0.5" max="12" step="0.5"
 											value={T?.height ?? tHeight}
 											oninput={(e) => { const v=+((e.target as HTMLInputElement).value); if(T) updateTable({height:v}); else tHeight=v; }}/>
@@ -1713,7 +1935,7 @@
 								</div>
 							{:else}
 								<div class="field">
-									<label for="t-r">Radius (m)</label>
+									<label for="t-r">{tr.editor.radiusM}</label>
 									<input id="t-r" type="number" min="0.5" max="6" step="0.25"
 										value={T?.radius ?? Math.max(tWidth,tHeight)/2}
 										oninput={(e) => { const v=+((e.target as HTMLInputElement).value); if(T) updateTable({radius:v,width:v*2,height:v*2}); else { tWidth=v*2; tHeight=v*2; } }}/>
@@ -1722,13 +1944,13 @@
 						{:else if isInventoryTable && T}
 							<div class="inv-locked-info">
 								{T.shape === 'round' ? `r=${T.radius}m` : `${T.width}×${T.height}m`}
-								· inventory type
+								· {tr.editor.inventoryType}
 							</div>
 						{/if}
 
 						{#if (T?.shape ?? tShape) === 'round'}
 							<div class="field">
-								<label for="t-ch">Chairs {maxChairs < 999 ? `(max ${maxChairs})` : ''}</label>
+								<label for="t-ch">{tr.editor.chairs} {maxChairs < 999 ? `(${tr.editor.max} ${maxChairs})` : ''}</label>
 								<input id="t-ch" type="number" min="0" max={maxChairs} step="1"
 									value={T?.chairs ?? tChairs}
 									oninput={(e) => { const v=Math.min(+((e.target as HTMLInputElement).value), maxChairs); if(T) updateTable({chairs:v}); else tChairs=v; }}/>
@@ -1736,17 +1958,17 @@
 						{:else}
 							{@const currentTotal = T ? (Number(T.chairsTop)||0)+(Number(T.chairsBottom)||0)+(Number(T.chairsLeft)||0)+(Number(T.chairsRight)||0) : tChairsTop+tChairsBottom+tChairsLeft+tChairsRight}
 							{#if maxChairs < 999}
-								<div class="chair-limit-hint">{currentTotal} / {maxChairs} chairs</div>
+								<div class="chair-limit-hint">{currentTotal} / {maxChairs} {tr.editor.chairsWord}</div>
 							{/if}
 							<div class="field-row">
 								<div class="field">
-									<label for="t-ct">Top</label>
+									<label for="t-ct">{tr.editor.top}</label>
 									<input id="t-ct" type="number" min="0" max={maxChairs} step="1"
 										value={T?.chairsTop ?? tChairsTop}
 										oninput={(e) => { const v=Math.max(0,+((e.target as HTMLInputElement).value)||0); if(T) updateTable({chairsTop:v}); else tChairsTop=v; }}/>
 								</div>
 								<div class="field">
-									<label for="t-cb">Bottom</label>
+									<label for="t-cb">{tr.editor.bottom}</label>
 									<input id="t-cb" type="number" min="0" max={maxChairs} step="1"
 										value={T?.chairsBottom ?? tChairsBottom}
 										oninput={(e) => { const v=Math.max(0,+((e.target as HTMLInputElement).value)||0); if(T) updateTable({chairsBottom:v}); else tChairsBottom=v; }}/>
@@ -1754,13 +1976,13 @@
 							</div>
 							<div class="field-row">
 								<div class="field">
-									<label for="t-cl">Left</label>
+									<label for="t-cl">{tr.editor.left}</label>
 									<input id="t-cl" type="number" min="0" max={maxChairs} step="1"
 										value={T?.chairsLeft ?? tChairsLeft}
 										oninput={(e) => { const v=Math.max(0,+((e.target as HTMLInputElement).value)||0); if(T) updateTable({chairsLeft:v}); else tChairsLeft=v; }}/>
 								</div>
 								<div class="field">
-									<label for="t-cr">Right</label>
+									<label for="t-cr">{tr.editor.right}</label>
 									<input id="t-cr" type="number" min="0" max={maxChairs} step="1"
 										value={T?.chairsRight ?? tChairsRight}
 										oninput={(e) => { const v=Math.max(0,+((e.target as HTMLInputElement).value)||0); if(T) updateTable({chairsRight:v}); else tChairsRight=v; }}/>
@@ -1768,8 +1990,9 @@
 							</div>
 						{/if}
 
+						{#if (T?.shape ?? tShape) === 'rect'}
 						<div class="field">
-							<label for="t-sp">Chair spacing (m)</label>
+							<label for="t-sp">{tr.editor.chairSpacing}</label>
 							<div style="display:flex;align-items:center;gap:8px">
 								<input id="t-sp" type="range" min="0" max="0.8" step="0.05"
 									value={T?.chairSpacing ?? tChairSpacing}
@@ -1778,10 +2001,11 @@
 								<span class="val">{((T?.chairSpacing ?? tChairSpacing)*100).toFixed(0)} cm</span>
 							</div>
 						</div>
+						{/if}
 
 						{#if T}
 							<div class="field">
-								<label for="t-rot">Rotation (°)</label>
+								<label for="t-rot">{tr.editor.rotation}</label>
 								<input id="t-rot" type="number" min="-180" max="180" step="5"
 									value={T.rotation}
 									oninput={(e) => updateTable({ rotation: +((e.target as HTMLInputElement).value) })}/>
@@ -1790,7 +2014,7 @@
 							<!-- Seat assignments summary -->
 							{@const assigned = T.assignments.filter(Boolean).length}
 							<div class="seat-summary">
-								<span>{assigned}/{totalChairs(T)} seats assigned</span>
+								<span>{assigned}/{totalChairs(T)} {tr.editor.seatsAssigned}</span>
 								<div class="seat-dots">
 									{#each T.assignments as a}
 										<span class="dot" class:filled={!!a}></span>
@@ -1799,7 +2023,7 @@
 							</div>
 
 							<button class="btn-del" onclick={() => { tables=tables.filter(t=>t.id!==selectedId); selectedId=null; }}>
-								Delete table
+								{tr.editor.deleteTable}
 							</button>
 						{/if}
 					</section>
@@ -1809,69 +2033,68 @@
 				{#if tool === 'zone' || selectedZone}
 					{@const Z = selectedZone}
 					<section>
-						<div class="sec-title">{Z ? Z.label : 'Zone options'}</div>
+						<div class="sec-title">{Z ? Z.label : tr.editor.zoneOptions}</div>
 						{#if Z}
 							<div class="field">
-								<label for="z-lbl">Name</label>
+								<label for="z-lbl">{tr.common.name}</label>
 								<input id="z-lbl" type="text" value={Z.label}
 									oninput={(e) => updateZone({ label: (e.target as HTMLInputElement).value })}/>
 							</div>
 						{/if}
 						<div class="field">
-							<label for="z-col">Colour</label>
+							<label for="z-col">{tr.editor.colour}</label>
 							<div class="swatches">
 								{#each ZONE_PRESETS as c}
 									<button class="swatch" class:on={(Z?.color ?? zoneColor)===c}
-										style="background:{c}" aria-label="Set colour {c}"
+										style="background:{c}" aria-label="{tr.editor.setColour} {c}"
 										onclick={() => { if(Z) updateZone({color:c}); else zoneColor=c; }}></button>
 								{/each}
 								<input id="z-col" type="color" value={Z?.color ?? zoneColor}
 									oninput={(e) => { const v=(e.target as HTMLInputElement).value; if(Z) updateZone({color:v}); else zoneColor=v; }}
-									title="Custom"/>
+									title={tr.editor.custom}/>
 							</div>
 						</div>
 						{#if Z}
 							<button class="btn-del" onclick={() => { zones=zones.filter(z=>z.id!==selectedId); selectedId=null; }}>
-								Delete zone
+								{tr.editor.deleteZone}
 							</button>
 						{/if}
 					</section>
 				{/if}
 
 				<!-- Bounds config -->
-				{#if (tool === 'bounds' || bounds) && tool !== 'table'}
+				{#if !boundsLocked && (tool === 'bounds' || bounds) && tool !== 'table'}
 					<section>
-						<div class="sec-title">Floor plan bounds</div>
+						<div class="sec-title">{tr.editor.floorPlanBounds}</div>
 						{#if bounds}
 							<div class="bounds-info">
 								<div class="field-row">
 									<div class="field">
-										<label>X</label>
+										<label>{tr.editor.boundsX}</label>
 										<span class="val">{bounds.x.toFixed(1)} m</span>
 									</div>
 									<div class="field">
-										<label>Y</label>
+										<label>{tr.editor.boundsY}</label>
 										<span class="val">{bounds.y.toFixed(1)} m</span>
 									</div>
 								</div>
 								<div class="field-row">
 									<div class="field">
-										<label>Width</label>
+										<label>{tr.editor.width}</label>
 										<span class="val">{bounds.w.toFixed(1)} m</span>
 									</div>
 									<div class="field">
-										<label>Height</label>
+										<label>{tr.editor.height}</label>
 										<span class="val">{bounds.h.toFixed(1)} m</span>
 									</div>
 								</div>
 							</div>
 							<button class="btn-del" onclick={() => { bounds = null; }}>
-								Remove bounds
+								{tr.editor.removeBounds}
 							</button>
 						{:else}
 							<p style="font-size:12px;color:var(--text-muted);line-height:1.5">
-								Click two corners on the map to define the floor plan boundary.
-								Area outside will be dimmed.
+								{tr.editor.boundsHelp}
 							</p>
 						{/if}
 					</section>
@@ -1880,13 +2103,13 @@
 				<!-- Wall selected -->
 				{#if selectedWall}
 					<section>
-						<div class="sec-title">Wall</div>
-						<div class="stat"><span>Vertices</span><b>{selectedWall.points.length}</b></div>
+						<div class="sec-title">{tr.editor.wall}</div>
+						<div class="stat"><span>{tr.editor.vertices}</span><b>{selectedWall.points.length}</b></div>
 						<p style="font-size:11px;color:var(--text-muted);line-height:1.4;margin:4px 0 8px">
-							Drag wall to move. Drag vertices to reshape.
+							{tr.editor.wallHelp}
 						</p>
 						<button class="btn-del" onclick={() => { walls=walls.filter(w=>w.id!==selectedId); selectedId=null; }}>
-							Delete wall
+							{tr.editor.deleteWall}
 						</button>
 					</section>
 				{/if}
@@ -1894,67 +2117,79 @@
 				<!-- Nothing selected tips -->
 				{#if !selectedTable && !selectedWall && !selectedZone && tool==='select'}
 					<section>
-						<div class="sec-title">Tips</div>
+						<div class="sec-title">{tr.editor.tips}</div>
 						<ul class="tips">
-							<li>Click a chair to assign a guest</li>
-							<li>Drag the <b style="color:#7b6cf0">● handle</b> above a table to rotate</li>
-							<li><kbd>Delete</kbd> removes selected element</li>
-							<li><kbd>Enter</kbd> closes a drawn polygon</li>
-							<li><kbd>Esc</kbd> cancels drawing or deselects</li>
+							<li>{tr.editor.tipAssign}</li>
+							<li>{tr.editor.tipRotatePre}<b style="color:#7b6cf0">{tr.editor.tipRotateHandle}</b>{tr.editor.tipRotatePost}</li>
+							<li><kbd>Delete</kbd> {tr.editor.tipDelete}</li>
+							<li><kbd>Enter</kbd> {tr.editor.tipEnter}</li>
+							<li><kbd>Esc</kbd> {tr.editor.tipEsc}</li>
 						</ul>
 					</section>
 				{/if}
 
 				<!-- Summary always visible -->
 				<section class="summary">
-					<div class="sec-title">Summary</div>
-					<div class="stat"><span>Tables</span><b>{tables.length}</b></div>
-					<div class="stat"><span>Total seats</span><b>{totalSeats}</b></div>
-					<div class="stat"><span>Assigned</span><b>{totalAssigned}/{guests.length} guests</b></div>
-					<div class="stat"><span>Walls</span><b>{walls.length}</b></div>
-					<div class="stat"><span>Zones</span><b>{zones.length}</b></div>
+					<div class="sec-title">{tr.editor.summary}</div>
+					<div class="stat"><span>{tr.editor.tables}</span><b>{tables.length}</b></div>
+					<div class="stat"><span>{tr.editor.totalSeats}</span><b>{totalSeats}</b></div>
+					<div class="stat"><span>{tr.editor.assigned}</span><b>{totalAssigned}/{guests.length} {tr.editor.guestsWord}</b></div>
+					<div class="stat"><span>{tr.editor.walls}</span><b>{walls.length}</b></div>
+					<div class="stat"><span>{tr.editor.zones}</span><b>{zones.length}</b></div>
 				</section>
 			{/if}
 
 			<!-- ── Guests tab ── -->
 			{#if activeTab === 'guests'}
 				<section>
-					<div class="sec-title">Add guest</div>
+					<div class="sec-title">{tr.editor.addGuest}</div>
 					<div class="field-row">
 						<div class="field">
-							<label for="g-first">First name</label>
-							<input id="g-first" type="text" bind:value={newFirst} placeholder="Anna"
+							<label for="g-first">{tr.users.firstName}</label>
+							<input id="g-first" type="text" bind:value={newFirst} placeholder={tr.editor.firstNamePlaceholder}
 								onkeydown={(e) => e.key==='Enter' && addGuest()}/>
 						</div>
 						<div class="field">
-							<label for="g-last">Last name</label>
-							<input id="g-last" type="text" bind:value={newLast} placeholder="Novák"
+							<label for="g-last">{tr.users.lastName}</label>
+							<input id="g-last" type="text" bind:value={newLast} placeholder={tr.editor.lastNamePlaceholder}
 								onkeydown={(e) => e.key==='Enter' && addGuest()}/>
 						</div>
 					</div>
-					<div class="field">
-						<label for="g-grp">Group / family (optional)</label>
-						<input id="g-grp" type="text" bind:value={newGroup} placeholder="Novák family"
-							onkeydown={(e) => e.key==='Enter' && addGuest()}/>
+					<div class="field gf-combo">
+						<label for="g-grp">{tr.editor.groupFamily}</label>
+						<input id="g-grp" type="text" bind:value={newGroup} placeholder={tr.editor.groupPlaceholder} autocomplete="off"
+							onfocus={() => groupDropOpen = true}
+							oninput={() => groupDropOpen = true}
+							onblur={() => setTimeout(() => groupDropOpen = false, 120)}
+							onkeydown={(e) => { if (e.key === 'Enter') { groupDropOpen = false; addGuest(); } else if (e.key === 'Escape') groupDropOpen = false; }}/>
+						{#if groupDropOpen && groupSuggestions.length > 0}
+							<div class="gf-suggest">
+								{#each groupSuggestions as grp}
+									<button type="button" class="gf-suggest-item" onmousedown={(e) => { e.preventDefault(); newGroup = grp; groupDropOpen = false; }}>
+										{grp}
+									</button>
+								{/each}
+							</div>
+						{/if}
 					</div>
-					<button class="btn-add" onclick={addGuest}>Add guest</button>
+					<button class="btn-add" onclick={addGuest}>{tr.editor.addGuest}</button>
 				</section>
 
 				{#if guests.length > 0}
 					<section>
 						<div class="sec-title-row">
-							<span class="sec-title" style="margin-bottom:0">Guest list</span>
+							<span class="sec-title" style="margin-bottom:0">{tr.editor.guestList}</span>
 							<div class="guest-actions">
-								<button class="btn-sm" onclick={autoAssign} title="Auto-assign seats by family/surname">
-									✦ Auto-seat
+								<button class="btn-sm" onclick={autoAssign} title={tr.editor.autoSeatTitle}>
+									✦ {tr.editor.autoSeat}
 								</button>
-								<button class="btn-sm btn-sm-danger" onclick={clearAllAssignments} title="Clear all seat assignments">
-									Clear
+								<button class="btn-sm btn-sm-danger" onclick={clearAllAssignments} title={tr.editor.clearAllTitle}>
+									{tr.editor.clear}
 								</button>
 							</div>
 						</div>
 						<div class="stat" style="margin:6px 0 8px">
-							<span>Seated</span>
+							<span>{tr.editor.seated}</span>
 							<b>{totalAssigned} / {guests.length}</b>
 						</div>
 						<div class="guest-list">
@@ -1968,9 +2203,30 @@
 										<span class="guest-name">{g.lastName}, {g.firstName}</span>
 										{#if g.group}<span class="guest-grp">{g.group}</span>{/if}
 										{#if seat}<span class="guest-seat">{seat}</span>{/if}
+										{#if g.note && noteEditId !== g.id}<span class="guest-note" title={g.note}>
+											<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="13" y2="17"/></svg>
+											{g.note}
+										</span>{/if}
 									</div>
-									<button class="btn-icon" onclick={() => removeGuest(g.id)} title="Remove guest">✕</button>
+									<div class="guest-row-actions">
+										<button class="btn-icon" class:active={noteEditId === g.id || !!g.note}
+											onclick={() => noteEditId = noteEditId === g.id ? null : g.id}
+											title={g.note ? tr.editor.editNote : tr.editor.addNote} aria-label={tr.editor.note}>
+											<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4z"/></svg>
+										</button>
+										<button class="btn-icon" onclick={() => removeGuest(g.id)} title={tr.editor.removeGuest}>✕</button>
+									</div>
 								</div>
+								{#if noteEditId === g.id}
+									<div class="guest-note-edit">
+										<textarea
+											placeholder={tr.editor.notePlaceholder}
+											value={g.note ?? ''}
+											oninput={(e) => updateGuestNote(g.id, e.currentTarget.value)}
+											onkeydown={(e) => { if (e.key === 'Escape') noteEditId = null; }}
+											rows="2"></textarea>
+									</div>
+								{/if}
 							{/each}
 						</div>
 					</section>
@@ -2081,6 +2337,12 @@ header {
 .pop-group { font-size:10px; color:var(--text-muted); background:var(--bg-panel2); padding:1px 5px; border-radius:4px; }
 .pop-clear { font-size:11px; color:#ef4444; padding:3px 8px; border-radius:5px; background:rgba(239,68,68,0.1); }
 .pop-clear:hover { background:rgba(239,68,68,0.2); }
+.pop-note {
+	display:flex; align-items:flex-start; gap:6px; padding:6px 10px;
+	font-size:11px; line-height:1.4; color:var(--warning, #b45309);
+	background:rgba(180,83,9,0.08); border-radius:6px; margin:0 0 2px;
+}
+.pop-note svg { flex-shrink:0; margin-top:1px; }
 .pop-empty { padding:8px 12px; font-size:12px; color:var(--text-muted); border-bottom:1px solid var(--border); }
 .pop-search {
 	display:block; width:100%; padding:8px 12px; border:none; border-bottom:1px solid var(--border);
@@ -2126,6 +2388,19 @@ section { padding:12px; border-bottom:1px solid var(--border); }
 .sec-title-row { display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; }
 .field { display:flex; flex-direction:column; gap:4px; margin-bottom:9px; }
 .field-row { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+
+/* Group/family combobox */
+.gf-combo { position:relative; }
+.gf-suggest {
+	position:absolute; top:100%; left:0; right:0; z-index:30; margin-top:3px;
+	background:var(--bg-panel); border:1px solid var(--border); border-radius:7px;
+	box-shadow:0 8px 24px rgba(0,0,0,0.14); overflow:hidden auto; max-height:158px;
+}
+.gf-suggest-item {
+	display:block; width:100%; text-align:left; padding:7px 10px; font-size:12px;
+	color:var(--text-base); background:none; border:none; cursor:pointer; font-family:inherit;
+}
+.gf-suggest-item:hover { background:var(--bg-panel2); }
 .toggle-row { flex-direction:row; justify-content:space-between; align-items:center; }
 .toggle {
 	padding:3px 10px; border-radius:12px; font-size:11px; font-weight:600;
@@ -2190,9 +2465,24 @@ input[type="color"] {
 .guest-name { font-size:12px; color:var(--text-base); font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .guest-grp  { font-size:10px; color:var(--text-muted); }
 .guest-seat { font-size:10px; color:var(--accent); font-weight:600; }
+.guest-note {
+	display:inline-flex; align-items:center; gap:4px; font-size:10px; line-height:1.3;
+	color:var(--warning, #b45309); max-width:100%;
+}
+.guest-note svg { flex-shrink:0; }
 .guest-row.seated .guest-name { color:var(--accent); }
+.guest-row-actions { display:flex; align-items:center; gap:2px; flex-shrink:0; }
 .btn-icon { font-size:11px; color:var(--text-muted); padding:3px 5px; border-radius:4px; flex-shrink:0; }
 .btn-icon:hover { background:rgba(239,68,68,0.1); color:#ef4444; }
+.btn-icon.active { color:var(--accent); }
+.btn-icon.active:hover { background:var(--accent-dim); color:var(--accent); }
+.guest-note-edit { padding:0 0 8px; }
+.guest-note-edit textarea {
+	width:100%; resize:vertical; font:inherit; font-size:11px; line-height:1.4;
+	padding:6px 8px; border:1px solid var(--border); border-radius:6px;
+	background:var(--bg-panel2); color:var(--text-base);
+}
+.guest-note-edit textarea:focus { outline:none; border-color:var(--accent); }
 
 .tips { list-style:none; display:flex; flex-direction:column; gap:6px; }
 .tips li { font-size:11px; color:var(--text-muted); line-height:1.5; }
@@ -2281,22 +2571,22 @@ kbd {
 	pointer-events:none;
 }
 .ruler-tick {
-	position:absolute; bottom:0; width:1px; background:rgba(0,0,0,0.3);
+	position:absolute; bottom:0; width:1px; background:var(--editor-tick);
 }
 .ruler-tick-major { height:10px; }
-.ruler-tick-minor { height:5px; background:rgba(0,0,0,0.15); }
+.ruler-tick-minor { height:5px; background:var(--editor-tick-minor); }
 .ruler-label {
 	position:absolute; left:3px; top:-1px; font-size:8px; font-family:monospace;
-	color:rgba(0,0,0,0.45); white-space:nowrap; line-height:1;
+	color:var(--editor-label); white-space:nowrap; line-height:1;
 }
 .ruler-tick-v {
-	position:absolute; right:0; height:1px; background:rgba(0,0,0,0.3);
+	position:absolute; right:0; height:1px; background:var(--editor-tick);
 }
 .ruler-tick-major-v { width:10px; }
-.ruler-tick-minor-v { width:5px; background:rgba(0,0,0,0.15); }
+.ruler-tick-minor-v { width:5px; background:var(--editor-tick-minor); }
 .ruler-label-v {
 	position:absolute; right:12px; top:-4px; font-size:8px; font-family:monospace;
-	color:rgba(0,0,0,0.45); white-space:nowrap; line-height:1;
+	color:var(--editor-label); white-space:nowrap; line-height:1;
 }
 .ruler-cursor-h {
 	position:absolute; top:0; bottom:0; width:1px; background:var(--accent); opacity:0.6;

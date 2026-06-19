@@ -3,6 +3,7 @@
   import type { HallDayHours } from '$lib/db/index';
   import { migrateToMultiFloor } from '$lib/floorplan-types';
   import type { FloorData } from '$lib/floorplan-types';
+  import { t } from '$lib/i18n.svelte';
 
   interface Props { data: PageData; }
   const { data }: Props = $props();
@@ -20,20 +21,20 @@
       : `/login?redirect=${encodeURIComponent(`/halls/${hall.slug}/book`)}`
   );
 
-  const AMENITY_LABELS: Record<string, string> = {
-    parking: 'Parking', catering: 'Catering', av: 'AV Equipment',
-    wifi: 'WiFi', ac: 'Air Conditioning', accessible: 'Wheelchair Access',
-    outdoor: 'Outdoor Space', stage: 'Stage', dancefloor: 'Dance Floor', bar: 'Bar / Drinks',
+  const AMENITY_LABELS: Record<string, () => string> = {
+    parking: () => t.hallProfile.amenityParking, catering: () => t.hallProfile.amenityCatering, av: () => t.hallProfile.amenityAv,
+    wifi: () => t.hallProfile.amenityWifi, ac: () => t.hallProfile.amenityAc, accessible: () => t.hallProfile.amenityAccessible,
+    outdoor: () => t.hallProfile.amenityOutdoor, stage: () => t.hallProfile.amenityStage, dancefloor: () => t.hallProfile.amenityDancefloor, bar: () => t.hallProfile.amenityBar,
   };
 
   const DAYS = [
-    { id: 'mon', label: 'Monday' },
-    { id: 'tue', label: 'Tuesday' },
-    { id: 'wed', label: 'Wednesday' },
-    { id: 'thu', label: 'Thursday' },
-    { id: 'fri', label: 'Friday' },
-    { id: 'sat', label: 'Saturday' },
-    { id: 'sun', label: 'Sunday' },
+    { id: 'mon', idx: 0 },
+    { id: 'tue', idx: 1 },
+    { id: 'wed', idx: 2 },
+    { id: 'thu', idx: 3 },
+    { id: 'fri', idx: 4 },
+    { id: 'sat', idx: 5 },
+    { id: 'sun', idx: 6 },
   ];
 
   const hasHours = Object.keys(openingHours).length > 0;
@@ -45,14 +46,16 @@
       return `${(x-p)*10} ${(y-p)*10} ${(w+p*2)*10} ${(h+p*2)*10}`;
     }
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-    for (const w of floor.walls) for (const pt of w.points) {
-      if (pt.x < minX) minX = pt.x; if (pt.y < minY) minY = pt.y;
-      if (pt.x > maxX) maxX = pt.x; if (pt.y > maxY) maxY = pt.y;
-    }
+    const ext = (x: number, y: number) => {
+      if (x < minX) minX = x; if (y < minY) minY = y;
+      if (x > maxX) maxX = x; if (y > maxY) maxY = y;
+    };
+    for (const w of floor.walls) for (const pt of w.points) ext(pt.x, pt.y);
+    for (const z of floor.zones) for (const pt of z.points) ext(pt.x, pt.y);
+    for (const s of floor.seats ?? []) { ext(s.x - 0.3, s.y - 0.3); ext(s.x + 0.3, s.y + 0.3); }
     for (const tbl of floor.tables) {
       const hw = (tbl.width ?? 2)/2, hh = (tbl.height ?? 1)/2;
-      if (tbl.x-hw < minX) minX = tbl.x-hw; if (tbl.y-hh < minY) minY = tbl.y-hh;
-      if (tbl.x+hw > maxX) maxX = tbl.x+hw; if (tbl.y+hh > maxY) maxY = tbl.y+hh;
+      ext(tbl.x - hw, tbl.y - hh); ext(tbl.x + hw, tbl.y + hh);
     }
     if (!isFinite(minX)) return '0 0 100 70';
     const p = 0.5;
@@ -62,7 +65,7 @@
 
 <svelte:head>
   <title>{hall.name} – {data.domainOrg.name}</title>
-  <meta name="description" content={hall.description ?? `Book ${hall.name} for your next event.`} />
+  <meta name="description" content={hall.description ?? `${t.hallProfile.metaBookPrefix} ${hall.name} ${t.hallProfile.metaBookSuffix}`} />
 </svelte:head>
 
 <div class="pub-root">
@@ -72,8 +75,8 @@
     <div class="success-banner">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
       <div>
-        <strong>Booking request submitted!</strong>
-        The venue will review your request and get back to you soon.
+        <strong>{t.hallProfile.bookingSubmittedTitle}</strong>
+        {t.hallProfile.bookingSubmittedMsg}
       </div>
     </div>
   {/if}
@@ -109,14 +112,14 @@
         <div class="section-kpis">
           <div class="kpi">
             <span class="kpi-val">{hall.max_people}</span>
-            <span class="kpi-lbl">Max guests</span>
+            <span class="kpi-lbl">{t.hallProfile.maxGuests}</span>
           </div>
           <div class="kpi" class:kpi-open={hall.allow_reservations} class:kpi-closed={!hall.allow_reservations}>
             <span class="kpi-val status-dot-wrap">
               <span class="status-dot"></span>
-              {hall.allow_reservations ? 'Open' : 'Closed'}
+              {hall.allow_reservations ? t.status.open : t.status.closed}
             </span>
-            <span class="kpi-lbl">Reservations</span>
+            <span class="kpi-lbl">{t.hallProfile.reservations}</span>
           </div>
         </div>
         {#if hall.description}
@@ -127,12 +130,12 @@
       <!-- Amenities -->
       {#if amenities.length > 0}
         <section class="section">
-          <h2 class="section-title">Amenities</h2>
+          <h2 class="section-title">{t.hallProfile.amenities}</h2>
           <div class="amenities-grid">
             {#each amenities as a}
               <div class="amenity-item">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
-                <span>{AMENITY_LABELS[a] ?? a}</span>
+                <span>{AMENITY_LABELS[a]?.() ?? a}</span>
               </div>
             {/each}
           </div>
@@ -142,7 +145,7 @@
       <!-- Pricing -->
       {#if hall.pricing_info}
         <section class="section">
-          <h2 class="section-title">Pricing</h2>
+          <h2 class="section-title">{t.hallProfile.pricing}</h2>
           <p class="pricing-text">{hall.pricing_info}</p>
         </section>
       {/if}
@@ -150,7 +153,7 @@
       <!-- Gallery -->
       {#if galleryImages.length > 0}
         <section class="section">
-          <h2 class="section-title">Gallery</h2>
+          <h2 class="section-title">{t.hallProfile.gallery}</h2>
           <div class="gallery-grid">
             {#each galleryImages as url}
               <div class="gallery-item">
@@ -166,14 +169,25 @@
         {@const mf = migrateToMultiFloor(hall.floorplan_json)}
         {@const f0 = mf.floors[0]}
         <section class="section">
-          <h2 class="section-title">Floorplan</h2>
+          <h2 class="section-title">{t.hallProfile.floorplan}</h2>
           <div class="fp-wrap">
             <svg viewBox={computeViewBox(f0)} preserveAspectRatio="xMidYMid meet">
-              {#each f0.walls as wall}
-                <polygon points={wall.points.map(p => `${p.x*10},${p.y*10}`).join(' ')} fill="#2b3462" opacity="0.8"/>
-              {/each}
+              {#if f0.bounds}
+                <rect x={f0.bounds.x*10} y={f0.bounds.y*10} width={f0.bounds.w*10} height={f0.bounds.h*10}
+                  fill="none" stroke="#cbd5e1" stroke-width="0.6" stroke-dasharray="3 2"/>
+              {/if}
               {#each f0.zones as zone}
-                <polygon points={zone.points.map(p => `${p.x*10},${p.y*10}`).join(' ')} fill={zone.color ?? '#3b82f6'} opacity="0.18"/>
+                {@const zx = zone.points.reduce((s,p)=>s+p.x,0)/zone.points.length}
+                {@const zy = zone.points.reduce((s,p)=>s+p.y,0)/zone.points.length}
+                <polygon points={zone.points.map(p => `${p.x*10},${p.y*10}`).join(' ')}
+                  fill={zone.color ?? '#3b82f6'} fill-opacity="0.22" stroke={zone.color ?? '#3b82f6'} stroke-width="0.4" stroke-opacity="0.6"/>
+                {#if zone.label}
+                  <text x={zx*10} y={zy*10} text-anchor="middle" dominant-baseline="middle"
+                    font-size="3.4" font-weight="700" fill={zone.color ?? '#3b82f6'}>{zone.label}</text>
+                {/if}
+              {/each}
+              {#each f0.walls as wall}
+                <polygon points={wall.points.map(p => `${p.x*10},${p.y*10}`).join(' ')} fill="#334155" opacity="0.9"/>
               {/each}
               {#each f0.tables as tbl}
                 {#if tbl.shape === 'round'}
@@ -182,6 +196,9 @@
                   <rect x={(tbl.x-(tbl.width??2)/2)*10} y={(tbl.y-(tbl.height??1)/2)*10}
                     width={(tbl.width??2)*10} height={(tbl.height??1)*10} rx="2" fill="#92400e" opacity="0.75"/>
                 {/if}
+              {/each}
+              {#each f0.seats ?? [] as seat}
+                <circle cx={seat.x*10} cy={seat.y*10} r="2.1" fill="#475569" opacity="0.8"/>
               {/each}
             </svg>
           </div>
@@ -196,26 +213,26 @@
       <!-- CTA card -->
       {#if hall.allow_reservations}
         <div class="cta-card" style="--hc:{hall.color}">
-          <h3 class="cta-title">Book {hall.name}</h3>
+          <h3 class="cta-title">{t.hallProfile.bookCta} {hall.name}</h3>
           {#if user}
-            <p class="cta-sub">Submit a booking request and we'll get back to you shortly.</p>
-            <a href={bookHref} class="cta-btn">Request this hall</a>
+            <p class="cta-sub">{t.hallProfile.bookSubLoggedIn}</p>
+            <a href={bookHref} class="cta-btn">{t.hallProfile.requestThisHall}</a>
           {:else}
-            <p class="cta-sub">Sign in to submit a booking request.</p>
-            <a href={bookHref} class="cta-btn">Sign in to book</a>
+            <p class="cta-sub">{t.hallProfile.bookSubSignIn}</p>
+            <a href={bookHref} class="cta-btn">{t.hallProfile.signInToBook}</a>
           {/if}
         </div>
       {:else}
         <div class="cta-card cta-card-closed" style="--hc:#94a3b8">
-          <h3 class="cta-title">Reservations closed</h3>
-          <p class="cta-sub">This hall is not currently accepting bookings.</p>
+          <h3 class="cta-title">{t.hallProfile.reservationsClosed}</h3>
+          <p class="cta-sub">{t.hallProfile.reservationsClosedSub}</p>
         </div>
       {/if}
 
       <!-- Contact -->
       {#if hasContact}
         <div class="side-card">
-          <h3 class="side-card-title">Contact</h3>
+          <h3 class="side-card-title">{t.hallProfile.contact}</h3>
           <div class="contact-list">
             {#if hall.contact_phone}
               <a href="tel:{hall.contact_phone}" class="contact-item">
@@ -232,7 +249,7 @@
             {#if hall.contact_website}
               <a href={hall.contact_website} target="_blank" rel="noopener" class="contact-item">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
-                Website
+                {t.hallProfile.website}
               </a>
             {/if}
           </div>
@@ -242,19 +259,19 @@
       <!-- Opening hours -->
       {#if hasHours}
         <div class="side-card">
-          <h3 class="side-card-title">Opening hours</h3>
+          <h3 class="side-card-title">{t.hallProfile.openingHours}</h3>
           <div class="hours-list">
             {#each DAYS as day}
               {@const dh = openingHours[day.id]}
               <div class="hours-row" class:hours-closed={dh && !dh.open}>
-                <span class="hours-day">{day.label}</span>
+                <span class="hours-day">{t.dayNamesFull[day.idx]}</span>
                 <span class="hours-val">
                   {#if !dh || dh.open === undefined}
                     —
                   {:else if dh.open}
                     {dh.from} – {dh.to}
                   {:else}
-                    Closed
+                    {t.status.closed}
                   {/if}
                 </span>
               </div>
@@ -382,7 +399,7 @@
 
   /* Floorplan */
   .fp-wrap {
-    background: var(--bg-panel); border: 1px solid var(--border); border-radius: 10px;
+    background: #f8f9fc; border: 1px solid var(--border); border-radius: 10px;
     overflow: hidden; height: 240px;
   }
   .fp-wrap svg { width: 100%; height: 100%; }

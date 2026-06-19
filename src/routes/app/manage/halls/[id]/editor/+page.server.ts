@@ -1,38 +1,30 @@
 import { error, fail } from '@sveltejs/kit';
-import sql from '$lib/db/index';
+import { dbFirst, dbAll, dbRun } from '$lib/db/index';
 import type { HallRow, TableTypeRow } from '$lib/db/index';
+import { st } from '$lib/i18n-server';
 import type { Actions, PageServerLoad } from './$types';
 
-export const load: PageServerLoad = async ({ params }) => {
-	const [hall] = await sql<HallRow[]>`SELECT * FROM halls WHERE id = ${params.id}`;
-	if (!hall) error(404, 'Hall not found');
+export const load: PageServerLoad = async ({ params, locals }) => {
+	const orgId = locals.currentOrg!.id;
+	const hall = await dbFirst<HallRow>(locals.db, 'SELECT * FROM halls WHERE id = ? AND org_id = ?', params.id, orgId);
+	if (!hall) error(404, st(locals.locale).serverErrors.hallNotFound);
 
-	const tableTypes = await sql<TableTypeRow[]>`
-		SELECT * FROM table_types WHERE hall_id = ${params.id} ORDER BY name
-	`;
+	const tableTypes = await dbAll<TableTypeRow>(
+		locals.db,
+		'SELECT * FROM table_types WHERE hall_id = ? ORDER BY name',
+		params.id
+	);
 
 	return { hall, tableTypes };
 };
 
 export const actions: Actions = {
-	saveFloorplan: async ({ request, params }) => {
+	saveFloorplan: async ({ request, params, locals }) => {
+		const orgId = locals.currentOrg!.id;
 		const data = await request.formData();
 		const floorplanJson = String(data.get('floorplanJson') ?? '');
-		if (!floorplanJson) return fail(400, { error: 'No data.' });
-		await sql`UPDATE halls SET floorplan_json=${floorplanJson}::jsonb WHERE id=${params.id}`;
+		if (!floorplanJson) return fail(400, { error: st(locals.locale).serverErrors.noData });
+		await dbRun(locals.db, 'UPDATE halls SET floorplan_json=? WHERE id=? AND org_id=?', floorplanJson, params.id, orgId);
 		return { success: true };
-	},
-
-	saveTemplate: async ({ request, params }) => {
-		const data = await request.formData();
-		const name = String(data.get('templateName') ?? '').trim();
-		const eventType = String(data.get('eventType') ?? '').trim();
-		const layoutJson = String(data.get('layoutJson') ?? '');
-		if (!name || !layoutJson) return fail(400, { templateError: 'Name and layout are required.' });
-		await sql`
-			INSERT INTO floorplan_templates (hall_id, name, event_type, layout_json)
-			VALUES (${params.id}, ${name}, ${eventType||null}, ${layoutJson}::jsonb)
-		`;
-		return { templateSuccess: true };
 	}
 };

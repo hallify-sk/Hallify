@@ -1,5 +1,6 @@
 <script lang="ts">
   import { enhance } from '$app/forms';
+  import { t } from '$lib/i18n.svelte';
   import type { PageData, ActionData } from './$types';
 
   interface Props { data: PageData; form: ActionData; }
@@ -13,64 +14,94 @@
   }
 </script>
 
-<svelte:head><title>Custom domains – Hallify</title></svelte:head>
+<svelte:head><title>{t.settingsPages.customDomains} – Hallify</title></svelte:head>
 
 <div class="page">
 
   <div class="page-head">
     <div>
-      <h1 class="page-title">Custom domains</h1>
-      <p class="page-sub">Point your own domain to your halls — visitors see your branding, not Hallify.</p>
+      <h1 class="page-title">{t.settingsPages.domains}</h1>
+      <p class="page-sub">{t.settingsPages.domainsSub}</p>
+    </div>
+  </div>
+
+  <!-- ── Free subdomain (always available) ── -->
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">{t.settingsPages.freeAddress}</span>
+      <span class="status-pill status-verified">
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
+        {t.settingsPages.active}
+      </span>
+    </div>
+    <div class="card-body">
+      <div class="domain-name">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+        <a href="https://{data.subdomain}" target="_blank" rel="noopener">{data.subdomain}</a>
+      </div>
+      <p class="dns-title" style="margin-top:10px">{t.settingsPages.includedEveryPlan}</p>
     </div>
   </div>
 
   {#if !data.cfEnabled}
     <div class="notice-warn">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;margin-top:1px"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-      <span>Cloudflare for SaaS is not configured (<code>CF_ZONE_ID</code> / <code>CF_API_TOKEN</code> missing). Domains will be saved but SSL provisioning won't run automatically.</span>
+      <span>{t.settingsPages.cfNotConfiguredPre} (<code>CF_ZONE_ID</code> / <code>CF_API_TOKEN</code> {t.settingsPages.cfNotConfiguredPost}</span>
     </div>
   {/if}
 
-  <!-- ── Add domain ── -->
-  <div class="card">
-    <div class="card-header">
-      <span class="card-title">Add a custom domain</span>
-    </div>
-    <div class="card-body">
-      {#if form?.error}
-        <div class="alert-error">{form.error}</div>
-      {/if}
-      <form method="POST" action="?/add" use:enhance class="add-form">
-        <div class="add-input-wrap">
-          <input
-            class="field-input"
-            type="text"
-            name="domain"
-            placeholder="bookings.myvenue.com"
-            bind:value={domainInput}
-            required
-            autocomplete="off"
-            spellcheck="false"
-          />
+  <!-- ── Add custom domain (paid only) ── -->
+  {#if data.customDomainsAllowed}
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">{t.settingsPages.addCustomDomain}</span>
+      </div>
+      <div class="card-body">
+        {#if form?.error}
+          <div class="alert-error">{form.error}</div>
+        {/if}
+        <form method="POST" action="?/add" use:enhance class="add-form">
+          <div class="add-input-wrap">
+            <input
+              class="field-input"
+              type="text"
+              name="domain"
+              placeholder="bookings.myvenue.com"
+              bind:value={domainInput}
+              required
+              autocomplete="off"
+              spellcheck="false"
+            />
+          </div>
+          <button type="submit" class="btn-primary">{t.settingsPages.addDomain}</button>
+        </form>
+        <div class="dns-instructions">
+          <p class="dns-title">{t.settingsPages.dnsConfigTitle}</p>
+          <ol class="dns-steps">
+            <li>{t.settingsPages.dnsStep1Pre} <strong>CNAME</strong> {t.settingsPages.dnsStep1Post}</li>
+            <li>{t.settingsPages.dnsStep2Pre} <code>fallback.hallify.sk</code>.</li>
+            <li>{t.settingsPages.dnsStep3Pre} <strong>{t.settingsPages.refreshStatus}</strong> {t.settingsPages.dnsStep3Post}</li>
+          </ol>
         </div>
-        <button type="submit" class="btn-primary">Add domain</button>
-      </form>
-      <div class="dns-instructions">
-        <p class="dns-title">After adding, configure your DNS:</p>
-        <ol class="dns-steps">
-          <li>In your DNS provider, create a <strong>CNAME</strong> record for your domain.</li>
-          <li>Point it to your Cloudflare for SaaS fallback hostname (e.g. <code>custom.hallify.app</code>).</li>
-          <li>Wait for SSL to provision (~minutes), then click <strong>Refresh status</strong> below.</li>
-        </ol>
       </div>
     </div>
-  </div>
+  {:else}
+    <div class="card upgrade-card">
+      <div class="card-body upgrade-body">
+        <div>
+          <p class="upgrade-title">{t.settingsPages.connectOwnDomain}</p>
+          <p class="upgrade-sub">{t.settingsPages.connectOwnDomainPre} <code>bookings.myvenue.com</code> {t.settingsPages.connectOwnDomainPost}</p>
+        </div>
+        <a class="btn-primary" href="/app/billing">{t.settingsPages.upgradePlan}</a>
+      </div>
+    </div>
+  {/if}
 
   <!-- ── Domain list ── -->
   {#if data.domains.length > 0}
     <div class="card">
       <div class="card-header">
-        <span class="card-title">Your domains</span>
+        <span class="card-title">{t.settingsPages.yourDomains}</span>
         <span class="domain-count">{data.domains.length}</span>
       </div>
       <div class="domain-list">
@@ -82,9 +113,9 @@
                 <a href="https://{d.domain}" target="_blank" rel="noopener">{d.domain}</a>
               </div>
               <div class="domain-meta">
-                Added {formatDate(d.created_at)}
+                {t.settingsPages.added} {formatDate(d.created_at)}
                 {#if !d.cf_hostname_id}
-                  · <span class="meta-note">CF not linked</span>
+                  · <span class="meta-note">{t.settingsPages.cfNotLinked}</span>
                 {/if}
               </div>
             </div>
@@ -93,10 +124,10 @@
               <span class="status-pill" class:status-verified={!!d.verified_at} class:status-pending={!d.verified_at}>
                 {#if d.verified_at}
                   <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
-                  Verified
+                  {t.settingsPages.verified}
                 {:else}
                   <span class="pulse-dot"></span>
-                  Pending
+                  {t.status.pending}
                 {/if}
               </span>
 
@@ -105,7 +136,7 @@
                   <input type="hidden" name="id" value={d.id} />
                   <button type="submit" class="btn-ghost btn-sm">
                     <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
-                    Refresh
+                    {t.settingsPages.refresh}
                   </button>
                 </form>
               {/if}
@@ -113,11 +144,11 @@
               {#if confirmDelete === d.id}
                 <form method="POST" action="?/delete" use:enhance style="display:contents">
                   <input type="hidden" name="id" value={d.id} />
-                  <button type="submit" class="btn-danger btn-sm">Confirm delete</button>
+                  <button type="submit" class="btn-danger btn-sm">{t.settingsPages.confirmDelete}</button>
                 </form>
-                <button type="button" class="btn-ghost btn-sm" onclick={() => confirmDelete = null}>Cancel</button>
+                <button type="button" class="btn-ghost btn-sm" onclick={() => confirmDelete = null}>{t.common.cancel}</button>
               {:else}
-                <button type="button" class="btn-ghost btn-sm btn-icon" onclick={() => confirmDelete = d.id} aria-label="Delete domain">
+                <button type="button" class="btn-ghost btn-sm btn-icon" onclick={() => confirmDelete = d.id} aria-label={t.settingsPages.deleteDomain}>
                   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>
                 </button>
               {/if}
@@ -126,11 +157,11 @@
         {/each}
       </div>
     </div>
-  {:else}
+  {:else if data.customDomainsAllowed}
     <div class="empty-state">
       <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
-      <p class="empty-title">No custom domains yet</p>
-      <p class="empty-sub">Add a domain above to give guests a branded booking experience.</p>
+      <p class="empty-title">{t.settingsPages.noCustomDomains}</p>
+      <p class="empty-sub">{t.settingsPages.noCustomDomainsSub}</p>
     </div>
   {/if}
 
@@ -275,6 +306,13 @@
     transition: background .1s;
   }
   .btn-danger:hover { background: color-mix(in srgb, #ef4444 20%, transparent); }
+
+  /* ── Upgrade prompt (free plan) ── */
+  .upgrade-body { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+  .upgrade-title { font-size: 13px; font-weight: 700; color: var(--text-base); margin: 0 0 4px; }
+  .upgrade-sub { font-size: 12px; color: var(--text-muted); margin: 0; line-height: 1.5; }
+  .upgrade-sub code { font-size: 11px; background: var(--bg-panel2, var(--bg-base)); border-radius: 3px; padding: 1px 5px; border: 1px solid var(--border); }
+  .upgrade-card .btn-primary { text-decoration: none; display: inline-block; flex-shrink: 0; }
 
   /* ── Empty ── */
   .empty-state {

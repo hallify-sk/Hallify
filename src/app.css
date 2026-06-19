@@ -8,6 +8,15 @@
 :root {
 	--sidebar-width: 240px;
 
+	/* Floor-plan editor canvas (theme-aware; warm inherits these light values) */
+	--editor-canvas:      #f8f9fc;
+	--editor-grid:        rgba(0,0,0,0.05);
+	--editor-grid-strong: rgba(0,0,0,0.12);
+	--editor-tick:        rgba(0,0,0,0.30);
+	--editor-tick-minor:  rgba(0,0,0,0.15);
+	--editor-label:       rgba(0,0,0,0.45);
+	--editor-wall:        #2b3462;
+
 	--bg-base:    #f3f4f6;
 	--bg-panel:   #ffffff;
 	--bg-panel2:  #f9fafb;
@@ -45,6 +54,14 @@
 
 /* ─── Theme: Dark ─────────────────────────────────────────────────── */
 [data-theme="dark"] {
+	--editor-canvas:      #0e1117;
+	--editor-grid:        rgba(255,255,255,0.05);
+	--editor-grid-strong: rgba(255,255,255,0.13);
+	--editor-tick:        rgba(255,255,255,0.35);
+	--editor-tick-minor:  rgba(255,255,255,0.18);
+	--editor-label:       rgba(255,255,255,0.50);
+	--editor-wall:        #8b95c9;
+
 	--bg-base:    #0f1117;
 	--bg-panel:   #16181f;
 	--bg-panel2:  #1e2028;

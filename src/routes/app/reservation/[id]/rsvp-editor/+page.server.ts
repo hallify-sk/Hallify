@@ -1,33 +1,48 @@
 import { error, redirect, fail } from '@sveltejs/kit';
-import sql from '$lib/db/index';
+import { dbFirst, dbAll, dbRun, fromJson, toJson } from '$lib/db/index';
 import type { ReservationRow, RsvpTemplateRow } from '$lib/db/index';
+import { getPlan } from '$lib/plans';
+import { st } from '$lib/i18n-server';
 import type { Actions, PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ locals, params }) => {
 	if (!locals.user) redirect(303, '/app/login');
+	const orgId = locals.currentOrg?.id;
+	if (!orgId) error(403, st(locals.locale).serverErrors.accessDenied);
 
-	const [reservation] = await sql<ReservationRow[]>`
-		SELECT r.*, h.name AS hall_name
+	const reservation = await dbFirst<ReservationRow>(locals.db,
+		`SELECT r.*, h.name AS hall_name
 		FROM reservations r
 		JOIN halls h ON h.id = r.hall_id
-		WHERE r.id = ${params.id}
-	`;
+		WHERE r.id = ? AND r.org_id = ?`,
+		params.id, orgId
+	);
 
-	if (!reservation) error(404, 'Reservation not found');
-	if (reservation.user_id !== locals.user.id && locals.user.role !== 'admin') {
-		error(403, 'Access denied');
-	}
+	if (!reservation) error(404, st(locals.locale).serverErrors.reservationNotFound);
 
-	const templates = await sql<RsvpTemplateRow[]>`
-		SELECT * FROM rsvp_templates ORDER BY name
-	`;
+	const templates = await dbAll<RsvpTemplateRow>(locals.db,
+		'SELECT * FROM rsvp_templates WHERE org_id = ? ORDER BY name',
+		orgId
+	);
 
-	return { reservation, templates };
+	return {
+		reservation: {
+			...reservation,
+			rsvp_config: fromJson(reservation.rsvp_config as string | null),
+		},
+		templates,
+		advancedRsvp: getPlan(locals.currentOrg!.subscription.plan).limits.advancedRsvp,
+	};
 };
 
 export const actions: Actions = {
 	save: async ({ request, locals, params }) => {
 		if (!locals.user) redirect(303, '/app/login');
+		const orgId = locals.currentOrg?.id;
+		if (!orgId) return fail(403, { error: st(locals.locale).serverErrors.accessDenied });
+		if (!getPlan(locals.currentOrg!.subscription.plan).limits.advancedRsvp) {
+			return fail(403, { error: st(locals.locale).serverErrors.advancedRsvpPaidPlans });
+		}
 		const data = await request.formData();
 		const configStr = String(data.get('config') ?? '{}');
 
@@ -35,15 +50,19 @@ export const actions: Actions = {
 		try {
 			configObj = JSON.parse(configStr);
 		} catch {
-			return fail(400, { error: 'Invalid config JSON' });
+			return fail(400, { error: st(locals.locale).serverErrors.invalidConfigJson });
 		}
 
-		const [reservation] = await sql<ReservationRow[]>`SELECT user_id FROM reservations WHERE id = ${params.id}`;
-		if (!reservation || (reservation.user_id !== locals.user.id && locals.user.role !== 'admin')) {
-			error(403, 'Access denied');
-		}
+		const reservation = await dbFirst<ReservationRow>(locals.db,
+			'SELECT user_id FROM reservations WHERE id = ? AND org_id = ?',
+			params.id, orgId
+		);
+		if (!reservation) return fail(404, { error: st(locals.locale).serverErrors.notFound });
 
-		await sql`UPDATE reservations SET rsvp_config = ${sql.json(configObj)} WHERE id = ${params.id}`;
+		await dbRun(locals.db,
+			'UPDATE reservations SET rsvp_config = ? WHERE id = ? AND org_id = ?',
+			toJson(configObj), params.id, orgId
+		);
 		return { success: true };
 	}
 };

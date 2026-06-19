@@ -1,11 +1,11 @@
-import sql from '$lib/db/index';
+import { dbFirst, dbAll } from '$lib/db/index';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ locals }) => {
   const orgId = locals.currentOrg!.id;
 
   // ─── Summary stats ───────────────────────────────────────────────────────
-  const [stats] = await sql<[{
+  const stats = await dbFirst<{
     total_halls: string;
     total_members: string;
     total_reservations: string;
@@ -13,91 +13,96 @@ export const load: PageServerLoad = async ({ locals }) => {
     open_tickets: string;
     upcoming_7d: string;
     completed: string;
-  }]>`
+  }>(locals.db, `
     SELECT
-      (SELECT COUNT(*)::text FROM halls WHERE org_id = ${orgId}) AS total_halls,
-      (SELECT COUNT(*)::text FROM organization_members WHERE org_id = ${orgId}) AS total_members,
-      (SELECT COUNT(*)::text FROM reservations WHERE org_id = ${orgId}) AS total_reservations,
-      (SELECT COUNT(*)::text FROM reservations WHERE org_id = ${orgId} AND status = 'pending') AS pending,
-      (SELECT COUNT(*)::text FROM tickets WHERE org_id = ${orgId} AND status = 'open') AS open_tickets,
-      (SELECT COUNT(*)::text FROM reservations WHERE org_id = ${orgId}
-        AND event_date BETWEEN NOW() AND NOW() + INTERVAL '7 days'
+      (SELECT COUNT(*) FROM halls WHERE org_id = ?) AS total_halls,
+      (SELECT COUNT(*) FROM organization_members WHERE org_id = ?) AS total_members,
+      (SELECT COUNT(*) FROM reservations WHERE org_id = ?) AS total_reservations,
+      (SELECT COUNT(*) FROM reservations WHERE org_id = ? AND status = 'pending') AS pending,
+      (SELECT COUNT(*) FROM tickets WHERE org_id = ? AND status = 'open') AS open_tickets,
+      (SELECT COUNT(*) FROM reservations WHERE org_id = ?
+        AND event_date BETWEEN datetime('now') AND datetime('now', '+7 days')
         AND status NOT IN ('cancelled')) AS upcoming_7d,
-      (SELECT COUNT(*)::text FROM reservations WHERE org_id = ${orgId} AND status = 'completed') AS completed
-  `;
+      (SELECT COUNT(*) FROM reservations WHERE org_id = ? AND status = 'completed') AS completed
+  `, orgId, orgId, orgId, orgId, orgId, orgId, orgId);
 
-  // ─── Monthly reservations — always 6 rows ────────────────────────────────
-  const monthly = await sql<Array<{ month_label: string; month_iso: string; count: number }>>`
-    WITH months AS (
-      SELECT generate_series(
-        date_trunc('month', NOW() - INTERVAL '5 months'),
-        date_trunc('month', NOW()),
-        '1 month'::interval
-      ) AS m
-    )
-    SELECT
-      TO_CHAR(months.m, 'Mon') AS month_label,
-      TO_CHAR(months.m, 'YYYY-MM') AS month_iso,
-      COUNT(r.id)::int AS count
-    FROM months
-    LEFT JOIN reservations r
-      ON date_trunc('month', r.event_date) = months.m
-     AND r.org_id = ${orgId}
-     AND r.status != 'cancelled'
-    GROUP BY months.m
-    ORDER BY months.m
-  `;
+  // ─── Monthly reservations — last 6 months ────────────────────────────────
+  // SQLite does not have generate_series; compute the 6 month buckets in JS
+  const now = new Date();
+  const monthBuckets: Array<{ month_label: string; month_iso: string }> = [];
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const iso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    const label = d.toLocaleString('en-US', { month: 'short' });
+    monthBuckets.push({ month_iso: iso, month_label: label });
+  }
+
+  const monthlyRaw = await dbAll<{ month_iso: string; count: number }>(locals.db, `
+    SELECT strftime('%Y-%m', event_date) AS month_iso, COUNT(*) AS count
+    FROM reservations
+    WHERE org_id = ?
+      AND status != 'cancelled'
+      AND event_date >= date('now', '-5 months', 'start of month')
+    GROUP BY month_iso
+  `, orgId);
+
+  const monthlyMap = new Map(monthlyRaw.map(r => [r.month_iso, r.count]));
+  const monthly = monthBuckets.map(b => ({
+    month_label: b.month_label,
+    month_iso: b.month_iso,
+    count: monthlyMap.get(b.month_iso) ?? 0,
+  }));
 
   // ─── Reservations by status (for donut) ──────────────────────────────────
-  const byStatus = await sql<Array<{ status: string; count: number }>>`
-    SELECT status, COUNT(*)::int AS count
+  const byStatus = await dbAll<{ status: string; count: number }>(locals.db, `
+    SELECT status, COUNT(*) AS count
     FROM reservations
-    WHERE org_id = ${orgId}
+    WHERE org_id = ?
     GROUP BY status
     ORDER BY count DESC
-  `;
+  `, orgId);
 
   // ─── Halls with reservation counts ───────────────────────────────────────
-  const halls = await sql<Array<{
+  const halls = await dbAll<{
     id: string; name: string; color: string; max_people: number;
     reservation_count: number; upcoming_count: number;
-  }>>`
+  }>(locals.db, `
     SELECT h.id, h.name, h.color, h.max_people,
-      COUNT(r.id)::int AS reservation_count,
-      COUNT(r.id) FILTER (WHERE r.event_date >= NOW() AND r.status != 'cancelled')::int AS upcoming_count
+      COUNT(r.id) AS reservation_count,
+      SUM(CASE WHEN r.event_date >= datetime('now') AND r.status != 'cancelled' THEN 1 ELSE 0 END) AS upcoming_count
     FROM halls h
     LEFT JOIN reservations r ON r.hall_id = h.id
-    WHERE h.org_id = ${orgId}
+    WHERE h.org_id = ?
     GROUP BY h.id
     ORDER BY reservation_count DESC
-  `;
+  `, orgId);
 
   // ─── Upcoming events (next 14 days) ──────────────────────────────────────
-  const upcoming = await sql<Array<{
-    id: string; title: string; event_date: Date; start_time: string | null;
+  const upcoming = await dbAll<{
+    id: string; title: string; event_date: string; start_time: string | null;
     status: string; hall_name: string; hall_color: string;
     user_first_name: string; user_last_name: string;
-  }>>`
+  }>(locals.db, `
     SELECT r.id, r.title, r.event_date, r.start_time, r.status,
            h.name AS hall_name, h.color AS hall_color,
            u.first_name AS user_first_name, u.last_name AS user_last_name
     FROM reservations r
     JOIN halls h ON h.id = r.hall_id
     JOIN users u ON u.id = r.user_id
-    WHERE r.org_id = ${orgId}
-      AND r.event_date BETWEEN NOW() AND NOW() + INTERVAL '14 days'
+    WHERE r.org_id = ?
+      AND r.event_date BETWEEN datetime('now') AND datetime('now', '+14 days')
       AND r.status != 'cancelled'
     ORDER BY r.event_date, r.start_time
     LIMIT 8
-  `;
+  `, orgId);
 
   // ─── Recent reservations ─────────────────────────────────────────────────
-  const recent = await sql<Array<{
-    id: string; title: string; event_date: Date; status: string;
+  const recent = await dbAll<{
+    id: string; title: string; event_date: string; status: string;
     hall_name: string; hall_color: string;
     user_first_name: string; user_last_name: string;
-    created_at: Date;
-  }>>`
+    created_at: string;
+  }>(locals.db, `
     SELECT r.id, r.title, r.event_date, r.status,
            h.name AS hall_name, h.color AS hall_color,
            u.first_name AS user_first_name, u.last_name AS user_last_name,
@@ -105,18 +110,18 @@ export const load: PageServerLoad = async ({ locals }) => {
     FROM reservations r
     JOIN halls h ON h.id = r.hall_id
     JOIN users u ON u.id = r.user_id
-    WHERE r.org_id = ${orgId}
+    WHERE r.org_id = ?
     ORDER BY r.created_at DESC
     LIMIT 7
-  `;
+  `, orgId);
 
   // ─── Online members ───────────────────────────────────────────────────────
-  const [presenceRow] = await sql<[{ online_count: number }]>`
-    SELECT COUNT(*)::int AS online_count
+  const presenceRow = await dbFirst<{ online_count: number }>(locals.db, `
+    SELECT COUNT(*) AS online_count
     FROM user_presence
-    WHERE org_id = ${orgId}
-      AND last_seen_at > NOW() - INTERVAL '2 minutes'
-  `;
+    WHERE org_id = ?
+      AND last_seen_at > datetime('now', '-2 minutes')
+  `, orgId);
 
   return {
     stats,

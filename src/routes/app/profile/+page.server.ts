@@ -1,15 +1,18 @@
 import type { PageServerLoad, Actions } from './$types';
 import { redirect, fail } from '@sveltejs/kit';
-import sql from '$lib/db';
-import type { UserRow } from '$lib/db';
+import { dbAll, dbFirst, dbRun } from '$lib/db/index';
+import type { UserRow } from '$lib/db/index';
+import { st } from '$lib/i18n-server';
 import bcrypt from 'bcryptjs';
 
 export const load: PageServerLoad = async ({ locals }) => {
 	if (!locals.user) redirect(303, '/app/login');
 
-	const [user] = await sql<Pick<UserRow, 'id' | 'email' | 'first_name' | 'last_name' | 'role' | 'created_at'>[]>`
-		SELECT id, email, first_name, last_name, role, created_at FROM users WHERE id = ${locals.user.id}
-	`;
+	const user = await dbFirst<Pick<UserRow, 'id' | 'email' | 'first_name' | 'last_name' | 'role' | 'created_at'>>(
+		locals.db,
+		'SELECT id, email, first_name, last_name, role, created_at FROM users WHERE id = ?',
+		locals.user.id
+	);
 	if (!user) redirect(303, '/app/login');
 
 	return { profile: user };
@@ -25,21 +28,28 @@ export const actions: Actions = {
 		const email = String(data.get('email') ?? '').toLowerCase().trim();
 
 		if (!firstName || !lastName || !email) {
-			return fail(400, { error: 'All fields are required.' });
+			return fail(400, { error: st(locals.locale).serverErrors.allFieldsRequired });
 		}
 
 		// Check email uniqueness
-		const [existing] = await sql<{ id: string }[]>`
-			SELECT id FROM users WHERE email = ${email} AND id != ${locals.user.id}
-		`;
+		const existing = await dbFirst<{ id: string }>(
+			locals.db,
+			'SELECT id FROM users WHERE email = ? AND id != ?',
+			email,
+			locals.user.id
+		);
 		if (existing) {
-			return fail(400, { error: 'This email is already in use.' });
+			return fail(400, { error: st(locals.locale).serverErrors.emailAlreadyInUse });
 		}
 
-		await sql`
-			UPDATE users SET first_name = ${firstName}, last_name = ${lastName}, email = ${email}
-			WHERE id = ${locals.user.id}
-		`;
+		await dbRun(
+			locals.db,
+			'UPDATE users SET first_name = ?, last_name = ?, email = ? WHERE id = ?',
+			firstName,
+			lastName,
+			email,
+			locals.user.id
+		);
 
 		return { success: true, section: 'profile' };
 	},
@@ -53,24 +63,26 @@ export const actions: Actions = {
 		const confirm = String(data.get('confirmPassword') ?? '');
 
 		if (!current || !newPass) {
-			return fail(400, { error: 'All fields are required.', section: 'password' });
+			return fail(400, { error: st(locals.locale).serverErrors.allFieldsRequired, section: 'password' });
 		}
 		if (newPass.length < 6) {
-			return fail(400, { error: 'Password must be at least 6 characters.', section: 'password' });
+			return fail(400, { error: st(locals.locale).serverErrors.passwordTooShort, section: 'password' });
 		}
 		if (newPass !== confirm) {
-			return fail(400, { error: 'Passwords do not match.', section: 'password' });
+			return fail(400, { error: st(locals.locale).serverErrors.passwordsDoNotMatch, section: 'password' });
 		}
 
-		const [user] = await sql<{ password_hash: string }[]>`
-			SELECT password_hash FROM users WHERE id = ${locals.user.id}
-		`;
+		const user = await dbFirst<{ password_hash: string }>(
+			locals.db,
+			'SELECT password_hash FROM users WHERE id = ?',
+			locals.user.id
+		);
 		if (!user || !(await bcrypt.compare(current, user.password_hash))) {
-			return fail(400, { error: 'Current password is incorrect.', section: 'password' });
+			return fail(400, { error: st(locals.locale).serverErrors.currentPasswordIncorrect, section: 'password' });
 		}
 
 		const hash = await bcrypt.hash(newPass, 10);
-		await sql`UPDATE users SET password_hash = ${hash} WHERE id = ${locals.user.id}`;
+		await dbRun(locals.db, 'UPDATE users SET password_hash = ? WHERE id = ?', hash, locals.user.id);
 
 		return { success: true, section: 'password' };
 	},

@@ -2,7 +2,7 @@
 	import { enhance } from '$app/forms';
 	import { invalidateAll } from '$app/navigation';
 	import { page } from '$app/stores';
-	import { t } from '$lib/i18n';
+	import { t } from '$lib/i18n.svelte';
 	import StatusBadge from '$lib/components/StatusBadge.svelte';
 	import type { PageData } from './$types';
 
@@ -38,9 +38,9 @@
 			const fd = new FormData();
 			fd.append('file', file);
 			const res = await fetch('/api/upload', { method: 'POST', body: fd });
-			if (!res.ok) { alert('Upload failed'); return; }
+			if (!res.ok) { alert(t.messagesAdmin.uploadFailed); return; }
 			pendingFile = await res.json();
-		} catch { alert('Upload failed'); }
+		} catch { alert(t.messagesAdmin.uploadFailed); }
 		finally { uploading = false; input.value = ''; }
 	}
 
@@ -134,12 +134,12 @@
 							<div class="msg-attachment">
 								{#if isImage(msg.attachment_type)}
 									<a href={msg.attachment_url} target="_blank" rel="noopener">
-										<img src={msg.attachment_url} alt={msg.attachment_name ?? 'attachment'} class="att-img" />
+										<img src={msg.attachment_url} alt={msg.attachment_name ?? t.messagesAdmin.attachment} class="att-img" />
 									</a>
 								{:else}
 									<a href={msg.attachment_url} target="_blank" rel="noopener" class="att-file">
 										<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-										{msg.attachment_name ?? 'File'}
+										{msg.attachment_name ?? t.messagesAdmin.file}
 									</a>
 								{/if}
 							</div>

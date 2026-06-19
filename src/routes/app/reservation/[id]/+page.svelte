@@ -1,34 +1,37 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
 	import { page } from '$app/stores';
-	import { t } from '$lib/i18n';
+	import { t } from '$lib/i18n.svelte';
 	import { migrateToMultiFloor } from '$lib/floorplan-types';
-	import FloorplanViewer from '$lib/FloorplanViewer.svelte';
-	import SectionHeader from '$lib/components/SectionHeader.svelte';
 	import StatusBadge from '$lib/components/StatusBadge.svelte';
 	import KpiCard from '$lib/components/KpiCard.svelte';
-	import type { PageData } from './$types';
+	import type { PageData, ActionData } from './$types';
 	import type { RsvpConfig } from '$lib/db/index';
+	import { computeExtras, eur } from '$lib/extras';
 
-	interface Props { data: PageData; }
-	let { data }: Props = $props();
+	interface Props { data: PageData; form: ActionData; }
+	let { data, form }: Props = $props();
+
+	let messageBody = $state('');
 
 	const rsvpConfig = $derived((data.reservation.rsvp_config ?? {}) as RsvpConfig);
 	const rsvpEnabled = $derived((data.reservation.rsvp_config as RsvpConfig)?.enabled !== false);
+	// RSVP/invite is parked as a novelty feature for now (kept in code, hidden from
+	// the UI). Flip to re-enable.
+	const SHOW_RSVP = false;
+
+	// Extras — staff can adjust the selection (e.g. after agreeing in chat).
+	let extraSel = $state<string[]>([...data.selectedExtras]);
+	function toggleExtra(id: string) {
+		extraSel = extraSel.includes(id) ? extraSel.filter((x) => x !== id) : [...extraSel, id];
+	}
+	const extrasOverview = $derived(computeExtras(data.extras, extraSel, data.reservation.num_guests));
 
 	let copied = $state(false);
 	let statusOpen = $state(false);
 	let templateDialogOpen = $state(false);
-	let layoutFormRef: HTMLFormElement | undefined = $state();
-	let layoutJsonValue = $state('');
 	let resetFormRef: HTMLFormElement | undefined = $state();
 	let templateFormRef: HTMLFormElement | undefined = $state();
-
-	function onLayoutSave(json: string) {
-		layoutJsonValue = json;
-		// Trigger form submission after state update
-		requestAnimationFrame(() => layoutFormRef?.requestSubmit());
-	}
 	let statusDropdownRef: HTMLDivElement | undefined = $state();
 	let statusFormRef: HTMLFormElement | undefined = $state();
 
@@ -77,13 +80,17 @@
 	};
 
 	const user = $derived($page.data.user);
-	const isAdmin = $derived(user?.role === 'admin');
+	const isAdmin = $derived($page.data.currentOrg?.role === 'owner' || $page.data.currentOrg?.role === 'admin');
 	const canEditAdvanced = $derived(
 		isAdmin || ['approved', 'planned'].includes(data.reservation.status)
 	);
 	const canCancel = $derived(
 		!['cancelled', 'completed'].includes(data.reservation.status)
 	);
+	// The table layout is built on the hall's floor plan; without one it's disabled.
+	// data.hasFloorplan is computed from the raw DB value in load (fromJson(null) === {}).
+	const hasFloorplan = $derived(data.hasFloorplan);
+	const canEditLayout = $derived(hasFloorplan && canEditAdvanced);
 
 	function selectStatus(value: string) {
 		statusOpen = false;
@@ -128,36 +135,25 @@
 
 <div class="page">
 	<!-- Header -->
-	<div class="page-top">
-		<div>
-			<SectionHeader overline={t.event.manage} title={data.reservation.title} />
-			{#if isPast}
-				<div class="alert-warning" style="margin-top:-12px;margin-bottom:20px">
-					<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-						<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
-					</svg>
-					{t.event.pastEvent}
-				</div>
-			{/if}
+	<div class="page-header">
+		<div class="ph-left">
+			<a href={isAdmin ? '/app/manage/reservations' : '/app/'} class="back-link">
+				<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+				{t.event.backToEvents}
+			</a>
+			<div class="ph-titlerow">
+				<h1 class="page-title">{data.reservation.title}</h1>
+				<StatusBadge status={data.reservation.status} />
+			</div>
 		</div>
-		<div class="header-actions">
-			{#if canEditAdvanced}
-				<a href="/app/reservation/{data.reservation.id}/rsvp-editor" class="btn-outline">
+		<div class="ph-actions">
+			{#if SHOW_RSVP && canEditAdvanced}
+				<a href="/app/reservation/{data.reservation.id}/rsvp-editor" class="btn-outline btn-sm">
 					<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
 						<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
 					</svg>
 					{t.event.rsvpSettings}
 				</a>
-			{/if}
-			{#if data.reservation.status === 'approved' && !isAdmin}
-				<form method="POST" action="?/markPlanned" use:enhance style="display:inline">
-					<button type="submit" class="btn-outline">
-						<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-							<polyline points="20 6 9 17 4 12"/>
-						</svg>
-						{t.event.markPlanned}
-					</button>
-				</form>
 			{/if}
 			{#if canCancel && !isAdmin}
 				<form method="POST" action="?/cancel" use:enhance style="display:inline"
@@ -165,9 +161,17 @@
 					<button type="submit" class="btn-danger btn-sm">{t.event.cancelReservation}</button>
 				</form>
 			{/if}
-			<a href="/app/" class="btn-outline">{t.event.backToEvents}</a>
 		</div>
 	</div>
+
+	{#if isPast}
+		<div class="alert-warning past-banner">
+			<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+				<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+			</svg>
+			{t.event.pastEvent}
+		</div>
+	{/if}
 
 	{#if !canEditAdvanced && !isAdmin}
 		<div class="alert-warning" style="margin-bottom:20px">
@@ -179,7 +183,7 @@
 	{/if}
 
 	<!-- Two-column details -->
-	<div class="detail-grid">
+	<div class="detail-grid" class:single={!SHOW_RSVP}>
 		<!-- Left: Event details card -->
 		<div class="card detail-card">
 			<h2>{t.event.details}</h2>
@@ -219,10 +223,125 @@
 				</div>
 				<div>
 					<div class="detail-label">{t.event.attendees}</div>
-					<div class="detail-value">{data.rsvps.length} / {layoutStats.seats} {t.event.confirmed}</div>
-					<div class="detail-sub">{t.event.registrations}: {data.rsvps.length}</div>
+					<div class="detail-value">{data.reservation.num_guests ?? 0} {t.common.people}</div>
+					<div class="detail-sub">{t.event.seats}: {layoutStats.seats}</div>
 				</div>
 			</div>
+
+			<div class="detail-row">
+				<div class="detail-icon">
+					<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="2">
+						<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
+					</svg>
+				</div>
+				<div>
+					<div class="detail-label">{t.calendar.bookedBy}</div>
+					<div class="detail-value">{data.reservation.user_first_name} {data.reservation.user_last_name}</div>
+					{#if data.reservation.user_email}
+						<div class="detail-sub"><a href="mailto:{data.reservation.user_email}" style="color:var(--accent);text-decoration:none">{data.reservation.user_email}</a></div>
+					{/if}
+				</div>
+			</div>
+
+			<!-- Assign / invite a client (staff only) -->
+			{#if isAdmin}
+				<div class="assign-card">
+					<div class="assign-head">
+						<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg>
+						<span class="assign-title">{t.reservationAdmin.assignTitle}</span>
+					</div>
+
+					{#if data.clientOwner}
+						<p class="assign-state ok">{t.reservationAdmin.assignOwnerIs} <strong>{data.reservation.user_first_name} {data.reservation.user_last_name}</strong></p>
+					{:else if data.pendingInvite}
+						<div class="assign-state pending">
+							<span>{t.reservationAdmin.assignInvitePending} <strong>{data.pendingInvite.email}</strong></span>
+							<div class="assign-pending-actions">
+								<form method="POST" action="?/resendInvite" use:enhance><button class="assign-link" type="submit">{t.reservationAdmin.assignResend}</button></form>
+								<form method="POST" action="?/cancelInvite" use:enhance><button class="assign-link danger" type="submit">{t.reservationAdmin.assignCancel}</button></form>
+							</div>
+						</div>
+					{:else}
+						<p class="assign-state muted">{t.reservationAdmin.assignNoClient}</p>
+					{/if}
+
+					{#if form?.assigned}<div class="assign-toast ok">{t.reservationAdmin.assignedToast}</div>{/if}
+					{#if form?.invited}<div class="assign-toast ok">{t.reservationAdmin.invitedToast}{#if form?.emailSent === false} — {t.reservationAdmin.assignEmailFailed}{/if}</div>{/if}
+					{#if form?.inviteResent}<div class="assign-toast ok">{t.reservationAdmin.inviteResentToast}{#if form?.emailSent === false} — {t.reservationAdmin.assignEmailFailed}{/if}</div>{/if}
+					{#if form?.inviteCancelled}<div class="assign-toast">{t.reservationAdmin.inviteCancelledToast}</div>{/if}
+
+					<details class="assign-form-wrap" open={!data.clientOwner && !data.pendingInvite}>
+						<summary>{(data.clientOwner || data.pendingInvite) ? t.reservationAdmin.assignReassign : t.reservationAdmin.assignCta}</summary>
+						<form method="POST" action="?/assignClient" use:enhance class="assign-form">
+							<div class="assign-names">
+								<input name="firstName" placeholder={t.reservationAdmin.assignFirstName} required />
+								<input name="lastName" placeholder={t.reservationAdmin.assignLastName} required />
+							</div>
+							<input name="email" type="email" placeholder={t.reservationAdmin.assignEmail} required />
+							<p class="assign-hint">{t.reservationAdmin.assignHint}</p>
+							{#if form?.assignError}<span class="assign-err">{form.assignError}</span>{/if}
+							<button type="submit" class="btn-action btn-sm">{t.reservationAdmin.assignSubmit}</button>
+						</form>
+					</details>
+				</div>
+			{/if}
+
+			<!-- Extras (booked add-ons; staff can adjust) -->
+			{#if data.extras.length > 0}
+				<div class="extras-block">
+					<div class="extras-block-head">
+						<span class="extras-block-title">{t.myRes.extras}</span>
+						<span class="extras-block-total">{eur(extrasOverview.totalCents)}</span>
+					</div>
+					{#if isAdmin}
+						<form method="POST" action="?/editExtras" use:enhance class="extras-form">
+							{#each data.extras as ex}
+								{@const on = extraSel.includes(ex.id)}
+								<label class="exr" class:on>
+									<input type="checkbox" checked={on} onchange={() => toggleExtra(ex.id)} />
+									<span class="exr-main"><span class="exr-name">{ex.name}</span>{#if ex.description}<span class="exr-desc">{ex.description}</span>{/if}</span>
+									<span class="exr-price">{eur(ex.price_cents)}{ex.pricing === 'per_guest' ? ` ${t.myRes.perGuest}` : ''}</span>
+								</label>
+								{#if on}<input type="hidden" name="extras" value={ex.id} />{/if}
+							{/each}
+							<div class="exr-foot">
+								{#if form?.extrasSaved}<span class="exr-saved">{t.myRes.saved}</span>{/if}
+								<button type="submit" class="btn-action btn-sm">{t.myRes.saveExtras}</button>
+							</div>
+						</form>
+					{:else}
+						{#each extrasOverview.lines as l}
+							<div class="exr-line"><span>{l.name}{l.pricing === 'per_guest' ? ` (×${l.qty})` : ''}</span><span>{eur(l.line_cents)}</span></div>
+						{:else}
+							<p class="exr-empty">{t.reservationAdmin.extrasNoneSelected}</p>
+						{/each}
+					{/if}
+				</div>
+			{/if}
+
+			<!-- Message the client (staff only; only when a real client owns it) -->
+			{#if isAdmin && data.clientOwner}
+				<div class="msg-client">
+					<div class="msg-client-head">
+						<span class="msg-client-title">{t.reservationAdmin.messageTheClient}</span>
+						<a href="/app/manage/messages" class="msg-client-link">{t.reservationAdmin.openMessages}</a>
+					</div>
+					{#if form?.messageSent}
+						<div class="msg-sent">
+							<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+							{t.reservationAdmin.messageSentTo} {data.reservation.user_first_name}.
+						</div>
+					{/if}
+					<form method="POST" action="?/messageClient" use:enhance={() => async ({ update }) => { await update({ reset: true }); messageBody = ''; }}>
+						<textarea name="body" rows="3" bind:value={messageBody}
+							placeholder="{t.reservationAdmin.messageComposePrefix} {data.reservation.user_first_name}{t.reservationAdmin.messageComposeSuffix}"></textarea>
+						<div class="msg-client-actions">
+							{#if form?.error}<span class="msg-err">{form.error}</span>{/if}
+							<button type="submit" class="btn-action btn-sm" disabled={!messageBody.trim()}>{t.reservationAdmin.sendMessage}</button>
+						</div>
+					</form>
+				</div>
+			{/if}
 
 			<hr />
 
@@ -270,7 +389,8 @@
 			{/if}
 		</div>
 
-		<!-- Right: Stat cards -->
+		<!-- Right: Stat cards (RSVP — hidden while the feature is parked) -->
+		{#if SHOW_RSVP}
 		<div class="stat-stack">
 			<KpiCard
 				label={t.event.totalAttendees}
@@ -307,66 +427,70 @@
 				{/if}
 			</div>
 		</div>
+		{/if}
 	</div>
 
 	<!-- Table layout section -->
 	<div class="card layout-section">
 		<div class="layout-header">
 			<div>
-				<h2 style="margin-bottom:4px">{t.event.tableLayout}</h2>
-				<p class="layout-sub">{canEditAdvanced ? t.event.customLayout : t.event.layoutLocked}</p>
+				<h2 class="section-title">{t.event.tableLayout}</h2>
+				<p class="layout-sub">
+					{#if !hasFloorplan}
+						{t.reservationAdmin.noFloorplanSub}
+					{:else}
+						{canEditLayout ? t.event.customLayout : t.event.layoutLocked}
+					{/if}
+				</p>
 			</div>
-			{#if canEditAdvanced}
-				<div class="layout-actions">
-					<a href="/app/reservation/{data.reservation.id}/layout" class="btn-action btn-sm">
-						<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-							<path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
-							<path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
-						</svg>
-						{t.event.editLayout}
-					</a>
-					<button type="button" class="btn-outline btn-sm" onclick={() => (templateDialogOpen = true)}>
-						<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-							<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-							<polyline points="14 2 14 8 20 8"/>
-						</svg>
-						{t.event.loadTemplate}
-					</button>
-					<button type="button" class="btn-outline btn-sm" onclick={resetLayout}>
-						<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-							<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-						</svg>
-						{t.event.resetLayout}
-					</button>
-				</div>
-			{/if}
 		</div>
 
-		<div class="layout-preview card">
-			<div class="layout-preview-header">
-				<span>{t.event.currentLayout}</span>
-				<span class="layout-badge">{layoutStats.tables} {t.event.tables} ({t.event.customBadge})</span>
+		{#if !hasFloorplan}
+			<div class="layout-empty">
+				<div class="layout-empty-icon">
+					<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
+				</div>
+				<h3>{t.reservationAdmin.noFloorplanTitle}</h3>
+				<p>{t.reservationAdmin.noFloorplanBodyPrefix} <strong>{data.reservation.hall_name}</strong> {t.reservationAdmin.noFloorplanBodySuffix}</p>
+				{#if isAdmin}
+					<a href="/app/manage/halls/{data.reservation.hall_id}" class="btn-action btn-sm">{t.reservationAdmin.openHallSettings}</a>
+				{/if}
 			</div>
-			<div class="map-wrap">
-				<FloorplanViewer
-					layoutJson={data.reservation.layout_json ?? data.reservation.hall_floorplan_json}
-					rsvps={data.rsvps}
-					reservationId={data.reservation.id}
-					tableTypes={data.tableTypes}
-					onsave={onLayoutSave}
-				/>
+		{:else}
+			<div class="layout-summary">
+				<div class="ls-stats">
+					<div class="ls-stat"><span class="ls-num">{layoutStats.tables}</span><span class="ls-lbl">{t.event.tables}</span></div>
+					<div class="ls-stat"><span class="ls-num">{layoutStats.seats}</span><span class="ls-lbl">{t.event.seats}</span></div>
+				</div>
+				{#if canEditLayout}
+					<div class="ls-actions">
+						<a href="/app/reservation/{data.reservation.id}/layout" class="btn-action">
+							<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+							{t.event.editLayout}
+						</a>
+						<a href="/app/reservation/{data.reservation.id}/manifest" class="btn-outline">
+							<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+							{t.myRes.seatingSheet}
+						</a>
+						<button type="button" class="btn-outline" onclick={() => (templateDialogOpen = true)}>{t.event.loadTemplate}</button>
+						<button type="button" class="btn-outline" onclick={resetLayout}>{t.event.resetLayout}</button>
+					</div>
+					<p class="ls-note">{t.reservationAdmin.seatingEditorNote}</p>
+				{:else}
+					<div class="ls-actions">
+						<a href="/app/reservation/{data.reservation.id}/manifest" class="btn-outline">
+							<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+							{t.myRes.seatingSheet}
+						</a>
+					</div>
+					<p class="ls-note">{t.event.layoutLocked}</p>
+				{/if}
 			</div>
-			<div class="layout-footer">
-				{layoutStats.tables} {t.event.tables}, {layoutStats.seats} {t.event.seats}
-			</div>
-		</div>
+		{/if}
 	</div>
 </div>
 
 <!-- Hidden forms -->
-<form method="POST" action="?/saveLayout" use:enhance bind:this={layoutFormRef} style="display:none">
-	<input type="hidden" name="layoutJson" value={layoutJsonValue} />
-</form>
 <form method="POST" action="?/resetLayout" use:enhance bind:this={resetFormRef} style="display:none"></form>
 <form method="POST" action="?/loadTemplate" use:enhance bind:this={templateFormRef} style="display:none">
 	<input type="hidden" name="templateId" value="" />
@@ -404,23 +528,32 @@
 
 <style>
 	.page {
-		padding: 32px 40px;
+		padding: 24px 28px;
 		overflow-y: auto;
 		height: 100%;
 	}
 
-	.page-top {
+	.page-header {
 		display: flex;
-		justify-content: space-between;
 		align-items: flex-start;
-		flex-wrap: wrap;
+		justify-content: space-between;
 		gap: 16px;
+		flex-wrap: wrap;
+		margin-bottom: 20px;
 	}
+	.ph-left { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+	.back-link {
+		display: inline-flex; align-items: center; gap: 5px;
+		font-size: 12.5px; font-weight: 600; color: var(--text-muted);
+		text-decoration: none; transition: color .12s;
+	}
+	.back-link:hover { color: var(--accent); }
+	.ph-titlerow { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+	.page-title { font-size: 20px; font-weight: 800; letter-spacing: -.025em; color: var(--text-base); margin: 0; }
+	.ph-actions { display: flex; align-items: center; gap: 10px; flex-shrink: 0; flex-wrap: wrap; }
 
-	.header-actions {
-		display: flex;
-		gap: 10px;
-	}
+	.past-banner { margin-bottom: 20px; }
+	.section-title { font-size: 15px; font-weight: 700; color: var(--text-base); margin: 0 0 2px; }
 
 	.detail-grid {
 		display: grid;
@@ -428,6 +561,7 @@
 		gap: 20px;
 		margin-bottom: 24px;
 	}
+	.detail-grid.single { grid-template-columns: 1fr; }
 
 	.detail-card h2 {
 		font-size: 16px;
@@ -479,6 +613,88 @@
 		border-top: 1px solid var(--border);
 		margin: 16px 0;
 	}
+
+	/* Extras block */
+	.extras-block { margin-top: 16px; padding: 14px 16px; border-radius: 12px; background: var(--bg-panel2, var(--bg-base)); border: 1px solid var(--border); }
+	.extras-block-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+	.extras-block-title { font-size: 13px; font-weight: 700; color: var(--text-base); }
+	.extras-block-total { font-size: 15px; font-weight: 800; color: var(--text-base); }
+	.extras-form { display: flex; flex-direction: column; gap: 8px; }
+	.exr { display: flex; align-items: center; gap: 10px; padding: 8px 11px; border: 1px solid var(--border); border-radius: 9px; background: var(--bg-panel); cursor: pointer; }
+	.exr.on { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 6%, var(--bg-panel)); }
+	.exr input { width: 15px; height: 15px; flex-shrink: 0; margin: 0; }
+	.exr-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+	.exr-name { font-size: 12.5px; font-weight: 600; }
+	.exr-desc { font-size: 11px; color: var(--text-muted); }
+	.exr-price { font-size: 12.5px; font-weight: 700; white-space: nowrap; }
+	.exr-foot { display: flex; align-items: center; justify-content: flex-end; gap: 10px; }
+	.exr-saved { font-size: 12px; color: var(--success, #16a34a); font-weight: 600; }
+	.exr-line { display: flex; justify-content: space-between; font-size: 12.5px; color: var(--text-muted); padding: 3px 0; }
+	.exr-empty { font-size: 12.5px; color: var(--text-muted); margin: 0; }
+
+	/* Message-the-client composer */
+	.msg-client {
+		margin-top: 16px; padding: 14px 16px; border-radius: 12px;
+		background: var(--bg-panel2, var(--bg-base)); border: 1px solid var(--border);
+	}
+	.msg-client-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+	.msg-client-title { font-size: 13px; font-weight: 700; color: var(--text-base); }
+	.msg-client-link { font-size: 12px; font-weight: 600; color: var(--accent); text-decoration: none; }
+	.msg-client-link:hover { text-decoration: underline; }
+	.msg-client textarea {
+		width: 100%; box-sizing: border-box; resize: vertical; font: inherit; font-size: 13px; line-height: 1.5;
+		padding: 9px 11px; border: 1px solid var(--border); border-radius: 9px;
+		background: var(--bg-panel); color: var(--text-base);
+	}
+	.msg-client textarea:focus { outline: none; border-color: var(--accent); }
+	.msg-client-actions { display: flex; align-items: center; justify-content: flex-end; gap: 10px; margin-top: 8px; }
+	.msg-err { font-size: 12px; color: var(--danger, #dc2626); margin-right: auto; }
+	.msg-sent {
+		display: flex; align-items: center; gap: 6px; margin-bottom: 10px;
+		font-size: 12.5px; font-weight: 600; color: var(--success, #16a34a);
+	}
+
+	/* ── Assign / invite a client ── */
+	.assign-card {
+		margin-top: 16px; padding: 14px 16px; border-radius: 12px;
+		background: var(--bg-panel2, var(--bg-base)); border: 1px solid var(--border);
+	}
+	.assign-head { display: flex; align-items: center; gap: 7px; margin-bottom: 10px; color: var(--text-muted); }
+	.assign-title { font-size: 13px; font-weight: 700; color: var(--text-base); }
+	.assign-state { font-size: 12.5px; color: var(--text-muted); margin: 0 0 8px; }
+	.assign-state.ok { color: var(--text-base); }
+	.assign-state.muted { color: var(--text-subtle); }
+	.assign-state.pending {
+		display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap;
+		padding: 8px 11px; border-radius: 9px; background: color-mix(in srgb, var(--s-amber, #f59e0b) 10%, transparent);
+		border: 1px solid color-mix(in srgb, var(--s-amber, #f59e0b) 30%, transparent); color: var(--text-base);
+	}
+	.assign-pending-actions { display: flex; gap: 12px; }
+	.assign-link {
+		background: none; border: none; padding: 0; cursor: pointer; font: inherit;
+		font-size: 12px; font-weight: 600; color: var(--accent); text-decoration: underline;
+	}
+	.assign-link.danger { color: var(--danger, #dc2626); }
+	.assign-toast {
+		font-size: 12.5px; font-weight: 600; margin: 0 0 8px; padding: 7px 10px; border-radius: 8px;
+		background: var(--bg-panel); border: 1px solid var(--border); color: var(--text-muted);
+	}
+	.assign-toast.ok { color: var(--success, #16a34a); }
+	.assign-form-wrap > summary {
+		cursor: pointer; font-size: 12.5px; font-weight: 600; color: var(--accent);
+		list-style: none; user-select: none;
+	}
+	.assign-form-wrap > summary::-webkit-details-marker { display: none; }
+	.assign-form { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+	.assign-names { display: flex; gap: 8px; }
+	.assign-form input {
+		width: 100%; box-sizing: border-box; font: inherit; font-size: 13px;
+		padding: 8px 11px; border: 1px solid var(--border); border-radius: 9px;
+		background: var(--bg-panel); color: var(--text-base);
+	}
+	.assign-form input:focus { outline: none; border-color: var(--accent); }
+	.assign-hint { font-size: 11.5px; line-height: 1.5; color: var(--text-subtle); margin: 0; }
+	.assign-err { font-size: 12px; color: var(--danger, #dc2626); }
 
 	.desc-label {
 		font-size: 14px;
@@ -695,12 +911,47 @@
 	}
 
 	.layout-footer {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 12px;
 		padding: 10px 20px;
 		border-top: 1px solid var(--border);
 		font-size: 13px;
 		color: var(--text-muted);
-		text-align: right;
 	}
+	.layout-hint { font-size: 12px; color: var(--text-subtle); }
+
+	/* Read-only layout summary (editing happens only in the full editor) */
+	.layout-summary {
+		display: flex; flex-direction: column; align-items: center; text-align: center;
+		padding: 32px 24px; gap: 18px;
+	}
+	.ls-stats { display: flex; gap: 14px; flex-wrap: wrap; justify-content: center; }
+	.ls-stat {
+		display: flex; flex-direction: column; align-items: center; gap: 2px;
+		min-width: 96px; padding: 14px 20px;
+		background: var(--bg-panel2, var(--bg-base)); border: 1px solid var(--border); border-radius: 12px;
+	}
+	.ls-num { font-size: 26px; font-weight: 800; color: var(--text-base); letter-spacing: -.02em; }
+	.ls-lbl { font-size: 12px; color: var(--text-muted); }
+	.ls-actions { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+	.ls-note { font-size: 12.5px; color: var(--text-subtle); max-width: 52ch; margin: 0; line-height: 1.5; }
+
+	.layout-empty {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		text-align: center;
+		padding: 48px 24px;
+	}
+	.layout-empty-icon {
+		width: 56px; height: 56px; border-radius: 16px; margin-bottom: 12px;
+		display: flex; align-items: center; justify-content: center;
+		background: var(--bg-panel2); border: 1px solid var(--border); color: var(--text-subtle);
+	}
+	.layout-empty h3 { font-size: 16px; font-weight: 700; color: var(--text-base); margin: 0 0 6px; }
+	.layout-empty p { font-size: 13px; color: var(--text-muted); line-height: 1.6; max-width: 50ch; margin: 0 0 16px; }
 
 	/* Template dialog */
 	.dialog-backdrop {

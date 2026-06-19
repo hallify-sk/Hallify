@@ -1,5 +1,5 @@
 import { redirect } from '@sveltejs/kit';
-import sql from '$lib/db/index';
+import { dbAll, dbFirst } from '$lib/db/index';
 import type { ReservationRow } from '$lib/db/index';
 import type { PageServerLoad } from './$types';
 
@@ -10,29 +10,39 @@ export const load: PageServerLoad = async ({ locals }) => {
 
   const orgId = locals.currentOrg.id;
 
-  const reservations = await sql<ReservationRow[]>`
-    SELECT r.*, h.name AS hall_name
+  const reservations = await dbAll<ReservationRow>(
+    locals.db,
+    `SELECT r.*, h.name AS hall_name
     FROM reservations r
     JOIN halls h ON h.id = r.hall_id
-    WHERE r.user_id = ${locals.user.id}
-      AND r.org_id = ${orgId}
-    ORDER BY r.event_date DESC
-  `;
+    WHERE r.user_id = ?
+      AND r.org_id = ?
+    ORDER BY r.event_date DESC`,
+    locals.user.id,
+    orgId
+  );
 
   const today = new Date().toISOString().split('T')[0];
-  const [stats] = await sql<[{ total: string; upcoming: string; finished: string }]>`
-    SELECT
-      COUNT(*)::text AS total,
-      COUNT(*) FILTER (WHERE r.event_date >= ${today}::date AND r.status != 'cancelled')::text AS upcoming,
-      COUNT(*) FILTER (WHERE r.event_date < ${today}::date)::text AS finished
+  const stats = await dbFirst<{ total: number; upcoming: number; finished: number }>(
+    locals.db,
+    `SELECT
+      COUNT(*) AS total,
+      SUM(CASE WHEN r.event_date >= ? AND r.status != 'cancelled' THEN 1 ELSE 0 END) AS upcoming,
+      SUM(CASE WHEN r.event_date < ? THEN 1 ELSE 0 END) AS finished
     FROM reservations r
-    WHERE r.user_id = ${locals.user.id}
-      AND r.org_id = ${orgId}
-  `;
+    WHERE r.user_id = ?
+      AND r.org_id = ?`,
+    today,
+    today,
+    locals.user.id,
+    orgId
+  );
 
-  const [hallCount] = await sql<[{ count: string }]>`
-    SELECT COUNT(*)::text AS count FROM halls WHERE org_id = ${orgId}
-  `;
+  const hallCount = await dbFirst<{ count: number }>(
+    locals.db,
+    'SELECT COUNT(*) AS count FROM halls WHERE org_id = ?',
+    orgId
+  );
 
   const eventDates = reservations
     .filter(r => r.status !== 'cancelled')
@@ -44,10 +54,10 @@ export const load: PageServerLoad = async ({ locals }) => {
   return {
     reservations,
     stats: {
-      total: Number(stats.total),
-      upcoming: Number(stats.upcoming),
-      finished: Number(stats.finished),
-      halls: Number(hallCount.count),
+      total: Number(stats?.total ?? 0),
+      upcoming: Number(stats?.upcoming ?? 0),
+      finished: Number(stats?.finished ?? 0),
+      halls: Number(hallCount?.count ?? 0),
     },
     eventDates,
   };

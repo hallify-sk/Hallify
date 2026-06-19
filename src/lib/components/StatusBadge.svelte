@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { t } from '$lib/i18n';
+	import { t } from '$lib/i18n.svelte';
 
 	interface Props {
 		status: 'pending' | 'waiting_payment' | 'approved' | 'planned' | 'completed' | 'cancelled' | 'set' | 'unset' | 'open' | 'closed';

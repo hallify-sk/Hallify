@@ -1,12 +1,13 @@
 <script lang="ts">
+  import { t } from '$lib/i18n.svelte';
   import type { ActionData } from './$types';
   let { form }: { form: ActionData } = $props();
 </script>
 
 <div class="auth-shell">
   <div class="card auth-card">
-    <h1>Create organization</h1>
-    <p class="subtitle">Organizations let you manage halls, reservations, and team members in one workspace.</p>
+    <h1>{t.accountExtra.createOrgTitle}</h1>
+    <p class="subtitle">{t.accountExtra.createOrgSubtitle}</p>
 
     {#if form?.error}
       <div class="alert-error">{form.error}</div>
@@ -14,12 +15,12 @@
 
     <form method="POST">
       <div class="field">
-        <label for="name">Organization name</label>
+        <label for="name">{t.accountExtra.orgNameLabel}</label>
         <input id="name" name="name" type="text" required minlength="2" maxlength="80"
-               placeholder="e.g. Acme Events" value={form?.name ?? ''} />
+               placeholder={t.accountExtra.orgNamePlaceholder} value={form?.name ?? ''} />
       </div>
       <button type="submit" class="btn-action" style="width:100%;margin-top:.5rem">
-        Create organization
+        {t.accountExtra.createOrgTitle}
       </button>
     </form>
   </div>

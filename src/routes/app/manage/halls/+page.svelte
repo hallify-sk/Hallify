@@ -1,5 +1,6 @@
 <script lang="ts">
   import { enhance } from '$app/forms';
+  import { t } from '$lib/i18n.svelte';
   import type { PageData, ActionData } from './$types';
 
   interface Props { data: PageData; form: ActionData; }
@@ -14,18 +15,18 @@
   const maxRes = $derived(Math.max(...data.halls.map(h => Number(h.reservation_count)), 1));
 </script>
 
-<svelte:head><title>Manage Halls – Hallify</title></svelte:head>
+<svelte:head><title>{t.halls.manageHalls} – Hallify</title></svelte:head>
 
 <div class="page">
 
   <!-- ─── Header ────────────────────────────────────────────────────────────── -->
   <div class="page-header">
     <div>
-      <p class="page-overline">Halls</p>
-      <h1 class="page-title">Manage Halls</h1>
+      <p class="page-overline">{t.nav.halls}</p>
+      <h1 class="page-title">{t.halls.manageHalls}</h1>
     </div>
     <button class="btn-primary" type="button" onclick={() => showCreate = !showCreate}>
-      {#if showCreate}Cancel{:else}+ Add Hall{/if}
+      {#if showCreate}{t.common.cancel}{:else}+ {t.halls.addHall}{/if}
     </button>
   </div>
 
@@ -33,7 +34,7 @@
   {#if showCreate}
     <div class="card create-card">
       <div class="card-header">
-        <h2 class="card-title">New Hall</h2>
+        <h2 class="card-title">{t.hallAdmin.newHall}</h2>
       </div>
       {#if form?.error}
         <p class="form-error">{form.error}</p>
@@ -42,25 +43,25 @@
         use:enhance={() => async ({ result, update }) => { await update(); if (result.type === 'success') showCreate = false; }}>
         <div class="field-row">
           <div class="field field-grow">
-            <label class="field-label" for="name">Hall name *</label>
-            <input class="field-input" id="name" name="name" type="text" placeholder="e.g. Grand Ballroom" required />
+            <label class="field-label" for="name">{t.halls.hallName} *</label>
+            <input class="field-input" id="name" name="name" type="text" placeholder={t.halls.hallNamePlaceholder} required />
           </div>
           <div class="field" style="width:130px">
-            <label class="field-label" for="maxPeople">Max guests</label>
+            <label class="field-label" for="maxPeople">{t.halls.maxGuests}</label>
             <input class="field-input" id="maxPeople" name="maxPeople" type="number" min="1" max="2000" value="100" />
           </div>
           <div class="field color-field">
-            <label class="field-label" for="color">Color</label>
+            <label class="field-label" for="color">{t.halls.hallColor}</label>
             <input class="color-input" id="color" name="color" type="color" value="#4f6ef7" />
           </div>
         </div>
         <div class="field">
-          <label class="field-label" for="description">Description</label>
-          <textarea class="field-input field-textarea" id="description" name="description" rows="2" placeholder="Optional…"></textarea>
+          <label class="field-label" for="description">{t.common.description}</label>
+          <textarea class="field-input field-textarea" id="description" name="description" rows="2" placeholder={t.hallAdmin.optional}></textarea>
         </div>
         <div class="create-actions">
-          <button type="button" class="btn-ghost" onclick={() => showCreate = false}>Cancel</button>
-          <button type="submit" class="btn-primary">Create Hall</button>
+          <button type="button" class="btn-ghost" onclick={() => showCreate = false}>{t.common.cancel}</button>
+          <button type="submit" class="btn-primary">{t.halls.createHall}</button>
         </div>
       </form>
     </div>
@@ -74,19 +75,19 @@
           <rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/>
         </svg>
       </div>
-      <p class="empty-title">No halls yet</p>
-      <p class="empty-sub">Add your first hall to start accepting reservations.</p>
-      <button class="btn-primary" type="button" onclick={() => showCreate = true}>+ Add Hall</button>
+      <p class="empty-title">{t.hallAdmin.noHallsYet}</p>
+      <p class="empty-sub">{t.hallAdmin.noHallsSub}</p>
+      <button class="btn-primary" type="button" onclick={() => showCreate = true}>+ {t.halls.addHall}</button>
     </div>
 
   <!-- ─── Halls table ───────────────────────────────────────────────────────── -->
   {:else}
     <div class="card halls-card">
       <div class="halls-thead">
-        <span>Hall</span>
-        <span>Capacity</span>
-        <span>All-time bookings</span>
-        <span>Created</span>
+        <span>{t.dashboard.hall}</span>
+        <span>{t.common.capacity}</span>
+        <span>{t.hallAdmin.allTimeBookings}</span>
+        <span>{t.common.created}</span>
         <span></span>
       </div>
       {#each data.halls as h}
@@ -114,11 +115,11 @@
           <span class="halls-created">{fmtDate(h.created_at)}</span>
 
           <div class="halls-actions">
-            <a href="/app/manage/halls/{h.id}" class="btn-manage">Manage</a>
+            <a href="/app/manage/halls/{h.id}" class="btn-manage">{t.hallAdmin.manageAction}</a>
             <form method="POST" action="?/delete" use:enhance style="display:contents">
               <input type="hidden" name="id" value={h.id} />
               <button type="submit" class="btn-delete"
-                onclick={(e) => { if (!confirm(`Delete "${h.name}"? This cannot be undone.`)) e.preventDefault(); }}>
+                onclick={(e) => { if (!confirm(`${t.hallAdmin.confirmDeleteHall} "${h.name}"? ${t.hallAdmin.cannotBeUndone}`)) e.preventDefault(); }}>
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
               </button>
             </form>
@@ -127,7 +128,7 @@
       {/each}
     </div>
 
-    <p class="footer-note">{data.halls.length} hall{data.halls.length === 1 ? '' : 's'} configured</p>
+    <p class="footer-note">{data.halls.length} {data.halls.length === 1 ? t.hallAdmin.hallConfiguredSingular : t.hallAdmin.hallsConfiguredPlural}</p>
   {/if}
 
 </div>

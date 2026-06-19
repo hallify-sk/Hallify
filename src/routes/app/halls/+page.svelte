@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
+	import { t } from '$lib/i18n.svelte';
 	import type { PageData } from './$types';
 
 	interface Props { data: PageData; }
@@ -29,18 +30,18 @@
 	}
 </script>
 
-<svelte:head><title>Browse halls – Hallify</title></svelte:head>
+<svelte:head><title>{t.appHalls.browseTitle} – Hallify</title></svelte:head>
 
 <div class="page">
 
 	<!-- ── Header ── -->
 	<div class="page-head">
 		<div class="head-left">
-			<h1 class="page-title">Browse venues</h1>
+			<h1 class="page-title">{t.appHalls.browseVenues}</h1>
 			{#if data.halls.length > 0}
 				<span class="result-count">
-					{data.halls.length}{data.q ? '' : '+'} venue{data.halls.length === 1 ? '' : 's'}
-					{#if data.q}<span class="result-query">for "{data.q}"</span>{/if}
+					{data.halls.length}{data.q ? '' : '+'} {data.halls.length === 1 ? t.appHalls.venueSingular : t.appHalls.venuePlural}
+					{#if data.q}<span class="result-query">{t.appHalls.resultsFor} "{data.q}"</span>{/if}
 				</span>
 			{/if}
 		</div>
@@ -49,14 +50,14 @@
 			<input
 				class="search-input"
 				type="text"
-				placeholder="Search by name, city, or feature…"
+				placeholder={t.appHalls.searchPlaceholder}
 				bind:value={search}
 				oninput={onSearchInput}
 				autocomplete="off"
 				spellcheck="false"
 			/>
 			{#if search}
-				<button class="search-clear" type="button" onclick={clearSearch} aria-label="Clear search">
+				<button class="search-clear" type="button" onclick={clearSearch} aria-label={t.appHalls.clearSearch}>
 					<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
 				</button>
 			{/if}
@@ -68,13 +69,13 @@
 		<div class="empty-state">
 			{#if data.q}
 				<svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-				<p class="empty-title">No venues found</p>
-				<p class="empty-sub">No results for "<strong>{data.q}</strong>". Try a different keyword.</p>
-				<button class="btn-ghost" onclick={clearSearch}>Clear search</button>
+				<p class="empty-title">{t.appHalls.noVenuesFound}</p>
+				<p class="empty-sub">{t.appHalls.noResultsFor} "<strong>{data.q}</strong>". {t.appHalls.tryDifferentKeyword}</p>
+				<button class="btn-ghost" onclick={clearSearch}>{t.appHalls.clearSearch}</button>
 			{:else}
 				<svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
-				<p class="empty-title">No venues listed yet</p>
-				<p class="empty-sub">Check back soon — venues are being added.</p>
+				<p class="empty-title">{t.appHalls.noVenuesListed}</p>
+				<p class="empty-sub">{t.appHalls.checkBackSoon}</p>
 			{/if}
 		</div>
 	{:else}
@@ -109,7 +110,7 @@
 						<div class="card-chips">
 							<span class="chip chip-cap">
 								<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-								{hall.max_people} guests
+								{hall.max_people} {t.appHalls.guestsWord}
 							</span>
 							{#each amenities.slice(0, 3) as a}
 								<span class="chip">{a}</span>

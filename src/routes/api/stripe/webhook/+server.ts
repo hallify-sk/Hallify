@@ -1,17 +1,13 @@
 import { stripe, STRIPE_WEBHOOK_SECRET } from '$lib/stripe';
-import sql from '$lib/db';
+import { dbRun } from '$lib/db/index';
+import { planFromAmount } from '$lib/plans';
+import type { PlanId } from '$lib/plans';
+import { enforcePlanLimits } from '$lib/limits';
 import type { RequestHandler } from './$types';
 import type Stripe from 'stripe';
+import type { D1Database } from '@cloudflare/workers-types';
 
 type SubscriptionStatus = 'active' | 'trialing' | 'past_due' | 'cancelled' | 'paused';
-
-function toPlanId(priceId: string): string {
-  // Map Stripe price IDs back to plan names via env vars
-  const { STRIPE_PRICE_STARTER, STRIPE_PRICE_PROFESSIONAL } = process.env;
-  if (priceId === STRIPE_PRICE_STARTER) return 'starter';
-  if (priceId === STRIPE_PRICE_PROFESSIONAL) return 'professional';
-  return 'free';
-}
 
 function toStatus(stripeStatus: string): SubscriptionStatus {
   const map: Record<string, SubscriptionStatus> = {
@@ -24,56 +20,70 @@ function toStatus(stripeStatus: string): SubscriptionStatus {
   return map[stripeStatus] ?? 'active';
 }
 
-async function handleSubscriptionEvent(sub: Stripe.Subscription) {
+async function handleSubscriptionEvent(sub: Stripe.Subscription, db: D1Database) {
   const orgId = sub.metadata?.orgId;
   if (!orgId) return;
 
-  const priceId = sub.items.data[0]?.price?.id ?? '';
-  const plan   = toPlanId(priceId);
+  const amount = sub.items.data[0]?.price?.unit_amount ?? 0;
   const status = toStatus(sub.status);
+  // The ACTIVE price amount is the source of truth for the plan — this is what
+  // makes a scheduled (period-end) downgrade sync correctly when its phase goes
+  // live and the price drops. Metadata is only a fallback. Canceled → free.
+  const plan = status === 'cancelled'
+    ? 'free'
+    : (planFromAmount(amount) ?? (sub.metadata?.plan as string) ?? 'free');
   const periodEnd = sub.current_period_end
-    ? new Date(sub.current_period_end * 1000)
+    ? new Date(sub.current_period_end * 1000).toISOString()
     : null;
 
-  await sql`
-    INSERT INTO subscriptions (org_id, plan, status, stripe_customer_id, stripe_subscription_id, current_period_end, updated_at)
-    VALUES (${orgId}, ${plan}, ${status}, ${sub.customer as string}, ${sub.id}, ${periodEnd}, NOW())
-    ON CONFLICT (org_id) DO UPDATE
-      SET plan = ${plan},
-          status = ${status},
-          stripe_customer_id = ${sub.customer as string},
-          stripe_subscription_id = ${sub.id},
-          current_period_end = ${periodEnd},
-          updated_at = NOW()
-  `;
+  await dbRun(
+    db,
+    `INSERT INTO subscriptions (id, org_id, plan, status, stripe_customer_id, stripe_subscription_id, current_period_end, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))
+     ON CONFLICT (org_id) DO UPDATE
+       SET plan = excluded.plan,
+           status = excluded.status,
+           stripe_customer_id = excluded.stripe_customer_id,
+           stripe_subscription_id = excluded.stripe_subscription_id,
+           current_period_end = excluded.current_period_end,
+           updated_at = datetime('now')`,
+    crypto.randomUUID(), orgId, plan, status, sub.customer as string, sub.id, periodEnd,
+  );
+
+  // If the (new) plan allows fewer active halls than the org currently has, lock
+  // them so the owner reactivates within the new limit (non-destructive).
+  await enforcePlanLimits(db, orgId, plan as PlanId);
 }
 
-export const POST: RequestHandler = async ({ request }) => {
+export const POST: RequestHandler = async (event) => {
+  const { request, locals } = event;
+  const db = locals.db;
+
   const body = await request.text();
   const sig  = request.headers.get('stripe-signature') ?? '';
 
-  let event: Stripe.Event;
+  let stripeEvent: Stripe.Event;
   try {
-    event = stripe.webhooks.constructEvent(body, sig, STRIPE_WEBHOOK_SECRET);
+    stripeEvent = stripe.webhooks.constructEvent(body, sig, STRIPE_WEBHOOK_SECRET);
   } catch {
     return new Response('Webhook signature invalid', { status: 400 });
   }
 
-  switch (event.type) {
+  switch (stripeEvent.type) {
     case 'customer.subscription.created':
     case 'customer.subscription.updated':
     case 'customer.subscription.deleted':
-      await handleSubscriptionEvent(event.data.object as Stripe.Subscription);
+      await handleSubscriptionEvent(stripeEvent.data.object as Stripe.Subscription, db);
       break;
 
     case 'checkout.session.completed': {
-      const session = event.data.object as Stripe.Checkout.Session;
-      // Set stripe_customer_id on subscriptions for new checkouts
+      const session = stripeEvent.data.object as Stripe.Checkout.Session;
       if (session.subscription && session.customer && session.metadata?.orgId) {
-        await sql`
-          UPDATE subscriptions SET stripe_customer_id = ${session.customer as string}
-          WHERE org_id = ${session.metadata.orgId}
-        `;
+        await dbRun(
+          db,
+          `UPDATE subscriptions SET stripe_customer_id = ? WHERE org_id = ?`,
+          session.customer as string, session.metadata.orgId,
+        );
       }
       break;
     }

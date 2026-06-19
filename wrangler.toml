@@ -1,0 +1,75 @@
+# Secrets must be set via wrangler (Worker secrets, NOT pages secrets):
+#   Prod:  wrangler secret put SECRET_NAME
+#   Dev:   wrangler secret put SECRET_NAME --env dev
+# Required: SESSION_SECRET, STRIPE_SECRET_KEY, STRIPE_PUBLISHABLE_KEY,
+# STRIPE_WEBHOOK_SECRET, STRIPE_PRICE_STARTER, STRIPE_PRICE_PROFESSIONAL,
+# BREVO_API_KEY, CF_ZONE_ID, CF_API_TOKEN
+# (EMAIL_FROM / EMAIL_FROM_NAME are non-secret [vars] below.)
+#
+# Deploy:
+#   Dev  (dev.hallify.sk):  npm run deploy:dev
+#   Prod (hallify.sk):      npm run deploy:prod
+
+name = "hallify"
+main = ".svelte-kit/cloudflare/_worker.js"
+compatibility_date = "2026-06-13"
+compatibility_flags = ["nodejs_compat"]
+
+[assets]
+binding = "ASSETS"
+directory = ".svelte-kit/cloudflare"
+
+# ── Production (hallify.sk + customer custom hostnames) ───────────────────────
+
+[vars]
+HALLIFY_DOMAIN = "hallify.sk"
+APP_URL = "https://hallify.sk"
+EMAIL_FROM = "noreply@hallify.sk"
+EMAIL_FROM_NAME = "Hallify"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "hallify"
+database_id = "9d32dc94-c7e4-409b-a86b-13def79ccd88"
+
+[[r2_buckets]]
+binding = "R2"
+bucket_name = "hallify-uploads"
+
+[[routes]]
+pattern = "hallify.sk"
+custom_domain = true
+
+# Catches ALL custom hostnames entering the zone (Cloudflare for SaaS).
+[[routes]]
+pattern = "*/*"
+zone_name = "hallify.sk"
+
+# ── Dev (dev.hallify.sk, separate worker + database) ──────────────────────────
+
+[env.dev]
+name = "hallify-dev"
+
+[env.dev.vars]
+HALLIFY_DOMAIN = "dev.hallify.sk"
+APP_URL = "https://dev.hallify.sk"
+EMAIL_FROM = "noreply@hallify.sk"
+EMAIL_FROM_NAME = "Hallify"
+
+[[env.dev.d1_databases]]
+binding = "DB"
+database_name = "hallify-dev"
+database_id = "52a3ac14-99c3-4485-8daa-c7e602d94def"
+
+[[env.dev.r2_buckets]]
+binding = "R2"
+bucket_name = "hallify-uploads"
+
+# A plain route (not custom_domain): `dev.hallify.sk/*` is MORE SPECIFIC than the
+# prod worker's `*/*`, so route-specificity sends dev.hallify.sk to this worker.
+# (Routes take priority over Custom Domains, so a custom_domain here loses to `*/*`.)
+# Requires a proxied DNS record for dev.hallify.sk (the `*.hallify.sk` wildcard or a
+# dedicated `dev` record). SSL is covered by the Universal `*.hallify.sk` cert.
+[[env.dev.routes]]
+pattern = "dev.hallify.sk/*"
+zone_name = "hallify.sk"

@@ -1,4 +1,5 @@
-import sql from '$lib/db';
+import { dbFirst, dbRun } from '$lib/db/index';
+import type { D1Database } from '@cloudflare/workers-types';
 
 /**
  * Find or create a ticket for a reservation, then post a system message.
@@ -6,6 +7,7 @@ import sql from '$lib/db';
  * Non-critical: errors are logged but don't propagate.
  */
 export async function postSystemMessage(
+	db: D1Database,
 	userId: string,
 	reservationTitle: string,
 	body: string,
@@ -15,24 +17,33 @@ export async function postSystemMessage(
 		const subject = `[Reservation] ${reservationTitle}`;
 
 		// Find existing ticket or create one
-		let [ticket] = await sql<{ id: string }[]>`
-			SELECT id FROM tickets
-			WHERE user_id = ${userId} AND subject = ${subject}
-			ORDER BY created_at DESC LIMIT 1
-		`;
+		let ticket = await dbFirst<{ id: string }>(
+			db,
+			'SELECT id FROM tickets WHERE user_id = ? AND subject = ? ORDER BY created_at DESC LIMIT 1',
+			userId,
+			subject
+		);
 		if (!ticket) {
-			[ticket] = await sql<{ id: string }[]>`
-				INSERT INTO tickets (user_id, subject) VALUES (${userId}, ${subject}) RETURNING id
-			`;
+			const ticketId = crypto.randomUUID();
+			await dbRun(db, 'INSERT INTO tickets (id, user_id, subject) VALUES (?, ?, ?)', ticketId, userId, subject);
+			ticket = { id: ticketId };
 		}
 
-		await sql`
-			INSERT INTO messages (ticket_id, sender_id, body, message_type)
-			VALUES (${ticket.id}, ${senderId}, ${body}, 'system')
-		`;
-		await sql`UPDATE tickets SET updated_at = NOW(), status = 'open' WHERE id = ${ticket.id}`;
+		await dbRun(
+			db,
+			"INSERT INTO messages (id, ticket_id, sender_id, body, message_type) VALUES (?, ?, ?, ?, 'system')",
+			crypto.randomUUID(),
+			ticket!.id,
+			senderId,
+			body
+		);
+		await dbRun(
+			db,
+			"UPDATE tickets SET updated_at = datetime('now'), status = 'open' WHERE id = ?",
+			ticket!.id
+		);
 
-		return ticket.id;
+		return ticket!.id;
 	} catch (err) {
 		console.error('postSystemMessage failed:', err);
 		return null;

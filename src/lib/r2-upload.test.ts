@@ -1,162 +1,135 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-vi.mock('$env/static/private', () => ({
-	R2_ACCOUNT_ID: 'real_account_id',
-	R2_ENDPOINT: 'https://real_account_id.eu.r2.cloudflarestorage.com',
-	R2_ACCESS_KEY_ID: 'real_access_key',
-	R2_SECRET_ACCESS_KEY: 'real_secret',
-	R2_BUCKET_NAME: 'hallify',
-	R2_PUBLIC_URL: 'https://pub-test.r2.dev',
-}));
+// The endpoint writes through the Cloudflare R2 binding (platform.env.R2) and
+// returns a same-origin /uploads/<key> URL served by /uploads/[...key].
 
-const mockSend = vi.fn();
+interface PutCall {
+	key: string;
+	value: unknown;
+	options?: { httpMetadata?: { contentType?: string } };
+}
 
-vi.mock('@aws-sdk/client-s3', () => ({
-	S3Client: vi.fn(function () {
-		(this as { send: typeof mockSend }).send = mockSend;
-	}),
-	PutObjectCommand: vi.fn(function (params: unknown) {
-		Object.assign(this as object, params);
-	}),
-}));
+function makeR2() {
+	const calls: PutCall[] = [];
+	return {
+		calls,
+		put: vi.fn(async (key: string, value: unknown, options?: PutCall['options']) => {
+			calls.push({ key, value, options });
+			return {};
+		}),
+	};
+}
 
-// Helper to build a fake Request with a multipart form file
-function makeRequest(overrides: {
+function makeEvent(overrides: {
 	type?: string;
 	size?: number;
 	userId?: string | null;
+	withR2?: boolean;
+	noFile?: boolean;
+	r2?: ReturnType<typeof makeR2>;
 } = {}) {
-	const { type = 'image/jpeg', size = 1024, userId = 'user_1' } = overrides;
+	const {
+		type = 'image/jpeg',
+		size = 1024,
+		userId = 'user_1',
+		withR2 = true,
+		noFile = false,
+		r2 = makeR2(),
+	} = overrides;
 
-	const file = new File([new Uint8Array(size).fill(0)], 'photo.jpg', { type });
 	const formData = new FormData();
-	formData.append('file', file);
+	if (!noFile) {
+		const file = new File([new Uint8Array(size).fill(0)], 'photo.jpg', { type });
+		formData.append('file', file);
+	}
 
-	const request = new Request('http://localhost/api/upload/image', {
-		method: 'POST',
-		body: formData,
-	});
-
+	const request = new Request('http://localhost/api/upload/image', { method: 'POST', body: formData });
 	const locals = { user: userId ? { id: userId } : null } as App.Locals;
-	return { request, locals };
+	const platform = { env: withR2 ? { R2: r2 } : {} } as unknown as App.Platform;
+	return { request, locals, platform, r2 };
 }
 
 const { POST } = await import('../routes/api/upload/image/+server.js');
-const { PutObjectCommand } = await import('@aws-sdk/client-s3');
 
 describe('R2 upload – authentication', () => {
 	it('returns 401 when user is not logged in', async () => {
-		const { request, locals } = makeRequest({ userId: null });
-		await expect(POST({ request, locals } as never)).rejects.toMatchObject({ status: 401 });
+		const ev = makeEvent({ userId: null });
+		await expect(POST(ev as never)).rejects.toMatchObject({ status: 401 });
+	});
+});
+
+describe('R2 upload – configuration', () => {
+	it('returns 503 when the R2 binding is missing', async () => {
+		const ev = makeEvent({ withR2: false });
+		await expect(POST(ev as never)).rejects.toMatchObject({ status: 503 });
 	});
 });
 
 describe('R2 upload – file validation', () => {
-	beforeEach(() => {
-		mockSend.mockReset();
-		mockSend.mockResolvedValue({});
-	});
-
 	it('rejects unsupported file types', async () => {
-		const { request, locals } = makeRequest({ type: 'application/pdf' });
-		await expect(POST({ request, locals } as never)).rejects.toMatchObject({ status: 400 });
+		const ev = makeEvent({ type: 'application/pdf' });
+		await expect(POST(ev as never)).rejects.toMatchObject({ status: 400 });
 	});
 
-	it('accepts JPEG files', async () => {
-		const { request, locals } = makeRequest({ type: 'image/jpeg', size: 100 });
-		const res = await POST({ request, locals } as never);
-		expect(res.status).toBe(200);
-	});
-
-	it('accepts PNG files', async () => {
-		const { request, locals } = makeRequest({ type: 'image/png', size: 100 });
-		const res = await POST({ request, locals } as never);
-		expect(res.status).toBe(200);
-	});
-
-	it('accepts WebP files', async () => {
-		const { request, locals } = makeRequest({ type: 'image/webp', size: 100 });
-		const res = await POST({ request, locals } as never);
-		expect(res.status).toBe(200);
-	});
-
-	it('accepts GIF files', async () => {
-		const { request, locals } = makeRequest({ type: 'image/gif', size: 100 });
-		const res = await POST({ request, locals } as never);
-		expect(res.status).toBe(200);
+	it('accepts JPEG, PNG, WebP and GIF', async () => {
+		for (const type of ['image/jpeg', 'image/png', 'image/webp', 'image/gif']) {
+			const ev = makeEvent({ type, size: 100 });
+			const res = await POST(ev as never);
+			expect(res.status).toBe(200);
+		}
 	});
 
 	it('rejects files over 8 MB', async () => {
-		const { request, locals } = makeRequest({ size: 9 * 1024 * 1024 });
-		await expect(POST({ request, locals } as never)).rejects.toMatchObject({ status: 400 });
+		const ev = makeEvent({ size: 9 * 1024 * 1024 });
+		await expect(POST(ev as never)).rejects.toMatchObject({ status: 400 });
 	});
 
 	it('accepts files exactly at the 8 MB limit', async () => {
-		const { request, locals } = makeRequest({ size: 8 * 1024 * 1024 });
-		const res = await POST({ request, locals } as never);
+		const ev = makeEvent({ size: 8 * 1024 * 1024 });
+		const res = await POST(ev as never);
 		expect(res.status).toBe(200);
 	});
 
 	it('returns 400 when no file field is included', async () => {
-		const formData = new FormData();
-		const request = new Request('http://localhost/api/upload/image', {
-			method: 'POST',
-			body: formData,
-		});
-		const locals = { user: { id: 'user_1' } } as App.Locals;
-		await expect(POST({ request, locals } as never)).rejects.toMatchObject({ status: 400 });
+		const ev = makeEvent({ noFile: true });
+		await expect(POST(ev as never)).rejects.toMatchObject({ status: 400 });
 	});
 });
 
 describe('R2 upload – successful upload', () => {
-	beforeEach(() => {
-		mockSend.mockReset();
-		mockSend.mockResolvedValue({});
-		vi.mocked(PutObjectCommand).mockClear();
+	let r2: ReturnType<typeof makeR2>;
+	beforeEach(() => { r2 = makeR2(); });
+
+	it('stores the object under a halls/<userId>/ key', async () => {
+		const ev = makeEvent({ type: 'image/jpeg', size: 512, r2 });
+		await POST(ev as never);
+		expect(r2.calls[0].key).toMatch(/^halls\/user_1\/.*\.jpg$/);
 	});
 
-	it('passes the correct bucket name to S3', async () => {
-		const { request, locals } = makeRequest({ type: 'image/jpeg', size: 512 });
-		await POST({ request, locals } as never);
-		expect(PutObjectCommand).toHaveBeenCalledWith(expect.objectContaining({ Bucket: 'hallify' }));
-	});
-
-	it('returns a public URL under R2_PUBLIC_URL', async () => {
-		const { request, locals } = makeRequest({ type: 'image/jpeg', size: 512 });
-		const res = await POST({ request, locals } as never);
+	it('returns a same-origin /uploads/ URL pointing at the stored key', async () => {
+		const ev = makeEvent({ type: 'image/jpeg', size: 512, r2 });
+		const res = await POST(ev as never);
 		const body = await res.json();
-		expect(body.url).toMatch(/^https:\/\/pub-test\.r2\.dev\/halls\/user_1\//);
+		expect(body.url).toBe(`/uploads/${r2.calls[0].key}`);
+		expect(body.url).toMatch(/^\/uploads\/halls\/user_1\//);
+	});
+
+	it('passes the content type through to R2', async () => {
+		const ev = makeEvent({ type: 'image/webp', size: 256, r2 });
+		await POST(ev as never);
+		expect(r2.calls[0].options?.httpMetadata?.contentType).toBe('image/webp');
 	});
 
 	it('generates a unique object key per upload', async () => {
-		const r1 = makeRequest({ type: 'image/jpeg', size: 100 });
-		const r2 = makeRequest({ type: 'image/jpeg', size: 100 });
-		await POST({ request: r1.request, locals: r1.locals } as never);
-		await POST({ request: r2.request, locals: r2.locals } as never);
-		const key1 = vi.mocked(PutObjectCommand).mock.calls[0][0].Key;
-		const key2 = vi.mocked(PutObjectCommand).mock.calls[1][0].Key;
-		expect(key1).not.toBe(key2);
+		await POST(makeEvent({ type: 'image/jpeg', size: 100, r2 }) as never);
+		await POST(makeEvent({ type: 'image/jpeg', size: 100, r2 }) as never);
+		expect(r2.calls[0].key).not.toBe(r2.calls[1].key);
 	});
 
-	it('sets ContentType matching the uploaded file', async () => {
-		const { request, locals } = makeRequest({ type: 'image/webp', size: 256 });
-		await POST({ request, locals } as never);
-		expect(PutObjectCommand).toHaveBeenCalledWith(
-			expect.objectContaining({ ContentType: 'image/webp' })
-		);
-	});
-
-	it('sets long-lived cache control header', async () => {
-		const { request, locals } = makeRequest({ type: 'image/png', size: 256 });
-		await POST({ request, locals } as never);
-		expect(PutObjectCommand).toHaveBeenCalledWith(
-			expect.objectContaining({ CacheControl: 'public, max-age=31536000' })
-		);
-	});
-
-	it('returns 502 with message when S3 send throws', async () => {
-		mockSend.mockRejectedValueOnce(new Error('Network error'));
-		const { request, locals } = makeRequest({ type: 'image/jpeg', size: 100 });
-		await expect(POST({ request, locals } as never)).rejects.toMatchObject({ status: 502 });
+	it('returns 502 when the R2 put throws', async () => {
+		const failing = makeR2();
+		failing.put.mockRejectedValueOnce(new Error('Network error'));
+		const ev = makeEvent({ type: 'image/jpeg', size: 100, r2: failing });
+		await expect(POST(ev as never)).rejects.toMatchObject({ status: 502 });
 	});
 });

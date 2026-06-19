@@ -4,7 +4,7 @@
   import OrgSwitcher from './OrgSwitcher.svelte';
   import type { SessionUser } from '$lib/auth';
   import type { Branding, OrgContext } from '../../app.d';
-  import { t } from '$lib/i18n';
+  import { t, getLocale, chooseLocale, type Locale } from '$lib/i18n.svelte';
   import { themeStore } from '$lib/stores/theme.svelte';
 
   interface OrgOption { id: string; name: string; slug: string; role: string; }
@@ -14,10 +14,13 @@
     branding?: Branding;
     currentOrg?: OrgContext | null;
     orgs?: OrgOption[];
+    allOrgs?: { id: string; name: string; slug: string }[];
+    onBubble?: boolean;
     unreadMessages?: number;
+    unreadAnnouncements?: number;
   }
 
-  const { user, branding, currentOrg, orgs = [], unreadMessages = 0 }: Props = $props();
+  const { user, branding, currentOrg, orgs = [], allOrgs = [], onBubble = false, unreadMessages = 0, unreadAnnouncements = 0 }: Props = $props();
 
   const isOrgAdmin    = $derived(currentOrg?.role === 'owner' || currentOrg?.role === 'admin');
   const isPlatformAdmin = $derived(user?.is_platform_admin ?? false);
@@ -42,6 +45,11 @@
     themeStore.set(id);
     localStorage.setItem('hallify-theme', id);
   }
+
+  const LANGS: { id: Locale; label: string }[] = [
+    { id: 'sk', label: 'SK' },
+    { id: 'en', label: 'EN' },
+  ];
 
   function closeUserMenu(e: MouseEvent) {
     if (!(e.target as HTMLElement).closest('.user-footer')) userMenuOpen = false;
@@ -68,36 +76,40 @@
     <!-- Org switcher -->
     {#if currentOrg}
       <div class="sidebar-org">
-        <OrgSwitcher {currentOrg} {orgs} returnTo={$page.url.pathname} />
+        <OrgSwitcher {currentOrg} {orgs} {allOrgs} {onBubble} isPlatformAdmin={!!isPlatformAdmin} returnTo={$page.url.pathname} />
       </div>
     {/if}
 
     <!-- Navigation -->
     <nav class="sidebar-nav">
 
-      <!-- Main -->
-      <div class="nav-section">
-        <a href="/app/" class="nav-item" class:active={$page.url.pathname === '/app/'}>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
-          </svg>
-          {t.nav.home}
-        </a>
-        <a href="/app/messages" class="nav-item" class:active={$page.url.pathname.startsWith('/app/messages')}>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-          </svg>
-          {t.nav.messages}
-          {#if unreadMessages > 0}
-            <span class="nav-badge">{unreadMessages}</span>
-          {/if}
-        </a>
-      </div>
+      <!-- Main (personal home + messages) — only for plain members.
+           Owners/admins live in the Admin section, which has its own dashboard
+           and its own client-messages view, so these two would be redundant. -->
+      {#if !isOrgAdmin}
+        <div class="nav-section">
+          <a href="/app/" class="nav-item" class:active={$page.url.pathname === '/app/'}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+            </svg>
+            {t.nav.home}
+          </a>
+          <a href="/app/messages" class="nav-item" class:active={$page.url.pathname.startsWith('/app/messages')}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+            </svg>
+            {t.nav.messages}
+            {#if unreadMessages > 0}
+              <span class="nav-badge">{unreadMessages}</span>
+            {/if}
+          </a>
+        </div>
+      {/if}
 
       <!-- Admin management -->
       {#if isOrgAdmin}
         <div class="nav-section">
-          <span class="nav-label">Admin</span>
+          <span class="nav-label">{t.sidebar.sectionAdmin}</span>
           <a href="/app/manage" class="nav-item" class:active={$page.url.pathname === '/app/manage'}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/>
@@ -122,6 +134,7 @@
             </svg>
             {t.nav.reservations}
           </a>
+          <!-- RSVP feature hidden for now (kept route + i18n intact for re-enabling later)
           <a href="/app/manage/rsvp-templates" class="nav-item" class:active={$page.url.pathname.startsWith('/app/manage/rsvp-templates')}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
@@ -130,6 +143,7 @@
             </svg>
             {t.nav.rsvpTemplates}
           </a>
+          -->
           <a href="/app/manage/calendar" class="nav-item" class:active={$page.url.pathname === '/app/manage/calendar'}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <rect x="3" y="4" width="18" height="18" rx="2"/>
@@ -143,12 +157,20 @@
               <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
             </svg>
             {t.nav.messages}
+            {#if unreadMessages > 0}<span class="nav-ping" aria-label={t.sidebar.unreadMessages}></span>{/if}
           </a>
         </div>
 
         <!-- Org admin -->
         <div class="nav-section">
-          <span class="nav-label">Organization</span>
+          <span class="nav-label">{t.sidebar.sectionOrganization}</span>
+          <a href="/app/announcements" class="nav-item" class:active={$page.url.pathname.startsWith('/app/announcements')}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M3 11l18-5v12L3 14v-3z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/>
+            </svg>
+            {t.sidebar.announcements}
+            {#if unreadAnnouncements > 0}<span class="nav-ping" aria-label={t.sidebar.unreadAnnouncements}></span>{/if}
+          </a>
           <a href="/app/manage/members" class="nav-item" class:active={$page.url.pathname.startsWith('/app/manage/members')}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
@@ -156,14 +178,14 @@
               <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
               <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
             </svg>
-            Members
+            {t.sidebar.members}
           </a>
           <a href="/app/billing" class="nav-item" class:active={$page.url.pathname.startsWith('/app/billing')}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <rect x="1" y="4" width="22" height="16" rx="2" ry="2"/>
               <line x1="1" y1="10" x2="23" y2="10"/>
             </svg>
-            Billing &amp; Plan
+            {t.sidebar.billingPlan}
           </a>
           <a href="/app/manage/settings/branding" class="nav-item" class:active={$page.url.pathname.startsWith('/app/manage/settings/branding')}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -173,21 +195,35 @@
               <circle cx="6.5" cy="12.5" r=".5" fill="currentColor"/>
               <path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z"/>
             </svg>
-            Customize
+            {t.sidebar.customize}
+          </a>
+          <a href="/app/manage/domains" class="nav-item" class:active={$page.url.pathname.startsWith('/app/manage/domains')}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10"/>
+              <line x1="2" y1="12" x2="22" y2="12"/>
+              <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+            </svg>
+            {t.sidebar.domains}
           </a>
           <a href="/app/manage/settings/webhooks" class="nav-item" class:active={$page.url.pathname.startsWith('/app/manage/settings/webhooks')}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
               <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
             </svg>
-            Webhooks
+            {t.sidebar.webhooks}
           </a>
-          <a href="/app/manage/settings" class="nav-item" class:active={$page.url.pathname === '/app/manage/settings'}>
+          <a href="/app/manage/settings/email" class="nav-item" class:active={$page.url.pathname.startsWith('/app/manage/settings/email')}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <circle cx="12" cy="12" r="3"/>
-              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+              <rect x="2" y="4" width="20" height="16" rx="2"/>
+              <path d="m22 7-10 5L2 7"/>
             </svg>
-            {t.settings.tabOverview}
+            {t.settings.tabEmail}
+          </a>
+          <a href="/app/manage/help" class="nav-item" class:active={$page.url.pathname.startsWith('/app/manage/help')}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+            </svg>
+            {t.sidebar.help}
           </a>
         </div>
       {/if}
@@ -195,31 +231,62 @@
       <!-- Platform admin -->
       {#if isPlatformAdmin}
         <div class="nav-section">
-          <span class="nav-label">Platform</span>
+          <span class="nav-label">{t.sidebar.sectionPlatform}</span>
           <a href="/app/platform" class="nav-item" class:active={$page.url.pathname === '/app/platform'}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/>
               <rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>
             </svg>
-            Overview
+            {t.sidebar.overview}
           </a>
           <a href="/app/platform/orgs" class="nav-item" class:active={$page.url.pathname.startsWith('/app/platform/orgs')}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
             </svg>
-            Organizations
+            {t.sidebar.organizations}
+          </a>
+          <a href="/app/platform/announcements" class="nav-item" class:active={$page.url.pathname.startsWith('/app/platform/announcements')}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M3 11l18-5v12L3 14v-3z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/>
+            </svg>
+            {t.sidebar.announcements}
           </a>
           <a href="/app/platform/users" class="nav-item" class:active={$page.url.pathname.startsWith('/app/platform/users')}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
               <circle cx="9" cy="7" r="4"/>
             </svg>
-            All Users
+            {t.sidebar.allUsers}
+          </a>
+          <a href="/app/platform/email" class="nav-item" class:active={$page.url.pathname.startsWith('/app/platform/email')}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="2" y="4" width="20" height="16" rx="2"/>
+              <path d="m22 7-10 5L2 7"/>
+            </svg>
+            {t.settings.tabEmail}
+          </a>
+          <a href="/app/platform/closed-orgs" class="nav-item" class:active={$page.url.pathname.startsWith('/app/platform/closed-orgs')}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="4" width="18" height="4" rx="1"/><path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8"/><line x1="10" y1="12" x2="14" y2="12"/>
+            </svg>
+            {t.sidebar.closedOrgs}
           </a>
         </div>
       {/if}
 
     </nav>
+
+    <!-- Language switcher -->
+    <div class="lang-switcher">
+      {#each LANGS as l}
+        <button
+          class="lang-btn"
+          class:active={getLocale() === l.id}
+          onclick={() => chooseLocale(l.id)}
+          type="button"
+        >{l.label}</button>
+      {/each}
+    </div>
 
     <!-- Theme switcher -->
     <div class="theme-switcher">
@@ -387,6 +454,18 @@
     text-align: center;
     line-height: 1.4;
   }
+  .nav-ping {
+    margin-left: auto;
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--danger, #ef4444); flex-shrink: 0;
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--danger, #ef4444) 70%, transparent);
+    animation: nav-ping-pulse 1.8s ease-out infinite;
+  }
+  @keyframes nav-ping-pulse {
+    0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--danger, #ef4444) 60%, transparent); }
+    70% { box-shadow: 0 0 0 6px transparent; }
+    100% { box-shadow: 0 0 0 0 transparent; }
+  }
 
   /* User footer */
   .user-footer {
@@ -549,5 +628,32 @@
 
   .theme-label {
     line-height: 1;
+  }
+
+  .lang-switcher {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 8px 12px 0;
+  }
+  .lang-btn {
+    flex: 1;
+    padding: 5px 6px;
+    border-radius: 6px;
+    border: 1px solid transparent;
+    background: none;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--text-subtle);
+    transition: background .1s, border-color .1s, color .1s;
+  }
+  .lang-btn:hover { background: var(--bg-hover); color: var(--text-muted); }
+  .lang-btn.active {
+    background: var(--bg-hover);
+    border-color: var(--border);
+    color: var(--text-base);
+    font-weight: 600;
   }
 </style>

@@ -1,8 +1,9 @@
 import { fail, redirect } from '@sveltejs/kit';
 import bcrypt from 'bcryptjs';
-import sql from '$lib/db/index';
+import { dbFirst } from '$lib/db/index';
 import type { UserRow } from '$lib/db/index';
 import { createSession } from '$lib/auth';
+import { st } from '$lib/i18n-server';
 import type { Actions, PageServerLoad } from './$types';
 
 export const load: PageServerLoad = ({ locals }) => {
@@ -11,24 +12,23 @@ export const load: PageServerLoad = ({ locals }) => {
 };
 
 export const actions: Actions = {
-	default: async ({ request, cookies }) => {
+	default: async ({ request, cookies, locals }) => {
 		const data = await request.formData();
 		const email = String(data.get('email') ?? '').toLowerCase().trim();
 		const password = String(data.get('password') ?? '');
 
 		if (!email || !password) {
-			return fail(400, { error: 'Email and password are required.' });
+			return fail(400, { error: st(locals.locale).serverErrors.emailAndPasswordRequired });
 		}
 
-		const [user] = await sql<UserRow[]>`
-			SELECT * FROM users WHERE email = ${email}
-		`;
+		// Main app is for org/platform users only; clients sign in on their org's bubble.
+		const user = await dbFirst<UserRow>(locals.db, 'SELECT * FROM users WHERE email = ? AND org_id IS NULL', email);
 
 		if (!user || !(await bcrypt.compare(password, user.password_hash))) {
-			return fail(400, { error: 'Invalid email or password.' });
+			return fail(400, { error: st(locals.locale).serverErrors.invalidEmailOrPassword });
 		}
 
-		await createSession(user.id, cookies);
+		await createSession(user.id, cookies, locals.db);
 		redirect(303, '/app/');
 	}
 };

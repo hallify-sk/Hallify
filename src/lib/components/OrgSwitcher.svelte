@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { OrgContext } from '../../app.d';
+  import { t } from '$lib/i18n.svelte';
 
   interface OrgOption {
     id: string;
@@ -11,12 +12,32 @@
   interface Props {
     currentOrg: OrgContext | null | undefined;
     orgs: OrgOption[];
+    allOrgs?: { id: string; name: string; slug: string }[];
+    isPlatformAdmin?: boolean;
+    onBubble?: boolean;
     returnTo?: string;
   }
 
-  const { currentOrg, orgs, returnTo = '/' }: Props = $props();
+  const { currentOrg, orgs, allOrgs = [], isPlatformAdmin = false, onBubble = false, returnTo = '/' }: Props = $props();
 
+  const SEARCH_THRESHOLD = 8;
   let open = $state(false);
+  let search = $state('');
+
+  // Member orgs carry a role; for platform admins, surface every org and label
+  // the ones they aren't a member of as "view as".
+  const memberRole = $derived(new Map(orgs.map(o => [o.id, o.role])));
+  const sourceOrgs = $derived(
+    isPlatformAdmin && allOrgs.length
+      ? allOrgs.map(o => ({ ...o, role: memberRole.get(o.id) ?? 'view as' }))
+      : orgs
+  );
+  const showSearch = $derived(isPlatformAdmin && sourceOrgs.length > SEARCH_THRESHOLD);
+  const displayOrgs = $derived.by(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return sourceOrgs;
+    return sourceOrgs.filter(o => o.name.toLowerCase().includes(q) || (o.slug ?? '').toLowerCase().includes(q));
+  });
 
   function close(e: MouseEvent) {
     if (!(e.target as HTMLElement).closest('.org-switcher')) open = false;
@@ -33,7 +54,7 @@
 <div class="org-switcher">
   <button class="org-btn" onclick={() => open = !open} type="button">
     <div class="org-icon">{currentOrg?.name?.[0]?.toUpperCase() ?? '?'}</div>
-    <span class="org-name">{currentOrg?.name ?? 'No organization'}</span>
+    <span class="org-name">{currentOrg?.name ?? t.sidebar.noOrganization}</span>
     <svg class="chevron" class:rotated={open} width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
       <polyline points="6 9 12 15 18 9"/>
     </svg>
@@ -41,34 +62,50 @@
 
   {#if open}
     <div class="org-dropdown">
-      <p class="dropdown-label">Switch organization</p>
-      {#each orgs as org}
-        <form method="POST" action="/org/switch">
-          <input type="hidden" name="org_id" value={org.id} />
-          <input type="hidden" name="return_to" value={returnTo} />
-          <button type="submit" class="org-option" class:active={org.id === currentOrg?.id}>
-            <div class="org-option-icon">{org.name[0].toUpperCase()}</div>
-            <div class="org-option-info">
-              <span class="org-option-name">{org.name}</span>
-              <span class="org-option-role">{org.role}</span>
-            </div>
-            {#if org.id === currentOrg?.id}
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                <polyline points="20 6 9 17 4 12"/>
-              </svg>
-            {/if}
-          </button>
-        </form>
-      {/each}
+      <p class="dropdown-label">{isPlatformAdmin && allOrgs.length ? t.sidebar.switchViewOrg : t.sidebar.switchOrg}</p>
 
-      <div class="dropdown-divider"></div>
-      <a href="/org/new" class="org-option new-org">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <line x1="12" y1="5" x2="12" y2="19"/>
-          <line x1="5" y1="12" x2="19" y2="12"/>
-        </svg>
-        Create organization
-      </a>
+      {#if showSearch}
+        <div class="dropdown-search">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <!-- svelte-ignore a11y_autofocus -->
+          <input type="text" placeholder={t.sidebar.searchOrgs} bind:value={search} autocomplete="off" spellcheck="false" />
+        </div>
+      {/if}
+
+      <div class="org-list">
+        {#each displayOrgs as org}
+          <form method="POST" action="/app/org/switch">
+            <input type="hidden" name="org_id" value={org.id} />
+            <input type="hidden" name="return_to" value={returnTo} />
+            <button type="submit" class="org-option" class:active={org.id === currentOrg?.id}>
+              <div class="org-option-icon">{org.name[0].toUpperCase()}</div>
+              <div class="org-option-info">
+                <span class="org-option-name">{org.name}</span>
+                <span class="org-option-role" class:viewas={org.role === 'view as'}>{org.role}</span>
+              </div>
+              {#if org.id === currentOrg?.id}
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                  <polyline points="20 6 9 17 4 12"/>
+                </svg>
+              {/if}
+            </button>
+          </form>
+        {/each}
+        {#if displayOrgs.length === 0}
+          <p class="no-match">{t.sidebar.noOrgsMatch} “{search}”.</p>
+        {/if}
+      </div>
+
+      {#if !onBubble}
+        <div class="dropdown-divider"></div>
+        <a href="/app/org/new" class="org-option new-org">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="12" y1="5" x2="12" y2="19"/>
+            <line x1="5" y1="12" x2="19" y2="12"/>
+          </svg>
+          {t.sidebar.createOrganization}
+        </a>
+      {/if}
     </div>
   {/if}
 </div>
@@ -187,4 +224,14 @@
   .dropdown-divider { height: 1px; background: var(--border-subtle); margin: 4px 0; }
 
   .new-org { font-size: 12px; color: var(--accent); font-weight: 600; }
+
+  .dropdown-search { display: flex; align-items: center; gap: 6px; padding: 5px 9px; margin: 2px 0 4px; border: 1px solid var(--border); border-radius: 7px; background: var(--bg-panel2, var(--bg-base)); }
+  .dropdown-search svg { color: var(--text-subtle); flex-shrink: 0; }
+  .dropdown-search input { flex: 1; border: none; background: none; outline: none; font-family: inherit; font-size: 12px; color: var(--text-base); padding: 1px 0; }
+
+  .org-list { max-height: 320px; overflow-y: auto; }
+
+  .org-option-role.viewas { color: var(--accent); font-weight: 700; }
+
+  .no-match { font-size: 11px; color: var(--text-subtle); padding: 8px 9px; margin: 0; text-align: center; }
 </style>

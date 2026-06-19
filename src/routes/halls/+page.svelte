@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { PageData } from './$types';
+  import { t } from '$lib/i18n.svelte';
 
   interface Props { data: PageData; }
   const { data }: Props = $props();
@@ -11,11 +12,11 @@
     return [];
   }
 
-  const AMENITY_LABELS: Record<string, string> = {
-    parking: 'Parking', catering: 'Catering', av: 'AV Equipment',
-    wifi: 'WiFi', ac: 'Air Conditioning', accessible: 'Wheelchair Access',
-    outdoor: 'Outdoor Space', stage: 'Stage', dancefloor: 'Dance Floor', bar: 'Bar / Drinks',
-  };
+  const AMENITY_LABELS = $derived<Record<string, string>>({
+    parking: t.hallDir.amenityParking, catering: t.hallDir.amenityCatering, av: t.hallDir.amenityAv,
+    wifi: t.hallDir.amenityWifi, ac: t.hallDir.amenityAc, accessible: t.hallDir.amenityAccessible,
+    outdoor: t.hallDir.amenityOutdoor, stage: t.hallDir.amenityStage, dancefloor: t.hallDir.amenityDancefloor, bar: t.hallDir.amenityBar,
+  });
 
   let search = $state('');
   let minCap = $state(0);
@@ -33,26 +34,26 @@
   );
 </script>
 
-<svelte:head><title>Browse halls – {data.domainOrg.name}</title></svelte:head>
+<svelte:head><title>{t.hallDir.browseHalls} – {data.domainOrg.name}</title></svelte:head>
 
 <div class="page">
 
   <!-- ── Hero ── -->
   <div class="hero">
-    <h1 class="hero-title">Find the perfect venue</h1>
-    <p class="hero-sub">Browse halls and book the right space for your event.</p>
+    <h1 class="hero-title">{t.hallDir.heroTitle}</h1>
+    <p class="hero-sub">{t.hallDir.heroSub}</p>
   </div>
 
   <!-- ── Filters ── -->
   <div class="filters">
     <div class="filter-search">
       <svg class="search-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-      <input class="filter-input" type="search" placeholder="Search halls, location…" bind:value={search} />
+      <input class="filter-input" type="search" placeholder={t.hallDir.searchPlaceholder} bind:value={search} />
     </div>
     <div class="filter-cap">
-      <label class="filter-cap-label" for="min-cap">Min. guests</label>
+      <label class="filter-cap-label" for="min-cap">{t.hallDir.minGuests}</label>
       <input class="filter-input filter-input-sm" id="min-cap" type="number" min="0" max="5000" step="10"
-        bind:value={minCap} placeholder="Any" />
+        bind:value={minCap} placeholder={t.hallDir.anyPlaceholder} />
     </div>
   </div>
 
@@ -65,7 +66,7 @@
           <line x1="3" y1="9" x2="21" y2="9"/>
           <line x1="9" y1="21" x2="9" y2="9"/>
         </svg>
-        <p>{data.halls.length === 0 ? 'No halls listed yet.' : 'No halls match your search.'}</p>
+        <p>{data.halls.length === 0 ? t.hallDir.noHallsListed : t.hallDir.noHallsMatch}</p>
       </div>
     {:else}
       {#each filtered as h}
@@ -92,7 +93,7 @@
             <div class="hall-meta">
               <span class="hall-cap">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
-                {h.max_people} guests
+                {h.max_people} {t.hallDir.guests}
               </span>
               {#each amenities.slice(0, 3) as a}
                 <span class="hall-chip">{AMENITY_LABELS[a] ?? a}</span>

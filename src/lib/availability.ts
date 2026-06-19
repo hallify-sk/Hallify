@@ -1,0 +1,190 @@
+// Single source of truth for reservation availability: whole-day model,
+// past-date / min-advance / capacity / blocked / taken / held rules, and the
+// hold (soft-lock) lifecycle. Reused by the org wizard, both client booking
+// forms, and the /api/holds endpoint.
+import { dbAll, dbFirst, dbRun } from '$lib/db/index';
+import { getPlan } from '$lib/plans';
+import type { PlanId } from '$lib/plans';
+import { st } from '$lib/i18n-server';
+import type { D1Database } from '@cloudflare/workers-types';
+
+export const HOLD_MINUTES = 15;
+
+// ── Date helpers (timezone-safe, string-keyed YYYY-MM-DD) ──
+export function isoLocal(d: Date): string {
+	return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+export function parseISO(s: string): Date { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d); }
+export function addDays(d: Date, n: number): Date { const r = new Date(d); r.setDate(d.getDate() + n); return r; }
+export function todayISO(): string { return isoLocal(new Date()); }
+
+/** Earliest date a hall can be booked = today + min_days_advance. */
+export function earliestBookableISO(minDaysAdvance: number | null | undefined): string {
+	return isoLocal(addDays(new Date(), Math.max(0, minDaysAdvance ?? 0)));
+}
+
+// ── Blocking rules (hall_blocks) ──
+export interface BlockRow {
+	block_type: string;
+	date_from: string | null;
+	date_to: string | null;
+	days_of_week: number[]; // JS getDay() values (0 = Sun)
+}
+
+export function isDateBlocked(blocks: BlockRow[], dateISO: string): boolean {
+	const jsDow = parseISO(dateISO).getDay();
+	return blocks.some(b =>
+		(b.block_type === 'date_range' && b.date_from && b.date_to &&
+			dateISO >= b.date_from.slice(0, 10) && dateISO <= b.date_to.slice(0, 10)) ||
+		(b.block_type === 'weekly' && b.days_of_week.includes(jsDow))
+	);
+}
+
+/** Expand blocking rules into a set of blocked ISO dates over [fromISO, toISO]. */
+export function expandBlocks(blocks: BlockRow[], fromISO: string, toISO: string): Set<string> {
+	const out = new Set<string>();
+	const end = parseISO(toISO);
+	for (let d = parseISO(fromISO); d <= end; d = addDays(d, 1)) {
+		const key = isoLocal(d);
+		if (isDateBlocked(blocks, key)) out.add(key);
+	}
+	return out;
+}
+
+// ── Taken / held lookups ──
+/** Dates with a non-cancelled reservation in [fromISO, toISO] — the canonical "taken" rule. */
+export async function getTakenDates(db: D1Database, hallId: string, fromISO: string, toISO: string): Promise<string[]> {
+	const rows = await dbAll<{ event_date: string }>(db,
+		`SELECT DISTINCT substr(event_date, 1, 10) AS event_date FROM reservations
+		 WHERE hall_id = ? AND status != 'cancelled'
+		   AND substr(event_date, 1, 10) >= ? AND substr(event_date, 1, 10) <= ?`,
+		hallId, fromISO, toISO);
+	return rows.map(r => r.event_date);
+}
+
+/** Active holds owned by someone other than `userId`. */
+export async function getHeldDatesByOthers(db: D1Database, hallId: string, userId: string): Promise<string[]> {
+	const rows = await dbAll<{ event_date: string }>(db,
+		`SELECT event_date FROM reservation_holds
+		 WHERE hall_id = ? AND user_id != ? AND expires_at > datetime('now')`,
+		hallId, userId);
+	return rows.map(r => r.event_date);
+}
+
+// ── Hold lifecycle ──
+export interface AcquireResult { ok: boolean; reason?: 'taken' | 'held'; ttl?: number; }
+
+/** Acquire a fresh hold or renew the caller's own. Rejects if the day is taken
+ *  or actively held by another user. Hold expiry is computed in SQL so it
+ *  string-compares correctly against datetime('now'). */
+export async function acquireOrRenewHold(
+	db: D1Database,
+	opts: { hallId: string; eventDate: string; userId: string; orgId?: string | null; minutes?: number }
+): Promise<AcquireResult> {
+	const { hallId, eventDate, userId, orgId = null, minutes = HOLD_MINUTES } = opts;
+	const mod = `+${minutes} minutes`;
+
+	await dbRun(db, "DELETE FROM reservation_holds WHERE expires_at <= datetime('now')");
+
+	const taken = await dbFirst<{ id: string }>(db,
+		"SELECT id FROM reservations WHERE hall_id = ? AND event_date = ? AND status != 'cancelled' LIMIT 1",
+		hallId, eventDate);
+	if (taken) return { ok: false, reason: 'taken' };
+
+	const active = await dbFirst<{ id: string; user_id: string }>(db,
+		"SELECT id, user_id FROM reservation_holds WHERE hall_id = ? AND event_date = ? AND expires_at > datetime('now') LIMIT 1",
+		hallId, eventDate);
+
+	if (active) {
+		if (active.user_id !== userId) return { ok: false, reason: 'held' };
+		await dbRun(db, "UPDATE reservation_holds SET expires_at = datetime('now', ?), org_id = ? WHERE id = ?", mod, orgId, active.id);
+		return { ok: true, ttl: minutes * 60 };
+	}
+
+	try {
+		await dbRun(db,
+			`INSERT INTO reservation_holds (id, hall_id, event_date, user_id, org_id, expires_at)
+			 VALUES (?, ?, ?, ?, ?, datetime('now', ?))`,
+			crypto.randomUUID(), hallId, eventDate, userId, orgId, mod);
+		return { ok: true, ttl: minutes * 60 };
+	} catch {
+		// Lost a race on the unique index — someone else just grabbed it.
+		return { ok: false, reason: 'held' };
+	}
+}
+
+export async function releaseHold(db: D1Database, hallId: string, eventDate: string, userId: string): Promise<void> {
+	await dbRun(db, 'DELETE FROM reservation_holds WHERE hall_id = ? AND event_date = ? AND user_id = ?', hallId, eventDate, userId);
+}
+
+// ── Final pre-insert validation (used by every submit) ──
+export interface BookableHall {
+	id: string;
+	org_id: string;
+	allow_reservations: number | boolean;
+	max_people: number | null;
+	min_days_advance: number | null;
+	plan_locked?: number | boolean;
+}
+
+export async function assertCanBook(
+	db: D1Database,
+	hall: BookableHall,
+	eventDate: string,
+	userId: string,
+	numGuests: number | null,
+	locale: 'sk' | 'en' = 'sk'
+): Promise<{ ok: boolean; reason?: string }> {
+	const e = st(locale).serverErrors;
+	if (hall.plan_locked) return { ok: false, reason: e.hallUnavailable };
+	if (!hall.allow_reservations) return { ok: false, reason: e.hallNotAcceptingBookings };
+	if (!/^\d{4}-\d{2}-\d{2}$/.test(eventDate)) return { ok: false, reason: e.chooseValidDate };
+
+	// Per-hall/month reservation cap (by the event's calendar month; excludes
+	// cancelled). The number comes from the hall's org plan.
+	const sub = await dbFirst<{ plan: string | null }>(db, 'SELECT plan FROM subscriptions WHERE org_id = ?', hall.org_id);
+	const monthLimit = getPlan((sub?.plan ?? 'free') as PlanId).limits.maxReservationsPerHallMonth;
+	if (monthLimit !== -1) {
+		const mc = await dbFirst<{ n: number }>(db,
+			"SELECT COUNT(*) AS n FROM reservations WHERE hall_id = ? AND status != 'cancelled' AND substr(event_date, 1, 7) = ?",
+			hall.id, eventDate.slice(0, 7));
+		if ((mc?.n ?? 0) >= monthLimit) {
+			return { ok: false, reason: e.hallFullyBookedMonth(eventDate.slice(0, 7), monthLimit) };
+		}
+	}
+
+	const minAdv = hall.min_days_advance ?? 0;
+	if (eventDate < earliestBookableISO(minAdv)) {
+		return { ok: false, reason: minAdv > 0 ? e.minDaysAdvance(minAdv) : e.dateInPast };
+	}
+
+	const blocks = await dbAll<BlockRow>(db,
+		'SELECT block_type, date_from, date_to, days_of_week FROM hall_blocks WHERE hall_id = ?', hall.id);
+	const normalized = blocks.map(b => ({ ...b, days_of_week: parseDow(b.days_of_week as unknown) }));
+	if (isDateBlocked(normalized, eventDate)) return { ok: false, reason: e.dateUnavailable };
+
+	if (numGuests != null && hall.max_people && hall.max_people > 0 && numGuests > hall.max_people) {
+		return { ok: false, reason: e.hallMaxCapacityGuests(hall.max_people) };
+	}
+
+	const taken = await dbFirst<{ id: string }>(db,
+		"SELECT id FROM reservations WHERE hall_id = ? AND event_date = ? AND status != 'cancelled' LIMIT 1",
+		hall.id, eventDate);
+	if (taken) return { ok: false, reason: e.hallAlreadyBooked };
+
+	const held = await dbFirst<{ user_id: string }>(db,
+		"SELECT user_id FROM reservation_holds WHERE hall_id = ? AND event_date = ? AND expires_at > datetime('now') LIMIT 1",
+		hall.id, eventDate);
+	if (held && held.user_id !== userId) return { ok: false, reason: e.dateBeingBooked };
+
+	return { ok: true };
+}
+
+/** hall_blocks.days_of_week is stored as a JSON string; normalize to number[]. */
+export function parseDow(value: unknown): number[] {
+	if (Array.isArray(value)) return value as number[];
+	if (typeof value === 'string' && value.trim()) {
+		try { const p = JSON.parse(value); return Array.isArray(p) ? p : []; } catch { return []; }
+	}
+	return [];
+}

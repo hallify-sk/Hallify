@@ -1,9 +1,10 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
-	import { goto } from '$app/navigation';
-	import { untrack } from 'svelte';
-	import { t } from '$lib/i18n';
+	import { goto, beforeNavigate } from '$app/navigation';
+	import { untrack, onDestroy } from 'svelte';
+	import { t } from '$lib/i18n.svelte';
 	import { migrateToMultiFloor } from '$lib/floorplan-types';
+	import { parseEventTypes, normalizeEventType } from '$lib/eventTypes';
 	import SectionHeader from '$lib/components/SectionHeader.svelte';
 	import MiniCalendar from '$lib/components/MiniCalendar.svelte';
 	import type { PageData, ActionData } from './$types';
@@ -11,71 +12,133 @@
 	interface Props { data: PageData; form: ActionData; }
 	const { data, form }: Props = $props();
 
+	function isoLocal(d: Date) { return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; }
+
 	let selectedHall = $state<string>(untrack(() => data.selectedHallId ?? ''));
 	let selectedTemplate = $state('');
 	let eventType = $state('');
-	let selectedDate = $state('');
+	let selectedDate = $state<string>('');
 	let step = $state(1);
 
+	// Optional event time + guests
+	let specifyTime = $state(false);
+	let startTime = $state('');
+	let endTime = $state('');
+	let numGuests = $state('');
+
+	// Hold (anti-race) state
+	let holdSeconds = $state(0);
+	let holdError = $state('');
+	let acquiring = $state(false);
+	let heartbeat: ReturnType<typeof setInterval> | null = null;
+	let ticker: ReturnType<typeof setInterval> | null = null;
+
 	const selectedHallData = $derived(data.halls.find(h => h.id === selectedHall));
+	const minDate = $derived(selectedHallData?.earliestDate ?? isoLocal(new Date()));
+	const holdLabel = $derived(`${Math.floor(holdSeconds / 60)}:${String(holdSeconds % 60).padStart(2, '0')}`);
+	const holdActive = $derived(holdSeconds > 0 && !holdError);
 
 	const EVENT_TYPES_KEYS: (keyof typeof t.eventTypes)[] = ['wedding', 'ball', 'conference', 'birthday', 'other'];
 
 	const filteredTemplates = $derived(
 		data.templates.filter(tmpl => {
-			if (!eventType) return true;
-			if (!tmpl.event_type) return true;
-			const key = eventType.toLowerCase();
-			return tmpl.event_type.toLowerCase() === key ||
-				tmpl.event_type.toLowerCase() === (t.eventTypes as Record<string, string>)[key];
+			const sel = normalizeEventType(eventType);
+			if (!sel) return true;
+			const types = parseEventTypes(tmpl.event_type as string | null);
+			return types.length === 0 || types.includes(sel);
 		})
 	);
 
-	const maxStep = $derived(selectedHall && filteredTemplates.length > 0 ? 3 : 2);
+	const showLayoutStep = $derived(!!selectedHallData?.custom_layouts && filteredTemplates.length > 0);
+	const maxStep = $derived(showLayoutStep ? 3 : 2);
+	const layoutRequired = $derived(!!selectedHallData?.force_layouts);
+	const overCapacity = $derived(!!selectedHallData && !!numGuests && Number(numGuests) > selectedHallData.max_people);
+	const canSubmit = $derived(!!selectedHall && !!selectedDate && holdActive && !overCapacity && (!layoutRequired || !!selectedTemplate));
 
-	// Compute blocked dates as ISO strings for MiniCalendar
+	// Blocked dates from hall rules (taken/held are passed separately to the calendar).
 	const blockedDateStrings = $derived.by(() => {
 		const result: string[] = [];
-		const blocks = data.blocks;
-		for (const b of blocks) {
+		for (const b of data.blocks) {
 			if (b.block_type === 'date_range' && b.date_from && b.date_to) {
-				const start = new Date(b.date_from);
 				const end = new Date(b.date_to);
-				for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-					result.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`);
-				}
+				for (let d = new Date(b.date_from); d <= end; d.setDate(d.getDate() + 1)) result.push(isoLocal(d));
 			}
 			if (b.block_type === 'weekly' && b.days_of_week) {
 				const now = new Date();
-				for (let i = 0; i < 180; i++) {
-					const d = new Date(now);
-					d.setDate(d.getDate() + i);
-					if (b.days_of_week.includes(d.getDay())) {
-						result.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`);
-					}
+				for (let i = 0; i < 540; i++) {
+					const d = new Date(now); d.setDate(d.getDate() + i);
+					if ((b.days_of_week as number[]).includes(d.getDay())) result.push(isoLocal(d));
 				}
 			}
 		}
 		return result;
 	});
 
-	const allBlockedDates = $derived([...new Set([...blockedDateStrings, ...data.takenDates])]);
+	// ── Hold lifecycle ──
+	function clearTimers() { if (heartbeat) clearInterval(heartbeat); if (ticker) clearInterval(ticker); heartbeat = ticker = null; }
+
+	function releaseHold(hall = selectedHall, date = selectedDate) {
+		if (!hall || !date) return;
+		try {
+			navigator.sendBeacon?.('/api/holds', new Blob([JSON.stringify({ hallId: hall, date, action: 'release' })], { type: 'application/json' }));
+		} catch { /* best effort */ }
+	}
+
+	async function acquireHold(date: string) {
+		holdError = '';
+		acquiring = true;
+		try {
+			const res = await fetch('/api/holds', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ hallId: selectedHall, date }) });
+			const body = await res.json().catch(() => ({}));
+			if (!res.ok || !body.ok) {
+				holdError = body.reason === 'taken'
+					? t.publicBooking.holdTaken
+					: t.publicBooking.holdInProgress;
+				selectedDate = '';
+				clearTimers();
+				goto(`/app/reservation/new?hall=${selectedHall}`, { replaceState: true, noScroll: true, invalidateAll: true });
+				return;
+			}
+			selectedDate = date;
+			startTimers(body.ttl ?? (data.holdMinutes ?? 15) * 60);
+		} catch {
+			holdError = t.reservationAdmin.holdError;
+		} finally {
+			acquiring = false;
+		}
+	}
+
+	function startTimers(seconds: number) {
+		clearTimers();
+		holdSeconds = seconds;
+		ticker = setInterval(() => { holdSeconds = Math.max(0, holdSeconds - 1); }, 1000);
+		heartbeat = setInterval(async () => {
+			if (!selectedHall || !selectedDate) return;
+			try {
+				const res = await fetch('/api/holds', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ hallId: selectedHall, date: selectedDate }) });
+				const body = await res.json().catch(() => ({}));
+				if (res.ok && body.ok) holdSeconds = body.ttl ?? holdSeconds;
+				else { holdError = t.publicBooking.holdExpired; selectedDate = ''; clearTimers(); }
+			} catch { /* keep trying next beat */ }
+		}, 60_000);
+	}
 
 	function onHallChange() {
-		if (selectedHall) goto(`/reservation/new?hall=${selectedHall}`, { replaceState: true, noScroll: true });
+		releaseHold();
+		selectedDate = '';
+		selectedTemplate = '';
+		holdError = '';
+		clearTimers();
+		if (selectedHall) goto(`/app/reservation/new?hall=${selectedHall}`, { replaceState: true, noScroll: true, invalidateAll: true });
 	}
 
 	function onDateSelect(date: string) {
-		selectedDate = date;
+		if (!selectedHall) return;
+		acquireHold(date);
 	}
 
-	function nextStep() {
-		if (step < maxStep) step++;
-	}
-
-	function prevStep() {
-		if (step > 1) step--;
-	}
+	function nextStep() { if (step < maxStep) step++; }
+	function prevStep() { if (step > 1) step--; }
 
 	// Auto-select hall if only one exists
 	$effect(() => {
@@ -84,6 +147,21 @@
 			onHallChange();
 		}
 	});
+
+	// Restore a pre-selected date (e.g. quick-create from the calendar) by acquiring its hold.
+	$effect(() => {
+		const pre = untrack(() => data.selectedDate);
+		if (pre && selectedHall && !selectedDate && !holdError) untrack(() => acquireHold(pre));
+	});
+
+	// Release the hold when leaving / closing.
+	beforeNavigate(() => { releaseHold(); clearTimers(); });
+	$effect(() => {
+		const onUnload = () => releaseHold();
+		window.addEventListener('beforeunload', onUnload);
+		return () => window.removeEventListener('beforeunload', onUnload);
+	});
+	onDestroy(clearTimers);
 </script>
 
 <svelte:head><title>{t.createEvent.title} – Hallify</title></svelte:head>
@@ -108,7 +186,7 @@
 					1
 				{/if}
 			</div>
-			<span class="step-label">Hall &amp; Date</span>
+			<span class="step-label">{t.reservationAdmin.stepHallDate}</span>
 		</div>
 
 		<div class="step-connector"></div>
@@ -124,7 +202,7 @@
 					2
 				{/if}
 			</div>
-			<span class="step-label">Event Details</span>
+			<span class="step-label">{t.event.details}</span>
 		</div>
 
 		{#if maxStep === 3}
@@ -133,7 +211,7 @@
 			<!-- Step 3 -->
 			<div class="step-item" class:active={step === 3} class:future={step < 3}>
 				<div class="step-num">3</div>
-				<span class="step-label">Layout</span>
+				<span class="step-label">{t.reservationAdmin.stepLayout}</span>
 			</div>
 		{/if}
 	</div>
@@ -143,6 +221,9 @@
 		<input type="hidden" name="hallId" value={selectedHall} />
 		<input type="hidden" name="eventDate" value={selectedDate} />
 		<input type="hidden" name="templateId" value={selectedTemplate} />
+		<input type="hidden" name="startTime" value={specifyTime ? startTime : ''} />
+		<input type="hidden" name="endTime" value={specifyTime ? endTime : ''} />
+		<input type="hidden" name="numGuests" value={numGuests} />
 
 		<!-- Step 1: Hall & Date -->
 		{#if step === 1}
@@ -157,6 +238,8 @@
 									type="button"
 									class="hall-card"
 									class:selected={selectedHall === h.id}
+									class:closed={!h.allow_reservations}
+									disabled={!h.allow_reservations}
 									onclick={() => {
 										selectedHall = h.id;
 										onHallChange();
@@ -177,17 +260,19 @@
 									{/if}
 									<div class="hall-info">
 										<span class="hall-name">{h.name}</span>
-										{#if h.description}
-											<span class="hall-desc">{h.description}</span>
-										{/if}
+										<div class="hall-tags">
+											<span class="hall-badge">{h.max_people} {t.common.people}</span>
+											{#if h.auto_approve}<span class="hall-tag ok">{t.createEvent?.autoApprove ?? 'Auto-approve'}</span>{/if}
+											{#if h.min_days_advance > 0}<span class="hall-tag">{h.min_days_advance}d {t.createEvent?.advance ?? 'advance'}</span>{/if}
+											{#if !h.allow_reservations}<span class="hall-tag warn">{t.createEvent?.closed ?? 'Closed'}</span>{/if}
+										</div>
 									</div>
 									<div class="hall-card-right">
-										<span class="hall-badge">{h.max_people} {t.common.people}</span>
 										{#if h.slug}
 											<a href="/halls/{h.slug}" target="_blank" rel="noopener"
 												class="hall-profile-link"
 												onclick={(e) => e.stopPropagation()}>
-												Profile →
+												{t.reservationAdmin.profileLink} →
 											</a>
 										{/if}
 									</div>
@@ -210,25 +295,33 @@
 					<!-- Right: Calendar -->
 					<div class="step1-calendar">
 						<h2 class="step-section-title">{t.createEvent.selectDate}</h2>
-						<MiniCalendar
-							blockedDates={allBlockedDates}
-							events={data.takenDates}
-							selectedDate={selectedDate}
-							onselect={onDateSelect}
-						/>
-						{#if selectedDate}
-							<div class="selected-date-note card">
-								<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2.5">
-									<polyline points="20 6 9 17 4 12"/>
-								</svg>
-								<span>{new Date(selectedDate).toLocaleDateString('sk-SK', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</span>
-							</div>
+						{#if !selectedHall}
+							<div class="cal-placeholder">{t.createEvent?.pickHallFirst ?? 'Select a hall to see available dates.'}</div>
+						{:else}
+							<MiniCalendar
+								blockedDates={blockedDateStrings}
+								takenDates={data.takenDates}
+								heldDates={data.heldDates}
+								minDate={minDate}
+								selectedDate={selectedDate}
+								onselect={onDateSelect}
+								showLegend={true}
+							/>
+							{#if holdError}
+								<div class="hold-banner err">
+									<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+									<span>{holdError}</span>
+								</div>
+							{:else if selectedDate && holdActive}
+								<div class="hold-banner ok">
+									<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+									<span>{new Date(selectedDate).toLocaleDateString('sk-SK', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</span>
+									<span class="hold-timer" title={t.createEvent?.heldHint ?? 'This date is reserved for you while you book'}>{t.createEvent?.heldFor ?? 'Held'} · {holdLabel}</span>
+								</div>
+							{:else if acquiring}
+								<div class="hold-banner">{t.common?.loading ?? 'Holding date…'}</div>
+							{/if}
 						{/if}
-						<div class="legend">
-							<div class="legend-item"><span class="dot today"></span> dnes</div>
-							<div class="legend-item"><span class="dot blocked"></span> {t.createEvent.blockedDate}</div>
-							<div class="legend-item"><span class="dot event"></span> {t.createEvent.takenDate}</div>
-						</div>
 					</div>
 				</div>
 
@@ -237,10 +330,10 @@
 					<button
 						type="button"
 						class="btn-action"
-						disabled={!selectedHall || !selectedDate}
+						disabled={!selectedHall || !selectedDate || !holdActive}
 						onclick={nextStep}
 					>
-						Continue
+						{t.reservationAdmin.continue}
 						<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
 							<line x1="5" y1="12" x2="19" y2="12"/>
 							<polyline points="12 5 19 12 12 19"/>
@@ -283,6 +376,41 @@
 						<textarea id="description" name="description" rows="3" placeholder="…"></textarea>
 					</div>
 
+					<div class="field-row">
+						<div class="field">
+							<label for="numGuests">{t.createEvent?.guests ?? 'Expected guests'}</label>
+							<input id="numGuests" type="number" min="1" max={selectedHallData?.max_people}
+								bind:value={numGuests}
+								placeholder={selectedHallData ? `max ${selectedHallData.max_people}` : ''} />
+							{#if selectedHallData && numGuests && Number(numGuests) > selectedHallData.max_people}
+								<span class="field-hint err">{t.createEvent?.overCapacity ?? `Exceeds capacity (${selectedHallData.max_people}).`}</span>
+							{/if}
+						</div>
+						<div class="field">
+							<!-- svelte-ignore a11y_label_has_associated_control -->
+							<label>{t.createEvent?.time ?? 'Time'}</label>
+							<label class="time-toggle">
+								<input type="checkbox" bind:checked={specifyTime} />
+								<span>{t.createEvent?.specifyTime ?? 'Specify a start/end time (optional)'}</span>
+							</label>
+						</div>
+					</div>
+
+					{#if specifyTime}
+						<div class="field-row">
+							<div class="field">
+								<label for="startTime">{t.createEvent?.startTime ?? 'Start'}</label>
+								<input id="startTime" type="time" bind:value={startTime} />
+							</div>
+							<div class="field">
+								<label for="endTime">{t.createEvent?.endTime ?? 'End'}</label>
+								<input id="endTime" type="time" bind:value={endTime} />
+							</div>
+						</div>
+					{/if}
+
+					<p class="whole-day-note">{t.createEvent?.wholeDayNote ?? 'Reservations hold the whole day for this hall — the date is blocked for everyone else.'}</p>
+
 					<!-- Summary of step 1 selections -->
 					<div class="selection-summary">
 						{#if selectedHallData}
@@ -313,17 +441,17 @@
 							<line x1="19" y1="12" x2="5" y2="12"/>
 							<polyline points="12 19 5 12 12 5"/>
 						</svg>
-						Back
+						{t.common.back}
 					</button>
 
 					{#if maxStep === 2}
-						<!-- No templates: this is the final step -->
-						<button type="submit" class="btn-action" disabled={!selectedDate}>
+						<!-- No layout step: this is the final step -->
+						<button type="submit" class="btn-action" disabled={!canSubmit}>
 							{t.createEvent.submit}
 						</button>
 					{:else}
 						<button type="button" class="btn-action" onclick={nextStep}>
-							Continue
+							{t.reservationAdmin.continue}
 							<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
 								<line x1="5" y1="12" x2="19" y2="12"/>
 								<polyline points="12 5 19 12 12 19"/>
@@ -390,9 +518,9 @@
 							<line x1="19" y1="12" x2="5" y2="12"/>
 							<polyline points="12 19 5 12 12 5"/>
 						</svg>
-						Back
+						{t.common.back}
 					</button>
-					<button type="submit" class="btn-action" disabled={!selectedDate}>
+					<button type="submit" class="btn-action" disabled={!canSubmit}>
 						{t.createEvent.submit}
 					</button>
 				</div>
@@ -815,4 +943,25 @@
 	.btn-action:disabled:hover {
 		background: var(--accent);
 	}
+
+	/* ── Redesign additions ── */
+	.hall-card:disabled, .hall-card.closed { opacity: .55; cursor: not-allowed; }
+	.hall-tags { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 5px; }
+	.hall-tag { font-size: 10.5px; font-weight: 600; padding: 2px 7px; border-radius: 99px; background: var(--bg-panel2, var(--bg-base)); color: var(--text-muted); border: 1px solid var(--border); }
+	.hall-tag.ok { color: var(--success, #16a34a); background: color-mix(in srgb, var(--success, #16a34a) 12%, transparent); border-color: transparent; }
+	.hall-tag.warn { color: var(--danger); background: color-mix(in srgb, var(--danger) 12%, transparent); border-color: transparent; }
+
+	.cal-placeholder { padding: 40px 20px; text-align: center; font-size: 13px; color: var(--text-subtle); border: 1px dashed var(--border); border-radius: 12px; }
+
+	.hold-banner { display: flex; align-items: center; gap: 8px; margin-top: 12px; padding: 10px 12px; border-radius: 9px; font-size: 13px; font-weight: 500; color: var(--text-muted); background: var(--bg-panel2, var(--bg-base)); border: 1px solid var(--border); }
+	.hold-banner.ok { color: var(--text-base); border-color: color-mix(in srgb, var(--accent) 35%, var(--border)); background: var(--accent-dim); }
+	.hold-banner.ok svg { color: var(--accent); }
+	.hold-banner.err { color: var(--danger); background: color-mix(in srgb, var(--danger) 9%, transparent); border-color: color-mix(in srgb, var(--danger) 25%, transparent); }
+	.hold-timer { margin-left: auto; font-size: 11px; font-weight: 700; font-variant-numeric: tabular-nums; padding: 3px 9px; border-radius: 99px; background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent); white-space: nowrap; }
+
+	.time-toggle { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 400; color: var(--text-muted); cursor: pointer; padding-top: 6px; }
+	.time-toggle input { width: 16px; height: 16px; accent-color: var(--accent); }
+	.whole-day-note { font-size: 12px; color: var(--text-subtle); margin: 4px 0 0; line-height: 1.5; }
+	.field-hint { font-size: 11.5px; margin-top: 4px; }
+	.field-hint.err { color: var(--danger); }
 </style>

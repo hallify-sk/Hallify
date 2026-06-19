@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from '$lib/i18n.svelte';
   import type { PageData } from './$types';
   let { data }: { data: PageData } = $props();
   const s = $derived(data.stats);
@@ -6,33 +7,33 @@
 
 <div class="page-wrap">
   <div class="page-header">
-    <h1>Platform overview</h1>
+    <h1>{t.platformExtra.overviewTitle}</h1>
   </div>
 
   <div class="kpi-grid">
     <div class="kpi-card">
-      <span class="kpi-label">Organizations</span>
+      <span class="kpi-label">{t.platformOrgs.organizations}</span>
       <span class="kpi-value">{s.total_orgs}</span>
     </div>
     <div class="kpi-card">
-      <span class="kpi-label">Users</span>
+      <span class="kpi-label">{t.platformExtra.users}</span>
       <span class="kpi-value">{s.total_users}</span>
     </div>
     <div class="kpi-card">
-      <span class="kpi-label">Paid subscriptions</span>
+      <span class="kpi-label">{t.platformExtra.paidSubscriptions}</span>
       <span class="kpi-value">{s.active_subscriptions}</span>
     </div>
     <div class="kpi-card">
-      <span class="kpi-label">Total reservations</span>
+      <span class="kpi-label">{t.platformExtra.totalReservations}</span>
       <span class="kpi-value">{s.total_reservations}</span>
     </div>
   </div>
 
-  <h2>Recent organizations</h2>
+  <h2>{t.platformExtra.recentOrganizations}</h2>
   <div class="card">
     <table class="table">
       <thead>
-        <tr><th>Name</th><th>Slug</th><th>Plan</th><th>Created</th></tr>
+        <tr><th>{t.platformOrgs.colName}</th><th>{t.platformOrgs.colSlug}</th><th>{t.platformOrgs.colPlan}</th><th>{t.platformOrgs.colCreated}</th></tr>
       </thead>
       <tbody>
         {#each data.recentOrgs as org}

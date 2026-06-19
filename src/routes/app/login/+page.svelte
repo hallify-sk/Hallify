@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
 	import { page } from '$app/stores';
-	import { t } from '$lib/i18n';
+	import { t } from '$lib/i18n.svelte';
 	import AuthShell from '$lib/components/AuthShell.svelte';
 	import type { ActionData } from './$types';
 

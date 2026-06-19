@@ -1,9 +1,13 @@
 import { getSessionUser, switchOrg } from '$lib/auth';
+import { isReservedSubdomain } from '$lib/reserved-subdomains';
 import { getBrandingCacheTime, setBrandingCacheTime, BRANDING_CACHE_TTL } from '$lib/branding-cache';
-import sql from '$lib/db';
+import { dbAll, dbFirst, dbRun } from '$lib/db';
+import { getPlan } from '$lib/plans';
+import type { PlanId } from '$lib/plans';
 import { env } from '$env/dynamic/private';
 import type { Handle } from '@sveltejs/kit';
 import type { Branding, OrgContext } from './app.d';
+import type { D1Database } from '@cloudflare/workers-types';
 
 const DEFAULT_BRANDING: Branding = {
   appName: 'Hallify',
@@ -15,14 +19,12 @@ const DEFAULT_BRANDING: Branding = {
 // Platform-level branding cache (30s TTL) — cache time managed in $lib/branding-cache
 let cachedPlatformBranding: Branding = { ...DEFAULT_BRANDING };
 
-async function loadPlatformBranding(): Promise<Branding> {
+async function loadPlatformBranding(db: D1Database): Promise<Branding> {
   const now = Date.now();
   if (now - getBrandingCacheTime() < BRANDING_CACHE_TTL) return cachedPlatformBranding;
   try {
-    const [row] = await sql<{ value: Partial<Branding> }[]>`
-      SELECT value FROM system_settings WHERE key = 'branding'
-    `;
-    cachedPlatformBranding = { ...DEFAULT_BRANDING, ...row?.value };
+    const row = await dbFirst<{ value: string }>(db, "SELECT value FROM system_settings WHERE key = 'branding'");
+    cachedPlatformBranding = { ...DEFAULT_BRANDING, ...(row?.value ? JSON.parse(row.value as string) : {}) };
     setBrandingCacheTime(now);
   } catch {
     // keep cached on error
@@ -30,120 +32,214 @@ async function loadPlatformBranding(): Promise<Branding> {
   return cachedPlatformBranding;
 }
 
-/** Load org context (org info + user's role + subscription) for a given org + user. */
-async function loadOrgContext(orgId: string, userId: string): Promise<OrgContext | null> {
-  const rows = await sql<{
+/** Load org context (org info + user's role + subscription) for a given org + user.
+ *  Platform admins who are NOT members can still load any non-suspended org with a
+ *  synthetic owner role ("view as" / impersonation), flagged via `impersonated`. */
+async function loadOrgContext(orgId: string, userId: string, db: D1Database, isPlatformAdmin = false): Promise<OrgContext | null> {
+  const r = await dbFirst<{
     org_id: string; org_name: string; org_slug: string; org_logo_url: string | null;
     member_role: string;
-    sub_plan: string; sub_status: string; stripe_customer_id: string | null; current_period_end: Date | null;
-  }[]>`
-    SELECT
-      o.id        AS org_id,
-      o.name      AS org_name,
-      o.slug      AS org_slug,
-      o.logo_url  AS org_logo_url,
-      m.role      AS member_role,
-      s.plan      AS sub_plan,
-      s.status    AS sub_status,
-      s.stripe_customer_id,
-      s.current_period_end
-    FROM organizations o
-    JOIN organization_members m ON m.org_id = o.id AND m.user_id = ${userId}
-    LEFT JOIN subscriptions s   ON s.org_id = o.id
-    WHERE o.id = ${orgId}
-      AND o.suspended_at IS NULL
-  `;
+    sub_plan: string; sub_status: string; stripe_customer_id: string | null; current_period_end: string | null;
+  }>(db,
+    'SELECT o.id AS org_id, o.name AS org_name, o.slug AS org_slug, o.logo_url AS org_logo_url, m.role AS member_role, s.plan AS sub_plan, s.status AS sub_status, s.stripe_customer_id, s.current_period_end FROM organizations o JOIN organization_members m ON m.org_id = o.id AND m.user_id = ? LEFT JOIN subscriptions s ON s.org_id = o.id WHERE o.id = ? AND o.suspended_at IS NULL',
+    userId, orgId);
 
-  const r = rows[0];
-  if (!r) return null;
+  if (r) {
+    return {
+      id:      r.org_id,
+      name:    r.org_name,
+      slug:    r.org_slug,
+      logoUrl: r.org_logo_url,
+      role:    r.member_role as OrgContext['role'],
+      impersonated: false,
+      subscription: {
+        plan:              (r.sub_plan ?? 'free') as OrgContext['subscription']['plan'],
+        status:            (r.sub_status ?? 'active') as OrgContext['subscription']['status'],
+        stripeCustomerId:  r.stripe_customer_id,
+        currentPeriodEnd:  r.current_period_end,
+      },
+    };
+  }
 
-  return {
-    id:      r.org_id,
-    name:    r.org_name,
-    slug:    r.org_slug,
-    logoUrl: r.org_logo_url,
-    role:    r.member_role as OrgContext['role'],
-    subscription: {
-      plan:              (r.sub_plan ?? 'free') as OrgContext['subscription']['plan'],
-      status:            (r.sub_status ?? 'active') as OrgContext['subscription']['status'],
-      stripeCustomerId:  r.stripe_customer_id,
-      currentPeriodEnd:  r.current_period_end,
-    },
-  };
+  // Platform-admin "view as": not a member, but allowed to inspect/manage any org.
+  if (isPlatformAdmin) {
+    const p = await dbFirst<{
+      org_id: string; org_name: string; org_slug: string; org_logo_url: string | null;
+      sub_plan: string | null; sub_status: string | null; stripe_customer_id: string | null; current_period_end: string | null;
+    }>(db,
+      'SELECT o.id AS org_id, o.name AS org_name, o.slug AS org_slug, o.logo_url AS org_logo_url, s.plan AS sub_plan, s.status AS sub_status, s.stripe_customer_id, s.current_period_end FROM organizations o LEFT JOIN subscriptions s ON s.org_id = o.id WHERE o.id = ? AND o.suspended_at IS NULL',
+      orgId);
+    if (p) {
+      return {
+        id:      p.org_id,
+        name:    p.org_name,
+        slug:    p.org_slug,
+        logoUrl: p.org_logo_url,
+        role:    'owner',
+        impersonated: true,
+        subscription: {
+          plan:             (p.sub_plan ?? 'free') as OrgContext['subscription']['plan'],
+          status:           (p.sub_status ?? 'active') as OrgContext['subscription']['status'],
+          stripeCustomerId: p.stripe_customer_id,
+          currentPeriodEnd: p.current_period_end,
+        },
+      };
+    }
+  }
+
+  return null;
 }
 
 /** Load org-specific branding, falling back to platform branding. */
-async function loadOrgBranding(orgId: string, fallback: Branding): Promise<Branding> {
+async function loadOrgBranding(orgId: string, fallback: Branding, db: D1Database): Promise<Branding> {
   try {
-    const [row] = await sql<{ value: Partial<Branding> }[]>`
-      SELECT value FROM org_settings WHERE org_id = ${orgId} AND key = 'branding'
-    `;
-    if (row?.value) return { ...fallback, ...row.value };
+    // Custom branding is a paid feature — on a non-eligible plan we fall back to
+    // the platform default (the org's saved branding is kept, just not applied).
+    const sub = await dbFirst<{ plan: string | null }>(db, 'SELECT plan FROM subscriptions WHERE org_id = ?', orgId);
+    if (!getPlan((sub?.plan ?? 'free') as PlanId).limits.customBranding) return fallback;
+    const row = await dbFirst<{ value: string }>(db, "SELECT value FROM org_settings WHERE org_id = ? AND key = 'branding'", orgId);
+    if (row?.value) return { ...fallback, ...JSON.parse(row.value as string) };
   } catch {
     // fall through
   }
   return fallback;
 }
 
+// ── Locale resolution ──────────────────────────────────────────────────────
+const isLocale = (v: unknown): v is 'sk' | 'en' => v === 'sk' || v === 'en';
+
+/** The org's preferred default language. Stored under its own 'locale' org_settings key
+ *  (NOT the paid 'branding' blob) — a default language is free for every plan. */
+async function loadOrgLanguage(orgId: string, db: D1Database): Promise<'sk' | 'en' | null> {
+  try {
+    const row = await dbFirst<{ value: string }>(db, "SELECT value FROM org_settings WHERE org_id = ? AND key = 'locale'", orgId);
+    if (row?.value) {
+      const lang = (JSON.parse(row.value as string) as { default?: unknown }).default;
+      if (isLocale(lang)) return lang;
+    }
+  } catch { /* ignore */ }
+  return null;
+}
+
+type HandleArgs = Parameters<Handle>[0];
+
+/** Resolve the request locale (?lang > 'hallify-lang' cookie > org default > 'sk'),
+ *  expose it on locals, persist an explicit ?lang choice as a cookie, and stamp the
+ *  <html lang> attribute via %lang% in app.html. */
+async function resolveWithLocale(
+  event: HandleArgs['event'],
+  resolve: HandleArgs['resolve'],
+  orgIdForDefault: string | null,
+  db: D1Database,
+): Promise<Response> {
+  const param = event.url.searchParams.get('lang');
+  let locale: 'sk' | 'en';
+  if (isLocale(param)) {
+    locale = param;
+    event.cookies.set('hallify-lang', param, { path: '/', maxAge: 60 * 60 * 24 * 365, httpOnly: false, sameSite: 'lax' });
+  } else {
+    const cookie = event.cookies.get('hallify-lang');
+    if (isLocale(cookie)) locale = cookie;
+    else locale = (orgIdForDefault ? await loadOrgLanguage(orgIdForDefault, db) : null) ?? 'sk';
+  }
+  event.locals.locale = locale;
+  return resolve(event, { transformPageChunk: ({ html }) => html.replace('%lang%', locale) });
+}
+
 // Auto-complete past events (rate-limited to once per minute)
 let lastAutoComplete = 0;
 const AUTO_COMPLETE_INTERVAL = 60_000;
 
-function autoCompletePastEvents() {
+function autoCompletePastEvents(db: D1Database) {
   const now = Date.now();
   if (now - lastAutoComplete < AUTO_COMPLETE_INTERVAL) return;
   lastAutoComplete = now;
-  sql`
-    UPDATE reservations SET status = 'completed'
-    WHERE event_date < CURRENT_DATE
-      AND status IN ('approved', 'planned')
-  `.catch(() => {});
+  dbRun(db, "UPDATE reservations SET status = 'completed' WHERE event_date < date('now') AND status IN ('approved', 'planned')").catch(() => {});
+  // Sweep expired booking holds (reads already filter on expires_at; this is housekeeping).
+  dbRun(db, "DELETE FROM reservation_holds WHERE expires_at <= datetime('now')").catch(() => {});
 }
 
 export const handle: Handle = async ({ event, resolve }) => {
-  // ── 1. Custom domain detection ──
+  const db: D1Database = event.platform!.env.DB;
+  event.locals.db = db;
+
+  // ── 1. Bubble detection — org subdomain OR custom domain → domainOrg ──
   const host = (event.request.headers.get('host') ?? '').split(':')[0];
   const appDomain = env.HALLIFY_DOMAIN ?? 'hallify.app';
-  const isCustomDomain = host
-    && host !== appDomain
-    && !host.startsWith('localhost')
-    && host !== '127.0.0.1'
-    && !host.endsWith('.hallify.app');
 
   let domainOrg: App.Locals['domainOrg'] = null;
-  if (isCustomDomain) {
-    try {
-      const [r] = await sql<{ org_id: string; name: string; slug: string; logo_url: string | null }[]>`
-        SELECT cd.org_id, o.name, o.slug, o.logo_url
-        FROM custom_domains cd
-        JOIN organizations o ON o.id = cd.org_id
-        WHERE cd.domain = ${host}
-        LIMIT 1
-      `;
-      if (r) domainOrg = { id: r.org_id, name: r.name, slug: r.slug, logoUrl: r.logo_url };
-    } catch { /* DB unavailable — serve without domain context */ }
-  }
+  // True when the host looks like an org subdomain (<slug>.hallify.sk, non-reserved)
+  // but no such org exists — we bounce these to the apex rather than serving the
+  // marketing app on an unclaimed subdomain.
+  let unmatchedSubdomain = false;
+  try {
+    if (host.endsWith(`.${appDomain}`)) {
+      // Free bubble: <slug>.hallify.sk — single-level, non-reserved label.
+      const sub = host.slice(0, -(appDomain.length + 1));
+      if (sub && !sub.includes('.') && !isReservedSubdomain(sub)) {
+        const r = await dbFirst<{ id: string; name: string; slug: string; logo_url: string | null }>(db, 'SELECT id, name, slug, logo_url FROM organizations WHERE slug = ? AND suspended_at IS NULL LIMIT 1', sub);
+        if (r) domainOrg = { id: r.id, name: r.name, slug: r.slug, logoUrl: r.logo_url };
+        else unmatchedSubdomain = true;
+      }
+    } else if (
+      host
+      && host !== appDomain
+      && !host.startsWith('localhost')
+      && host !== '127.0.0.1'
+      && !host.endsWith('.hallify.pages.dev')
+      && !host.endsWith('.workers.dev')
+    ) {
+      // Paid bubble: external custom domain. Only resolves while the org's plan
+      // includes custom domains — a downgrade quietly stops serving it (the domain
+      // config is kept and resumes on re-upgrade).
+      const r = await dbFirst<{ org_id: string; name: string; slug: string; logo_url: string | null; plan: string | null }>(db,
+        'SELECT cd.org_id, o.name, o.slug, o.logo_url, s.plan FROM custom_domains cd JOIN organizations o ON o.id = cd.org_id LEFT JOIN subscriptions s ON s.org_id = cd.org_id WHERE cd.domain = ? LIMIT 1', host);
+      if (r && getPlan((r.plan ?? 'free') as PlanId).limits.customDomains) {
+        domainOrg = { id: r.org_id, name: r.name, slug: r.slug, logoUrl: r.logo_url };
+      }
+    }
+  } catch { /* DB unavailable — serve without domain context */ }
   event.locals.domainOrg = domainOrg;
 
-  // ── 2. Domain-level route guards ──
+  // Unclaimed org subdomain → send to the apex instead of serving the app here.
+  if (unmatchedSubdomain) {
+    const port = event.url.port ? `:${event.url.port}` : '';
+    return new Response(null, { status: 302, headers: { Location: `${event.url.protocol}//${appDomain}${port}/` } });
+  }
+
+  // ── 2. Session resolution ──
+  // Resolve the session before the bubble guards so an org member of the
+  // bubble's org can reach the management app on their own domain.
+  const session = await getSessionUser(event.cookies, db, domainOrg?.id ?? null);
+
+  // True when an organization account (owner/admin/member) is signed in on a
+  // bubble — getSessionUser has already verified they belong to that org.
+  const orgMemberOnBubble = !!domainOrg && !!session && session.account_type !== 'client';
+
+  // ── 3. Domain-level route guards ──
   if (domainOrg) {
     const { pathname } = new URL(event.request.url);
-    if (pathname === '/' || pathname.startsWith('/app/')) {
+    if (orgMemberOnBubble) {
+      // Org member of this org: the public root sends them to their dashboard;
+      // the rest of /app/* is theirs to manage from their own domain.
+      if (pathname === '/') {
+        return new Response(null, { status: 303, headers: { Location: '/app/manage' } });
+      }
+    } else if (pathname === '/' || pathname.startsWith('/app/')) {
+      // Clients, anonymous visitors, and non-members stay on the public surface.
       return new Response(null, { status: 303, headers: { Location: '/halls' } });
     }
   }
 
-  // ── 3. Session + user/org context ──
-  const session = await getSessionUser(event.cookies);
-  const platformBranding = await loadPlatformBranding();
+  const platformBranding = await loadPlatformBranding(db);
 
   if (!session) {
     event.locals.user = null;
     event.locals.currentOrg = null;
     event.locals.branding = domainOrg
-      ? await loadOrgBranding(domainOrg.id, platformBranding)
+      ? await loadOrgBranding(domainOrg.id, platformBranding, db)
       : platformBranding;
-    return resolve(event);
+    return resolveWithLocale(event, resolve, domainOrg?.id ?? null, db);
   }
 
   event.locals.user = {
@@ -153,35 +249,38 @@ export const handle: Handle = async ({ event, resolve }) => {
     last_name: session.last_name,
     is_platform_admin: session.is_platform_admin,
     account_type: session.account_type,
+    org_id: session.org_id,
   };
 
   // Client accounts don't belong to any org — skip org context entirely
   if (session.account_type === 'client') {
     event.locals.currentOrg = null;
     event.locals.branding = domainOrg
-      ? await loadOrgBranding(domainOrg.id, platformBranding)
+      ? await loadOrgBranding(domainOrg.id, platformBranding, db)
       : platformBranding;
-    autoCompletePastEvents();
-    return resolve(event);
+    autoCompletePastEvents(db);
+    return resolveWithLocale(event, resolve, domainOrg?.id ?? null, db);
   }
 
   let orgId = session.currentOrgId;
 
+  // On a bubble, an org account is always scoped to that bubble's org (not
+  // whatever org their session last had active on the apex).
+  if (orgMemberOnBubble) orgId = domainOrg!.id;
+
   // If session has no org, pick the user's first org and persist it
   if (!orgId) {
-    const [firstOrg] = await sql<{ org_id: string }[]>`
-      SELECT org_id FROM organization_members WHERE user_id = ${session.id} ORDER BY joined_at LIMIT 1
-    `;
+    const firstOrg = await dbFirst<{ org_id: string }>(db, 'SELECT org_id FROM organization_members WHERE user_id = ? ORDER BY joined_at LIMIT 1', session.id);
     if (firstOrg) {
       orgId = firstOrg.org_id;
-      await switchOrg(session.sessionId, orgId);
+      await switchOrg(session.sessionId, orgId, db);
     }
   }
 
   if (orgId) {
-    event.locals.currentOrg = await loadOrgContext(orgId, session.id);
+    event.locals.currentOrg = await loadOrgContext(orgId, session.id, db, !!session.is_platform_admin);
     event.locals.branding = event.locals.currentOrg
-      ? await loadOrgBranding(orgId, platformBranding)
+      ? await loadOrgBranding(orgId, platformBranding, db)
       : platformBranding;
   } else {
     event.locals.currentOrg = null;
@@ -190,9 +289,9 @@ export const handle: Handle = async ({ event, resolve }) => {
 
   // On custom domains, domain org branding always wins
   if (domainOrg) {
-    event.locals.branding = await loadOrgBranding(domainOrg.id, platformBranding);
+    event.locals.branding = await loadOrgBranding(domainOrg.id, platformBranding, db);
   }
 
-  autoCompletePastEvents();
-  return resolve(event);
+  autoCompletePastEvents(db);
+  return resolveWithLocale(event, resolve, domainOrg?.id ?? event.locals.currentOrg?.id ?? null, db);
 };

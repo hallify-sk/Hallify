@@ -1,6 +1,7 @@
 <script lang="ts">
   import { enhance } from '$app/forms';
   import { invalidateAll } from '$app/navigation';
+  import { t as tr } from '$lib/i18n.svelte';
   import type { PageData } from './$types';
 
   interface Props { data: PageData; }
@@ -48,11 +49,11 @@
   function timeAgo(d: Date | string) {
     const diff = Date.now() - new Date(d).getTime();
     const mins = Math.floor(diff / 60000);
-    if (mins < 1) return 'now';
-    if (mins < 60) return `${mins}m`;
+    if (mins < 1) return tr.memberMessages.timeNow;
+    if (mins < 60) return `${mins}${tr.memberMessages.timeMinutes}`;
     const hrs = Math.floor(mins / 60);
-    if (hrs < 24) return `${hrs}h`;
-    return `${Math.floor(hrs / 24)}d`;
+    if (hrs < 24) return `${hrs}${tr.memberMessages.timeHours}`;
+    return `${Math.floor(hrs / 24)}${tr.memberMessages.timeDays}`;
   }
 
   function initials(first: string, last: string) {
@@ -84,7 +85,7 @@
 </script>
 
 <svelte:head>
-  <title>{activeChannel ? `#${activeChannel.name}` : activeTicket ? activeTicket.subject : 'Messages'} – Hallify</title>
+  <title>{activeChannel ? `#${activeChannel.name}` : activeTicket ? activeTicket.subject : tr.memberMessages.pageTitle} – Hallify</title>
 </svelte:head>
 
 <div class="hub">
@@ -94,15 +95,15 @@
 
     <div class="nav-section">
       <div class="nav-section-header">
-        <span class="nav-section-label">Team</span>
+        <span class="nav-section-label">{tr.memberMessages.team}</span>
         {#if onlineCount > 0}
-          <span class="online-pill"><span class="online-dot"></span>{onlineCount} online</span>
+          <span class="online-pill"><span class="online-dot"></span>{onlineCount} {tr.memberMessages.online}</span>
         {/if}
       </div>
 
       <div class="presence-strip">
         {#each members.slice(0, 8) as m}
-          <div class="presence-av" title="{m.first_name} {m.last_name} — {m.is_online ? 'online' : 'offline'}">
+          <div class="presence-av" title="{m.first_name} {m.last_name} — {m.is_online ? tr.memberMessages.online : tr.memberMessages.offline}">
             <span class="av-inner" style="background:{avatarColor(m.user_id)}">{initials(m.first_name, m.last_name)}</span>
             <span class="presence-dot" class:online={m.is_online}></span>
           </div>
@@ -120,15 +121,15 @@
 
       {#if orgRole === 'owner' || orgRole === 'admin'}
         <button class="nav-new-btn" type="button" onclick={() => { showNewChannel = !showNewChannel; showNewTicket = false; }}>
-          + New channel
+          {tr.memberMessages.newChannel}
         </button>
         {#if showNewChannel}
           <form method="POST" action="?/createChannel" use:enhance={() => { showNewChannel = false; return async ({ update }) => update(); }} class="inline-form">
-            <input name="name" placeholder="channel-name" required class="inline-input" autocomplete="off" />
-            <input name="description" placeholder="Description (optional)" class="inline-input" />
+            <input name="name" placeholder={tr.memberMessages.channelNamePlaceholder} required class="inline-input" autocomplete="off" />
+            <input name="description" placeholder={tr.memberMessages.descriptionPlaceholder} class="inline-input" />
             <div class="inline-actions">
-              <button type="submit" class="btn-xs btn-accent">Create</button>
-              <button type="button" class="btn-xs" onclick={() => showNewChannel = false}>Cancel</button>
+              <button type="submit" class="btn-xs btn-accent">{tr.common.create}</button>
+              <button type="button" class="btn-xs" onclick={() => showNewChannel = false}>{tr.common.cancel}</button>
             </div>
           </form>
         {/if}
@@ -139,30 +140,30 @@
 
     <div class="nav-section">
       <div class="nav-section-header">
-        <span class="nav-section-label">Clients</span>
-        <button class="nav-new-btn-inline" type="button" onclick={() => { showNewTicket = !showNewTicket; showNewChannel = false; }}>+ New</button>
+        <span class="nav-section-label">{tr.memberMessages.clients}</span>
+        <button class="nav-new-btn-inline" type="button" onclick={() => { showNewTicket = !showNewTicket; showNewChannel = false; }}>{tr.memberMessages.newShort}</button>
       </div>
 
       {#if showNewTicket}
         <form method="POST" action="?/createTicket" use:enhance={() => { showNewTicket = false; return async ({ update }) => update(); }} class="inline-form">
           {#if myReservations.length === 0}
-            <p class="inline-hint">You have no reservations with this venue yet.</p>
+            <p class="inline-hint">{tr.memberMessages.noReservationsHint}</p>
           {:else}
-            <label class="inline-label">Reservation</label>
+            <label class="inline-label">{tr.memberMessages.reservation}</label>
             <select name="reservation_id" required class="inline-input inline-select">
-              <option value="">Select a reservation…</option>
+              <option value="">{tr.memberMessages.selectReservation}</option>
               {#each myReservations as r}
                 <option value={r.id}>{r.hall_name} – {new Date(r.event_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</option>
               {/each}
             </select>
-            <textarea name="body" placeholder="What do you need help with?" rows="2" required class="inline-input inline-textarea"></textarea>
+            <textarea name="body" placeholder={tr.memberMessages.ticketBodyPlaceholder} rows="2" required class="inline-input inline-textarea"></textarea>
             <div class="inline-actions">
-              <button type="submit" class="btn-xs btn-accent">Send</button>
-              <button type="button" class="btn-xs" onclick={() => showNewTicket = false}>Cancel</button>
+              <button type="submit" class="btn-xs btn-accent">{tr.messaging.send}</button>
+              <button type="button" class="btn-xs" onclick={() => showNewTicket = false}>{tr.common.cancel}</button>
             </div>
           {/if}
           {#if myReservations.length === 0}
-            <button type="button" class="btn-xs" onclick={() => showNewTicket = false}>Close</button>
+            <button type="button" class="btn-xs" onclick={() => showNewTicket = false}>{tr.memberMessages.closePopup}</button>
           {/if}
         </form>
       {/if}
@@ -176,7 +177,7 @@
           {#if t.unread}<span class="unread-dot"></span>{/if}
         </a>
       {:else}
-        <p class="nav-empty">No threads yet</p>
+        <p class="nav-empty">{tr.memberMessages.noThreadsYet}</p>
       {/each}
     </div>
   </nav>
@@ -192,14 +193,14 @@
           <span class="header-title">{activeChannel.name}</span>
           {#if activeChannel.description}<span class="header-desc">{activeChannel.description}</span>{/if}
         </div>
-        <span class="member-count">{members.length} members · {onlineCount} online</span>
+        <span class="member-count">{members.length} {tr.memberMessages.membersLower} · {onlineCount} {tr.memberMessages.online}</span>
       </div>
 
       <div class="msg-thread" bind:this={threadEl}>
         {#if channelMessages.length === 0}
           <div class="thread-empty">
-            <p class="thread-empty-title">Start of #{activeChannel.name}</p>
-            <p class="thread-empty-sub">Say hello to the team.</p>
+            <p class="thread-empty-title">{tr.memberMessages.startOf} #{activeChannel.name}</p>
+            <p class="thread-empty-sub">{tr.memberMessages.sayHello}</p>
           </div>
         {/if}
 
@@ -229,23 +230,23 @@
                   <input type="hidden" name="msg_id" value={msg.id} />
                   <input class="edit-input" name="body" bind:value={editBody} onkeydown={(e) => { if (e.key === 'Escape') cancelEdit(); }} />
                   <div class="edit-actions">
-                    <button type="submit" class="btn-xs btn-accent">Save</button>
-                    <button type="button" class="btn-xs" onclick={cancelEdit}>Cancel</button>
+                    <button type="submit" class="btn-xs btn-accent">{tr.common.save}</button>
+                    <button type="button" class="btn-xs" onclick={cancelEdit}>{tr.common.cancel}</button>
                   </div>
                 </form>
               {:else}
-                <p class="msg-text">{msg.body}{#if msg.edited_at}<span class="msg-edited"> (edited)</span>{/if}</p>
+                <p class="msg-text">{msg.body}{#if msg.edited_at}<span class="msg-edited"> ({tr.messaging.edited})</span>{/if}</p>
               {/if}
             </div>
             {#if isOwn && editingId !== msg.id}
               <div class="msg-actions">
-                <button type="button" class="action-btn" title="Edit" onclick={() => startEdit(msg.id, msg.body)}>
+                <button type="button" class="action-btn" title={tr.common.edit} onclick={() => startEdit(msg.id, msg.body)}>
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
                 </button>
                 <form method="POST" action="?/deleteChannel" use:enhance style="display:contents">
                   <input type="hidden" name="msg_id" value={msg.id} />
-                  <button type="submit" class="action-btn action-btn-danger" title="Delete"
-                    onclick={(e) => { if (!confirm('Delete this message?')) e.preventDefault(); }}>
+                  <button type="submit" class="action-btn action-btn-danger" title={tr.common.delete}
+                    onclick={(e) => { if (!confirm(tr.messaging.confirmDelete)) e.preventDefault(); }}>
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
                   </button>
                 </form>
@@ -257,7 +258,7 @@
 
       <form class="compose" method="POST" action="?/sendChannel" use:enhance={() => { body = ''; return async ({ update }) => update(); }}>
         <input type="hidden" name="channel_id" value={activeChannel.id} />
-        <input class="compose-input" name="body" placeholder="Message #{activeChannel.name}…" bind:value={body} onkeydown={submitOnEnter} autocomplete="off" />
+        <input class="compose-input" name="body" placeholder="{tr.memberMessages.messagePrefix} #{activeChannel.name}…" bind:value={body} onkeydown={submitOnEnter} autocomplete="off" />
         <button type="submit" class="compose-send" disabled={!body.trim()}>
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
         </button>
@@ -276,21 +277,21 @@
               <span class="header-desc">{new Date(activeTicket.event_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
             {/if}
           </div>
-          <span class="ticket-badge" class:badge-open={activeTicket.status === 'open'} class:badge-closed={activeTicket.status === 'closed'}>{activeTicket.status}</span>
+          <span class="ticket-badge" class:badge-open={activeTicket.status === 'open'} class:badge-closed={activeTicket.status === 'closed'}>{activeTicket.status === 'open' ? tr.status.open : tr.status.closed}</span>
         </div>
         <div class="msg-header-right">
           {#if activeTicket.status === 'open'}
             <form method="POST" action="?/closeTicket" use:enhance style="display:contents">
               <input type="hidden" name="ticket_id" value={activeTicket.id} />
               <button type="submit" class="header-action-btn"
-                onclick={(e) => { if (!confirm('Close this support thread?')) e.preventDefault(); }}>
-                Close thread
+                onclick={(e) => { if (!confirm(tr.memberMessages.confirmCloseThread)) e.preventDefault(); }}>
+                {tr.memberMessages.closeThread}
               </button>
             </form>
           {:else}
             <form method="POST" action="?/reopenTicket" use:enhance style="display:contents">
               <input type="hidden" name="ticket_id" value={activeTicket.id} />
-              <button type="submit" class="header-action-btn header-action-reopen">Reopen</button>
+              <button type="submit" class="header-action-btn header-action-reopen">{tr.messaging.reopen}</button>
             </form>
           {/if}
         </div>
@@ -316,7 +317,7 @@
                 {#if showMeta}
                   <div class="msg-meta">
                     <span class="msg-author">{msg.sender_first_name} {msg.sender_last_name}</span>
-                    {#if isSupport}<span class="msg-role role-admin">Support</span>{/if}
+                    {#if isSupport}<span class="msg-role role-admin">{tr.memberMessages.support}</span>{/if}
                     <span class="msg-time">{timeAgo(msg.created_at)}</span>
                   </div>
                 {/if}
@@ -325,15 +326,15 @@
                     <input type="hidden" name="msg_id" value={msg.id} />
                     <input class="edit-input" name="body" bind:value={editBody} onkeydown={(e) => { if (e.key === 'Escape') cancelEdit(); }} />
                     <div class="edit-actions">
-                      <button type="submit" class="btn-xs btn-accent">Save</button>
-                      <button type="button" class="btn-xs" onclick={cancelEdit}>Cancel</button>
+                      <button type="submit" class="btn-xs btn-accent">{tr.common.save}</button>
+                      <button type="button" class="btn-xs" onclick={cancelEdit}>{tr.common.cancel}</button>
                     </div>
                   </form>
                 {:else}
-                  {#if msg.body}<p class="msg-text">{msg.body}{#if msg.edited_at}<span class="msg-edited"> (edited)</span>{/if}</p>{/if}
+                  {#if msg.body}<p class="msg-text">{msg.body}{#if msg.edited_at}<span class="msg-edited"> ({tr.messaging.edited})</span>{/if}</p>{/if}
                   {#if msg.attachment_url}
                     {#if msg.attachment_type?.startsWith('image/')}
-                      <img src={msg.attachment_url} alt={msg.attachment_name ?? 'attachment'} class="msg-image" />
+                      <img src={msg.attachment_url} alt={msg.attachment_name ?? tr.memberMessages.attachment} class="msg-image" />
                     {:else}
                       <a href={msg.attachment_url} target="_blank" rel="noopener noreferrer" class="msg-file">
                         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
@@ -345,13 +346,13 @@
               </div>
               {#if isOwn && editingId !== msg.id && msg.message_type === 'text'}
                 <div class="msg-actions">
-                  <button type="button" class="action-btn" title="Edit" onclick={() => startEdit(msg.id, msg.body ?? '')}>
+                  <button type="button" class="action-btn" title={tr.common.edit} onclick={() => startEdit(msg.id, msg.body ?? '')}>
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
                   </button>
                   <form method="POST" action="?/deleteTicket" use:enhance style="display:contents">
                     <input type="hidden" name="msg_id" value={msg.id} />
-                    <button type="submit" class="action-btn action-btn-danger" title="Delete"
-                      onclick={(e) => { if (!confirm('Delete this message?')) e.preventDefault(); }}>
+                    <button type="submit" class="action-btn action-btn-danger" title={tr.common.delete}
+                      onclick={(e) => { if (!confirm(tr.messaging.confirmDelete)) e.preventDefault(); }}>
                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
                     </button>
                   </form>
@@ -361,8 +362,8 @@
           {/if}
         {:else}
           <div class="thread-empty">
-            <p class="thread-empty-title">Thread opened</p>
-            <p class="thread-empty-sub">No replies yet.</p>
+            <p class="thread-empty-title">{tr.memberMessages.threadOpened}</p>
+            <p class="thread-empty-sub">{tr.memberMessages.noRepliesYet}</p>
           </div>
         {/each}
       </div>
@@ -370,19 +371,19 @@
       {#if activeTicket.status === 'open'}
         <form class="compose" method="POST" action="?/sendTicket" use:enhance={() => { body = ''; return async ({ update }) => update(); }}>
           <input type="hidden" name="ticket_id" value={activeTicket.id} />
-          <input class="compose-input" name="body" placeholder="Reply…" bind:value={body} onkeydown={submitOnEnter} autocomplete="off" />
+          <input class="compose-input" name="body" placeholder={tr.memberMessages.replyPlaceholder} bind:value={body} onkeydown={submitOnEnter} autocomplete="off" />
           <button type="submit" class="compose-send" disabled={!body.trim()}>
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
           </button>
         </form>
       {:else}
-        <div class="compose-closed">This ticket is closed.</div>
+        <div class="compose-closed">{tr.memberMessages.ticketClosed}</div>
       {/if}
 
     {:else}
       <div class="empty-state">
         <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-        <p>Select a channel or thread to start messaging</p>
+        <p>{tr.memberMessages.selectToStart}</p>
       </div>
     {/if}
   </div>

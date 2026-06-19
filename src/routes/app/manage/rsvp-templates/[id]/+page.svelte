@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
-	import { t } from '$lib/i18n';
+	import { t } from '$lib/i18n.svelte';
 	import type { PageData, ActionData } from './$types';
 	import type { RsvpConfig } from '$lib/db/index';
 
@@ -57,7 +57,7 @@
 		fields = arr;
 	}
 
-	const defaultAllergens = t.rsvpEditor.defaultAllergens.split(',').map(s => s.trim());
+	const defaultAllergens = $derived(t.rsvpEditor.defaultAllergens.split(',').map(s => s.trim()));
 
 	const configJson = $derived(JSON.stringify({
 		primaryColor, bgColor, bgImage, description,

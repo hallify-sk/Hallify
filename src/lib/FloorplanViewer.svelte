@@ -24,6 +24,10 @@
 	}
 	const { layoutJson, rsvps, reservationId, onsave, tableTypes = [] }: Props = $props();
 
+	// RSVP feature is hidden for now — gate the import UI but keep importRsvp()/rsvps wired
+	// so it can be re-enabled by flipping this flag.
+	const SHOW_RSVP = false;
+
 	// ─── State (loaded from layoutJson) ──────────────────────────────────────
 	let floors = $state<FloorData[]>([]);
 	let activeFloorIdx = $state(0);
@@ -49,7 +53,7 @@
 	let activePing = $state<string | null>(null);
 
 	import { onMount } from 'svelte';
-	import { t } from '$lib/i18n';
+	import { t as tr } from '$lib/i18n.svelte';
 
 	onMount(() => {
 		if (typeof localStorage !== 'undefined') {
@@ -404,18 +408,18 @@
 		{#if showTutorial}
 			<!-- Ping on first table area (top-left of canvas) -->
 			<div class="ping-container" style="top:50%;left:50%;transform:translate(-50%,-50%)">
-				<button class="ping" onclick={() => togglePing('table')} aria-label="Table hint">
+				<button class="ping" onclick={() => togglePing('table')} aria-label={tr.components.tableHintLabel}>
 					<span class="ping-dot"></span>
 					<span class="ping-ring"></span>
 				</button>
 				{#if activePing === 'table'}
-					<div class="ping-tooltip">{t.tutorial.tableHint}</div>
+					<div class="ping-tooltip">{tr.tutorial.tableHint}</div>
 				{/if}
 			</div>
 
 			<!-- Dismiss button -->
 			<button class="tutorial-dismiss" onclick={dismissTutorial}>
-				{t.tutorial.dontShowAgain}
+				{tr.tutorial.dontShowAgain}
 			</button>
 		{/if}
 
@@ -429,7 +433,7 @@
 			onwheel={onWheel}
 			style="cursor:{isPanning ? 'grabbing' : 'default'}"
 			role="img"
-			aria-label="Seating floor plan"
+			aria-label={tr.components.seatingFloorPlan}
 		>
 			<defs>
 				<pattern id="vgrid" width={zoom} height={zoom} patternUnits="userSpaceOnUse"
@@ -537,7 +541,7 @@
 				style="left:{Math.min(chairPopover.x+12, 9999)}px; top:{Math.min(chairPopover.y-8, 9999)}px">
 				<div class="pop-header">
 					<span>
-						{#if popoverTable}{popoverTable.label} · seat {chairPopover.chairIdx + 1}{/if}
+						{#if popoverTable}{popoverTable.label} · {tr.components.seat} {chairPopover.chairIdx + 1}{/if}
 					</span>
 					<button onclick={() => { chairPopover = null; guestSearch = ''; }} class="pop-close">✕</button>
 				</div>
@@ -545,10 +549,10 @@
 					<div class="current-guest">
 						<div class="cg-avatar">{popoverChairGuest.firstName[0]}{popoverChairGuest.lastName[0]}</div>
 						<span>{popoverChairGuest.firstName} {popoverChairGuest.lastName}</span>
-						<button onclick={clearChairAssignment} class="unassign-btn">Remove</button>
+						<button onclick={clearChairAssignment} class="unassign-btn">{tr.components.remove}</button>
 					</div>
 				{/if}
-				<input type="text" bind:value={guestSearch} placeholder="Search guests…" class="pop-search" />
+				<input type="text" bind:value={guestSearch} placeholder={tr.components.searchGuests} class="pop-search" />
 				<div class="pop-list">
 					{#each filteredPopoverGuests as g}
 						<button onclick={() => assignGuest(g.id)} class="pop-guest"
@@ -558,30 +562,30 @@
 						</button>
 					{/each}
 					{#if filteredPopoverGuests.length === 0}
-						<p class="pop-empty">No unassigned guests found</p>
+						<p class="pop-empty">{tr.components.noUnassignedGuests}</p>
 					{/if}
 				</div>
 			</div>
 		{/if}
 
 		<!-- Zoom hint -->
-		<div class="zoom-hint">Alt+drag or scroll to pan/zoom</div>
+		<div class="zoom-hint">{tr.components.panZoomHint}</div>
 	</div>
 
 	<!-- Right panel -->
 	<div class="right-panel">
 		<div class="panel-header">
-			<span>Guests</span>
+			<span>{tr.components.guests}</span>
 			<span class="panel-count">{guests.length}</span>
 		</div>
 
 		<!-- Import RSVPs (grouped by surname family) -->
-		{#if rsvps.length > 0}
+		{#if SHOW_RSVP && rsvps.length > 0}
 			<div class="rsvp-section">
 				<div class="section-label-row">
-					<span class="section-label">RSVPs ({rsvps.length})</span>
+					<span class="section-label">{tr.components.rsvps} ({rsvps.length})</span>
 					{#if !rsvps.every(r => guests.some(g => `${g.firstName} ${g.lastName}`.toLowerCase() === r.name.toLowerCase()))}
-						<button onclick={importAllRsvps} class="import-all-btn">Import all</button>
+						<button onclick={importAllRsvps} class="import-all-btn">{tr.components.importAll}</button>
 					{/if}
 				</div>
 				{#each groupedRsvps as [, familyRsvps]}
@@ -591,9 +595,9 @@
 							<div class="rsvp-row">
 								<span class="rsvp-name">{rsvp.name}</span>
 								{#if alreadyAdded}
-									<span class="added-badge">Added</span>
+									<span class="added-badge">{tr.components.added}</span>
 								{:else}
-									<button onclick={() => importRsvp(rsvp)} class="import-btn">Import</button>
+									<button onclick={() => importRsvp(rsvp)} class="import-btn">{tr.components.import}</button>
 								{/if}
 							</div>
 						{/each}
@@ -604,15 +608,15 @@
 
 		<!-- Add guest manually -->
 		<div class="add-section">
-			<div class="section-label">Add guest</div>
-			<input type="text" bind:value={newFirst} placeholder="First name" />
-			<input type="text" bind:value={newLast} placeholder="Last name" style="margin-top:4px"/>
-			<button onclick={addGuest} class="add-btn" disabled={!newFirst.trim() || !newLast.trim()}>Add</button>
+			<div class="section-label">{tr.components.addGuest}</div>
+			<input type="text" bind:value={newFirst} placeholder={tr.components.firstName} />
+			<input type="text" bind:value={newLast} placeholder={tr.components.lastName} style="margin-top:4px"/>
+			<button onclick={addGuest} class="add-btn" disabled={!newFirst.trim() || !newLast.trim()}>{tr.components.add}</button>
 		</div>
 
 		<!-- Guest list (grouped by surname family) -->
 		<div class="guest-list-section">
-			<div class="section-label">Seating list</div>
+			<div class="section-label">{tr.components.seatingList}</div>
 			{#each groupedGuests as [familyRoot, familyGuests]}
 				<div class="family-group">
 					<div class="family-label">{familyGuests[0].group || familyRoot}</div>
@@ -628,18 +632,18 @@
 								{#if tableForGuest}
 									<span class="seat-tag">{tableForGuest.label} #{seatIdx+1}</span>
 								{:else}
-									<span class="no-seat">Unassigned</span>
+									<span class="no-seat">{tr.components.unassigned}</span>
 								{/if}
 							</div>
 						</div>
 					{/each}
 				</div>
 			{:else}
-				<p class="empty-guests">No guests yet. Import RSVPs or add manually.</p>
+				<p class="empty-guests">{tr.components.noGuestsYet}</p>
 			{/each}
 		</div>
 
-		<button onclick={saveLayout} class="save-btn">Save seating</button>
+		<button onclick={saveLayout} class="save-btn">{tr.components.saveSeating}</button>
 	</div>
 </div>
 

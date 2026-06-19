@@ -18,6 +18,14 @@ export interface TableObj {
 }
 export interface Guest {
 	id: string; firstName: string; lastName: string; group?: string;
+	note?: string;       // free-form note (dietary, accessibility, …); auto-seeded from RSVP allergies
+}
+
+/** A chair placed on its own (not attached to a table) — e.g. concert seating. */
+export interface SeatObj {
+	id: string; x: number; y: number; rotation: number;
+	assignment: string | null;   // guest id, like a table chair
+	label?: string;
 }
 
 export interface FloorData {
@@ -26,6 +34,7 @@ export interface FloorData {
 	walls: WallObj[];
 	zones: ZoneObj[];
 	tables: TableObj[];
+	seats?: SeatObj[];     // standalone chairs (optional for legacy compat)
 	bounds: BoundsRect | null;
 }
 
@@ -53,12 +62,17 @@ export function migrateChairCounts(t: TableObj): TableObj {
 	return { ...t, chairsTop: 0, chairsBottom: 0, chairsLeft: Math.ceil(n / 2), chairsRight: n - Math.ceil(n / 2) };
 }
 
-/** Convert any floorplan JSON (legacy or multi-floor) into MultiFloorState */
+/** Convert any floorplan JSON (legacy or multi-floor) into MultiFloorState.
+ *  Accepts either a parsed object or a raw JSON string (DB columns are often
+ *  passed straight through without `fromJson`). */
 export function migrateToMultiFloor(raw: unknown): MultiFloorState {
+	if (typeof raw === 'string') {
+		try { raw = JSON.parse(raw); } catch { raw = null; }
+	}
 	if (!raw || typeof raw !== 'object') {
 		return {
 			version: 2,
-			floors: [{ id: crypto.randomUUID(), name: 'Floor 1', walls: [], zones: [], tables: [], bounds: null }],
+			floors: [{ id: crypto.randomUUID(), name: 'Floor 1', walls: [], zones: [], tables: [], seats: [], bounds: null }],
 			guests: [],
 		};
 	}
@@ -66,7 +80,10 @@ export function migrateToMultiFloor(raw: unknown): MultiFloorState {
 
 	// Already multi-floor format
 	if (obj.version === 2 && Array.isArray(obj.floors)) {
-		return obj as unknown as MultiFloorState;
+		const state = obj as unknown as MultiFloorState;
+		// Ensure every floor has a seats array (added after the original v2 format).
+		for (const f of state.floors) if (!Array.isArray(f.seats)) f.seats = [];
+		return state;
 	}
 
 	// Legacy single-floor format: wrap in floors array
@@ -78,8 +95,25 @@ export function migrateToMultiFloor(raw: unknown): MultiFloorState {
 			walls: Array.isArray(obj.walls) ? obj.walls as WallObj[] : [],
 			zones: Array.isArray(obj.zones) ? obj.zones as ZoneObj[] : [],
 			tables: (Array.isArray(obj.tables) ? obj.tables as TableObj[] : []).map(migrateChairCounts),
+			seats: Array.isArray(obj.seats) ? obj.seats as SeatObj[] : [],
 			bounds: (obj.bounds as BoundsRect) ?? null,
 		}],
 		guests: Array.isArray(obj.guests) ? obj.guests as Guest[] : [],
 	};
+}
+
+/** Total seat (chair) count across every floor/table of a layout. Uses per-side
+ *  counts when present, else the legacy flat `chairs` count. Accepts raw stored
+ *  JSON (string or parsed) — migrates to the v2 multi-floor shape first. */
+export function countSeats(raw: unknown): number {
+	const state = migrateToMultiFloor(raw);
+	let seats = 0;
+	for (const floor of state.floors) {
+		for (const t of floor.tables) {
+			const perSide = (Number(t.chairsTop) || 0) + (Number(t.chairsBottom) || 0) +
+				(Number(t.chairsLeft) || 0) + (Number(t.chairsRight) || 0);
+			seats += perSide || (Number(t.chairs) || 0);
+		}
+	}
+	return seats;
 }

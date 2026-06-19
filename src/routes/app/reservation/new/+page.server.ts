@@ -1,46 +1,73 @@
 import { fail, redirect } from '@sveltejs/kit';
-import sql from '$lib/db/index';
+import { dbAll, dbFirst, dbRun, fromJson, fromJsonArr } from '$lib/db/index';
 import type { HallRow, HallBlockRow, TemplateRow } from '$lib/db/index';
 import type { Actions, PageServerLoad } from './$types';
 import { notifyNewReservation } from '$lib/email';
 import { postSystemMessage } from '$lib/tickets';
+import { assertCanBook, getTakenDates, getHeldDatesByOthers, releaseHold, earliestBookableISO, HOLD_MINUTES } from '$lib/availability';
+import { st } from '$lib/i18n-server';
+
+const RANGE_DAYS = 540; // how far ahead to compute taken/held for the picker
 
 export const load: PageServerLoad = async ({ locals, url }) => {
 	if (!locals.user) redirect(303, '/app/login');
-
 	const orgId = locals.currentOrg?.id;
-	const halls = await sql<(Pick<HallRow, 'id' | 'name' | 'description' | 'max_people' | 'auto_approve' | 'pre_reservation_text' | 'allow_reservations' | 'color' | 'slug' | 'cover_image_url'>)[]>`
-		SELECT id, name, description, max_people, auto_approve, pre_reservation_text, allow_reservations, color, slug, cover_image_url FROM halls
-		WHERE org_id = ${orgId ?? null} ORDER BY name
-	`;
+
+	const halls = await dbAll<Pick<HallRow,
+		'id' | 'name' | 'description' | 'max_people' | 'auto_approve' | 'pre_reservation_text' |
+		'allow_reservations' | 'custom_layouts' | 'force_layouts' | 'min_days_advance' | 'color' | 'slug' | 'cover_image_url'>>(
+		locals.db,
+		`SELECT id, name, description, max_people, auto_approve, pre_reservation_text, allow_reservations,
+		        custom_layouts, force_layouts, min_days_advance, color, slug, cover_image_url
+		 FROM halls WHERE org_id = ? ORDER BY name`,
+		orgId ?? null
+	);
 
 	const hallId = url.searchParams.get('hall');
 	let blocks: HallBlockRow[] = [];
 	let templates: TemplateRow[] = [];
 	let takenDates: string[] = [];
+	let heldDates: string[] = [];
 
-	if (hallId) {
-		blocks = await sql<HallBlockRow[]>`
-			SELECT * FROM hall_blocks WHERE hall_id = ${hallId}
-		`;
-		templates = await sql<TemplateRow[]>`
-			SELECT * FROM floorplan_templates WHERE hall_id = ${hallId} ORDER BY name
-		`;
-		const taken = await sql<{ event_date: Date }[]>`
-			SELECT event_date FROM reservations WHERE hall_id = ${hallId} AND status != 'cancelled'
-		`;
-		takenDates = taken.map(r => {
-			const d = new Date(r.event_date);
-			return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-		});
+	if (hallId && halls.some(h => h.id === hallId)) {
+		const today = new Date();
+		const fromISO = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+		const to = new Date(today); to.setDate(today.getDate() + RANGE_DAYS);
+		const toISO = `${to.getFullYear()}-${String(to.getMonth() + 1).padStart(2, '0')}-${String(to.getDate()).padStart(2, '0')}`;
+
+		blocks = await dbAll<HallBlockRow>(locals.db, 'SELECT * FROM hall_blocks WHERE hall_id = ?', hallId);
+		templates = await dbAll<TemplateRow>(locals.db, 'SELECT * FROM floorplan_templates WHERE hall_id = ? ORDER BY name', hallId);
+		takenDates = await getTakenDates(locals.db, hallId, fromISO, toISO);
+		heldDates = await getHeldDatesByOthers(locals.db, hallId, locals.user.id);
 	}
 
-	return { halls, blocks, templates, selectedHallId: hallId, takenDates };
+	const dateParam = url.searchParams.get('date');
+	const selectedDate = dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam) ? dateParam : null;
+
+	return {
+		halls: halls.map(h => ({
+			...h,
+			auto_approve: !!h.auto_approve,
+			allow_reservations: !!h.allow_reservations,
+			custom_layouts: !!h.custom_layouts,
+			force_layouts: !!h.force_layouts,
+			earliestDate: earliestBookableISO(h.min_days_advance),
+		})),
+		blocks: blocks.map(b => ({ ...b, days_of_week: fromJsonArr(b.days_of_week as string | null) })),
+		templates: templates.map(t => ({ ...t, layout_json: fromJson(t.layout_json as string | null) })),
+		selectedHallId: hallId,
+		selectedDate,
+		takenDates,
+		heldDates,
+		holdMinutes: HOLD_MINUTES,
+	};
 };
 
 export const actions: Actions = {
 	default: async ({ request, locals }) => {
 		if (!locals.user) redirect(303, '/app/login');
+		const orgId = locals.currentOrg?.id;
+		if (!orgId) return fail(403, { error: st(locals.locale).serverErrors.noOrganizationSelected });
 
 		const data = await request.formData();
 		const hallId = String(data.get('hallId') ?? '');
@@ -48,72 +75,53 @@ export const actions: Actions = {
 		const description = String(data.get('description') ?? '').trim();
 		const eventDate = String(data.get('eventDate') ?? '');
 		const templateId = String(data.get('templateId') ?? '');
+		const startTime = String(data.get('startTime') ?? '').trim() || null;
+		const endTime = String(data.get('endTime') ?? '').trim() || null;
+		const numGuests = parseInt(String(data.get('numGuests') ?? ''), 10) || null;
 
 		if (!hallId || !title || !eventDate) {
-			return fail(400, { error: 'Vyplňte všetky povinné polia.' });
+			return fail(400, { error: st(locals.locale).serverErrors.fillAllRequiredFields, values: { hallId, eventDate } });
 		}
 
-		// Check hall exists and allows reservations
-		const [hall] = await sql<HallRow[]>`SELECT * FROM halls WHERE id = ${hallId}`;
-		if (!hall || !hall.allow_reservations) {
-			return fail(400, { error: 'Táto sála nie je dostupná pre rezervácie.' });
+		const hall = await dbFirst<HallRow>(locals.db, 'SELECT * FROM halls WHERE id = ? AND org_id = ?', hallId, orgId);
+		if (!hall) return fail(400, { error: st(locals.locale).serverErrors.hallNotFound });
+
+		if (hall.force_layouts && !templateId) {
+			return fail(400, { error: st(locals.locale).serverErrors.layoutMustBeSelected, values: { hallId, eventDate } });
 		}
 
-		// Check for blocked date
-		const blocks = await sql<HallBlockRow[]>`
-			SELECT * FROM hall_blocks WHERE hall_id = ${hallId}
-		`;
-		const d = new Date(eventDate);
-		const dow = d.getDay();
-		const blocked = blocks.some((b) => {
-			if (b.block_type === 'weekly') return b.days_of_week?.includes(dow);
-			if (b.block_type === 'date_range' && b.date_from && b.date_to) {
-				return d >= new Date(b.date_from) && d <= new Date(b.date_to);
-			}
-			return false;
-		});
-		if (blocked) {
-			return fail(400, { error: 'Sála nie je dostupná v zvolený dátum.' });
-		}
+		// All availability rules in one place (past/min-advance/blocked/taken/held/capacity).
+		const check = await assertCanBook(locals.db, hall, eventDate, locals.user.id, numGuests, locals.locale);
+		if (!check.ok) return fail(400, { error: check.reason, values: { hallId, eventDate } });
 
-		// Check date not already taken
-		const [existing] = await sql<[{ count: string }]>`
-			SELECT COUNT(*)::text AS count FROM reservations
-			WHERE hall_id = ${hallId} AND event_date = ${eventDate} AND status != 'cancelled'
-		`;
-		if (Number(existing.count) > 0) {
-			return fail(400, { error: 'Na tento dátum už existuje udalosť v tejto sále.' });
-		}
-
-		// Copy template layout if provided
-		let layoutJson = null;
+		let layoutJson: string | null = null;
 		if (templateId) {
-			const [tmpl] = await sql<TemplateRow[]>`SELECT layout_json FROM floorplan_templates WHERE id = ${templateId}`;
-			if (tmpl) layoutJson = tmpl.layout_json;
+			const tmpl = await dbFirst<TemplateRow>(locals.db,
+				'SELECT layout_json FROM floorplan_templates WHERE id = ? AND hall_id = ?', templateId, hallId);
+			if (tmpl) layoutJson = tmpl.layout_json as string | null;
 		}
 
-		// Determine initial status: auto-approve if hall has it enabled
 		const initialStatus = hall.auto_approve ? 'approved' : 'pending';
+		const newId = crypto.randomUUID();
+		const inviteCode = crypto.randomUUID().replace(/-/g, '').slice(0, 8).toUpperCase();
 
-		const orgId = locals.currentOrg!.id;
-		const [{ id }] = await sql<[{ id: string }]>`
-			INSERT INTO reservations (org_id, hall_id, user_id, title, description, event_date, layout_json, status)
-			VALUES (${orgId}, ${hallId}, ${locals.user.id}, ${title}, ${description || null}, ${eventDate}, ${layoutJson ? JSON.stringify(layoutJson) : null}, ${initialStatus})
-			RETURNING id
-		`;
+		try {
+			await dbRun(locals.db,
+				`INSERT INTO reservations (id, org_id, hall_id, user_id, title, description, event_date, start_time, end_time, layout_json, status, invite_code, num_guests)
+				 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+				newId, orgId, hallId, locals.user.id, title, description || null, eventDate, startTime, endTime, layoutJson, initialStatus, inviteCode, numGuests
+			);
+		} catch {
+			// Lost the one-per-hall-day unique index race.
+			return fail(409, { error: st(locals.locale).serverErrors.dateJustTaken, values: { hallId } });
+		}
 
-		// Post system message about creation
+		await releaseHold(locals.db, hallId, eventDate, locals.user.id);
+
 		const userName = `${locals.user.first_name} ${locals.user.last_name}`;
-		await postSystemMessage(
-			locals.user.id,
-			title,
-			`reservation_created:${initialStatus}:${userName}`,
-			locals.user.id
-		);
+		await postSystemMessage(locals.db, locals.user.id, title, `reservation_created:${initialStatus}:${userName}`, locals.user.id);
+		notifyNewReservation(locals.db, orgId, title, userName, hall.name, eventDate).catch(() => {});
 
-		// Notify admins about new reservation
-		notifyNewReservation(userName, title, hall.name, eventDate).catch(() => {});
-
-		redirect(303, `/reservation/${id}`);
+		redirect(303, `/app/reservation/${newId}`);
 	}
 };

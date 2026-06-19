@@ -1,13 +1,12 @@
 import { redirect, fail } from '@sveltejs/kit';
-import sql from '$lib/db/index';
+import { dbAll, dbFirst, dbRun } from '$lib/db/index';
 import type { RsvpTemplateRow } from '$lib/db/index';
+import { st } from '$lib/i18n-server';
 import type { Actions, PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ locals }) => {
   const orgId = locals.currentOrg!.id;
-  const templates = await sql<RsvpTemplateRow[]>`
-    SELECT * FROM rsvp_templates WHERE org_id = ${orgId} ORDER BY created_at DESC
-  `;
+  const templates = await dbAll<RsvpTemplateRow>(locals.db, 'SELECT * FROM rsvp_templates WHERE org_id = ? ORDER BY created_at DESC', orgId);
   return { templates };
 };
 
@@ -18,22 +17,19 @@ export const actions: Actions = {
     const name = String(data.get('name') ?? '').trim();
     const eventType = String(data.get('event_type') ?? '').trim() || null;
 
-    if (!name) return fail(400, { error: 'Name is required.' });
+    if (!name) return fail(400, { error: st(locals.locale).serverErrors.nameRequired });
 
-    const [tmpl] = await sql<RsvpTemplateRow[]>`
-      INSERT INTO rsvp_templates (org_id, name, event_type)
-      VALUES (${orgId}, ${name}, ${eventType})
-      RETURNING *
-    `;
+    const id = crypto.randomUUID();
+    await dbRun(locals.db, 'INSERT INTO rsvp_templates (id, org_id, name, event_type) VALUES (?, ?, ?, ?)', id, orgId, name, eventType);
 
-    redirect(303, `/admin/rsvp-templates/${tmpl.id}`);
+    redirect(303, `/admin/rsvp-templates/${id}`);
   },
 
   delete: async ({ request, locals }) => {
     const orgId = locals.currentOrg!.id;
     const data = await request.formData();
     const id = String(data.get('id') ?? '');
-    await sql`DELETE FROM rsvp_templates WHERE id = ${id} AND org_id = ${orgId}`;
+    await dbRun(locals.db, 'DELETE FROM rsvp_templates WHERE id = ? AND org_id = ?', id, orgId);
     return { success: true };
   }
 };

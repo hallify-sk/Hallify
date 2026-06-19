@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
-	import { t } from '$lib/i18n';
+	import { t } from '$lib/i18n.svelte';
 	import SectionHeader from '$lib/components/SectionHeader.svelte';
 	import type { PageData, ActionData } from './$types';
 	import type { RsvpConfig } from '$lib/db/index';

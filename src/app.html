@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="%lang%">
 	<head>
 		<meta charset="utf-8" />
 		<link rel="icon" href="%sveltekit.assets%/favicon.png" />
@@ -10,7 +10,7 @@
 		%sveltekit.head%
 	</head>
 	<body data-sveltekit-preload-data="hover">
-		<script>try{var __t=localStorage.getItem('hallify-theme');if(__t)document.documentElement.setAttribute('data-theme',__t);}catch(e){}</script>
+		<script>try{var __t=localStorage.getItem('hallify-theme');if(!__t){__t=window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'slate';}document.documentElement.setAttribute('data-theme',__t);}catch(e){}</script>
 		<div style="display: contents">%sveltekit.body%</div>
 	</body>
 </html>

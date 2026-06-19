@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
-	import { t } from '$lib/i18n';
+	import { t } from '$lib/i18n.svelte';
 	import SectionHeader from '$lib/components/SectionHeader.svelte';
 	import MiniCalendar from '$lib/components/MiniCalendar.svelte';
 	import KpiCard from '$lib/components/KpiCard.svelte';

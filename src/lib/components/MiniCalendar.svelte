@@ -1,14 +1,21 @@
 <script lang="ts">
-	import { t } from '$lib/i18n';
+	import { t } from '$lib/i18n.svelte';
 
 	interface Props {
 		selectedDate?: string;
-		events?: string[];
-		blockedDates?: string[];
+		events?: string[];           // soft markers (dots)
+		blockedDates?: string[];     // unavailable by hall rules (hatch)
+		takenDates?: string[];       // already booked (filled, non-selectable)
+		heldDates?: string[];        // held by someone else right now (amber, non-selectable)
+		minDate?: string;            // earliest selectable day (YYYY-MM-DD); earlier days are disabled
+		showLegend?: boolean;
 		onselect?: (date: string) => void;
 		title?: string;
 	}
-	const { selectedDate, events = [], blockedDates = [], onselect, title }: Props = $props();
+	const {
+		selectedDate, events = [], blockedDates = [], takenDates = [], heldDates = [],
+		minDate, showLegend = false, onselect, title,
+	}: Props = $props();
 
 	let viewYear = $state(new Date().getFullYear());
 	let viewMonth = $state(new Date().getMonth());
@@ -41,8 +48,10 @@
 		let startDow = firstDay.getDay() - 1;
 		if (startDow < 0) startDow = 6;
 
-		const rows: { day: number; iso: string; inMonth: boolean; isToday: boolean; isSunday: boolean; hasEvent: boolean; isBlocked: boolean; isSelected: boolean }[][] = [];
-		let row: typeof rows[0] = [];
+		type Cell = { day: number; iso: string; inMonth: boolean; isToday: boolean; isSunday: boolean; hasEvent: boolean; isBlocked: boolean; isTaken: boolean; isHeld: boolean; isPast: boolean; isSelected: boolean };
+		const rows: Cell[][] = [];
+		let row: Cell[] = [];
+		const fill = (day: number, iso: string, isSunday: boolean): Cell => ({ day, iso, inMonth: false, isToday: false, isSunday, hasEvent: false, isBlocked: false, isTaken: false, isHeld: false, isPast: false, isSelected: false });
 
 		// Previous month fill
 		const prevLast = new Date(viewYear, viewMonth, 0).getDate();
@@ -50,8 +59,7 @@
 			const d = prevLast - i;
 			const m = viewMonth === 0 ? 11 : viewMonth - 1;
 			const y = viewMonth === 0 ? viewYear - 1 : viewYear;
-			const iso = toIso(y, m, d);
-			row.push({ day: d, iso, inMonth: false, isToday: false, isSunday: false, hasEvent: false, isBlocked: false, isSelected: false });
+			row.push(fill(d, toIso(y, m, d), false));
 		}
 
 		// Current month
@@ -66,6 +74,9 @@
 				isSunday: dow === 0,
 				hasEvent: events.includes(iso),
 				isBlocked: blockedDates.includes(iso),
+				isTaken: takenDates.includes(iso),
+				isHeld: heldDates.includes(iso),
+				isPast: !!minDate && iso < minDate,
 				isSelected: iso === selectedDate,
 			});
 			if (row.length === 7) { rows.push(row); row = []; }
@@ -77,8 +88,7 @@
 			while (row.length < 7) {
 				const m = viewMonth === 11 ? 0 : viewMonth + 1;
 				const y = viewMonth === 11 ? viewYear + 1 : viewYear;
-				const iso = toIso(y, m, nd);
-				row.push({ day: nd, iso, inMonth: false, isToday: false, isSunday: new Date(y, m, nd).getDay() === 0, hasEvent: false, isBlocked: false, isSelected: false });
+				row.push(fill(nd, toIso(y, m, nd), new Date(y, m, nd).getDay() === 0));
 				nd++;
 			}
 			rows.push(row);
@@ -87,9 +97,12 @@
 		return rows;
 	});
 
+	function isLocked(cell: { isBlocked: boolean; isTaken: boolean; isHeld: boolean; isPast: boolean }) {
+		return cell.isBlocked || cell.isTaken || cell.isHeld || cell.isPast;
+	}
+
 	function onDayClick(cell: (typeof cells)[0][0]) {
-		if (!onselect) return;
-		if (cell.isBlocked) return;
+		if (!onselect || !cell.inMonth || isLocked(cell)) return;
 		onselect(cell.iso);
 	}
 </script>
@@ -108,10 +121,10 @@
 			<span>{t.monthNames[viewMonth].toLowerCase()} {viewYear}</span>
 		</div>
 		<div class="cal-nav-btns">
-			<button onclick={prevMonth} class="cal-arrow" aria-label="Previous month">
+			<button type="button" onclick={prevMonth} class="cal-arrow" aria-label={t.components.prevMonth}>
 				<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="5" y1="12" x2="19" y2="12"/></svg>
 			</button>
-			<button onclick={nextMonth} class="cal-arrow" aria-label="Next month">
+			<button type="button" onclick={nextMonth} class="cal-arrow" aria-label={t.components.nextMonth}>
 				<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
 			</button>
 		</div>
@@ -131,18 +144,23 @@
 					{#each row as cell}
 						<td>
 							<button
+								type="button"
 								class="cal-day"
 								class:out={!cell.inMonth}
 								class:today={cell.isToday}
 								class:sunday={cell.isSunday && cell.inMonth}
 								class:blocked={cell.isBlocked}
+								class:taken={cell.isTaken}
+								class:held={cell.isHeld}
+								class:past={cell.isPast && cell.inMonth}
 								class:selected={cell.isSelected}
-								class:clickable={!!onselect && cell.inMonth && !cell.isBlocked}
-								onclick={() => cell.inMonth && onDayClick(cell)}
-								disabled={cell.isBlocked && !!onselect}
+								class:clickable={!!onselect && cell.inMonth && !isLocked(cell)}
+								onclick={() => onDayClick(cell)}
+								disabled={!!onselect && cell.inMonth && isLocked(cell)}
+								title={cell.isTaken ? t.components.calBooked : cell.isHeld ? t.components.calBeingBooked : cell.isBlocked ? t.components.calUnavailable : ''}
 							>
 								{cell.day}
-								{#if cell.hasEvent}
+								{#if cell.hasEvent && !cell.isTaken}
 									<span class="event-dot"></span>
 								{/if}
 							</button>
@@ -152,6 +170,14 @@
 			{/each}
 		</tbody>
 	</table>
+
+	{#if showLegend}
+		<div class="cal-legend">
+			<span class="lg"><span class="lg-dot lg-taken"></span>{t.components.calBooked}</span>
+			<span class="lg"><span class="lg-dot lg-held"></span>{t.components.legendOnHold}</span>
+			<span class="lg"><span class="lg-dot lg-blocked"></span>{t.components.calUnavailable}</span>
+		</div>
+	{/if}
 </div>
 
 <style>
@@ -261,7 +287,33 @@
 		color: var(--danger);
 		text-decoration: line-through;
 		opacity: 0.5;
+		cursor: not-allowed;
 	}
+
+	/* Already booked — solid filled + struck through so it's unmistakable in any
+	   theme (the old faint tint was invisible in dark mode). No PII: only that
+	   the day is taken, never by whom. */
+	.cal-day.taken:not(.today) {
+		background: color-mix(in srgb, var(--text-muted) 34%, var(--bg-panel));
+		color: var(--text-subtle);
+		text-decoration: line-through;
+		text-decoration-color: color-mix(in srgb, var(--text-muted) 55%, transparent);
+		cursor: not-allowed;
+	}
+
+	/* Held by someone else right now */
+	.cal-day.held:not(.today) {
+		background: color-mix(in srgb, var(--warning, #f59e0b) 32%, var(--bg-panel));
+		color: color-mix(in srgb, var(--warning, #f59e0b) 70%, var(--text-base));
+		cursor: not-allowed;
+	}
+
+	/* Past / before min-advance */
+	.cal-day.past {
+		color: var(--border);
+		cursor: not-allowed;
+	}
+	.cal-day.past.sunday { color: var(--border); }
 
 	.cal-day.selected:not(.today) {
 		background: var(--accent-dim);
@@ -287,4 +339,18 @@
 		border-radius: 50%;
 		background: var(--accent);
 	}
+
+	.cal-legend {
+		display: flex;
+		gap: 14px;
+		flex-wrap: wrap;
+		margin-top: 14px;
+		padding-top: 12px;
+		border-top: 1px solid var(--border);
+	}
+	.lg { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; color: var(--text-muted); }
+	.lg-dot { width: 10px; height: 10px; border-radius: 3px; }
+	.lg-taken { background: color-mix(in srgb, var(--text-muted) 45%, transparent); }
+	.lg-held { background: color-mix(in srgb, var(--warning, #f59e0b) 60%, transparent); }
+	.lg-blocked { background: color-mix(in srgb, var(--danger) 55%, transparent); }
 </style>

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { t } from '$lib/i18n';
+	import { t } from '$lib/i18n.svelte';
 	import type { PageData } from './$types';
 	import type { ReservationStatus } from '$lib/db';
 
@@ -7,6 +7,10 @@
 	const { data }: Props = $props();
 
 	let filter = $state<'all' | ReservationStatus>('all');
+
+	// An event whose date is before today (UTC) has passed.
+	const todayISO = new Date().toISOString().slice(0, 10);
+	const isPastEvent = (d: string) => d.slice(0, 10) < todayISO;
 
 	const filtered = $derived(
 		filter === 'all'
@@ -84,9 +88,10 @@
 				<tbody>
 					{#each filtered as res}
 						{@const sc = STATUS_COLOR[res.status] ?? '--s-slate'}
-						<tr onclick={() => window.location.href = `/app/manage/reservations/${res.id}`} class="res-row">
+						<tr onclick={() => window.location.href = `/app/reservation/${res.id}`} class="res-row" class:is-past={isPastEvent(res.event_date) && res.status !== 'cancelled'}>
 							<td class="td-title">
 								<span class="res-title">{res.title}</span>
+								{#if isPastEvent(res.event_date) && res.status !== 'cancelled'}<span class="past-tag">{t.event.past}</span>{/if}
 							</td>
 							<td class="td-user">
 								<span class="user-name">{res.user_first_name} {res.user_last_name}</span>
@@ -187,6 +192,13 @@
 
 	.res-row { cursor: pointer; transition: background .1s; }
 	.res-row:hover td { background: var(--bg-hover); }
+	.res-row.is-past td { opacity: .62; }
+	.res-row.is-past:hover td { opacity: 1; }
+	.past-tag {
+		display: inline-block; margin-left: 8px; padding: 1px 7px; border-radius: 99px;
+		font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em;
+		color: var(--text-muted); background: var(--bg-hover); border: 1px solid var(--border); vertical-align: middle;
+	}
 
 	.td-title { max-width: 260px; }
 	.res-title { font-size: 13px; font-weight: 600; color: var(--text-base); }

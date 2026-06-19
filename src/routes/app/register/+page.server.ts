@@ -1,57 +1,51 @@
 import { fail, redirect } from '@sveltejs/kit';
 import bcrypt from 'bcryptjs';
-import sql from '$lib/db/index';
+import { dbFirst, dbRun } from '$lib/db/index';
 import { createSession } from '$lib/auth';
+import { st } from '$lib/i18n-server';
 import type { Actions, PageServerLoad } from './$types';
 
 export const load: PageServerLoad = ({ locals }) => {
-	if (locals.user) {
-		redirect(303, locals.user.account_type === 'client' ? '/app/client' : '/app/');
-	}
+	if (locals.user) redirect(303, '/app/');
 	return {};
 };
 
+// The main app only creates ORGANIZATION accounts. Client accounts are created
+// inside an org's bubble (its subdomain or custom domain), not here.
 export const actions: Actions = {
-	default: async ({ request, cookies }) => {
+	default: async ({ request, cookies, locals }) => {
 		const data = await request.formData();
-		const accountType = String(data.get('accountType') ?? '');
 		const email = String(data.get('email') ?? '').toLowerCase().trim();
 		const password = String(data.get('password') ?? '');
 		const firstName = String(data.get('firstName') ?? '').trim();
 		const lastName = String(data.get('lastName') ?? '').trim();
 
-		if (accountType !== 'client' && accountType !== 'organization') {
-			return fail(400, { error: 'Please choose an account type.' });
-		}
 		if (!email || !password || !firstName || !lastName) {
-			return fail(400, { error: 'All fields are required.', accountType });
+			return fail(400, { error: st(locals.locale).serverErrors.allFieldsRequired });
 		}
 		if (password.length < 6) {
-			return fail(400, { error: 'Password must be at least 6 characters.', accountType });
+			return fail(400, { error: st(locals.locale).serverErrors.passwordMin6 });
 		}
 
-		const [existing] = await sql`SELECT id FROM users WHERE email = ${email}`;
+		// org/platform users are globally unique by email (org_id IS NULL).
+		const existing = await dbFirst<{ id: string }>(locals.db, 'SELECT id FROM users WHERE email = ? AND org_id IS NULL', email);
 		if (existing) {
-			return fail(400, { error: 'An account with this email already exists.', accountType });
+			return fail(400, { error: st(locals.locale).serverErrors.accountEmailExists });
 		}
 
-		const [{ count }] = await sql<[{ count: string }]>`SELECT COUNT(*)::text AS count FROM users`;
-		const role = Number(count) === 0 ? 'admin' : 'user';
+		const countRow = await dbFirst<{ count: number }>(locals.db, 'SELECT COUNT(*) AS count FROM users WHERE org_id IS NULL');
+		const role = (countRow?.count ?? 0) === 0 ? 'admin' : 'user';
 
 		const hash = await bcrypt.hash(password, 12);
 
-		const [{ id }] = await sql<[{ id: string }]>`
-			INSERT INTO users (email, password_hash, first_name, last_name, role, account_type)
-			VALUES (${email}, ${hash}, ${firstName}, ${lastName}, ${role}, ${accountType})
-			RETURNING id
-		`;
+		const userId = crypto.randomUUID();
+		await dbRun(
+			locals.db,
+			"INSERT INTO users (id, email, password_hash, first_name, last_name, role, account_type) VALUES (?, ?, ?, ?, ?, ?, 'organization')",
+			userId, email, hash, firstName, lastName, role
+		);
 
-		await createSession(id, cookies);
-
-		if (accountType === 'client') {
-			redirect(303, '/app/client');
-		} else {
-			redirect(303, '/app/org/new');
-		}
+		await createSession(userId, cookies, locals.db);
+		redirect(303, '/app/org/new');
 	}
 };

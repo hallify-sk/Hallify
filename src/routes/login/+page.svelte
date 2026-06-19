@@ -1,5 +1,6 @@
 <script lang="ts">
   import { enhance } from '$app/forms';
+  import { t } from '$lib/i18n.svelte';
   import type { PageData, ActionData } from './$types';
 
   interface Props { data: PageData; form: ActionData; }
@@ -9,7 +10,7 @@
   let tab = $state((form?.tab as 'login' | 'register' | undefined) ?? 'login');
 </script>
 
-<svelte:head><title>Sign in – {org.name}</title></svelte:head>
+<svelte:head><title>{t.publicBooking.signInTitle} – {org.name}</title></svelte:head>
 
 <div class="auth-root">
   <div class="auth-card">
@@ -31,8 +32,8 @@
 
     <!-- Tabs -->
     <div class="tabs">
-      <button class="tab" class:tab-active={tab === 'login'} type="button" onclick={() => tab = 'login'}>Sign in</button>
-      <button class="tab" class:tab-active={tab === 'register'} type="button" onclick={() => tab = 'register'}>Create account</button>
+      <button class="tab" class:tab-active={tab === 'login'} type="button" onclick={() => tab = 'login'}>{t.auth.signIn}</button>
+      <button class="tab" class:tab-active={tab === 'register'} type="button" onclick={() => tab = 'register'}>{t.auth.createAccount}</button>
     </div>
 
     {#if form?.error}
@@ -44,21 +45,22 @@
       <form method="POST" action="?/login" use:enhance class="form">
         <input type="hidden" name="redirect" value={data.redirectTo} />
         <div class="field">
-          <label class="field-label" for="l-email">Email</label>
+          <label class="field-label" for="l-email">{t.auth.email}</label>
           <input class="field-input" id="l-email" name="email" type="email"
             placeholder="you@example.com" value={form?.email ?? ''} autocomplete="email" required />
         </div>
         <div class="field">
-          <label class="field-label" for="l-password">Password</label>
+          <label class="field-label" for="l-password">{t.auth.password}</label>
           <input class="field-input" id="l-password" name="password" type="password"
             placeholder="••••••••" autocomplete="current-password" required />
         </div>
-        <button type="submit" class="btn-submit">Sign in</button>
+        <button type="submit" class="btn-submit">{t.auth.signIn}</button>
       </form>
       <p class="switch-hint">
-        Don't have an account?
-        <button type="button" class="switch-link" onclick={() => tab = 'register'}>Create one</button>
+        {t.auth.noAccount}
+        <button type="button" class="switch-link" onclick={() => tab = 'register'}>{t.publicBooking.createOne}</button>
       </p>
+      <p class="owner-hint">{t.publicBooking.ownerHint}</p>
     {/if}
 
     <!-- ── Register form ── -->
@@ -67,31 +69,31 @@
         <input type="hidden" name="redirect" value={data.redirectTo} />
         <div class="field-row">
           <div class="field field-grow">
-            <label class="field-label" for="r-first">First name</label>
+            <label class="field-label" for="r-first">{t.auth.firstName}</label>
             <input class="field-input" id="r-first" name="first_name" type="text"
               placeholder="Jane" value={form?.first_name ?? ''} autocomplete="given-name" required />
           </div>
           <div class="field field-grow">
-            <label class="field-label" for="r-last">Last name</label>
+            <label class="field-label" for="r-last">{t.auth.lastName}</label>
             <input class="field-input" id="r-last" name="last_name" type="text"
               placeholder="Smith" value={form?.last_name ?? ''} autocomplete="family-name" required />
           </div>
         </div>
         <div class="field">
-          <label class="field-label" for="r-email">Email</label>
+          <label class="field-label" for="r-email">{t.auth.email}</label>
           <input class="field-input" id="r-email" name="email" type="email"
             placeholder="you@example.com" value={form?.email ?? ''} autocomplete="email" required />
         </div>
         <div class="field">
-          <label class="field-label" for="r-password">Password <span class="opt">(min 8 characters)</span></label>
+          <label class="field-label" for="r-password">{t.auth.password} <span class="opt">{t.publicBooking.passwordMin8}</span></label>
           <input class="field-input" id="r-password" name="password" type="password"
             placeholder="••••••••" autocomplete="new-password" required minlength="8" />
         </div>
-        <button type="submit" class="btn-submit">Create account</button>
+        <button type="submit" class="btn-submit">{t.auth.register}</button>
       </form>
       <p class="switch-hint">
-        Already have an account?
-        <button type="button" class="switch-link" onclick={() => tab = 'login'}>Sign in</button>
+        {t.auth.hasAccount}
+        <button type="button" class="switch-link" onclick={() => tab = 'login'}>{t.auth.signInLink}</button>
       </p>
     {/if}
 
@@ -182,5 +184,10 @@
   .switch-link {
     background: none; border: none; color: var(--accent); font-size: 12px; font-weight: 600;
     cursor: pointer; padding: 0; font-family: inherit; text-decoration: underline;
+  }
+
+  .owner-hint {
+    text-align: center; font-size: 11px; color: var(--text-subtle);
+    margin: 10px 0 0; padding-top: 10px; border-top: 1px solid var(--border-subtle, var(--border));
   }
 </style>
