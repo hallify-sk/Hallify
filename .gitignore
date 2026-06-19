@@ -5,11 +5,18 @@ node_modules/
 .env
 .env.local
 .env.*.local
+.dev.vars
 
 # SvelteKit build output
 .svelte-kit/
 build/
 dist/
+
+# Cloudflare Wrangler local state/cache (local D1, build artifacts)
+.wrangler/
+
+# Local DB backups / snapshots — may contain production data, NEVER commit
+backup-*.sql
 
 # OS
 .DS_Store
