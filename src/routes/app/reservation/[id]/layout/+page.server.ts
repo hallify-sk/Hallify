@@ -65,11 +65,21 @@ export const actions: Actions = {
 		if (!layoutJson) return fail(400, { error: st(locals.locale).serverErrors.noLayoutData });
 
 		const reservation = await dbFirst<ReservationRow & { hall_floorplan_json: unknown }>(locals.db,
-			'SELECT r.user_id, h.floorplan_json AS hall_floorplan_json FROM reservations r JOIN halls h ON h.id = r.hall_id WHERE r.id = ? AND r.org_id = ?',
+			'SELECT r.user_id, r.status, h.floorplan_json AS hall_floorplan_json FROM reservations r JOIN halls h ON h.id = r.hall_id WHERE r.id = ? AND r.org_id = ?',
 			params.id, orgId
 		);
 		if (!reservation) return fail(404, { error: st(locals.locale).serverErrors.notFound });
 		if (!reservation.hall_floorplan_json) return fail(400, { error: st(locals.locale).serverErrors.hallHasNoFloorPlan });
+
+		// Same gate as the sibling action on /app/reservation/[id]: staff may edit any
+		// booking in the org; everyone else only their own, and only once it is live.
+		const staff = locals.currentOrg?.role === 'owner' || locals.currentOrg?.role === 'admin';
+		if (!staff && reservation.user_id !== locals.user.id) {
+			return fail(403, { error: st(locals.locale).serverErrors.accessDenied });
+		}
+		if (!staff && !['approved', 'planned'].includes(reservation.status)) {
+			return fail(403, { error: st(locals.locale).serverErrors.reservationMustBeApprovedToEditLayout });
+		}
 
 		await dbRun(locals.db, 'UPDATE reservations SET layout_json = ? WHERE id = ? AND org_id = ?', layoutJson, params.id, orgId);
 		return { success: true };

@@ -31,13 +31,22 @@ export interface BlockRow {
 	days_of_week: number[]; // JS getDay() values (0 = Sun)
 }
 
+/** opening_hours keys as written by the hall editor, indexed by JS getDay(). */
+export const DOW_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
+
 export function isDateBlocked(blocks: BlockRow[], dateISO: string): boolean {
 	const jsDow = parseISO(dateISO).getDay();
-	return blocks.some(b =>
-		(b.block_type === 'date_range' && b.date_from && b.date_to &&
-			dateISO >= b.date_from.slice(0, 10) && dateISO <= b.date_to.slice(0, 10)) ||
-		(b.block_type === 'weekly' && b.days_of_week.includes(jsDow))
-	);
+	return blocks.some(b => {
+		if (b.block_type === 'weekly') return b.days_of_week.includes(jsDow);
+		if (b.block_type !== 'date_range' || !b.date_from || !b.date_to) return false;
+		const inRange = dateISO >= b.date_from.slice(0, 10) && dateISO <= b.date_to.slice(0, 10);
+		if (!inRange) return false;
+		// The block wizard lets you pick WHICH days inside the range to close (e.g.
+		// "weekends in June"). That selection used to be ignored here, so a date_range
+		// always closed every day in the range. An empty/absent selection still means
+		// "every day", which is what the old behaviour effectively did.
+		return b.days_of_week.length === 0 || b.days_of_week.includes(jsDow);
+	});
 }
 
 /** Expand blocking rules into a set of blocked ISO dates over [fromISO, toISO]. */
@@ -133,7 +142,10 @@ export async function assertCanBook(
 	eventDate: string,
 	userId: string,
 	numGuests: number | null,
-	locale: 'sk' | 'en' = 'sk'
+	locale: 'sk' | 'en' = 'sk',
+	/** When rescheduling, the reservation being moved — excluded from the monthly cap
+	 *  and the taken-date check so an edit never conflicts with itself. */
+	excludeReservationId: string | null = null
 ): Promise<{ ok: boolean; reason?: string }> {
 	const e = st(locale).serverErrors;
 	if (hall.plan_locked) return { ok: false, reason: e.hallUnavailable };
@@ -146,8 +158,8 @@ export async function assertCanBook(
 	const monthLimit = getPlan((sub?.plan ?? 'free') as PlanId).limits.maxReservationsPerHallMonth;
 	if (monthLimit !== -1) {
 		const mc = await dbFirst<{ n: number }>(db,
-			"SELECT COUNT(*) AS n FROM reservations WHERE hall_id = ? AND status != 'cancelled' AND substr(event_date, 1, 7) = ?",
-			hall.id, eventDate.slice(0, 7));
+			"SELECT COUNT(*) AS n FROM reservations WHERE hall_id = ? AND status != 'cancelled' AND substr(event_date, 1, 7) = ? AND id IS NOT ?",
+			hall.id, eventDate.slice(0, 7), excludeReservationId);
 		if ((mc?.n ?? 0) >= monthLimit) {
 			return { ok: false, reason: e.hallFullyBookedMonth(eventDate.slice(0, 7), monthLimit) };
 		}
@@ -156,6 +168,26 @@ export async function assertCanBook(
 	const minAdv = hall.min_days_advance ?? 0;
 	if (eventDate < earliestBookableISO(minAdv)) {
 		return { ok: false, reason: minAdv > 0 ? e.minDaysAdvance(minAdv) : e.dateInPast };
+	}
+
+	// Days the venue marks CLOSED in opening_hours are not bookable. This was stored
+	// and displayed but never enforced, so a hall open Fri–Sun still accepted a Monday
+	// booking (reported by a venue during testing).
+	//
+	// NOTE: only the per-day open/closed flag is enforced — NOT the from/to times, since
+	// the field doubles as "office hours" for some venues. If opening_hours is unset or
+	// malformed, nothing is enforced.
+	const oh = await dbFirst<{ opening_hours: string | null }>(db,
+		'SELECT opening_hours FROM halls WHERE id = ?', hall.id);
+	if (oh?.opening_hours) {
+		try {
+			const parsed = JSON.parse(oh.opening_hours) as Record<string, { open?: boolean }>;
+			const dow = parseISO(eventDate).getDay(); // 0 = Sunday
+			// The hall editor writes 'mon'..'sun' keys; accept a numeric key too so any
+			// older rows keep working.
+			const day = parsed[DOW_KEYS[dow]] ?? parsed[String(dow)];
+			if (day && day.open === false) return { ok: false, reason: e.dateUnavailable };
+		} catch { /* malformed — don't block on it */ }
 	}
 
 	const blocks = await dbAll<BlockRow>(db,
@@ -168,8 +200,8 @@ export async function assertCanBook(
 	}
 
 	const taken = await dbFirst<{ id: string }>(db,
-		"SELECT id FROM reservations WHERE hall_id = ? AND event_date = ? AND status != 'cancelled' LIMIT 1",
-		hall.id, eventDate);
+		"SELECT id FROM reservations WHERE hall_id = ? AND event_date = ? AND status != 'cancelled' AND id IS NOT ? LIMIT 1",
+		hall.id, eventDate, excludeReservationId);
 	if (taken) return { ok: false, reason: e.hallAlreadyBooked };
 
 	const held = await dbFirst<{ user_id: string }>(db,

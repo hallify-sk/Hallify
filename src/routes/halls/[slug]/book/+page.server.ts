@@ -50,6 +50,8 @@ export const actions: Actions = {
 		const endTime = String(data.get('endTime') ?? '').trim() || null;
 		const description = String(data.get('description') ?? '').trim() || null;
 		const numGuests = parseInt(String(data.get('numGuests') ?? ''), 10) || null;
+		// Guard the lower bound too — a negative count was accepted and stored.
+		if (numGuests != null && numGuests < 1) return fail(400, { error: st(locals.locale).serverErrors.chooseValidDate });
 
 		if (!title) return fail(400, { error: st(locals.locale).serverErrors.eventNameRequired });
 		if (!eventDate) return fail(400, { error: st(locals.locale).serverErrors.pleaseChooseDate });
@@ -72,8 +74,13 @@ export const actions: Actions = {
 			await dbRun(locals.db,
 				`INSERT INTO reservations
 					(id, hall_id, org_id, user_id, title, description, event_date, start_time, end_time, status, invite_code, num_guests, extras_json)
-				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?)`,
-				reservationId, hall.id, orgId, locals.user.id, title, description, eventDate, startTime, endTime, inviteCode, numGuests, extrasJson
+				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+				reservationId, hall.id, orgId, locals.user.id, title, description, eventDate, startTime, endTime,
+				// Honour the hall's auto-approve flag, exactly as the apex client path and
+				// the staff paths do. This branch hardcoded 'pending', so a venue that had
+				// switched auto-approve on still had to approve every bubble booking.
+				hall.auto_approve ? 'approved' : 'pending',
+				inviteCode, numGuests, extrasJson
 			);
 		} catch {
 			return fail(409, { error: st(locals.locale).serverErrors.hallJustBooked });

@@ -1,34 +1,34 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-// Mock $env/static/private before importing stripe module
-vi.mock('$env/static/private', () => ({
-	STRIPE_SECRET_KEY: 'sk_test_mock_key',
-	STRIPE_WEBHOOK_SECRET: 'whsec_mock_secret',
-	STRIPE_PRICE_STARTER: 'price_mock_starter',
-	STRIPE_PRICE_PROFESSIONAL: 'price_mock_professional',
-	APP_URL: 'http://localhost:5173',
+// Mock runtime env before importing the stripe module. The module reads secrets
+// from $env/dynamic/private so they come from Worker secrets rather than being
+// inlined into the build.
+vi.mock('$env/dynamic/private', () => ({
+	env: {
+		STRIPE_SECRET_KEY: 'sk_test_mock_key',
+		STRIPE_WEBHOOK_SECRET: 'whsec_mock_secret',
+		APP_URL: 'http://localhost:5173',
+	},
 }));
 
 // Mock the stripe SDK
 const mockSessionCreate = vi.fn();
 const mockPortalCreate = vi.fn();
 
+type StripeMock = { checkout: unknown; billingPortal: unknown };
+
 vi.mock('stripe', () => ({
-	default: vi.fn(function () {
-		(this as { checkout: unknown; billingPortal: unknown }).checkout = {
-			sessions: { create: mockSessionCreate },
-		};
-		(this as { checkout: unknown; billingPortal: unknown }).billingPortal = {
-			sessions: { create: mockPortalCreate },
-		};
+	default: vi.fn(function (this: StripeMock) {
+		this.checkout = { sessions: { create: mockSessionCreate } };
+		this.billingPortal = { sessions: { create: mockPortalCreate } };
 	}),
 }));
 
-const { createCheckoutSession, createPortalSession, STRIPE_WEBHOOK_SECRET } = await import('./stripe.js');
+const { createCheckoutSession, createPortalSession, getWebhookSecret } = await import('./stripe.js');
 
-describe('STRIPE_WEBHOOK_SECRET', () => {
-	it('is exported from the module', () => {
-		expect(STRIPE_WEBHOOK_SECRET).toBe('whsec_mock_secret');
+describe('getWebhookSecret', () => {
+	it('reads the signing secret from runtime env', () => {
+		expect(getWebhookSecret()).toBe('whsec_mock_secret');
 	});
 });
 
@@ -48,26 +48,32 @@ describe('createCheckoutSession', () => {
 		expect(url).toBe('https://checkout.stripe.com/session_123');
 	});
 
-	it('passes the starter price ID', async () => {
+	// Pricing is inline `price_data` built from plans.ts — there are no pre-created
+	// Stripe Price objects and no STRIPE_PRICE_* env vars any more.
+	it('prices starter inline from plans.ts', async () => {
 		await createCheckoutSession({
 			orgId: 'org_1',
 			plan: 'starter',
 			stripeCustomerId: null,
 			userEmail: 'test@example.com',
 		});
-		const params = mockSessionCreate.mock.calls[0][0];
-		expect(params.line_items[0].price).toBe('price_mock_starter');
+		const priceData = mockSessionCreate.mock.calls[0][0].line_items[0].price_data;
+		expect(priceData.unit_amount).toBe(2999);
+		expect(priceData.currency).toBe('eur');
+		expect(priceData.recurring.interval).toBe('month');
+		expect(priceData.product_data.name).toBe('Hallify Starter');
 	});
 
-	it('passes the professional price ID', async () => {
+	it('prices professional inline from plans.ts', async () => {
 		await createCheckoutSession({
 			orgId: 'org_1',
 			plan: 'professional',
 			stripeCustomerId: null,
 			userEmail: 'test@example.com',
 		});
-		const params = mockSessionCreate.mock.calls[0][0];
-		expect(params.line_items[0].price).toBe('price_mock_professional');
+		const priceData = mockSessionCreate.mock.calls[0][0].line_items[0].price_data;
+		expect(priceData.unit_amount).toBe(7999);
+		expect(priceData.product_data.name).toBe('Hallify Professional');
 	});
 
 	it('uses customer_email when no stripeCustomerId', async () => {
@@ -106,20 +112,7 @@ describe('createCheckoutSession', () => {
 		expect(params.subscription_data?.metadata?.orgId).toBe('org_abc');
 	});
 
-	it('builds success and cancel URLs from APP_URL and returnPath', async () => {
-		await createCheckoutSession({
-			orgId: 'org_1',
-			plan: 'starter',
-			stripeCustomerId: null,
-			userEmail: 'x@x.com',
-			returnPath: '/billing',
-		});
-		const params = mockSessionCreate.mock.calls[0][0];
-		expect(params.success_url).toBe('http://localhost:5173/billing?success=1');
-		expect(params.cancel_url).toBe('http://localhost:5173/billing?cancelled=1');
-	});
-
-	it('uses /billing as default returnPath', async () => {
+	it('builds success and cancel URLs from APP_URL', async () => {
 		await createCheckoutSession({
 			orgId: 'org_1',
 			plan: 'starter',
@@ -127,10 +120,21 @@ describe('createCheckoutSession', () => {
 			userEmail: 'x@x.com',
 		});
 		const params = mockSessionCreate.mock.calls[0][0];
-		expect(params.success_url).toContain('/billing?success=1');
+		expect(params.success_url).toBe('http://localhost:5173/app/billing/success?plan=starter');
+		expect(params.cancel_url).toBe('http://localhost:5173/app/billing?cancelled=1');
 	});
 
-	it('throws for a plan with no configured price', async () => {
+	it('carries the plan through to the success URL', async () => {
+		await createCheckoutSession({
+			orgId: 'org_1',
+			plan: 'professional',
+			stripeCustomerId: null,
+			userEmail: 'x@x.com',
+		});
+		expect(mockSessionCreate.mock.calls[0][0].success_url).toContain('plan=professional');
+	});
+
+	it('throws for a plan that is not payable', async () => {
 		await expect(
 			createCheckoutSession({
 				orgId: 'org_1',
@@ -138,7 +142,18 @@ describe('createCheckoutSession', () => {
 				stripeCustomerId: null,
 				userEmail: 'x@x.com',
 			})
-		).rejects.toThrow('No Stripe price configured for plan: enterprise');
+		).rejects.toThrow('Plan "enterprise" is not a paid plan');
+	});
+
+	it('throws for the free plan', async () => {
+		await expect(
+			createCheckoutSession({
+				orgId: 'org_1',
+				plan: 'free',
+				stripeCustomerId: null,
+				userEmail: 'x@x.com',
+			})
+		).rejects.toThrow('is not a paid plan');
 	});
 
 	it('uses subscription mode', async () => {
@@ -169,9 +184,9 @@ describe('createPortalSession', () => {
 		expect(mockPortalCreate.mock.calls[0][0].customer).toBe('cus_xyz');
 	});
 
-	it('uses /billing as default return path', async () => {
+	it('uses /app/billing as default return path', async () => {
 		await createPortalSession('cus_abc');
-		expect(mockPortalCreate.mock.calls[0][0].return_url).toBe('http://localhost:5173/billing');
+		expect(mockPortalCreate.mock.calls[0][0].return_url).toBe('http://localhost:5173/app/billing');
 	});
 
 	it('uses custom return path when provided', async () => {

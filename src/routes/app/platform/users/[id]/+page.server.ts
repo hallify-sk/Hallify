@@ -2,6 +2,7 @@ import { error, fail } from '@sveltejs/kit';
 import { dbFirst, dbAll, dbRun } from '$lib/db/index';
 import { st } from '$lib/i18n-server';
 import type { PageServerLoad, Actions } from './$types';
+import { requirePlatformAdmin } from '$lib/guards';
 
 export const load: PageServerLoad = async ({ params, locals }) => {
   const user = await dbFirst<{
@@ -34,10 +35,12 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 
 export const actions: Actions = {
   grantPlatformAdmin: async ({ params, locals }) => {
+    requirePlatformAdmin(locals);
     await dbRun(locals.db, 'UPDATE users SET is_platform_admin = 1 WHERE id = ?', params.id);
     return { success: true };
   },
   revokePlatformAdmin: async ({ params, locals }) => {
+    requirePlatformAdmin(locals);
     if (params.id === locals.user?.id) return fail(400, { error: st(locals.locale).serverErrors.cannotRevokeOwnAdmin });
     await dbRun(locals.db, 'UPDATE users SET is_platform_admin = 0 WHERE id = ?', params.id);
     return { success: true };

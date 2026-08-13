@@ -3,8 +3,11 @@ import { dbFirst, dbRun, toJson } from '$lib/db/index';
 import type { RsvpTemplateRow } from '$lib/db/index';
 import { st } from '$lib/i18n-server';
 import type { Actions, PageServerLoad } from './$types';
+import { RSVP_ENABLED } from '$lib/features';
+import { requireOrgStaff } from '$lib/guards';
 
 export const load: PageServerLoad = async ({ locals, params }) => {
+	if (!RSVP_ENABLED) error(404, 'Not found');
 	if (!locals.user) redirect(303, '/app/login');
 
 	const template = await dbFirst<RsvpTemplateRow>(locals.db, 'SELECT * FROM rsvp_templates WHERE id = ?', params.id);
@@ -16,6 +19,8 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 
 export const actions: Actions = {
 	save: async ({ request, locals, params }) => {
+	  requireOrgStaff(locals);
+		if (!RSVP_ENABLED) error(404, 'Not found');
 		if (!locals.user || (locals.currentOrg?.role !== 'owner' && locals.currentOrg?.role !== 'admin')) return fail(403, { error: st(locals.locale).serverErrors.unauthorized });
 		const data = await request.formData();
 		const name = String(data.get('name') ?? '').trim();

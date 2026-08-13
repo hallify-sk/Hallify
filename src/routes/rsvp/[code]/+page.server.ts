@@ -3,8 +3,10 @@ import { dbFirst, dbRun, fromJson } from '$lib/db/index';
 import type { ReservationRow, RsvpConfig } from '$lib/db/index';
 import { st } from '$lib/i18n-server';
 import type { Actions, PageServerLoad } from './$types';
+import { RSVP_ENABLED } from '$lib/features';
 
 export const load: PageServerLoad = async ({ params, locals }) => {
+	if (!RSVP_ENABLED) error(404, 'Not found');
 	const reservation = await dbFirst<ReservationRow & { hall_name: string; hall_address: string | null }>(
 		locals.db,
 		`SELECT r.id, r.title, r.event_date, r.start_time, r.end_time, r.status, r.rsvp_config,
@@ -27,6 +29,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 
 export const actions: Actions = {
 	default: async ({ request, params, locals }) => {
+		if (!RSVP_ENABLED) error(404, 'Not found');
 		const data = await request.formData();
 
 		const reservation = await dbFirst<ReservationRow>(

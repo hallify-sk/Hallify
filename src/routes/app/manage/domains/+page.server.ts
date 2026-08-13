@@ -5,6 +5,7 @@ import { getPlan } from '$lib/plans';
 import { st } from '$lib/i18n-server';
 import { env } from '$env/dynamic/private';
 import type { PageServerLoad, Actions } from './$types';
+import { requireOrgStaff } from '$lib/guards';
 
 interface DomainRow {
   id: string;
@@ -40,6 +41,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 
 export const actions: Actions = {
   add: async ({ request, locals }) => {
+    requireOrgStaff(locals);
     const orgId = locals.currentOrg!.id;
 
     // Custom domains are a paid feature. Free orgs use their <slug>.hallify.sk subdomain.
@@ -87,6 +89,7 @@ export const actions: Actions = {
   },
 
   refresh: async ({ request, locals }) => {
+    requireOrgStaff(locals);
     const orgId = locals.currentOrg!.id;
     const data = await request.formData();
     const id = String(data.get('id') ?? '');
@@ -115,6 +118,7 @@ export const actions: Actions = {
   },
 
   delete: async ({ request, locals }) => {
+    requireOrgStaff(locals);
     const orgId = locals.currentOrg!.id;
     const data = await request.formData();
     const id = String(data.get('id') ?? '');

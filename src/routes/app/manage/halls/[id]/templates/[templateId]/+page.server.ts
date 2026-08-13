@@ -4,6 +4,7 @@ import type { TemplateRow, TableTypeRow } from '$lib/db/index';
 import { serializeEventTypes } from '$lib/eventTypes';
 import { st } from '$lib/i18n-server';
 import type { Actions, PageServerLoad } from './$types';
+import { requireOrgStaff } from '$lib/guards';
 
 export const load: PageServerLoad = async ({ locals, params }) => {
 	const orgId = locals.currentOrg!.id;
@@ -42,6 +43,7 @@ async function assertOwned(db: App.Locals['db'], templateId: string, hallId: str
 
 export const actions: Actions = {
 	saveLayout: async ({ request, locals, params }) => {
+	  requireOrgStaff(locals);
 		const orgId = locals.currentOrg!.id;
 		const data = await request.formData();
 		const layoutJson = String(data.get('layoutJson') ?? '');
@@ -60,6 +62,7 @@ export const actions: Actions = {
 
 	// Edit the template's name + event types (the layout is saved separately).
 	updateMeta: async ({ request, locals, params }) => {
+	  requireOrgStaff(locals);
 		const orgId = locals.currentOrg!.id;
 		const data = await request.formData();
 		const name = String(data.get('name') ?? '').trim();

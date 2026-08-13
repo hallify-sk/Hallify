@@ -6,6 +6,7 @@ import { notifyNewReservation } from '$lib/email';
 import { postSystemMessage } from '$lib/tickets';
 import { assertCanBook, getTakenDates, getHeldDatesByOthers, releaseHold, earliestBookableISO, HOLD_MINUTES } from '$lib/availability';
 import { st } from '$lib/i18n-server';
+import { dispatchWebhooks } from '$lib/notifications';
 
 const RANGE_DAYS = 540; // how far ahead to compute taken/held for the picker
 
@@ -121,6 +122,11 @@ export const actions: Actions = {
 		const userName = `${locals.user.first_name} ${locals.user.last_name}`;
 		await postSystemMessage(locals.db, locals.user.id, title, `reservation_created:${initialStatus}:${userName}`, locals.user.id);
 		notifyNewReservation(locals.db, orgId, title, userName, hall.name, eventDate).catch(() => {});
+		// `reservation.new` is declared in WebhookEvent and offered in the webhook
+		// settings UI, but nothing ever dispatched it — subscribing was a no-op.
+		dispatchWebhooks(locals.db, orgId, 'reservation.new', {
+			reservation_id: newId, title, hall_id: hallId, event_date: eventDate,
+		}).catch(() => {});
 
 		redirect(303, `/app/reservation/${newId}`);
 	}

@@ -724,6 +724,8 @@ export const sk = {
 	editor: {
 		zoom: "Priblíženie",
 		pxPerM: "px/m",
+		snapOff: "Vypnuté",
+		allFloors: "Všetky poschodia (stoly · miesta · steny · zóny)",
 		snap: "Prichytenie",
 		elementSnappingOn: "Prichytávanie k prvkom ZAPNUTÉ",
 		elementSnappingOff: "Prichytávanie k prvkom VYPNUTÉ",
@@ -1536,6 +1538,14 @@ export const sk = {
 		progressOf: "z",
 		progressDone: "hotových",
 		allSetUp: "Všetko máte nastavené. Skvelé!",
+		checklistItems: {
+			hall:   { label: "Vytvorte svoju prvú sálu", desc: "Pridajte priestor, ktorý prenajímate — kapacita, adresa, fotky.", cta: "Pridať sálu" },
+			plan:   { label: "Nakreslite pôdorys", desc: "Nastavte hranice miestnosti, steny a zóny, aby ste mohli rozsádzať hostí.", cta: "Otvoriť sálu" },
+			tables: { label: "Definujte typy stolov", desc: "Opakovane použiteľné stoly (okrúhly pre 8, banketový…), ktoré rozmiestnite podľa udalosti.", cta: "Pridať typy stolov" },
+			public: { label: "Zverejnite sálu", desc: "Sprístupnite sálu verejne, aby ju hostia našli a mohli o ňu požiadať.", cta: "Zverejniť" },
+			extras: { label: "Ponúknite doplnky (voliteľné)", desc: "Nechajte hostí objednať catering, vybavenie alebo služby k rezervácii.", cta: "Pridať doplnky" },
+			team:   { label: "Pozvite kolegu", desc: "Prizvite kolegov, aby pomohli spravovať udalosti.", cta: "Pozvať" },
+		},
 		knowledgebase: "Databáza znalostí",
 	},
 	memberMessages: {
@@ -1617,6 +1627,7 @@ export const sk = {
 		levelMajor: "Závažné",
 	},
 	serverErrors: {
+		tooManyAttempts: "Príliš veľa pokusov. Skúste to znova o {minutes} min.",
 		hallUnavailable: "Táto sála je momentálne nedostupná.",
 		chooseValidDate: "Vyberte platný dátum.",
 		dateInPast: "Dátum udalosti nemôže byť v minulosti.",
@@ -1766,6 +1777,16 @@ export const sk = {
 	},
 	dayNames: ['PO', 'UT', 'ST', 'ŠT', 'PI', 'SO', 'NE'],
 	dayNamesFull: ['Pondelok', 'Utorok', 'Streda', 'Štvrtok', 'Piatok', 'Sobota', 'Nedeľa'],
+	errorPage: {
+		genericTitle: "Niečo sa pokazilo",
+		notFoundTitle: "Stránka sa nenašla",
+		notFoundBody: "Táto stránka neexistuje alebo bola presunutá. Skontrolujte odkaz, prosím.",
+		forbiddenBody: "Na zobrazenie tejto stránky nemáte oprávnenie.",
+		rateLimitedBody: "Príliš veľa požiadaviek. Skúste to o chvíľu znova.",
+		serverBody: "Na našej strane nastala chyba. Skúste to znova o chvíľu — ak problém pretrváva, kontaktujte nás.",
+		backHome: "Späť na úvod",
+		goBack: "Späť",
+	},
 	monthNames: [
 		'Január', 'Február', 'Marec', 'Apríl', 'Máj', 'Jún',
 		'Júl', 'August', 'September', 'Október', 'November', 'December',
@@ -2492,6 +2513,8 @@ export const en: typeof sk = {
 	editor: {
 		zoom: "Zoom",
 		pxPerM: "px/m",
+		snapOff: "Off",
+		allFloors: "All floors (tables · seats · walls · zones)",
 		snap: "Snap",
 		elementSnappingOn: "Element snapping ON",
 		elementSnappingOff: "Element snapping OFF",
@@ -3304,6 +3327,14 @@ export const en: typeof sk = {
 		progressOf: "of",
 		progressDone: "done",
 		allSetUp: "You're all set up. Nice!",
+		checklistItems: {
+			hall:   { label: "Create your first hall", desc: "Add a space you rent out — capacity, address, photos.", cta: "Add a hall" },
+			plan:   { label: "Draw a floor plan", desc: "Set the room bounds, walls and zones so you can seat guests.", cta: "Open a hall" },
+			tables: { label: "Define table types", desc: "Reusable tables (a round 8-seater, a banquet table…) you place per event.", cta: "Add table types" },
+			public: { label: "Publish a hall", desc: "Make a hall public so guests can find and request it.", cta: "Publish" },
+			extras: { label: "Offer extras (optional)", desc: "Let guests order catering, equipment or services with a booking.", cta: "Add extras" },
+			team:   { label: "Invite a teammate", desc: "Bring colleagues in to help manage events.", cta: "Invite" },
+		},
 		knowledgebase: "Knowledgebase",
 	},
 	memberMessages: {
@@ -3385,6 +3416,7 @@ export const en: typeof sk = {
 		levelMajor: "Major",
 	},
 	serverErrors: {
+		tooManyAttempts: "Too many attempts. Try again in {minutes} min.",
 		hallUnavailable: "This hall is currently unavailable.",
 		chooseValidDate: "Please choose a valid date.",
 		dateInPast: "Event date cannot be in the past.",
@@ -3534,6 +3566,16 @@ export const en: typeof sk = {
 	},
 	dayNames: ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'],
 	dayNamesFull: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'],
+	errorPage: {
+		genericTitle: "Something went wrong",
+		notFoundTitle: "Page not found",
+		notFoundBody: "This page doesn't exist or has moved. Please check the link.",
+		forbiddenBody: "You don't have permission to view this page.",
+		rateLimitedBody: "Too many requests. Please try again shortly.",
+		serverBody: "Something went wrong on our end. Please try again in a moment — if it keeps happening, get in touch.",
+		backHome: "Back to home",
+		goBack: "Go back",
+	},
 	monthNames: [
 		'January', 'February', 'March', 'April', 'May', 'June',
 		'July', 'August', 'September', 'October', 'November', 'December',

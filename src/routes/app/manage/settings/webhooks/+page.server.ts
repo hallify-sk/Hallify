@@ -3,6 +3,7 @@ import { redirect, fail } from '@sveltejs/kit';
 import { dbAll, dbFirst, dbRun, toJson, fromJsonArr } from '$lib/db/index';
 import { st } from '$lib/i18n-server';
 import { PLANS } from '$lib/plans';
+import { requireOrgStaff } from '$lib/guards';
 
 // Webhooks are a paid feature (Starter and up).
 function planHasWebhooks(plan: string): boolean {
@@ -60,6 +61,7 @@ const ALL_EVENTS = [
 
 export const actions: Actions = {
   create: async ({ request, locals }) => {
+    requireOrgStaff(locals);
     const org = locals.currentOrg!;
     if (org.role !== 'owner' && org.role !== 'admin') return fail(403);
     if (!planHasWebhooks(org.subscription.plan)) return fail(403, { error: st(locals.locale).serverErrors.webhooksPaidPlan });
@@ -81,6 +83,7 @@ export const actions: Actions = {
   },
 
   toggle: async ({ request, locals }) => {
+    requireOrgStaff(locals);
     const org = locals.currentOrg!;
     if (org.role !== 'owner' && org.role !== 'admin') return fail(403);
     if (!planHasWebhooks(org.subscription.plan)) return fail(403, { error: st(locals.locale).serverErrors.webhooksPaidPlan });
@@ -100,6 +103,7 @@ export const actions: Actions = {
   },
 
   delete: async ({ request, locals }) => {
+    requireOrgStaff(locals);
     const org = locals.currentOrg!;
     if (org.role !== 'owner' && org.role !== 'admin') return fail(403);
     if (!planHasWebhooks(org.subscription.plan)) return fail(403, { error: st(locals.locale).serverErrors.webhooksPaidPlan });

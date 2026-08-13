@@ -1,5 +1,6 @@
 import { dbAll, dbFirst, dbRun } from '$lib/db/index';
 import type { UserRow } from '$lib/db/index';
+import { dev } from '$app/environment';
 import type { Cookies } from '@sveltejs/kit';
 import type { D1Database } from '@cloudflare/workers-types';
 
@@ -22,7 +23,7 @@ export async function createSession(userId: string, cookies: Cookies, db: D1Data
     path: '/',
     httpOnly: true,
     sameSite: 'lax',
-    secure: false, // set true in production
+    secure: !dev, // HTTPS-only everywhere except local dev (localhost is plain HTTP)
     maxAge: TTL_DAYS * 86400,
   });
   return id;
@@ -62,7 +63,7 @@ export async function getSessionUser(
     if (!member) return null;
   }
 
-  return { ...row, is_platform_admin: !!row.is_platform_admin, currentOrgId: row.current_org_id, sessionId };
+  return { ...row, is_platform_admin: row.is_platform_admin ? 1 : 0, currentOrgId: row.current_org_id, sessionId };
 }
 
 /** Switch the active org for a session. */

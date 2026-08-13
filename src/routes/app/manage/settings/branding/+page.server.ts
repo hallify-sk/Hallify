@@ -4,6 +4,7 @@ import { dbFirst, dbRun, toJson, fromJson } from '$lib/db/index';
 import { invalidateBrandingCache } from '$lib/branding-cache';
 import { st } from '$lib/i18n-server';
 import { PLANS } from '$lib/plans';
+import { requireOrgStaff } from '$lib/guards';
 
 // Custom branding (Customize page) is a paid feature (Starter and up).
 function planHasBranding(plan: string): boolean {
@@ -34,6 +35,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 
 export const actions: Actions = {
   save: async ({ request, locals }) => {
+    requireOrgStaff(locals);
     const org = locals.currentOrg!;
     if (!planHasBranding(org.subscription.plan)) return fail(403, { error: st(locals.locale).serverErrors.customBrandingPaidPlan });
     const orgId = org.id;
@@ -58,6 +60,7 @@ export const actions: Actions = {
 
   // Org default language — NOT plan-gated (available to all plans).
   saveLanguage: async ({ request, locals }) => {
+    requireOrgStaff(locals);
     const org = locals.currentOrg!;
     const data = await request.formData();
     const langRaw = String(data.get('language') ?? 'sk');
@@ -71,6 +74,7 @@ export const actions: Actions = {
   },
 
   resetDefaults: async ({ locals }) => {
+    requireOrgStaff(locals);
     const org = locals.currentOrg!;
     if (!planHasBranding(org.subscription.plan)) return fail(403, { error: st(locals.locale).serverErrors.customBrandingPaidPlan });
     const orgId = org.id;

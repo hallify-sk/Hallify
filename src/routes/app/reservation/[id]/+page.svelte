@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { RSVP_ENABLED } from '$lib/features';
 	import { enhance } from '$app/forms';
 	import { page } from '$app/stores';
 	import { t } from '$lib/i18n.svelte';
@@ -18,7 +19,7 @@
 	const rsvpEnabled = $derived((data.reservation.rsvp_config as RsvpConfig)?.enabled !== false);
 	// RSVP/invite is parked as a novelty feature for now (kept in code, hidden from
 	// the UI). Flip to re-enable.
-	const SHOW_RSVP = false;
+	const SHOW_RSVP = RSVP_ENABLED; // single switch: $lib/features
 
 	// Extras — staff can adjust the selection (e.g. after agreeing in chat).
 	let extraSel = $state<string[]>([...data.selectedExtras]);

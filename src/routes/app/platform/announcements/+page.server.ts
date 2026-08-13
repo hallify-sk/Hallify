@@ -5,6 +5,7 @@ import type { AnnouncementLevel } from '$lib/announcements';
 import { sendAnnouncementEmail } from '$lib/email';
 import { st } from '$lib/i18n-server';
 import type { PageServerLoad, Actions } from './$types';
+import { requirePlatformAdmin } from '$lib/guards';
 
 const LEVELS: AnnouncementLevel[] = ['info', 'success', 'warning', 'error'];
 
@@ -28,6 +29,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 
 export const actions: Actions = {
 	create: async ({ request, locals }) => {
+	  requirePlatformAdmin(locals);
 		const data = await request.formData();
 		const level = String(data.get('level') ?? 'info') as AnnouncementLevel;
 		const title = String(data.get('title') ?? '').trim();
@@ -53,6 +55,7 @@ export const actions: Actions = {
 	},
 
 	delete: async ({ request, locals }) => {
+	  requirePlatformAdmin(locals);
 		const id = String((await request.formData()).get('id') ?? '');
 		if (id) await dbRun(locals.db, 'DELETE FROM announcements WHERE id = ?', id);
 		return { deleted: true };

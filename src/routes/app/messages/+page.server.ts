@@ -6,7 +6,8 @@ import { dispatchWebhooks } from '$lib/notifications';
 export const load: PageServerLoad = async ({ locals, url }) => {
   if (!locals.user) redirect(303, '/app/login');
   const user = locals.user;
-  const org  = locals.currentOrg!;
+  const org = locals.currentOrg;
+  if (!org) redirect(303, '/app/org/new');
 
   const channelId = url.searchParams.get('c');
   const ticketId  = url.searchParams.get('t');
@@ -18,10 +19,10 @@ export const load: PageServerLoad = async ({ locals, url }) => {
   }>(locals.db,
     `SELECT c.id, c.name, c.type, c.description,
       CAST(COUNT(CASE WHEN cm.created_at > COALESCE(
-        (SELECT MAX(cm2.created_at) FROM channel_messages cm2
-          WHERE cm2.channel_id = c.id AND cm2.sender_id = ?),
+        (SELECT cr.last_read_at FROM channel_reads cr
+          WHERE cr.channel_id = c.id AND cr.user_id = ?),
         c.created_at
-      ) THEN 1 END) AS TEXT) AS unread_count,
+      ) AND cm.sender_id != ? THEN 1 END) AS TEXT) AS unread_count,
       (SELECT body FROM channel_messages WHERE channel_id = c.id
         AND deleted_at IS NULL ORDER BY created_at DESC LIMIT 1) AS last_message,
       (SELECT created_at FROM channel_messages WHERE channel_id = c.id
@@ -31,7 +32,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
     WHERE c.org_id = ? AND c.archived_at IS NULL
     GROUP BY c.id
     ORDER BY c.created_at`,
-    user.id, org.id
+    user.id, user.id, org.id
   );
 
   // ─── Client tickets (user's own, with reservation info) ──────────────────
@@ -96,6 +97,14 @@ export const load: PageServerLoad = async ({ locals, url }) => {
   if (channelId) {
     activeChannel = channels.find(c => c.id === channelId) ?? null;
     if (activeChannel) {
+      // Opening a channel marks it read. `channels` above was already computed, so the
+      // badge clears on the NEXT load — which matches how the sidebar poll refreshes.
+      await dbRun(locals.db,
+        `INSERT INTO channel_reads (user_id, channel_id, last_read_at)
+         VALUES (?, ?, datetime('now'))
+         ON CONFLICT (user_id, channel_id) DO UPDATE SET last_read_at = datetime('now')`,
+        user.id, activeChannel.id
+      );
       channelMessages = await dbAll<{
         id: string; sender_id: string; body: string; edited_at: string | null; created_at: string;
         sender_first_name: string; sender_last_name: string;
@@ -155,7 +164,8 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 export const actions: Actions = {
   sendChannel: async ({ request, locals }) => {
     const user = locals.user!;
-    const org  = locals.currentOrg!;
+    const org = locals.currentOrg;
+  if (!org) redirect(303, '/app/org/new');
     const data = await request.formData();
     const channelId = String(data.get('channel_id') ?? '');
     const body = String(data.get('body') ?? '').trim();
@@ -198,20 +208,24 @@ export const actions: Actions = {
 
   deleteChannel: async ({ request, locals }) => {
     const user = locals.user!;
-    const org  = locals.currentOrg!;
+    const org = locals.currentOrg;
+  if (!org) redirect(303, '/app/org/new');
     const data = await request.formData();
     const msgId = String(data.get('msg_id') ?? '');
     if (!msgId) return;
     if (org.role === 'owner' || org.role === 'admin') {
-      await dbRun(locals.db, `UPDATE channel_messages SET deleted_at = datetime('now') WHERE id = ?`, msgId);
+      // org_id is required here: without it an admin of ANY org could soft-delete
+      // any other org's channel message by id.
+      await dbRun(locals.db, `UPDATE channel_messages SET deleted_at = datetime('now') WHERE id = ? AND org_id = ?`, msgId, org.id);
     } else {
-      await dbRun(locals.db, `UPDATE channel_messages SET deleted_at = datetime('now') WHERE id = ? AND sender_id = ?`, msgId, user.id);
+      await dbRun(locals.db, `UPDATE channel_messages SET deleted_at = datetime('now') WHERE id = ? AND sender_id = ? AND org_id = ?`, msgId, user.id, org.id);
     }
   },
 
   createChannel: async ({ request, locals }) => {
     const user = locals.user!;
-    const org  = locals.currentOrg!;
+    const org = locals.currentOrg;
+  if (!org) redirect(303, '/app/org/new');
     if (org.role !== 'owner' && org.role !== 'admin') return;
     const data = await request.formData();
     const rawName = String(data.get('name') ?? '').trim();
@@ -232,7 +246,8 @@ export const actions: Actions = {
 
   sendTicket: async ({ request, locals }) => {
     const user = locals.user!;
-    const org  = locals.currentOrg!;
+    const org = locals.currentOrg;
+  if (!org) redirect(303, '/app/org/new');
     const data = await request.formData();
     const ticketId = String(data.get('ticket_id') ?? '');
     const body = String(data.get('body') ?? '').trim();
@@ -279,7 +294,8 @@ export const actions: Actions = {
 
   createTicket: async ({ request, locals }) => {
     const user = locals.user!;
-    const org  = locals.currentOrg!;
+    const org = locals.currentOrg;
+  if (!org) redirect(303, '/app/org/new');
     const data = await request.formData();
     const reservationId = String(data.get('reservation_id') ?? '').trim();
     const body = String(data.get('body') ?? '').trim();
@@ -316,7 +332,8 @@ export const actions: Actions = {
 
   closeTicket: async ({ request, locals }) => {
     const user = locals.user!;
-    const org  = locals.currentOrg!;
+    const org = locals.currentOrg;
+  if (!org) redirect(303, '/app/org/new');
     const data = await request.formData();
     const ticketId = String(data.get('ticket_id') ?? '');
     if (!ticketId) return;
@@ -331,7 +348,8 @@ export const actions: Actions = {
 
   reopenTicket: async ({ request, locals }) => {
     const user = locals.user!;
-    const org  = locals.currentOrg!;
+    const org = locals.currentOrg;
+  if (!org) redirect(303, '/app/org/new');
     const data = await request.formData();
     const ticketId = String(data.get('ticket_id') ?? '');
     if (!ticketId) return;

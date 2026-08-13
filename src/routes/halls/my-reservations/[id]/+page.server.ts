@@ -21,9 +21,9 @@ function subjectFor(hallName: string, eventDate: string): string {
 }
 
 async function loadReservation(db: App.Locals['db'], id: string, userId: string, orgId: string) {
-	return dbFirst<ReservationRow & { hall_name: string; hall_slug: string | null }>(
+	return dbFirst<ReservationRow & { hall_name: string; hall_slug: string | null; hall_min_cancel_days: number }>(
 		db,
-		`SELECT r.*, h.name AS hall_name, h.slug AS hall_slug
+		`SELECT r.*, h.name AS hall_name, h.slug AS hall_slug, h.min_cancel_days AS hall_min_cancel_days
 		FROM reservations r
 		JOIN halls h ON h.id = r.hall_id
 		WHERE r.id = ? AND r.user_id = ? AND r.org_id = ?`,
@@ -142,7 +142,7 @@ export const actions: Actions = {
 		}
 
 		if (eventDate !== reservation.event_date) {
-			const check = await assertCanBook(locals.db, hall, eventDate, userId, numGuests, locals.locale);
+			const check = await assertCanBook(locals.db, hall, eventDate, userId, numGuests, locals.locale, params.id);
 			if (!check.ok) return fail(400, { error: check.reason });
 		}
 
@@ -171,6 +171,20 @@ export const actions: Actions = {
 		if (!reservation) return fail(404, { error: st(locals.locale).serverErrors.reservationNotFoundDot });
 		if (hasEventStarted(reservation.event_date, reservation.start_time)) return fail(400, { error: st(locals.locale).serverErrors.reservationNoLongerCancellable });
 		if (!CANCELLABLE.has(reservation.status)) return fail(400, { error: st(locals.locale).serverErrors.reservationNoLongerCancellable });
+
+		// The venue's minimum cancellation notice. This is the ONLY cancel path a client
+		// can reach, so without this the setting had no effect on the people it exists
+		// for — staff already enforced it on their own path.
+		if (reservation.hall_min_cancel_days > 0) {
+			const daysUntil = Math.ceil(
+				(new Date(reservation.event_date).getTime() - Date.now()) / (1000 * 60 * 60 * 24)
+			);
+			if (daysUntil < reservation.hall_min_cancel_days) {
+				return fail(400, {
+					error: st(locals.locale).serverErrors.cannotCancelBeforeEvent.replace('{days}', String(reservation.hall_min_cancel_days)),
+				});
+			}
+		}
 
 		await dbRun(locals.db,
 			`UPDATE reservations SET status = 'cancelled' WHERE id = ? AND user_id = ? AND org_id = ?`,

@@ -5,7 +5,11 @@ import { buildSeatableLayout, rsvpDetailMap } from '$lib/reservationLayout';
 import { st } from '$lib/i18n-server';
 import type { PageServerLoad } from './$types';
 
-const CLIENT_VISIBLE = new Set(['approved', 'planned']);
+// Must match `canViewSeating` on the parent page, which includes 'completed' — the
+// link was rendered for completed events and then bounced straight back. The manifest
+// is read-only, so letting a client review a finished event's seating is safe; the
+// layout EDITOR stays approved/planned only.
+const CLIENT_VISIBLE = new Set(['approved', 'planned', 'completed']);
 
 export const load: PageServerLoad = async ({ locals, params }) => {
 	if (!locals.user) redirect(303, `/login?redirect=/halls/my-reservations/${params.id}/manifest`);

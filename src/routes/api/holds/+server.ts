@@ -26,9 +26,19 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	);
 	if (!hall) return json({ ok: false, reason: 'not-found' }, { status: 404 });
 
+	// Staff may hold halls in their own org.
 	const isOrgUser = !!locals.currentOrg && hall.org_id === locals.currentOrg.id;
-	const isPublicBookable = !!hall.is_public && !!hall.allow_reservations;
-	if (!isOrgUser && !isPublicBookable) return json({ ok: false, reason: 'forbidden' }, { status: 403 });
+
+	// Clients may hold a public bookable hall — but ONLY inside that hall's own bubble.
+	// Without the domainOrg check this branch was global: any client of any venue could
+	// hold dates on any other venue's halls (blocking that venue's real customers, and
+	// writing reservation_holds rows stamped with the victim's org_id). Every other
+	// client-facing query is scoped by locals.domainOrg; this one was the exception.
+	const isPublicBookableOnOwnBubble =
+		!!hall.is_public && !!hall.allow_reservations &&
+		!!locals.domainOrg && hall.org_id === locals.domainOrg.id;
+
+	if (!isOrgUser && !isPublicBookableOnOwnBubble) return json({ ok: false, reason: 'forbidden' }, { status: 403 });
 
 	if (body.action === 'release') {
 		await releaseHold(locals.db, hallId, date, locals.user.id);

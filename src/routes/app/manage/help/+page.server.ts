@@ -1,6 +1,7 @@
 import { dbFirst } from '$lib/db/index';
 import { ARTICLES } from '$lib/knowledgebase';
 import type { PageServerLoad } from './$types';
+import { st } from '$lib/i18n-server';
 
 export const load: PageServerLoad = async ({ locals }) => {
 	const orgId = locals.currentOrg!.id;
@@ -16,13 +17,16 @@ export const load: PageServerLoad = async ({ locals }) => {
 	const firstHall   = await dbFirst<{ id: string }>(locals.db, 'SELECT id FROM halls WHERE org_id = ? ORDER BY created_at LIMIT 1', orgId);
 	const hallHref = firstHall ? `/app/manage/halls/${firstHall.id}` : '/app/manage/halls';
 
+	// Localized — these were hardcoded English literals, so the whole checklist
+	// rendered in English even under the Slovak default locale.
+	const C = st(locals.locale).membersAdmin.checklistItems;
 	const checklist = [
-		{ key: 'hall',    label: 'Create your first hall',  desc: 'Add a space you rent out — capacity, address, photos.', done: halls > 0,       href: '/app/manage/halls', cta: 'Add a hall' },
-		{ key: 'plan',    label: 'Draw a floor plan',       desc: 'Set the room bounds, walls and zones so you can seat guests.', done: withPlan > 0, href: hallHref, cta: 'Open a hall' },
-		{ key: 'tables',  label: 'Define table types',      desc: 'Reusable tables (a round 8-seater, a banquet table…) you place per event.', done: tableTypes > 0, href: hallHref, cta: 'Add table types' },
-		{ key: 'public',  label: 'Publish a hall',          desc: 'Make a hall public so guests can find and request it.', done: publicHalls > 0, href: hallHref, cta: 'Publish' },
-		{ key: 'extras',  label: 'Offer extras (optional)', desc: 'Let guests order catering, equipment or services with a booking.', done: extras > 0, href: hallHref, cta: 'Add extras' },
-		{ key: 'team',    label: 'Invite a teammate',       desc: 'Bring colleagues in to help manage events.', done: members > 1, href: '/app/manage/members', cta: 'Invite' },
+		{ key: 'hall', label: C.hall.label, desc: C.hall.desc, done: halls > 0, href: '/app/manage/halls', cta: C.hall.cta },
+		{ key: 'plan', label: C.plan.label, desc: C.plan.desc, done: withPlan > 0, href: hallHref, cta: C.plan.cta },
+		{ key: 'tables', label: C.tables.label, desc: C.tables.desc, done: tableTypes > 0, href: hallHref, cta: C.tables.cta },
+		{ key: 'public', label: C.public.label, desc: C.public.desc, done: publicHalls > 0, href: hallHref, cta: C.public.cta },
+		{ key: 'extras', label: C.extras.label, desc: C.extras.desc, done: extras > 0, href: hallHref, cta: C.extras.cta },
+		{ key: 'team', label: C.team.label, desc: C.team.desc, done: members > 1, href: '/app/manage/members', cta: C.team.cta },
 	];
 
 	const completed = checklist.filter((c) => c.done).length;

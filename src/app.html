@@ -2,11 +2,14 @@
 <html lang="%lang%">
 	<head>
 		<meta charset="utf-8" />
-		<link rel="icon" href="%sveltekit.assets%/favicon.png" />
+		<!-- favicon.png never existed, so this 404'd on every page. -->
+		<link rel="icon" href="%sveltekit.assets%/favicon.svg" type="image/svg+xml" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
-		<link rel="preconnect" href="https://fonts.googleapis.com" />
-		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-		<link href="https://fonts.googleapis.com/css2?family=Poppins:ital,wght@1,900&display=swap" rel="stylesheet" />
+		<!-- Poppins is self-hosted (see app.css). It used to load from Google's CDN,
+		     which (a) the Content-Security-Policy now blocks and (b) sends every
+		     visitor's IP to Google — at odds with the privacy policy's "no third-party
+		     tracking", and a live GDPR issue for an EU service. -->
+		<link rel="preload" href="%sveltekit.assets%/fonts/poppins-900italic-latin.woff2" as="font" type="font/woff2" crossorigin />
 		%sveltekit.head%
 	</head>
 	<body data-sveltekit-preload-data="hover">

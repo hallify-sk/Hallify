@@ -22,5 +22,12 @@ export const load: PageServerLoad = async ({ locals }) => {
     LIMIT 10
   `);
 
-  return { stats, recentOrgs };
+  // A bare aggregate SELECT always yields one row; the fallback keeps the type honest
+  // and renders zeros instead of pushing a null check into every KPI card.
+  return {
+    stats: stats ?? {
+      total_orgs: '0', total_users: '0', active_subscriptions: '0', total_reservations: '0',
+    },
+    recentOrgs,
+  };
 };

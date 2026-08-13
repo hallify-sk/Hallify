@@ -84,6 +84,8 @@
 	const isPublicHallsPage = $derived($page.url.pathname.startsWith('/halls'));
 	// Document-style pages (printable seating manifest) render without the app shell.
 	const isDocPage = $derived($page.url.pathname.endsWith('/manifest'));
+	// Legal documents render standalone, like the landing page.
+	const isLegalPage = $derived(['/terms', '/privacy', '/dpa'].includes($page.url.pathname));
 
 	function osTheme(): string {
 		return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'slate';
@@ -105,7 +107,7 @@
 	});
 </script>
 
-{#if isLandingPage || isPublicHallsPage || isDocPage}
+{#if isLandingPage || isPublicHallsPage || isDocPage || isLegalPage}
 	<div style={brandStyle}>
 		{@render children()}
 	</div>

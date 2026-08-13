@@ -1,5 +1,6 @@
 import type { PageServerLoad, Actions } from './$types';
 import { dbFirst, dbRun, toJson, fromJson } from '$lib/db/index';
+import { requireOrgStaff } from '$lib/guards';
 
 export const load: PageServerLoad = async ({ locals }) => {
   const orgId = locals.currentOrg!.id;
@@ -22,6 +23,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 
 export const actions: Actions = {
   saveNotifications: async ({ request, locals }) => {
+    requireOrgStaff(locals);
     const orgId = locals.currentOrg!.id;
     const data = await request.formData();
     const config = {

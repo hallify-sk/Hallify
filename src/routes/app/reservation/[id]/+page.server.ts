@@ -29,6 +29,13 @@ function isOrgStaff(locals: App.Locals): boolean {
 	return locals.currentOrg?.role === 'owner' || locals.currentOrg?.role === 'admin';
 }
 
+/** Staff may act on any reservation in their org; everyone else only on their own.
+ *  Org scoping alone is NOT enough here — without this, any `member`-role account
+ *  could cancel, re-layout or reset a colleague's (or a client's) booking. */
+function canActOnReservation(locals: App.Locals, reservationUserId: string): boolean {
+	return isOrgStaff(locals) || reservationUserId === locals.user?.id;
+}
+
 export const load: PageServerLoad = async ({ locals, params, url }) => {
 	if (!locals.user) redirect(303, '/app/login');
 	const orgId = locals.currentOrg?.id;
@@ -276,6 +283,7 @@ export const actions: Actions = {
 			params.id, orgId
 		);
 		if (!reservation) return fail(404, { error: st(locals.locale).serverErrors.notFound });
+		if (!canActOnReservation(locals, reservation.user_id)) return fail(403, { error: st(locals.locale).serverErrors.accessDenied });
 		if (!isOrgStaff(locals) && !['approved', 'planned'].includes(reservation.status)) {
 			return fail(403, { error: st(locals.locale).serverErrors.reservationMustBeApprovedToEditLayout });
 		}
@@ -298,12 +306,25 @@ export const actions: Actions = {
 		}
 
 		const reservation = await dbFirst<ReservationRow>(locals.db,
-			'SELECT user_id, title, hall_id FROM reservations WHERE id = ? AND org_id = ?',
+			'SELECT user_id, title, hall_id, status, event_date FROM reservations WHERE id = ? AND org_id = ?',
 			params.id, orgId
 		);
 		if (!reservation) return fail(404, { error: st(locals.locale).serverErrors.notFound });
 
-		await dbRun(locals.db, 'UPDATE reservations SET status = ? WHERE id = ? AND org_id = ?', status, params.id, orgId);
+		// Bringing a reservation out of 'cancelled' can collide with the unique index
+		// (one active reservation per hall per day) if the date was re-booked meanwhile.
+		// Catch it and report cleanly instead of surfacing a 500.
+		if (reservation.status === 'cancelled' && status !== 'cancelled') {
+			const clash = await dbFirst<{ id: string }>(locals.db,
+				"SELECT id FROM reservations WHERE hall_id = ? AND event_date = ? AND status != 'cancelled' AND id != ? LIMIT 1",
+				reservation.hall_id, reservation.event_date, params.id);
+			if (clash) return fail(409, { error: st(locals.locale).serverErrors.hallAlreadyBooked });
+		}
+		try {
+			await dbRun(locals.db, 'UPDATE reservations SET status = ? WHERE id = ? AND org_id = ?', status, params.id, orgId);
+		} catch {
+			return fail(409, { error: st(locals.locale).serverErrors.hallAlreadyBooked });
+		}
 
 		const actorName = `${locals.user.first_name} ${locals.user.last_name}`;
 		await postSystemMessage(
@@ -322,6 +343,13 @@ export const actions: Actions = {
 			notifyStatusChange(locals.db, orgId, userInfo.email, reservation.title, status).catch(() => {});
 		}
 
+		// Only the client's own self-cancel fired this before, so an org subscribed to
+		// `reservation.status_changed` saw nothing when staff changed a status.
+		dispatchWebhooks(locals.db, orgId, 'reservation.status_changed', {
+			reservation_id: params.id, title: reservation.title,
+			event_date: reservation.event_date, status, changed_by: 'staff',
+		}).catch(() => {});
+
 		return { success: true };
 	},
 
@@ -337,6 +365,7 @@ export const actions: Actions = {
 			params.id, orgId
 		);
 		if (!reservation) return fail(404, { error: st(locals.locale).serverErrors.notFound });
+		if (!canActOnReservation(locals, reservation.user_id)) return fail(403, { error: st(locals.locale).serverErrors.accessDenied });
 
 		const isAdmin = isOrgStaff(locals);
 
@@ -381,6 +410,7 @@ export const actions: Actions = {
 			params.id, orgId
 		);
 		if (!reservation) return fail(404, { error: st(locals.locale).serverErrors.notFound });
+		if (!canActOnReservation(locals, reservation.user_id)) return fail(403, { error: st(locals.locale).serverErrors.accessDenied });
 		await dbRun(locals.db,
 			'UPDATE reservations SET layout_json = (SELECT floorplan_json FROM halls WHERE id = ?) WHERE id = ? AND org_id = ?',
 			reservation.hall_id, params.id, orgId
@@ -401,6 +431,7 @@ export const actions: Actions = {
 			params.id, orgId
 		);
 		if (!reservation) return fail(404, { error: st(locals.locale).serverErrors.notFound });
+		if (!canActOnReservation(locals, reservation.user_id)) return fail(403, { error: st(locals.locale).serverErrors.accessDenied });
 
 		// Template must belong to the same hall (and therefore the same org).
 		const tmpl = await dbFirst<TemplateRow>(locals.db,
@@ -428,6 +459,7 @@ export const actions: Actions = {
 			params.id, orgId
 		);
 		if (!reservation) return fail(404, { error: st(locals.locale).serverErrors.notFound });
+		if (!canActOnReservation(locals, reservation.user_id)) return fail(403, { error: st(locals.locale).serverErrors.accessDenied });
 
 		const existing = fromJson<Record<string, boolean | string | unknown[]>>(reservation.rsvp_config as string | null) ?? {};
 		const config = { ...existing, enabled };

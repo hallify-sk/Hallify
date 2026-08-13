@@ -3,6 +3,7 @@ import { dbFirst, dbAll, dbRun } from '$lib/db/index';
 import type { HallRow, TableTypeRow } from '$lib/db/index';
 import { st } from '$lib/i18n-server';
 import type { Actions, PageServerLoad } from './$types';
+import { requireOrgStaff } from '$lib/guards';
 
 export const load: PageServerLoad = async ({ params, locals }) => {
 	const orgId = locals.currentOrg!.id;
@@ -20,6 +21,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 
 export const actions: Actions = {
 	saveFloorplan: async ({ request, params, locals }) => {
+	  requireOrgStaff(locals);
 		const orgId = locals.currentOrg!.id;
 		const data = await request.formData();
 		const floorplanJson = String(data.get('floorplanJson') ?? '');

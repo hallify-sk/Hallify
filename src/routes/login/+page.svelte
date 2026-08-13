@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { page } from '$app/stores';
   import { enhance } from '$app/forms';
   import { t } from '$lib/i18n.svelte';
   import type { PageData, ActionData } from './$types';
@@ -8,6 +9,7 @@
 
   const org = $derived(data.domainOrg);
   let tab = $state((form?.tab as 'login' | 'register' | undefined) ?? 'login');
+  const resetSuccess = $derived($page.url.searchParams.get('reset') === 'success');
 </script>
 
 <svelte:head><title>{t.publicBooking.signInTitle} – {org.name}</title></svelte:head>
@@ -36,6 +38,8 @@
       <button class="tab" class:tab-active={tab === 'register'} type="button" onclick={() => tab = 'register'}>{t.auth.createAccount}</button>
     </div>
 
+    {#if resetSuccess}<div class="notice notice-success">{t.forgotPassword.resetSuccess}</div>{/if}
+
     {#if form?.error}
       <div class="alert-error">{form.error}</div>
     {/if}
@@ -56,6 +60,9 @@
         </div>
         <button type="submit" class="btn-submit">{t.auth.signIn}</button>
       </form>
+      <p class="switch-hint">
+        <a class="switch-link" href="/forgot-password">{t.forgotPassword.title}</a>
+      </p>
       <p class="switch-hint">
         {t.auth.noAccount}
         <button type="button" class="switch-link" onclick={() => tab = 'register'}>{t.publicBooking.createOne}</button>

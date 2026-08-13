@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { RSVP_ENABLED } from '$lib/features';
 	import { migrateToMultiFloor } from '$lib/floorplan-types';
 	import type { FloorData, MultiFloorState, WallObj, ZoneObj, TableObj, Guest, Point, TableShape } from '$lib/floorplan-types';
 
@@ -26,7 +27,7 @@
 
 	// RSVP feature is hidden for now — gate the import UI but keep importRsvp()/rsvps wired
 	// so it can be re-enabled by flipping this flag.
-	const SHOW_RSVP = false;
+	const SHOW_RSVP = RSVP_ENABLED; // single switch: $lib/features
 
 	// ─── State (loaded from layoutJson) ──────────────────────────────────────
 	let floors = $state<FloorData[]>([]);

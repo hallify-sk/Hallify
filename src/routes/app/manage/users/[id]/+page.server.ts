@@ -5,6 +5,7 @@ import { deleteUserAndCleanup } from '$lib/orgLifecycle';
 import { st } from '$lib/i18n-server';
 import type { PageServerLoad, Actions } from './$types';
 import bcrypt from 'bcryptjs';
+import { requireOrgStaff } from '$lib/guards';
 
 export const load: PageServerLoad = async ({ params, locals }) => {
 	const user = await dbFirst<UserRow & { reservation_count: string }>(locals.db,
@@ -32,6 +33,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 
 export const actions: Actions = {
 	updateDetails: async ({ request, params, locals }) => {
+	  requireOrgStaff(locals);
 		if (!locals.user || locals.currentOrg?.impersonated || (locals.currentOrg?.role !== 'owner' && locals.currentOrg?.role !== 'admin')) return fail(403, { error: st(locals.locale).serverErrors.unauthorized });
 		const data = await request.formData();
 		const firstName = String(data.get('first_name') ?? '').trim();
@@ -56,6 +58,7 @@ export const actions: Actions = {
 	},
 
 	setRole: async ({ request, params, locals }) => {
+	  requireOrgStaff(locals);
 		if (!locals.user || locals.currentOrg?.impersonated || (locals.currentOrg?.role !== 'owner' && locals.currentOrg?.role !== 'admin')) return fail(403, { error: st(locals.locale).serverErrors.unauthorized });
 		const data = await request.formData();
 		const role = String(data.get('role') ?? '');
@@ -73,6 +76,7 @@ export const actions: Actions = {
 	},
 
 	resetPassword: async ({ request, params, locals }) => {
+	  requireOrgStaff(locals);
 		if (!locals.user || locals.currentOrg?.impersonated || (locals.currentOrg?.role !== 'owner' && locals.currentOrg?.role !== 'admin')) return fail(403, { error: st(locals.locale).serverErrors.unauthorized });
 		const data = await request.formData();
 		const password = String(data.get('password') ?? '');
@@ -84,6 +88,7 @@ export const actions: Actions = {
 	},
 
 	deleteUser: async ({ params, locals }) => {
+	  requireOrgStaff(locals);
 		if (!locals.user || locals.currentOrg?.impersonated || (locals.currentOrg?.role !== 'owner' && locals.currentOrg?.role !== 'admin')) return fail(403, { error: st(locals.locale).serverErrors.unauthorized });
 		if (params.id === locals.user.id) return fail(400, { error: st(locals.locale).serverErrors.cannotDeleteOwnAccount });
 
