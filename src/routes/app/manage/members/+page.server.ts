@@ -8,6 +8,7 @@ import { sendOrgInviteEmail } from '$lib/email';
 import { st } from '$lib/i18n-server';
 import { env } from '$env/dynamic/private';
 import type { Actions, PageServerLoad } from './$types';
+import { requireOrgStaff } from '$lib/guards';
 
 export const load: PageServerLoad = async ({ locals }) => {
   const orgId = locals.currentOrg!.id;
@@ -33,6 +34,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 
 export const actions: Actions = {
   invite: async ({ request, locals, url }) => {
+    requireOrgStaff(locals);
     if (locals.currentOrg?.impersonated) return fail(403, { error: st(locals.locale).serverErrors.impersonationBlockThisOrg });
     const orgId = locals.currentOrg!.id;
     const data = await request.formData();
@@ -92,6 +94,7 @@ export const actions: Actions = {
   },
 
   revoke: async ({ request, locals }) => {
+    requireOrgStaff(locals);
     if (locals.currentOrg?.impersonated) return fail(403, { error: st(locals.locale).serverErrors.impersonationBlockThisOrg });
     const orgId = locals.currentOrg!.id;
     const data = await request.formData();
@@ -101,6 +104,7 @@ export const actions: Actions = {
   },
 
   remove: async ({ request, locals }) => {
+    requireOrgStaff(locals);
     if (locals.currentOrg?.impersonated) return fail(403, { error: st(locals.locale).serverErrors.impersonationBlockThisOrg });
     // Defense-in-depth: this action mutates membership, so re-check the caller's
     // role explicitly rather than relying solely on the manage-layout guard.
@@ -136,6 +140,7 @@ export const actions: Actions = {
   // Current user leaves the org. The last member (usually the owner) cannot
   // leave — they must explicitly close the organization.
   leave: async ({ locals, cookies }) => {
+    requireOrgStaff(locals);
     if (locals.currentOrg?.impersonated) return fail(403, { error: st(locals.locale).serverErrors.impersonationBlockThisOrg });
     const orgId = locals.currentOrg!.id;
     const userId = locals.user!.id;
@@ -165,6 +170,7 @@ export const actions: Actions = {
   // record (kept indefinitely) then deletes all live data. Requires typing the
   // org name to confirm.
   closeOrg: async ({ request, locals }) => {
+    requireOrgStaff(locals);
     const org = locals.currentOrg!;
     if (org.impersonated) return fail(403, { error: st(locals.locale).serverErrors.impersonationBlockThisOrg });
     if (org.role !== 'owner') return fail(403, { error: st(locals.locale).serverErrors.onlyOwnerCanCloseOrg });
@@ -185,6 +191,7 @@ export const actions: Actions = {
   },
 
   changeRole: async ({ request, locals }) => {
+    requireOrgStaff(locals);
     if (locals.currentOrg?.impersonated) return fail(403, { error: st(locals.locale).serverErrors.impersonationBlockThisOrg });
     const orgId = locals.currentOrg!.id;
     const data = await request.formData();

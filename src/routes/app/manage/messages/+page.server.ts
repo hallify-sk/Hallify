@@ -1,6 +1,7 @@
 import type { PageServerLoad, Actions } from './$types';
 import { dbAll, dbRun } from '$lib/db/index';
 import { fail } from '@sveltejs/kit';
+import { requireOrgStaff } from '$lib/guards';
 
 export const load: PageServerLoad = async ({ locals }) => {
   const orgId = locals.currentOrg!.id;
@@ -31,6 +32,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 
 export const actions: Actions = {
   close: async ({ request, locals }) => {
+    requireOrgStaff(locals);
     const orgId = locals.currentOrg!.id;
     const data = await request.formData();
     const id = String(data.get('id') ?? '');
@@ -38,6 +40,7 @@ export const actions: Actions = {
     await dbRun(locals.db, `UPDATE tickets SET status = 'closed', updated_at = datetime('now') WHERE id = ? AND org_id = ?`, id, orgId);
   },
   reopen: async ({ request, locals }) => {
+    requireOrgStaff(locals);
     const orgId = locals.currentOrg!.id;
     const data = await request.formData();
     const id = String(data.get('id') ?? '');

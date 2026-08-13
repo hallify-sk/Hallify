@@ -25,7 +25,7 @@
       </form>
     {:else}
       <p class="info">{t.authPages.inviteLoginFirst}</p>
-      <a href="/login?redirect=/invite/{data.invite.id}" class="btn-action" style="display:block;text-align:center">
+      <a href="/app/login?redirect=/app/invite/{data.token}" class="btn-action" style="display:block;text-align:center">
         {t.authPages.inviteLoginToAccept}
       </a>
     {/if}

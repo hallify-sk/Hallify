@@ -5,6 +5,7 @@ import { getPlan } from '$lib/plans';
 import { canAddHall, activeHallCount } from '$lib/limits';
 import { st } from '$lib/i18n-server';
 import type { Actions, PageServerLoad } from './$types';
+import { requireOrgStaff } from '$lib/guards';
 
 export const load: PageServerLoad = async ({ locals }) => {
   const orgId = locals.currentOrg!.id;
@@ -23,6 +24,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 
 export const actions: Actions = {
   create: async ({ request, locals }) => {
+    requireOrgStaff(locals);
     const orgId = locals.currentOrg!.id;
     const data = await request.formData();
     const name = String(data.get('name') ?? '').trim();
@@ -48,6 +50,7 @@ export const actions: Actions = {
   },
 
   delete: async ({ request, locals }) => {
+    requireOrgStaff(locals);
     const orgId = locals.currentOrg!.id;
     const data = await request.formData();
     const id = String(data.get('id') ?? '');

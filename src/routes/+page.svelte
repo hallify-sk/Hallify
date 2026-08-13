@@ -1,9 +1,13 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { t, getLocale, chooseLocale } from '$lib/i18n.svelte';
+  import { LEGAL_LABELS } from '$lib/legal';
   import type { PageData } from './$types';
 
   let { data }: { data: PageData } = $props();
+
+  // Legal link labels live with the documents themselves, not in the i18n bundle.
+  const legal = $derived(LEGAL_LABELS[getLocale()]);
 
   // Locale is driven by the global i18n state (set by the root layout from the
   // server-resolved locale: ?lang > cookie > 'sk'). The SK/EN pill flips + persists it.
@@ -751,6 +755,12 @@
         <a href="/app/register">{t.landing.nav.getStarted}</a>
         <a href="/app/login">{t.landing.nav.signIn}</a>
       </div>
+      <div class="footer-col">
+        <span class="footer-heading">{legal.sectionHeading}</span>
+        <a href="/terms">{legal.terms}</a>
+        <a href="/privacy">{legal.privacy}</a>
+        <a href="/dpa">{legal.dpa}</a>
+      </div>
     </div>
     <div class="footer-bottom">
       <p class="footer-copy">{t.landing.footer.copyright}</p>
@@ -815,7 +825,7 @@
     filter: brightness(0) invert(0.7) sepia(1) hue-rotate(200deg) saturate(2);
   }
   .nav-name {
-    font-family: 'Poppins', sans-serif;
+    font-family: 'Poppins', 'Segoe UI', system-ui, -apple-system, sans-serif;
     font-weight: 900; font-style: italic; font-size: 18px;
     color: var(--txt); letter-spacing: -0.01em;
   }
@@ -1591,7 +1601,7 @@
   }
   .footer-brand { display: inline-flex; align-items: center; gap: 9px; text-decoration: none; }
   .footer-logo { width: 22px; height: 22px; filter: brightness(0) invert(0.5); }
-  .footer-name { font-family: 'Poppins', sans-serif; font-weight: 900; font-style: italic; font-size: 16px; color: rgba(255,255,255,.7); letter-spacing: -0.01em; }
+  .footer-name { font-family: 'Poppins', 'Segoe UI', system-ui, -apple-system, sans-serif; font-weight: 900; font-style: italic; font-size: 16px; color: rgba(255,255,255,.7); letter-spacing: -0.01em; }
   .footer-tag { font-size: 13px; color: var(--txt-faint); margin: 14px 0 0; max-width: 240px; line-height: 1.5; }
   .footer-col { display: flex; flex-direction: column; gap: 12px; }
   .footer-heading { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: rgba(255,255,255,.32); margin-bottom: 2px; }

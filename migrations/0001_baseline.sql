@@ -1,4 +1,17 @@
 -- ─────────────────────────────────────────────────────────────────────────────
+-- Migration 0001 — baseline schema (was src/lib/db/schema.sql).
+--
+-- Every statement is IF NOT EXISTS, so applying this to an already-populated
+-- database (dev-remote, prod) is a no-op that simply records the baseline in
+-- `d1_migrations`. On a fresh database it creates everything.
+--
+-- Applied with: npm run migrate:local | migrate:dev | migrate:prod
+-- New changes go in a NEW numbered file — never edit this one. Note that
+-- `CREATE TABLE IF NOT EXISTS` will NOT add a column to a table that already
+-- exists; adding a column always needs its own `ALTER TABLE` migration.
+-- ─────────────────────────────────────────────────────────────────────────────
+
+-- ─────────────────────────────────────────────────────────────────────────────
 -- Hallify – SQLite / Cloudflare D1 schema
 -- All UUIDs are generated in application code.
 -- Booleans are stored as INTEGER (1 = true, 0 = false).

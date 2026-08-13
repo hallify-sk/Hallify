@@ -279,6 +279,8 @@
 		return { x: sx(e.clientX - r.left), y: sy(e.clientY - r.top) };
 	}
 	function snap(p: Point): Point {
+		// 0 = snapping off (the dropdown offered no way to disable it before).
+		if (!gridSnap) return { x: p.x, y: p.y };
 		return { x: Math.round(p.x / gridSnap) * gridSnap, y: Math.round(p.y / gridSnap) * gridSnap };
 	}
 
@@ -544,7 +546,12 @@
 		if (t.shape === 'round') {
 			const n = Number(t.chairs) || 0;
 			if (n === 0) return [];
-			const r = Number(t.radius) + TABLE_GAP + CR;
+			// `gap` used to be ignored here — the spacing control rendered for round
+			// tables but did nothing. Chairs sit on a circle, so spacing means pushing
+			// the ring out until the arc between neighbours is at least (2*CR + gap).
+			const minRadius = Number(t.radius) + TABLE_GAP + CR;
+			const needed = n > 1 ? step / (2 * Math.sin(Math.PI / n)) : 0;
+			const r = Math.max(minRadius, needed);
 			return Array.from({ length: n }, (_, i) => {
 				const a = (i / n) * 2 * Math.PI - Math.PI / 2;
 				return { x: Math.cos(a) * r, y: Math.sin(a) * r, rot: (a * 180 / Math.PI) + 90 };
@@ -810,6 +817,17 @@
 	const totalAssigned    = $derived(assignedIds.size);
 	const totalSeats       = $derived(tables.reduce((s, t) => s + totalChairs(t), 0) + seats.length);
 
+	// Whole-plan totals. The panel above only ever described the active floor, which
+	// is misleading on a multi-floor venue — show both.
+	const allFloors = $derived(
+		floors.map((f, i) => (i === activeFloorIdx ? { ...f, walls, zones, tables, seats } : f))
+	);
+	const allTables = $derived(allFloors.reduce((n, f) => n + (f.tables?.length ?? 0), 0));
+	const allWalls  = $derived(allFloors.reduce((n, f) => n + (f.walls?.length ?? 0), 0));
+	const allZones  = $derived(allFloors.reduce((n, f) => n + (f.zones?.length ?? 0), 0));
+	const allSeats  = $derived(allFloors.reduce(
+		(n, f) => n + (f.tables ?? []).reduce((m, t) => m + totalChairs(t), 0) + (f.seats?.length ?? 0), 0));
+
 	const popoverTable = $derived.by(() => {
 		const cp = chairPopover;
 		return cp?.tableId ? tables.find(t => t.id === cp.tableId) ?? null : null;
@@ -846,8 +864,8 @@
 	const patternY = $derived(((panY % zoom) + zoom) % zoom);
 
 	// Ruler tick computation
-	const rulerStep  = $derived(gridSnap);
-	const rulerMajor = $derived(gridSnap < 1 ? 1 : gridSnap);
+	const rulerStep  = $derived(gridSnap || 0.5);
+	const rulerMajor = $derived(!gridSnap || gridSnap < 1 ? 1 : gridSnap);
 	const rulerMinMx = $derived(Math.floor(-panX / zoom / rulerStep) * rulerStep);
 	const rulerMaxMx = $derived(Math.ceil((4000 - panX) / zoom / rulerStep) * rulerStep);
 	const rulerMinMy = $derived(Math.floor(-panY / zoom / rulerStep) * rulerStep);
@@ -954,7 +972,7 @@
 		if (tool === 'wall' || tool === 'zone') {
 			if (!isDrawing) { isDrawing = true; drawPts = [pos]; return; }
 			const first = drawPts[0];
-			if (drawPts.length >= 3 && Math.hypot(pos.x - first.x, pos.y - first.y) < gridSnap * 1.5) {
+			if (drawPts.length >= 3 && Math.hypot(pos.x - first.x, pos.y - first.y) < (gridSnap || 0.5) * 1.5) {
 				finishDrawing();
 			} else { drawPts = [...drawPts, pos]; }
 			return;
@@ -1286,14 +1304,14 @@
 				<div class="custom-select" role="listbox" tabindex="0"
 					onclick={(e) => { e.stopPropagation(); snapDropOpen = !snapDropOpen; }}
 					onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); snapDropOpen = !snapDropOpen; } }}>
-					<span class="custom-select-value">{gridSnap} m</span>
+					<span class="custom-select-value">{gridSnap === 0 ? tr.editor.snapOff : `${gridSnap} m`}</span>
 					<svg class="custom-select-chevron" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
 					{#if snapDropOpen}
 						<div class="custom-select-dropdown">
-							{#each [0.25, 0.5, 1, 2] as val}
+							{#each [0, 0.25, 0.5, 1, 2] as val}
 								<button class="custom-select-option" class:selected={gridSnap === val}
 									onclick={(e) => { e.stopPropagation(); gridSnap = val; snapDropOpen = false; }}>
-									{val} m
+									{val === 0 ? tr.editor.snapOff : `${val} m`}
 								</button>
 							{/each}
 						</div>
@@ -2136,6 +2154,12 @@
 					<div class="stat"><span>{tr.editor.assigned}</span><b>{totalAssigned}/{guests.length} {tr.editor.guestsWord}</b></div>
 					<div class="stat"><span>{tr.editor.walls}</span><b>{walls.length}</b></div>
 					<div class="stat"><span>{tr.editor.zones}</span><b>{zones.length}</b></div>
+					{#if floors.length > 1}
+						<div class="stat stat-total">
+							<span>{tr.editor.allFloors}</span>
+							<b>{allTables} · {allSeats} · {allWalls} · {allZones}</b>
+						</div>
+					{/if}
 				</section>
 			{/if}
 
@@ -2422,6 +2446,7 @@ input[type="color"] {
 }
 
 .seat-summary { margin:4px 0 8px; }
+.stat-total { border-top:1px solid var(--border, rgba(255,255,255,.08)); margin-top:6px; padding-top:6px; opacity:.85; }
 .seat-summary span { font-size:11px; color:var(--text-muted); }
 .seat-dots { display:flex; flex-wrap:wrap; gap:3px; margin-top:5px; }
 .dot {

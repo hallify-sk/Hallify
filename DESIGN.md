@@ -16,11 +16,11 @@ Hallify is a **multi-tenant SaaS** hall/venue management and reservation platfor
 |---|---|---|
 | Framework | SvelteKit 2 + Svelte 5 | Uses new runes API: `$props()`, `$state()`, `$derived()`, `$effect()` |
 | Language | TypeScript 5 | Strict mode via tsconfig |
-| Database | PostgreSQL 16 (Docker) | Accessed via `postgres` npm package (tagged template literals) |
+| Database | Cloudflare D1 (SQLite) | Accessed via `dbAll`/`dbFirst`/`dbRun` helpers in `$lib/db/index` |
 | Auth | Custom cookie sessions | `session_id` httpOnly cookie, 30-day TTL, stored in `sessions` table |
 | Billing | Stripe | Server-side checkout + portal + webhooks; API version `2025-05-28.basil` |
 | Email | Brevo (HTTP API) | Single platform sender `noreply@hallify.sk` via the Brevo transactional API; no per-org SMTP |
-| Adapter | `@sveltejs/adapter-auto` | No explicit node/static adapter chosen yet |
+| Adapter | `@sveltejs/adapter-cloudflare` | Deployed as a Cloudflare Worker |
 | CSS | Pure CSS + custom properties | No Tailwind, no component library |
 | Icons | Inline SVG | No icon library dependency |
 | Build | Vite 6 | |
@@ -84,13 +84,11 @@ src/
 
   lib/
     db/
-      index.ts        — singleton postgres pool + ALL typed row interfaces
-      schema.sql      — master schema (idempotent, safe to re-run)
-      migration-002.sql
-      migration-003.sql — multi-tenancy: orgs, members, invites, subscriptions, org_settings
-      migrate.ts      — migration runner script
+      index.ts        — D1 query helpers (dbAll/dbFirst/dbRun) + ALL typed row interfaces
+      seed.sql        — default org + subscription (data, not schema)
+  (schema lives in /migrations — see migrations/README.md)
     auth.ts           — createSession / getSessionUser / deleteSession / switchOrg
-    email.ts          — nodemailer + per-org SMTP + email templates
+    email.ts          — Brevo HTTP API + email templates (no per-org SMTP)
     stripe.ts         — Stripe client + createCheckoutSession / createPortalSession
     plans.ts          — PLANS constant, PlanId type, getPlan(), isWithinLimit()
     i18n.ts           — sk (default) + en translations as plain objects
@@ -766,21 +764,21 @@ Database migrated from PostgreSQL (postgres.js) to Cloudflare D1 (SQLite).
 | Adapter | `@sveltejs/adapter-auto` | `@sveltejs/adapter-cloudflare` |
 | DB access | `sql\`...\`` tagged template literals | `dbAll`, `dbFirst`, `dbRun` helpers from `$lib/db/index` |
 
-### Schema and seed files
-- Master schema: `src/lib/db/schema.sql` (SQLite; idempotent, safe to re-run)
-- Seed data: `src/lib/db/seed.sql`
-- All incremental migration files (migration-002 through migration-008) removed — superseded by schema.sql
+### Schema and seed files (reworked August 2026 — see "Tracked migrations" below)
+- Schema lives in **`migrations/`**, applied and tracked by Wrangler. See `migrations/README.md`.
+- `migrations/0001_baseline.sql` is the former `src/lib/db/schema.sql` (idempotent), and also
+  supersedes the old `migration-009/010/011` files.
+- Seed data: `src/lib/db/seed.sql` (data, not schema — not a migration)
 
 ### Deployment commands
 ```bash
-# Apply schema (local dev)
-npx wrangler d1 execute hallify --local --file=src/lib/db/schema.sql
+npm run migrate:local          # local D1 (what `npm run dev` uses)
+npm run migrate:dev            # dev-remote (hallify-dev)
+npm run migrate:prod           # production (hallify)
 
-# Apply schema (production)
-npx wrangler d1 execute hallify --file=src/lib/db/schema.sql
-
-# Seed default data
-npx wrangler d1 execute hallify --local --file=src/lib/db/seed.sql
+npm run migrate:status:prod    # what's still pending
+npm run migrate:new -- "msg"   # scaffold the next migration file
+npm run seed:local             # seed default data
 ```
 
 ### D1 binding and access
@@ -1100,3 +1098,30 @@ The org creates an event normally (any way it likes), then hands it to a client 
 - New i18n: `reservationAdmin.assign*` + new `inviteAccept` namespace + 5 `serverErrors` keys (sk+en, parity kept).
 
 ### DB migration owed (dev-remote + prod) before deploying: the new `reservation_invites` table (+ its index) via `schema.sql`'s `CREATE TABLE IF NOT EXISTS` — idempotent, so `migrate:dev` / `migrate:prod` apply it safely. Applied to **local D1** this session; dev-remote + prod still owed.
+
+---
+
+## Tracked migrations (August 2026)
+
+Schema changes were previously hand-applied per environment with no record of what had
+landed where — `DESIGN.md` carried "DB migration owed (dev-remote + prod)" notes as the
+only tracking, and those notes went stale (all three were in fact already applied).
+
+- **`migrations/` is now the single source of truth**, applied by Wrangler's native D1
+  migrations and recorded per-database in `d1_migrations`. `migrations_dir = "migrations"`
+  is set on both the prod and `env.dev` D1 bindings in `wrangler.toml`.
+- `src/lib/db/schema.sql` → **`migrations/0001_baseline.sql`**. It is entirely
+  `IF NOT EXISTS`, so applying it to the already-populated dev/prod databases is a no-op
+  that records the baseline. Verified locally: data preserved, re-run reports
+  "No migrations to apply!".
+- Removed as superseded: `migration-009/010/011.sql` (folded into the baseline) and
+  `src/lib/db/migrate.ts` (a comment stub, never imported). Instructions now live in
+  **`migrations/README.md`**.
+- `npm run migrate:{local,dev,prod}` now mean *apply pending migrations*, not *re-run the
+  whole schema*. Added `migrate:status:*`, `migrate:new`, and `seed:local`.
+
+**The trap this closes:** `CREATE TABLE IF NOT EXISTS` never adds a column to a table that
+already exists, so any `ADD COLUMN` written into the schema file silently skipped every
+existing database. That is exactly how `rsvp_entries.extra_guests` and
+`rsvp_entries.responses` ended up needing manual `ALTER`s. Adding a column now always gets
+its own migration file, and every environment records that it ran.

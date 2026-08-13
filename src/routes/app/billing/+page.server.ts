@@ -10,6 +10,7 @@ import { PLANS, comparePlanPrice } from '$lib/plans';
 import { st } from '$lib/i18n-server';
 import type { PlanId } from '$lib/plans';
 import type { D1Database } from '@cloudflare/workers-types';
+import { requireOrgOwner } from '$lib/guards';
 
 async function getSubId(db: D1Database, orgId: string): Promise<string | null> {
   const row = await dbFirst<{ stripe_subscription_id: string | null }>(db,
@@ -68,6 +69,7 @@ export const actions: Actions = {
   // changed in place — upgrades prorate + charge the difference now, downgrades
   // are scheduled for the period end (no new subscription, no full re-charge).
   upgrade: async ({ request, locals }) => {
+    requireOrgOwner(locals);
     if (!locals.user || !locals.currentOrg) redirect(303, '/app/login');
     const data = await request.formData();
     const plan = (data.get('plan') as PlanId) ?? 'starter';
@@ -98,6 +100,7 @@ export const actions: Actions = {
 
   // Undo a scheduled period-end downgrade — stay on the current plan.
   cancelScheduledChange: async ({ locals }) => {
+    requireOrgOwner(locals);
     if (!locals.currentOrg) redirect(303, '/app/login');
     const subId = await getSubId(locals.db, locals.currentOrg.id);
     if (!subId) return fail(400, { error: st(locals.locale).serverErrors.noSubscriptionToUpdate });
@@ -106,6 +109,7 @@ export const actions: Actions = {
   },
 
   manage: async ({ locals }) => {
+    requireOrgOwner(locals);
     if (!locals.currentOrg?.subscription.stripeCustomerId) redirect(303, '/app/billing');
     const portalUrl = await createPortalSession(locals.currentOrg.subscription.stripeCustomerId);
     redirect(303, portalUrl);
@@ -114,6 +118,7 @@ export const actions: Actions = {
   // Cancel at period end — the org keeps its plan until the period ends, then
   // reverts to Free (handled by the subscription.deleted webhook).
   cancel: async ({ locals }) => {
+    requireOrgOwner(locals);
     if (!locals.currentOrg) redirect(303, '/app/login');
     const subId = await getSubId(locals.db, locals.currentOrg.id);
     if (!subId) return fail(400, { error: st(locals.locale).serverErrors.noActiveSubscriptionToCancel });
@@ -123,6 +128,7 @@ export const actions: Actions = {
 
   // Undo a scheduled cancellation.
   resume: async ({ locals }) => {
+    requireOrgOwner(locals);
     if (!locals.currentOrg) redirect(303, '/app/login');
     const subId = await getSubId(locals.db, locals.currentOrg.id);
     if (!subId) return fail(400, { error: st(locals.locale).serverErrors.noSubscriptionToResume });

@@ -4,8 +4,10 @@ import type { ReservationRow, RsvpTemplateRow } from '$lib/db/index';
 import { getPlan } from '$lib/plans';
 import { st } from '$lib/i18n-server';
 import type { Actions, PageServerLoad } from './$types';
+import { RSVP_ENABLED } from '$lib/features';
 
 export const load: PageServerLoad = async ({ locals, params }) => {
+	if (!RSVP_ENABLED) error(404, 'Not found');
 	if (!locals.user) redirect(303, '/app/login');
 	const orgId = locals.currentOrg?.id;
 	if (!orgId) error(403, st(locals.locale).serverErrors.accessDenied);
@@ -37,6 +39,7 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 
 export const actions: Actions = {
 	save: async ({ request, locals, params }) => {
+		if (!RSVP_ENABLED) error(404, 'Not found');
 		if (!locals.user) redirect(303, '/app/login');
 		const orgId = locals.currentOrg?.id;
 		if (!orgId) return fail(403, { error: st(locals.locale).serverErrors.accessDenied });

@@ -26,6 +26,14 @@ export const load: PageServerLoad = async ({ locals }) => {
       (SELECT COUNT(*) FROM reservations WHERE org_id = ? AND status = 'completed') AS completed
   `, orgId, orgId, orgId, orgId, orgId, orgId, orgId);
 
+  // A bare aggregate SELECT always yields exactly one row, so this is unreachable —
+  // but dbFirst is typed nullable, and a dashboard should render zeros rather than
+  // make every consumer null-check.
+  const safeStats = stats ?? {
+    total_halls: '0', total_members: '0', total_reservations: '0',
+    pending: '0', open_tickets: '0', upcoming_7d: '0', completed: '0',
+  };
+
   // ─── Monthly reservations — last 6 months ────────────────────────────────
   // SQLite does not have generate_series; compute the 6 month buckets in JS
   const now = new Date();
@@ -124,7 +132,7 @@ export const load: PageServerLoad = async ({ locals }) => {
   `, orgId);
 
   return {
-    stats,
+    stats: safeStats,
     monthly,
     byStatus,
     halls,

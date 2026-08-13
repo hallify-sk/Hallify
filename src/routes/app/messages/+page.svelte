@@ -18,7 +18,7 @@
   const currentUserId   = $derived(data.currentUserId);
   const orgRole         = $derived(data.orgRole);
 
-  const onlineCount = $derived(members.filter((m: { is_online: boolean }) => m.is_online).length);
+  const onlineCount = $derived(members.filter((m: { is_online: number }) => !!m.is_online).length);
 
   let body         = $state('');
   let editingId    = $state<string | null>(null);

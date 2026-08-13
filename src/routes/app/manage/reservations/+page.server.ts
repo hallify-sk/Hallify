@@ -5,6 +5,7 @@ import { fail } from '@sveltejs/kit';
 import { notifyStatusChange } from '$lib/email';
 import { postSystemMessage } from '$lib/tickets';
 import { st } from '$lib/i18n-server';
+import { requireOrgStaff } from '$lib/guards';
 
 export const load: PageServerLoad = async ({ locals }) => {
   const orgId = locals.currentOrg!.id;
@@ -25,6 +26,7 @@ const ALLOWED_STATUSES: ReservationStatus[] = ['pending', 'waiting_payment', 'ap
 
 export const actions: Actions = {
   updateStatus: async ({ request, locals }) => {
+    requireOrgStaff(locals);
     const orgId = locals.currentOrg!.id;
     const data = await request.formData();
     const id = String(data.get('id') ?? '');

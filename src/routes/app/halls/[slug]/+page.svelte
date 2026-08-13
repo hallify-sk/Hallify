@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { DOW_KEYS } from '$lib/availability';
 	import { t } from '$lib/i18n.svelte';
 	import type { PageData } from './$types';
 
@@ -99,7 +100,7 @@
 					<h2>{t.appHalls.openingHours}</h2>
 					<div class="hours-list">
 						{#each DAYS as day, i}
-							{@const hours = hall.opening_hours[i.toString()]}
+							{@const hours = hall.opening_hours[DOW_KEYS[i]] ?? hall.opening_hours[i.toString()]}
 							{#if hours}
 								<div class="hours-row">
 									<span class="hours-day">{day}</span>

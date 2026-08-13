@@ -1,4 +1,4 @@
-import { stripe, STRIPE_WEBHOOK_SECRET } from '$lib/stripe';
+import { getStripe, getWebhookSecret } from '$lib/stripe';
 import { dbRun } from '$lib/db/index';
 import { planFromAmount } from '$lib/plans';
 import type { PlanId } from '$lib/plans';
@@ -32,8 +32,11 @@ async function handleSubscriptionEvent(sub: Stripe.Subscription, db: D1Database)
   const plan = status === 'cancelled'
     ? 'free'
     : (planFromAmount(amount) ?? (sub.metadata?.plan as string) ?? 'free');
-  const periodEnd = sub.current_period_end
-    ? new Date(sub.current_period_end * 1000).toISOString()
+  // Present at runtime on the pinned basil API; the dahlia SDK types moved it off
+  // Subscription, so read it through a narrow cast rather than changing API version.
+  const currentPeriodEnd = (sub as unknown as { current_period_end?: number }).current_period_end;
+  const periodEnd = currentPeriodEnd
+    ? new Date(currentPeriodEnd * 1000).toISOString()
     : null;
 
   await dbRun(
@@ -62,9 +65,14 @@ export const POST: RequestHandler = async (event) => {
   const body = await request.text();
   const sig  = request.headers.get('stripe-signature') ?? '';
 
+  // Resolved outside the try so a missing key/secret surfaces as a 500 instead of
+  // masquerading as an invalid signature (the catch below is deliberately blind).
+  const client = getStripe();
+  const webhookSecret = getWebhookSecret();
+
   let stripeEvent: Stripe.Event;
   try {
-    stripeEvent = stripe.webhooks.constructEvent(body, sig, STRIPE_WEBHOOK_SECRET);
+    stripeEvent = client.webhooks.constructEvent(body, sig, webhookSecret);
   } catch {
     return new Response('Webhook signature invalid', { status: 400 });
   }

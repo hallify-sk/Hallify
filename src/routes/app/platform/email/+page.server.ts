@@ -5,6 +5,7 @@ import { fail } from '@sveltejs/kit';
 import { sendTestEmail, getEmailTemplates } from '$lib/email';
 import { st } from '$lib/i18n-server';
 import { env } from '$env/dynamic/private';
+import { requirePlatformAdmin } from '$lib/guards';
 
 const TEMPLATE_KEYS = ['newReservation', 'guestMessage', 'guestCancel', 'guestEdit', 'statusChange', 'newMessage', 'passwordReset', 'testEmail'] as const;
 
@@ -34,6 +35,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 
 export const actions: Actions = {
   testEmail: async ({ request, locals }) => {
+    requirePlatformAdmin(locals);
     const data = await request.formData();
     const to = String(data.get('testEmail') ?? '').trim();
     if (!to) return fail(400, { error: st(locals.locale).serverErrors.emailRequired });
@@ -44,6 +46,7 @@ export const actions: Actions = {
   },
 
   saveTemplates: async ({ request, locals }) => {
+    requirePlatformAdmin(locals);
     const data = await request.formData();
     const templates: Record<string, string> = {};
     for (const key of TEMPLATE_KEYS) {

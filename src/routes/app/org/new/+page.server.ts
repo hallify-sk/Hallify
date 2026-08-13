@@ -29,7 +29,7 @@ export const actions: Actions = {
     const name = (data.get('name') as string)?.trim();
 
     if (!name || name.length < 2) {
-      return fail(400, { error: st(locals.locale).serverErrors.orgNameMin2 });
+      return fail(400, { name, error: st(locals.locale).serverErrors.orgNameMin2 });
     }
 
     // Derive a unique slug. The slug doubles as the org's free subdomain

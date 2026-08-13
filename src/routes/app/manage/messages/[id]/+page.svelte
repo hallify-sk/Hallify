@@ -101,7 +101,7 @@
 			{#if msg.message_type === 'system'}
 				<div class="system-msg">
 					<span class="system-line"></span>
-					<span class="system-text">{formatSystemMessage(msg.body)}</span>
+					<span class="system-text">{formatSystemMessage(msg.body ?? '')}</span>
 					<span class="system-time">{formatTime(msg.created_at)}</span>
 					<span class="system-line"></span>
 				</div>
@@ -146,7 +146,7 @@
 						{/if}
 						<div class="msg-actions">
 							{#if msg.sender_id === currentUserId}
-								<button type="button" class="msg-action-btn" onclick={() => { editingId = msg.id; editBody = msg.body; }}>
+								<button type="button" class="msg-action-btn" onclick={() => { editingId = msg.id; editBody = msg.body ?? ''; }}>
 									{t.messaging.editMessage}
 								</button>
 							{/if}

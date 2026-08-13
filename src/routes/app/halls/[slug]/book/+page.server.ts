@@ -50,6 +50,8 @@ export const actions: Actions = {
 		const endTime = String(data.get('endTime') ?? '').trim() || null;
 		const description = String(data.get('description') ?? '').trim() || null;
 		const numGuests = parseInt(String(data.get('numGuests') ?? ''), 10) || null;
+		// Guard the lower bound too — a negative count was accepted and stored.
+		if (numGuests != null && numGuests < 1) return fail(400, { error: st(locals.locale).serverErrors.chooseValidDate });
 
 		if (!title) return fail(400, { error: st(locals.locale).serverErrors.eventNameRequired });
 		if (!eventDate) return fail(400, { error: st(locals.locale).serverErrors.pleaseChooseDate });

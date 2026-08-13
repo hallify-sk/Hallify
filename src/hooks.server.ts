@@ -2,9 +2,11 @@ import { getSessionUser, switchOrg } from '$lib/auth';
 import { isReservedSubdomain } from '$lib/reserved-subdomains';
 import { getBrandingCacheTime, setBrandingCacheTime, BRANDING_CACHE_TTL } from '$lib/branding-cache';
 import { dbAll, dbFirst, dbRun } from '$lib/db';
+import { runCleanup } from '$lib/cleanup';
 import { getPlan } from '$lib/plans';
 import type { PlanId } from '$lib/plans';
 import { env } from '$env/dynamic/private';
+import { sequence } from '@sveltejs/kit/hooks';
 import type { Handle } from '@sveltejs/kit';
 import type { Branding, OrgContext } from './app.d';
 import type { D1Database } from '@cloudflare/workers-types';
@@ -159,7 +161,24 @@ function autoCompletePastEvents(db: D1Database) {
   dbRun(db, "DELETE FROM reservation_holds WHERE expires_at <= datetime('now')").catch(() => {});
 }
 
-export const handle: Handle = async ({ event, resolve }) => {
+// ── Housekeeping: reap expired sessions, tokens, invites and counters ────────
+// adapter-cloudflare only emits a `fetch` handler, so a Cron Trigger (which needs a
+// `scheduled` export) isn't available without a second Worker. Instead this runs
+// opportunistically off request traffic, at most once an hour per isolate, inside
+// waitUntil so it never adds latency to the response. /api/cron/cleanup exists for
+// running it explicitly.
+const CLEANUP_INTERVAL = 60 * 60 * 1000;
+let lastCleanup = 0;
+
+function housekeeping(db: D1Database, ctx: { waitUntil?: (p: Promise<unknown>) => void } | undefined) {
+  const now = Date.now();
+  if (now - lastCleanup < CLEANUP_INTERVAL) return;
+  lastCleanup = now;
+  const job = runCleanup(db).catch(() => []);
+  if (ctx?.waitUntil) ctx.waitUntil(job);
+}
+
+const appHandle: Handle = async ({ event, resolve }) => {
   const db: D1Database = event.platform!.env.DB;
   event.locals.db = db;
 
@@ -259,6 +278,8 @@ export const handle: Handle = async ({ event, resolve }) => {
       ? await loadOrgBranding(domainOrg.id, platformBranding, db)
       : platformBranding;
     autoCompletePastEvents(db);
+    housekeeping(db, event.platform?.context);
+  housekeeping(db, event.platform?.context);
     return resolveWithLocale(event, resolve, domainOrg?.id ?? null, db);
   }
 
@@ -293,5 +314,39 @@ export const handle: Handle = async ({ event, resolve }) => {
   }
 
   autoCompletePastEvents(db);
+  housekeeping(db, event.platform?.context);
   return resolveWithLocale(event, resolve, domainOrg?.id ?? event.locals.currentOrg?.id ?? null, db);
 };
+
+/** Security response headers.
+ *
+ *  Composed OUTSIDE appHandle via `sequence`, so it also covers appHandle's early
+ *  returns (the unclaimed-subdomain redirect and the bubble route guards) — not just
+ *  the pages that make it to `resolve`.
+ *
+ *  CSP itself is configured in svelte.config.js (`kit.csp`), which hashes SvelteKit's
+ *  own inline bootstrap for us; hand-rolling it here would break hydration.
+ */
+const securityHeaders: Handle = async ({ event, resolve }) => {
+  const response = await resolve(event);
+
+  // Clickjacking. frame-ancestors in the CSP is the modern control; X-Frame-Options
+  // is kept for older browsers that ignore it.
+  response.headers.set('X-Frame-Options', 'DENY');
+  // Stop MIME sniffing — matters for the R2-backed /uploads/ path, where the stored
+  // content-type is whatever the uploader claimed.
+  response.headers.set('X-Content-Type-Options', 'nosniff');
+  // Don't leak booking URLs (which contain ids) to third-party sites.
+  response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
+  response.headers.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=(), usb=()');
+
+  // HSTS only over HTTPS; browsers ignore it on http, and setting it in local dev
+  // would pin localhost to https for the developer's whole browser profile.
+  if (event.url.protocol === 'https:') {
+    response.headers.set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+  }
+
+  return response;
+};
+
+export const handle: Handle = sequence(securityHeaders, appHandle);

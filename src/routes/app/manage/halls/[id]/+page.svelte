@@ -36,74 +36,6 @@
   let settingsDirty = $state(false);
   let savingAll     = $state(false);
 
-  // Recomputes whenever data.hall updates (after a successful save + invalidation).
-  const _init = $derived({
-    name:      data.hall.name,
-    desc:      data.hall.description ?? '',
-    maxPeople: data.hall.max_people,
-    address:   data.hall.address ?? '',
-    color:     data.hall.color,
-    pricing:   data.hall.pricing_info ?? '',
-    phone:     data.hall.contact_phone ?? '',
-    email:     data.hall.contact_email ?? '',
-    website:   data.hall.contact_website ?? '',
-    isPublic:  !!data.hall.is_public,
-    slug:      data.hall.slug ?? '',
-    cover:     data.hall.cover_image_url ?? '',
-    amenities: JSON.stringify(parseArr(data.hall.amenities)),
-    gallery:   JSON.stringify(parseArr(data.hall.gallery_images)),
-    hours:     JSON.stringify(parseObj(data.hall.opening_hours)),
-  });
-
-  const profileDirty = $derived(
-    previewName        !== _init.name      ||
-    previewDescription !== _init.desc      ||
-    previewMaxPeople   !== _init.maxPeople ||
-    previewAddress     !== _init.address   ||
-    previewColor       !== _init.color     ||
-    previewPricing     !== _init.pricing   ||
-    previewPhone       !== _init.phone     ||
-    previewEmail       !== _init.email     ||
-    previewWebsite     !== _init.website   ||
-    profileIsPublic    !== _init.isPublic  ||
-    profileSlug        !== _init.slug      ||
-    profileCoverUrl    !== _init.cover     ||
-    JSON.stringify(profileAmenities) !== _init.amenities ||
-    JSON.stringify(galleryImages)    !== _init.gallery   ||
-    JSON.stringify(profileHours)     !== _init.hours
-  );
-
-  const anyDirty = $derived(profileDirty || settingsDirty);
-
-  // Clear settings dirty flag once the server confirms save.
-  $effect(() => { if (settingsSaved) settingsDirty = false; });
-
-  async function saveAll() {
-    savingAll = true;
-    if (profileDirty)  profileFormEl?.requestSubmit();
-    if (settingsDirty) settingsFormEl?.requestSubmit();
-    savingAll = false;
-  }
-
-  function revertAll() {
-    previewName        = _init.name;
-    previewDescription = _init.desc;
-    previewMaxPeople   = _init.maxPeople;
-    previewAddress     = _init.address;
-    previewColor       = _init.color;
-    previewPricing     = _init.pricing;
-    previewPhone       = _init.phone;
-    previewEmail       = _init.email;
-    previewWebsite     = _init.website;
-    profileIsPublic    = _init.isPublic;
-    profileSlug        = _init.slug;
-    profileCoverUrl    = _init.cover;
-    profileAmenities   = JSON.parse(_init.amenities);
-    galleryImages      = JSON.parse(_init.gallery);
-    profileHours       = JSON.parse(_init.hours);
-    settingsFormEl?.reset();
-    settingsDirty      = false;
-  }
 
   let showBlockDialog   = $state(false);
   let blockStep         = $state(1);
@@ -287,6 +219,77 @@
   type DayHours = { open: boolean; from: string; to: string };
   let profileHours = $state<Record<string, DayHours>>(parseObj(data.hall.opening_hours));
 
+  // Dirty-tracking for the profile form. Declared AFTER every `preview*` / `profile*`
+  // state above: $derived bodies are lazy so hoisting worked at runtime, but it read
+  // as a use-before-declaration to the type checker.
+  const _init = $derived({
+    name:      data.hall.name,
+    desc:      data.hall.description ?? '',
+    maxPeople: data.hall.max_people,
+    address:   data.hall.address ?? '',
+    color:     data.hall.color,
+    pricing:   data.hall.pricing_info ?? '',
+    phone:     data.hall.contact_phone ?? '',
+    email:     data.hall.contact_email ?? '',
+    website:   data.hall.contact_website ?? '',
+    isPublic:  !!data.hall.is_public,
+    slug:      data.hall.slug ?? '',
+    cover:     data.hall.cover_image_url ?? '',
+    amenities: JSON.stringify(parseArr(data.hall.amenities)),
+    gallery:   JSON.stringify(parseArr(data.hall.gallery_images)),
+    hours:     JSON.stringify(parseObj(data.hall.opening_hours)),
+  });
+
+  const profileDirty = $derived(
+    previewName        !== _init.name      ||
+    previewDescription !== _init.desc      ||
+    previewMaxPeople   !== _init.maxPeople ||
+    previewAddress     !== _init.address   ||
+    previewColor       !== _init.color     ||
+    previewPricing     !== _init.pricing   ||
+    previewPhone       !== _init.phone     ||
+    previewEmail       !== _init.email     ||
+    previewWebsite     !== _init.website   ||
+    profileIsPublic    !== _init.isPublic  ||
+    profileSlug        !== _init.slug      ||
+    profileCoverUrl    !== _init.cover     ||
+    JSON.stringify(profileAmenities) !== _init.amenities ||
+    JSON.stringify(galleryImages)    !== _init.gallery   ||
+    JSON.stringify(profileHours)     !== _init.hours
+  );
+
+  const anyDirty = $derived(profileDirty || settingsDirty);
+
+  // Clear settings dirty flag once the server confirms save.
+  $effect(() => { if (settingsSaved) settingsDirty = false; });
+
+  async function saveAll() {
+    savingAll = true;
+    if (profileDirty)  profileFormEl?.requestSubmit();
+    if (settingsDirty) settingsFormEl?.requestSubmit();
+    savingAll = false;
+  }
+
+  function revertAll() {
+    previewName        = _init.name;
+    previewDescription = _init.desc;
+    previewMaxPeople   = _init.maxPeople;
+    previewAddress     = _init.address;
+    previewColor       = _init.color;
+    previewPricing     = _init.pricing;
+    previewPhone       = _init.phone;
+    previewEmail       = _init.email;
+    previewWebsite     = _init.website;
+    profileIsPublic    = _init.isPublic;
+    profileSlug        = _init.slug;
+    profileCoverUrl    = _init.cover;
+    profileAmenities   = JSON.parse(_init.amenities);
+    galleryImages      = JSON.parse(_init.gallery);
+    profileHours       = JSON.parse(_init.hours);
+    settingsFormEl?.reset();
+    settingsDirty      = false;
+  }
+
   const AMENITIES = $derived([
     { id: 'parking',    label: t.hallProfile.amenityParking },
     { id: 'catering',   label: t.hallProfile.amenityCatering },
@@ -341,16 +344,16 @@
   const upcomingReservations = $derived(
     data.reservations
       .filter(r => {
-        const d = r.event_date instanceof Date ? r.event_date : new Date(r.event_date as string);
+        const d = new Date(r.event_date);
         const iso = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
         return iso >= todayStr;
       })
-      .sort((a, b) => new Date(a.event_date as unknown as string).getTime() - new Date(b.event_date as unknown as string).getTime())
+      .sort((a, b) => new Date(a.event_date).getTime() - new Date(b.event_date).getTime())
   );
 
   const eventDateStrings = $derived(
     data.reservations.map(r => {
-      const d = r.event_date instanceof Date ? r.event_date : new Date(r.event_date as string);
+      const d = new Date(r.event_date);
       return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
     })
   );
@@ -358,7 +361,7 @@
   const conflictingEvents = $derived.by(() => {
     if (!rangeFrom || !rangeTo) return [];
     return data.reservations.filter(r => {
-      const d = r.event_date instanceof Date ? r.event_date : new Date(r.event_date as string);
+      const d = new Date(r.event_date);
       const iso = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
       return iso >= rangeFrom && iso <= rangeTo;
     });
@@ -988,7 +991,7 @@
                   {#if b.block_type === 'date_range'}
                     {formatDate(b.date_from)} – {formatDate(b.date_to)}
                   {:else}
-                    {t.halls.weekly}: {(b.days_of_week ?? []).map((d: number) => DAYS_SK[d]).join(', ')}
+                    {t.halls.weekly}: {parseArr(b.days_of_week).map((d) => DAYS_SK[Number(d)]).join(', ')}
                   {/if}
                 </span>
                 {#if b.reason}<span class="block-reason">{b.reason}</span>{/if}
@@ -1043,7 +1046,7 @@
                 <span class="toggle-hint">{t.halls.allowReservationsHint}</span>
               </div>
               <div class="toggle-switch">
-                <input type="checkbox" name="allowReservations" checked={data.hall.allow_reservations} />
+                <input type="checkbox" name="allowReservations" checked={!!data.hall.allow_reservations} />
                 <span class="toggle-slider"></span>
               </div>
             </label>
@@ -1053,7 +1056,7 @@
                 <span class="toggle-hint">{t.halls.customLayoutsHint}</span>
               </div>
               <div class="toggle-switch">
-                <input type="checkbox" name="customLayouts" checked={data.hall.custom_layouts} />
+                <input type="checkbox" name="customLayouts" checked={!!data.hall.custom_layouts} />
                 <span class="toggle-slider"></span>
               </div>
             </label>
@@ -1063,7 +1066,7 @@
                 <span class="toggle-hint">{t.halls.forceLayoutsHint}</span>
               </div>
               <div class="toggle-switch">
-                <input type="checkbox" name="forceLayouts" checked={data.hall.force_layouts} />
+                <input type="checkbox" name="forceLayouts" checked={!!data.hall.force_layouts} />
                 <span class="toggle-slider"></span>
               </div>
             </label>
@@ -1073,7 +1076,7 @@
                 <span class="toggle-hint">{t.halls.allowFeedbackHint}</span>
               </div>
               <div class="toggle-switch">
-                <input type="checkbox" name="allowFeedback" checked={data.hall.allow_feedback} />
+                <input type="checkbox" name="allowFeedback" checked={!!data.hall.allow_feedback} />
                 <span class="toggle-slider"></span>
               </div>
             </label>
@@ -1083,7 +1086,7 @@
                 <span class="toggle-hint">{t.halls.autoApproveHint}</span>
               </div>
               <div class="toggle-switch">
-                <input type="checkbox" name="autoApprove" checked={data.hall.auto_approve} />
+                <input type="checkbox" name="autoApprove" checked={!!data.hall.auto_approve} />
                 <span class="toggle-slider"></span>
               </div>
             </label>

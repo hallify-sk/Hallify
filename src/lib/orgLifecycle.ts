@@ -148,6 +148,13 @@ export async function deleteUserAndCleanup(db: D1Database, userId: string): Prom
 	await dbRun(db, 'DELETE FROM tickets WHERE user_id = ?', userId);
 	await dbRun(db, 'DELETE FROM sessions WHERE user_id = ?', userId);
 	await dbRun(db, 'DELETE FROM password_resets WHERE user_id = ?', userId);
+	// reservations.user_id is NOT NULL with an FK to users, so deleting someone who
+	// still owns bookings threw and surfaced to the admin as a 500. Clear the
+	// reservations (and their dependents) first.
+	await dbRun(db, 'DELETE FROM rsvp_entries WHERE reservation_id IN (SELECT id FROM reservations WHERE user_id = ?)', userId);
+	await dbRun(db, 'DELETE FROM reservation_invites WHERE reservation_id IN (SELECT id FROM reservations WHERE user_id = ?)', userId);
+	await dbRun(db, 'DELETE FROM reservation_holds WHERE user_id = ?', userId);
+	await dbRun(db, 'DELETE FROM reservations WHERE user_id = ?', userId);
 	await dbRun(db, 'DELETE FROM users WHERE id = ?', userId);
 	for (const oid of orgIds) await destroyOrgIfEmpty(db, oid, 'user_deleted');
 }

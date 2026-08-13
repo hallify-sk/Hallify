@@ -1,6 +1,7 @@
 import { dbAll, dbRun } from '$lib/db/index';
 import type { PageServerLoad, Actions } from './$types';
 import { fail } from '@sveltejs/kit';
+import { requirePlatformAdmin } from '$lib/guards';
 
 export const load: PageServerLoad = async ({ locals }) => {
   const orgs = await dbAll<{
@@ -20,12 +21,14 @@ export const load: PageServerLoad = async ({ locals }) => {
 
 export const actions: Actions = {
   suspend: async ({ request, locals }) => {
+    requirePlatformAdmin(locals);
     const data = await request.formData();
     const id = data.get('id') as string;
     await dbRun(locals.db, "UPDATE organizations SET suspended_at = datetime('now') WHERE id = ?", id);
     return { success: true };
   },
   unsuspend: async ({ request, locals }) => {
+    requirePlatformAdmin(locals);
     const data = await request.formData();
     const id = data.get('id') as string;
     await dbRun(locals.db, 'UPDATE organizations SET suspended_at = NULL WHERE id = ?', id);

@@ -2,6 +2,7 @@ import { error } from '@sveltejs/kit';
 import { dbFirst } from '$lib/db/index';
 import type { HallRow } from '$lib/db/index';
 import { fromJsonArr, fromJson } from '$lib/db/index';
+import type { HallDayHours } from '$lib/db/index';
 import { st } from '$lib/i18n-server';
 import type { PageServerLoad } from './$types';
 
@@ -22,9 +23,9 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 	return {
 		hall: {
 			...hall,
-			gallery_images: fromJsonArr(hall.gallery_images as string | null),
-			amenities: fromJsonArr(hall.amenities as string | null),
-			opening_hours: fromJson(hall.opening_hours as string | null),
+			gallery_images: fromJsonArr(hall.gallery_images as string | null) as string[],
+			amenities: fromJsonArr(hall.amenities as string | null) as string[],
+			opening_hours: fromJson<Record<string, HallDayHours>>(hall.opening_hours as string | null),
 		},
 		isLoggedIn: !!locals.user,
 		isClient: locals.user?.account_type === 'client',

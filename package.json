@@ -13,9 +13,14 @@
     "deploy:prod": "npm run build:prod && wrangler deploy",
     "build:dev": "APP_URL=https://dev.hallify.sk vite build",
     "build:prod": "APP_URL=https://hallify.sk vite build",
-    "migrate:dev": "wrangler d1 execute hallify-dev --remote --file=src/lib/db/schema.sql",
-    "migrate:prod": "wrangler d1 execute hallify --remote --file=src/lib/db/schema.sql",
-    "migrate:local": "wrangler d1 execute hallify --local --file=src/lib/db/schema.sql",
+    "migrate:local": "wrangler d1 migrations apply hallify --local",
+    "migrate:dev": "wrangler d1 migrations apply hallify-dev --remote --env dev",
+    "migrate:prod": "wrangler d1 migrations apply hallify --remote",
+    "migrate:status:local": "wrangler d1 migrations list hallify --local",
+    "migrate:status:dev": "wrangler d1 migrations list hallify-dev --remote --env dev",
+    "migrate:status:prod": "wrangler d1 migrations list hallify --remote",
+    "migrate:new": "wrangler d1 migrations create hallify",
+    "seed:local": "wrangler d1 execute hallify --local --file=src/lib/db/seed.sql",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage"
@@ -39,5 +44,13 @@
     "vitest": "^4.1.8",
     "wrangler": "^4.0.0"
   },
-  "type": "module"
+  "type": "module",
+  "allowScripts": {
+    "esbuild@0.24.2": true,
+    "esbuild@0.25.12": true,
+    "esbuild@0.27.3": true,
+    "fsevents@2.3.3": true,
+    "sharp@0.34.5": true,
+    "workerd@1.20260611.1": true
+  }
 }

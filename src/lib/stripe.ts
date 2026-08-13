@@ -1,13 +1,39 @@
 import Stripe from 'stripe';
-import { STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, APP_URL } from '$env/static/private';
+import { env } from '$env/dynamic/private';
 import { PLANS, planFromAmount, comparePlanPrice } from '$lib/plans';
 import type { PlanId } from '$lib/plans';
 
-export const stripe = new Stripe(STRIPE_SECRET_KEY, {
-  apiVersion: '2025-05-28.basil',
-});
+// Secrets are read at RUNTIME from Worker secrets / `.env`, never inlined at build
+// time. `$env/static/private` would bake the literal key into `_worker.js` (and its
+// sourcemap), which meant the deployed key was whatever sat in the builder's `.env`
+// and `wrangler secret put STRIPE_SECRET_KEY` had no effect. Runtime env is also why
+// the client is built lazily: `$env/dynamic/private` is empty at module-init time.
+let _stripe: Stripe | null = null;
 
-export { STRIPE_WEBHOOK_SECRET };
+/** The Stripe client, constructed on first use from runtime env. */
+export function getStripe(): Stripe {
+  if (!_stripe) {
+    const key = env.STRIPE_SECRET_KEY;
+    if (!key) throw new Error('STRIPE_SECRET_KEY is not configured');
+    // Pinned to basil on purpose — previewPlanChange uses invoices.retrieveUpcoming,
+    // which the dahlia SDK renamed. The cast keeps the pin while the types move on.
+    _stripe = new Stripe(key, { apiVersion: '2025-05-28.basil' } as unknown as ConstructorParameters<typeof Stripe>[1]);
+  }
+  return _stripe;
+}
+
+/** Webhook signing secret, read at runtime. Throws if unset so a misconfigured
+ *  deployment fails loudly instead of silently accepting unverified events. */
+export function getWebhookSecret(): string {
+  const secret = env.STRIPE_WEBHOOK_SECRET;
+  if (!secret) throw new Error('STRIPE_WEBHOOK_SECRET is not configured');
+  return secret;
+}
+
+/** Base URL for Stripe redirect targets. */
+function appUrl(): string {
+  return env.APP_URL ?? '';
+}
 
 /** Create a Stripe Checkout session for upgrading an org to a paid plan.
  *  Price + product name/description are taken from `plans.ts` (single source of
@@ -37,8 +63,8 @@ export async function createCheckoutSession(opts: {
         },
       },
     }],
-    success_url: `${APP_URL}/app/billing/success?plan=${opts.plan}`,
-    cancel_url: `${APP_URL}/app/billing?cancelled=1`,
+    success_url: `${appUrl()}/app/billing/success?plan=${opts.plan}`,
+    cancel_url: `${appUrl()}/app/billing?cancelled=1`,
     allow_promotion_codes: true,
     metadata: { orgId: opts.orgId, plan: opts.plan },
     subscription_data: { metadata: { orgId: opts.orgId, plan: opts.plan } },
@@ -50,33 +76,33 @@ export async function createCheckoutSession(opts: {
     params.customer_email = opts.userEmail;
   }
 
-  const session = await stripe.checkout.sessions.create(params);
+  const session = await getStripe().checkout.sessions.create(params);
   return session.url!;
 }
 
 /** Create a Stripe Billing Portal session for managing an existing subscription. */
 export async function createPortalSession(stripeCustomerId: string, returnPath = '/app/billing'): Promise<string> {
-  const session = await stripe.billingPortal.sessions.create({
+  const session = await getStripe().billingPortal.sessions.create({
     customer: stripeCustomerId,
-    return_url: `${APP_URL}${returnPath}`,
+    return_url: `${appUrl()}${returnPath}`,
   });
   return session.url;
 }
 
 /** Schedule a subscription to cancel at the end of the current billing period. */
 export async function cancelSubscription(subscriptionId: string): Promise<void> {
-  await stripe.subscriptions.update(subscriptionId, { cancel_at_period_end: true });
+  await getStripe().subscriptions.update(subscriptionId, { cancel_at_period_end: true });
 }
 
 /** Undo a scheduled cancellation. */
 export async function resumeSubscription(subscriptionId: string): Promise<void> {
-  await stripe.subscriptions.update(subscriptionId, { cancel_at_period_end: false });
+  await getStripe().subscriptions.update(subscriptionId, { cancel_at_period_end: false });
 }
 
 /** Retrieve a subscription, or null if it can't be fetched. */
 export async function getSubscription(subscriptionId: string): Promise<Stripe.Subscription | null> {
   try {
-    return await stripe.subscriptions.retrieve(subscriptionId);
+    return await getStripe().subscriptions.retrieve(subscriptionId);
   } catch {
     return null;
   }
@@ -92,9 +118,9 @@ export async function getOrCreatePrice(plan: PlanId): Promise<string> {
   }
   const amount = Math.round(p.priceMonthly * 100);
   const lookupKey = `hallify_${plan}_eur_${amount}`;
-  const existing = await stripe.prices.list({ lookup_keys: [lookupKey], active: true, limit: 1 });
+  const existing = await getStripe().prices.list({ lookup_keys: [lookupKey], active: true, limit: 1 });
   if (existing.data[0]) return existing.data[0].id;
-  const price = await stripe.prices.create({
+  const price = await getStripe().prices.create({
     currency: 'eur',
     unit_amount: amount,
     recurring: { interval: 'month' },
@@ -115,7 +141,7 @@ export async function changeSubscriptionPlan(opts: {
   currentPlan: PlanId;
   newPlan: PlanId;
 }): Promise<'upgraded' | 'downgrade_scheduled'> {
-  const sub = await stripe.subscriptions.retrieve(opts.subscriptionId);
+  const sub = await getStripe().subscriptions.retrieve(opts.subscriptionId);
   const item = sub.items.data[0];
   const newPriceId = await getOrCreatePrice(opts.newPlan);
   const scheduleId = typeof sub.schedule === 'string' ? sub.schedule : sub.schedule?.id ?? null;
@@ -124,9 +150,9 @@ export async function changeSubscriptionPlan(opts: {
   // prorated difference for the remaining days immediately.
   if (comparePlanPrice(opts.newPlan, opts.currentPlan) >= 0) {
     if (scheduleId) {
-      try { await stripe.subscriptionSchedules.release(scheduleId); } catch { /* already released */ }
+      try { await getStripe().subscriptionSchedules.release(scheduleId); } catch { /* already released */ }
     }
-    await stripe.subscriptions.update(opts.subscriptionId, {
+    await getStripe().subscriptions.update(opts.subscriptionId, {
       items: [{ id: item.id, price: newPriceId }],
       proration_behavior: 'always_invoice',
       metadata: { orgId: opts.orgId, plan: opts.newPlan },
@@ -137,13 +163,13 @@ export async function changeSubscriptionPlan(opts: {
   // Downgrade — schedule the new (cheaper) price to begin at the current period end.
   let sid = scheduleId;
   if (!sid) {
-    const created = await stripe.subscriptionSchedules.create({ from_subscription: opts.subscriptionId });
+    const created = await getStripe().subscriptionSchedules.create({ from_subscription: opts.subscriptionId });
     sid = created.id;
   }
-  const schedule = await stripe.subscriptionSchedules.retrieve(sid);
+  const schedule = await getStripe().subscriptionSchedules.retrieve(sid);
   const phase0 = schedule.phases[0];
   const currentPriceId = typeof item.price === 'string' ? item.price : item.price.id;
-  await stripe.subscriptionSchedules.update(sid, {
+  await getStripe().subscriptionSchedules.update(sid, {
     end_behavior: 'release',
     proration_behavior: 'none',
     phases: [
@@ -169,15 +195,27 @@ export async function previewPlanChange(opts: {
   currentPlan: PlanId;
   newPlan: PlanId;
 }): Promise<{ amountDue: number; currency: string; exact: boolean }> {
-  const sub = await stripe.subscriptions.retrieve(opts.subscriptionId);
-  const item = sub.items.data[0];
-  const newPriceId = await getOrCreatePrice(opts.newPlan);
+  // Everything that talks to Stripe must be inside the try: these two calls used to
+  // sit outside it, so an unreachable Stripe 500'd the whole billing page instead of
+  // falling back to the local proration estimate below.
+  let sub: Stripe.Subscription;
+  let item: Stripe.SubscriptionItem;
+  let newPriceId: string;
+  try {
+    sub = await getStripe().subscriptions.retrieve(opts.subscriptionId);
+    item = sub.items.data[0];
+    newPriceId = await getOrCreatePrice(opts.newPlan);
+  } catch {
+    // No live data — estimate from plans.ts alone.
+    const diff = (PLANS[opts.newPlan].priceMonthly ?? 0) - (PLANS[opts.currentPlan].priceMonthly ?? 0);
+    return { amountDue: Math.round(Math.max(0, diff) * 100), currency: 'eur', exact: false };
+  }
   const now = Math.floor(Date.now() / 1000);
 
   try {
     // `retrieveUpcoming` is present at runtime on the basil API; cast around the
     // (dahlia) SDK types which renamed it.
-    const inv = await (stripe.invoices as unknown as {
+    const inv = await (getStripe().invoices as unknown as {
       retrieveUpcoming: (p: Record<string, unknown>) => Promise<Stripe.Invoice>;
     }).retrieveUpcoming({
       customer: sub.customer as string,
@@ -204,10 +242,10 @@ export async function previewPlanChange(opts: {
 
 /** Cancel a scheduled (period-end) plan change, keeping the current plan. */
 export async function cancelScheduledChange(subscriptionId: string): Promise<void> {
-  const sub = await stripe.subscriptions.retrieve(subscriptionId);
+  const sub = await getStripe().subscriptions.retrieve(subscriptionId);
   const sid = typeof sub.schedule === 'string' ? sub.schedule : sub.schedule?.id ?? null;
   if (sid) {
-    try { await stripe.subscriptionSchedules.release(sid); } catch { /* already gone */ }
+    try { await getStripe().subscriptionSchedules.release(sid); } catch { /* already gone */ }
   }
 }
 
@@ -218,14 +256,14 @@ export async function getPendingPlanChange(
   const sid = typeof sub.schedule === 'string' ? sub.schedule : sub.schedule?.id ?? null;
   if (!sid) return null;
   try {
-    const sched = await stripe.subscriptionSchedules.retrieve(sid);
+    const sched = await getStripe().subscriptionSchedules.retrieve(sid);
     const nowS = Math.floor(Date.now() / 1000);
     const future = sched.phases.find((p) => p.start_date > nowS);
     if (!future) return null;
     const priceRef = future.items[0]?.price;
     const priceId = typeof priceRef === 'string' ? priceRef : priceRef?.id;
     if (!priceId) return null;
-    const price = await stripe.prices.retrieve(priceId);
+    const price = await getStripe().prices.retrieve(priceId);
     const plan = planFromAmount(price.unit_amount ?? 0);
     if (!plan) return null;
     return { plan, effective: new Date(future.start_date * 1000).toISOString() };
@@ -241,7 +279,7 @@ export async function listInvoices(customerId: string, limit = 100): Promise<Arr
   hosted_invoice_url: string | null; invoice_pdf: string | null;
 }>> {
   try {
-    const res = await stripe.invoices.list({ customer: customerId, limit });
+    const res = await getStripe().invoices.list({ customer: customerId, limit });
     return res.data.map(inv => ({
       id: inv.id ?? '', number: inv.number ?? null, status: inv.status ?? null,
       amount_due: inv.amount_due, amount_paid: inv.amount_paid, currency: inv.currency, created: inv.created,

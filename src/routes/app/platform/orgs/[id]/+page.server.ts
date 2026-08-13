@@ -7,6 +7,7 @@ import { isReservedSubdomain } from '$lib/reserved-subdomains';
 import { listInvoices } from '$lib/stripe';
 import { st } from '$lib/i18n-server';
 import type { PageServerLoad, Actions } from './$types';
+import { requirePlatformAdmin } from '$lib/guards';
 
 const VALID_PLANS: PlanId[] = ['free', 'starter', 'professional', 'enterprise'];
 
@@ -38,6 +39,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 export const actions: Actions = {
   // Superadmin plan override — written straight to our subscriptions table.
   setPlan: async ({ request, params, locals }) => {
+    requirePlatformAdmin(locals);
     const data = await request.formData();
     const plan = String(data.get('plan') ?? '') as PlanId;
     if (!VALID_PLANS.includes(plan)) return fail(400, { error: st(locals.locale).serverErrors.invalidPlan });
@@ -53,6 +55,7 @@ export const actions: Actions = {
 
   // Change the org's subdomain (slug) — the <slug>.hallify.sk bubble + public URLs.
   setSlug: async ({ request, params, locals }) => {
+    requirePlatformAdmin(locals);
     const data = await request.formData();
     const slug = String(data.get('slug') ?? '').trim().toLowerCase()
       .normalize('NFD').replace(/[̀-ͯ]/g, '')
@@ -66,10 +69,12 @@ export const actions: Actions = {
   },
 
   suspend: async ({ params, locals }) => {
+    requirePlatformAdmin(locals);
     await dbRun(locals.db, "UPDATE organizations SET suspended_at = datetime('now') WHERE id = ?", params.id);
     return { success: true };
   },
   unsuspend: async ({ params, locals }) => {
+    requirePlatformAdmin(locals);
     await dbRun(locals.db, 'UPDATE organizations SET suspended_at = NULL WHERE id = ?', params.id);
     return { success: true };
   },

@@ -1,9 +1,13 @@
 # Secrets must be set via wrangler (Worker secrets, NOT pages secrets):
 #   Prod:  wrangler secret put SECRET_NAME
 #   Dev:   wrangler secret put SECRET_NAME --env dev
-# Required: SESSION_SECRET, STRIPE_SECRET_KEY, STRIPE_PUBLISHABLE_KEY,
+# Required: STRIPE_SECRET_KEY, STRIPE_PUBLISHABLE_KEY,
 # STRIPE_WEBHOOK_SECRET, STRIPE_PRICE_STARTER, STRIPE_PRICE_PROFESSIONAL,
 # BREVO_API_KEY, CF_ZONE_ID, CF_API_TOKEN
+# Optional: CRON_SECRET (enables POST /api/cron/cleanup)
+# NOTE: SESSION_SECRET is NOT used — session ids are random UUIDs stored in D1 and
+# are never signed. It was listed here and set as a prod secret, implying protection
+# the code does not implement. Remove it with: wrangler secret delete SESSION_SECRET
 # (EMAIL_FROM / EMAIL_FROM_NAME are non-secret [vars] below.)
 #
 # Deploy:
@@ -12,8 +16,17 @@
 
 name = "hallify"
 main = ".svelte-kit/cloudflare/_worker.js"
+# Set explicitly: without it, any login with access to more than one account makes
+# every non-interactive wrangler command fail with "More than one account available".
+# account_id = "<your Cloudflare account id>"
 compatibility_date = "2026-06-13"
 compatibility_flags = ["nodejs_compat"]
+
+# Workers Logs are OFF by default — production was running with no traces or errors
+# retained anywhere. head_sampling_rate 1 keeps everything; lower it if volume grows.
+[observability]
+enabled = true
+head_sampling_rate = 1
 
 [assets]
 binding = "ASSETS"
@@ -31,6 +44,7 @@ EMAIL_FROM_NAME = "Hallify"
 binding = "DB"
 database_name = "hallify"
 database_id = "9d32dc94-c7e4-409b-a86b-13def79ccd88"
+migrations_dir = "migrations"
 
 [[r2_buckets]]
 binding = "R2"
@@ -60,6 +74,7 @@ EMAIL_FROM_NAME = "Hallify"
 binding = "DB"
 database_name = "hallify-dev"
 database_id = "52a3ac14-99c3-4485-8daa-c7e602d94def"
+migrations_dir = "migrations"
 
 [[env.dev.r2_buckets]]
 binding = "R2"

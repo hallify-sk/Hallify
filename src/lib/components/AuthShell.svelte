@@ -108,7 +108,7 @@
   }
 
   .brand-logo-text {
-    font-family: 'Poppins', sans-serif;
+    font-family: 'Poppins', 'Segoe UI', system-ui, -apple-system, sans-serif;
     font-weight: 900;
     font-style: italic;
     font-size: 17px;
