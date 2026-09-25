@@ -39,6 +39,10 @@
 			<label for="password">{t.auth.password}</label>
 			<input id="password" name="password" type="password" placeholder={t.auth.passwordMin} required autocomplete="new-password" />
 		</div>
+		<label class="consent">
+			<input type="checkbox" name="acceptTerms" required />
+			<span>{t.legalConsent.agreePre}<a href="/terms" target="_blank" rel="noopener">{t.legalConsent.termsLink}</a>{t.legalConsent.including}<a href="/dpa" target="_blank" rel="noopener">{t.legalConsent.dpaLink}</a>{t.legalConsent.privacyAck}<a href="/privacy" target="_blank" rel="noopener">{t.legalConsent.privacyLink}</a>{t.legalConsent.end}</span>
+		</label>
 		<button type="submit" class="submit-btn">{t.authPages.registerSubmit}</button>
 	</form>
 
@@ -83,6 +87,17 @@
 		font-weight: 600;
 		color: var(--text-muted);
 	}
+
+	.consent {
+		display: flex;
+		align-items: flex-start;
+		gap: 9px;
+		font-weight: 500;
+		line-height: 1.45;
+	}
+	.consent input { margin-top: 2px; flex-shrink: 0; accent-color: var(--accent); }
+	.consent a { color: var(--accent); font-weight: 600; text-decoration: none; }
+	.consent a:hover { text-decoration: underline; }
 
 	.submit-btn {
 		width: 100%;

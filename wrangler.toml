@@ -1,13 +1,16 @@
 # Secrets must be set via wrangler (Worker secrets, NOT pages secrets):
 #   Prod:  wrangler secret put SECRET_NAME
 #   Dev:   wrangler secret put SECRET_NAME --env dev
-# Required: STRIPE_SECRET_KEY, STRIPE_PUBLISHABLE_KEY,
-# STRIPE_WEBHOOK_SECRET, STRIPE_PRICE_STARTER, STRIPE_PRICE_PROFESSIONAL,
-# BREVO_API_KEY, CF_ZONE_ID, CF_API_TOKEN
+# Required: STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, BREVO_API_KEY, CF_ZONE_ID,
+# CF_API_TOKEN
 # Optional: CRON_SECRET (enables POST /api/cron/cleanup)
-# NOTE: SESSION_SECRET is NOT used — session ids are random UUIDs stored in D1 and
-# are never signed. It was listed here and set as a prod secret, implying protection
-# the code does not implement. Remove it with: wrangler secret delete SESSION_SECRET
+# NOT read by the code — safe to delete wherever still set:
+#   STRIPE_PRICE_STARTER, STRIPE_PRICE_PROFESSIONAL  (prices are inline from plans.ts)
+#   STRIPE_PUBLISHABLE_KEY                           (Checkout is a server-side redirect)
+#   R2_*                                             (uploads use the R2 binding below)
+#   SESSION_SECRET — session ids are random UUIDs stored in D1 and never signed, so
+#   leaving it set implies protection the code does not implement.
+# e.g. wrangler secret delete STRIPE_PRICE_STARTER
 # (EMAIL_FROM / EMAIL_FROM_NAME are non-secret [vars] below.)
 #
 # Deploy:
@@ -18,7 +21,8 @@ name = "hallify"
 main = ".svelte-kit/cloudflare/_worker.js"
 # Set explicitly: without it, any login with access to more than one account makes
 # every non-interactive wrangler command fail with "More than one account available".
-# account_id = "<your Cloudflare account id>"
+# (An account id is an identifier, not a credential.)
+account_id = "46d0e242dd6f2bba5cc3de0a393b8eb6"
 compatibility_date = "2026-06-13"
 compatibility_flags = ["nodejs_compat"]
 

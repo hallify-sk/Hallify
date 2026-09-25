@@ -15,8 +15,11 @@ export function getStripe(): Stripe {
   if (!_stripe) {
     const key = env.STRIPE_SECRET_KEY;
     if (!key) throw new Error('STRIPE_SECRET_KEY is not configured');
-    // Pinned to basil on purpose — previewPlanChange uses invoices.retrieveUpcoming,
-    // which the dahlia SDK renamed. The cast keeps the pin while the types move on.
+    // Pinned to basil. Every call and response shape in this file targets it: billing
+    // periods live on subscription items, invoice previews use `createPreview`, and
+    // the proration flag sits on a line's `parent`. Moving to a newer version means
+    // re-checking those. The cast keeps the pin while the SDK's types track its own
+    // (newer) default version.
     _stripe = new Stripe(key, { apiVersion: '2025-05-28.basil' } as unknown as ConstructorParameters<typeof Stripe>[1]);
   }
   return _stripe;
@@ -33,6 +36,26 @@ export function getWebhookSecret(): string {
 /** Base URL for Stripe redirect targets. */
 function appUrl(): string {
   return env.APP_URL ?? '';
+}
+
+/** A subscription's current billing period, in Unix seconds. API 2025-03-31.basil
+ *  moved these fields from the Subscription onto its items. The old top-level fields
+ *  are still read as a fallback because a webhook payload is rendered in the webhook
+ *  endpoint's own API version, which can predate basil. */
+export function subscriptionPeriod(sub: Stripe.Subscription): { start: number | null; end: number | null } {
+  const item = sub.items?.data?.[0];
+  const legacy = sub as unknown as { current_period_start?: number; current_period_end?: number };
+  return {
+    start: item?.current_period_start ?? legacy.current_period_start ?? null,
+    end: item?.current_period_end ?? legacy.current_period_end ?? null,
+  };
+}
+
+/** Whether an invoice line is a proration. Basil moved the flag off the line itself
+ *  onto `parent`. */
+function isProration(line: Stripe.InvoiceLineItem): boolean {
+  const parent = line.parent;
+  return !!(parent?.subscription_item_details?.proration || parent?.invoice_item_details?.proration);
 }
 
 /** Create a Stripe Checkout session for upgrading an org to a paid plan.
@@ -66,12 +89,19 @@ export async function createCheckoutSession(opts: {
     success_url: `${appUrl()}/app/billing/success?plan=${opts.plan}`,
     cancel_url: `${appUrl()}/app/billing?cancelled=1`,
     allow_promotion_codes: true,
+    // Venues are businesses and need their company details on the invoice. This only
+    // collects them; charging VAT (Stripe Tax) waits on the operator's VAT decision.
+    billing_address_collection: 'required',
+    tax_id_collection: { enabled: true },
     metadata: { orgId: opts.orgId, plan: opts.plan },
     subscription_data: { metadata: { orgId: opts.orgId, plan: opts.plan } },
   };
 
   if (opts.stripeCustomerId) {
     params.customer = opts.stripeCustomerId;
+    // Required by Stripe for tax ID collection on an existing customer; it also
+    // saves the collected name and address onto the customer for future invoices.
+    params.customer_update = { name: 'auto', address: 'auto' };
   } else {
     params.customer_email = opts.userEmail;
   }
@@ -188,8 +218,8 @@ export async function changeSubscriptionPlan(opts: {
 }
 
 /** Preview what an upgrade would charge right now (the prorated difference for the
- *  days left in the current period). Uses Stripe's upcoming-invoice preview; if that
- *  call isn't available, falls back to a local proration estimate. */
+ *  days left in the current period). Uses Stripe's invoice preview; if that call
+ *  fails, falls back to a local proration estimate. */
 export async function previewPlanChange(opts: {
   subscriptionId: string;
   currentPlan: PlanId;
@@ -213,28 +243,31 @@ export async function previewPlanChange(opts: {
   const now = Math.floor(Date.now() / 1000);
 
   try {
-    // `retrieveUpcoming` is present at runtime on the basil API; cast around the
-    // (dahlia) SDK types which renamed it.
-    const inv = await (getStripe().invoices as unknown as {
-      retrieveUpcoming: (p: Record<string, unknown>) => Promise<Stripe.Invoice>;
-    }).retrieveUpcoming({
+    // Basil removed the upcoming-invoice endpoint (`retrieveUpcoming`) in favour of
+    // `createPreview`. The old call no longer exists in the SDK, so it always threw
+    // and every preview came from the fallback below.
+    const inv = await getStripe().invoices.createPreview({
       customer: sub.customer as string,
       subscription: opts.subscriptionId,
-      subscription_items: [{ id: item.id, price: newPriceId }],
-      subscription_proration_behavior: 'always_invoice',
-      subscription_proration_date: now,
+      subscription_details: {
+        items: [{ id: item.id, price: newPriceId }],
+        proration_behavior: 'always_invoice',
+        proration_date: now,
+      },
     });
     // The immediate charge is the net of the proration line items (new charge minus
     // the credit for unused time on the old price).
     const amount = inv.lines.data
-      .filter((l: Stripe.InvoiceLineItem) => (l as unknown as { proration?: boolean }).proration)
-      .reduce((s: number, l: Stripe.InvoiceLineItem) => s + l.amount, 0);
+      .filter(isProration)
+      .reduce((s, l) => s + l.amount, 0);
     return { amountDue: Math.max(0, amount), currency: inv.currency ?? 'eur', exact: true };
   } catch {
-    const s = sub as unknown as { current_period_start: number; current_period_end: number };
-    const total = s.current_period_end - s.current_period_start;
-    const remaining = Math.max(0, s.current_period_end - now);
-    const frac = total > 0 ? remaining / total : 0;
+    // Unknown period → charge the full difference. Overstating the estimate is safe;
+    // understating it (this used to show €0.00) surprises the customer at payment.
+    const { start, end } = subscriptionPeriod(sub);
+    const total = start != null && end != null ? end - start : 0;
+    const remaining = end != null ? Math.max(0, end - now) : 0;
+    const frac = total > 0 ? Math.min(1, remaining / total) : 1;
     const diff = (PLANS[opts.newPlan].priceMonthly ?? 0) - (PLANS[opts.currentPlan].priceMonthly ?? 0);
     return { amountDue: Math.round(Math.max(0, diff) * frac * 100), currency: 'eur', exact: false };
   }

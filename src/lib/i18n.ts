@@ -119,7 +119,7 @@ export const sk = {
 		markPlanned: 'Označiť ako naplánované',
 		cancelReservation: 'Zrušiť rezerváciu',
 		confirmCancel: 'Naozaj chcete zrušiť túto rezerváciu?',
-		pendingNotice: 'Táto rezervácia čaká na schválenie. Pokročilé funkcie (rozloženie, RSVP) budú dostupné po schválení.',
+		pendingNotice: 'Táto rezervácia čaká na schválenie. Pokročilé funkcie, ako rozloženie stolov, budú dostupné po schválení.',
 		layoutLocked: 'Rozloženie bude možné upraviť po schválení rezervácie',
 	},
 	createEvent: {
@@ -486,13 +486,13 @@ export const sk = {
 	},
 	landing: {
 		head: 'Hallify · Softvér na správu priestorov pre moderné tímy',
-		metaDesc: 'Pôdorysy, rezervácie, RSVP a správy pre hostí v jednej white-label platforme pre tímy prenajímaných priestorov.',
+		metaDesc: 'Pôdorysy, rezervácie, zasadací poriadok a správy pre hostí v jednej white-label platforme pre tímy prenajímaných priestorov.',
 		nav: { features: 'Funkcie', whiteLabel: 'White-label', pricing: 'Cenník', signIn: 'Prihlásiť sa', getStarted: 'Začať' },
 		hero: {
 			line1: 'Váš priestor,',
 			accent: 'spravovaný',
 			line2: 'dokonale.',
-			sub: 'Pôdorysy, rezervácie, RSVP a správy pre hostí. Jedna platforma pre tímy prenajímaných priestorov a ich klientov.',
+			sub: 'Pôdorysy, rezervácie, zasadací poriadok a správy pre hostí. Jedna platforma pre tímy prenajímaných priestorov a ich klientov.',
 			cta: 'Začať zadarmo',
 			note: 'Bez platobnej karty. Bezplatný plán v cene.',
 		},
@@ -522,18 +522,18 @@ export const sk = {
 			sub: 'Žiadna zložitá inštalácia, žiadne onboarding hovory. Otvorte Hallify a začnite.',
 			steps: [
 				{ title: 'Vytvorte si priestor', desc: 'Nastavte organizáciu, pridajte sály a nakreslite pôdorys vo vizuálnom editore.' },
-				{ title: 'Nastavte akciu', desc: 'Vytvorte rezerváciu, vyberte dátum a sálu, zvoľte rozloženie a vygenerujte RSVP formulár.' },
-				{ title: 'Spravujte všetko', desc: 'Sledujte RSVP v reálnom čase, usádzajte hostí na plán a komunikujte s tímom.' },
+				{ title: 'Nastavte akciu', desc: 'Vytvorte rezerváciu, vyberte dátum a sálu a zvoľte rozloženie stolov.' },
+				{ title: 'Spravujte všetko', desc: 'Schvaľujte rezervácie, usádzajte hostí na plán a komunikujte s tímom.' },
 			],
 		},
 		pricing: {
 			heading: 'Ceny, ktoré rastú s vami',
 			sub: 'Začnite zadarmo na subdoméne Hallify. Prejdite na vlastnú doménu kedykoľvek budete pripravení.',
 			mostPopular: 'Najpopulárnejší',
-			free:         { name: 'Free',         price: '€0',          cadence: '/mes', blurb: 'Pre jednu sálu, ktorá začína.',                         cta: 'Začať',                features: ['1 sála', '2 členovia organizácie', '5 rezervácií / sála / mesiac', '5 obrázkov v galérii', 'Základné RSVP', 'Bezplatná subdoména Hallify'] },
-			starter:      { name: 'Starter',      price: '€29.99',      cadence: '/mes', blurb: 'Pre rastúce priestory, ktoré chcú vlastnú značku.',      cta: 'Začať',                features: ['3 sály', '10 členov organizácie', '12 rezervácií / sála / mesiac', 'Vlastná doména', 'Vlastná značka', 'Webhooks', 'Rozšírené RSVP', '10 obrázkov galérie / sála'] },
-			professional: { name: 'Professional', price: '€79.99',      cadence: '/mes', blurb: 'Pre vyťažené priestory s akciami vo veľkom.',            cta: 'Začať',                features: ['10 sál', 'Neobmedzení členovia org.', '20 rezervácií / sála / mesiac', 'Vlastná doména', 'Vlastná značka', 'Webhooks', 'Rozšírené RSVP', '20 obrázkov galérie / sála', 'Prioritná podpora'] },
-			enterprise:   { name: 'Enterprise',   price: 'Individuálne', cadence: '',     blurb: 'Pre skupiny a franšízy.',                                cta: 'Kontaktovať obchod', features: ['Neobmedzené sály, členovia a rezervácie', 'Neobmedzené obrázky galérie', 'Vlastná doména', 'Vlastná značka', 'Webhooks', 'Rozšírené RSVP', 'Prioritná podpora', 'SLA', 'Dedikovaná podpora'] },
+			free:         { name: 'Free',         price: '€0',          cadence: '/mes', blurb: 'Pre jednu sálu, ktorá začína.',                         cta: 'Začať',                features: ['1 sála', '2 členovia organizácie', '5 rezervácií / sála / mesiac', '5 obrázkov v galérii', 'Bezplatná subdoména Hallify'] },
+			starter:      { name: 'Starter',      price: '€29.99',      cadence: '/mes', blurb: 'Pre rastúce priestory, ktoré chcú vlastnú značku.',      cta: 'Začať',                features: ['3 sály', '10 členov organizácie', '12 rezervácií / sála / mesiac', 'Vlastná doména', 'Vlastná značka', 'Webhooks', '10 obrázkov galérie / sála'] },
+			professional: { name: 'Professional', price: '€79.99',      cadence: '/mes', blurb: 'Pre vyťažené priestory s akciami vo veľkom.',            cta: 'Začať',                features: ['10 sál', 'Neobmedzení členovia org.', '20 rezervácií / sála / mesiac', 'Vlastná doména', 'Vlastná značka', 'Webhooks', '20 obrázkov galérie / sála', 'Prioritná podpora'] },
+			enterprise:   { name: 'Enterprise',   price: 'Individuálne', cadence: '',     blurb: 'Pre skupiny a franšízy.',                                cta: 'Kontaktovať obchod', features: ['Neobmedzené sály, členovia a rezervácie', 'Neobmedzené obrázky galérie', 'Vlastná doména', 'Vlastná značka', 'Webhooks', 'Prioritná podpora', 'SLA', 'Dedikovaná podpora'] },
 		},
 		proof: [
 			{ num: 'Zadarmo',      label: 'na začiatok, bez karty' },
@@ -1409,6 +1409,18 @@ export const sk = {
 		dayFriday: "Piatok",
 		daySaturday: "Sobota",
 	},
+	// Acceptance checkbox at signup and on the first-subscription dialog. Sentence
+	// fragments around the three document links, so each locale keeps its own grammar.
+	legalConsent: {
+		agreePre: "Súhlasím s ",
+		agreeOnBehalfPre: "V mene organizácie súhlasím s ",
+		termsLink: "Obchodnými podmienkami",
+		including: " vrátane ",
+		dpaLink: "Zmluvy o spracúvaní osobných údajov",
+		privacyAck: " a beriem na vedomie ",
+		privacyLink: "informácie o ochrane osobných údajov",
+		end: ".",
+	},
 	authPages: {
 		registerTitle: "Vytvorte si organizáciu",
 		registerSubtitle: "Pridajte svoje sály, spravujte rezervácie a rozvíjajte svoje podnikanie.",
@@ -1627,6 +1639,7 @@ export const sk = {
 		levelMajor: "Závažné",
 	},
 	serverErrors: {
+		mustAcceptTerms: "Pre pokračovanie musíte súhlasiť s Obchodnými podmienkami a Zmluvou o spracúvaní osobných údajov.",
 		tooManyAttempts: "Príliš veľa pokusov. Skúste to znova o {minutes} min.",
 		hallUnavailable: "Táto sála je momentálne nedostupná.",
 		chooseValidDate: "Vyberte platný dátum.",
@@ -1912,7 +1925,7 @@ export const en: typeof sk = {
 		markPlanned: 'Mark as planned',
 		cancelReservation: 'Cancel reservation',
 		confirmCancel: 'Are you sure you want to cancel this reservation?',
-		pendingNotice: 'This reservation is awaiting approval. Advanced features (layout, RSVP) will be available after approval.',
+		pendingNotice: 'This reservation is awaiting approval. Advanced features such as the table layout will be available after approval.',
 		layoutLocked: 'Layout editing will be available after the reservation is approved',
 	},
 	createEvent: {
@@ -2275,13 +2288,13 @@ export const en: typeof sk = {
 	},
 	landing: {
 		head: 'Hallify · Venue management software for modern teams',
-		metaDesc: 'Floor plans, reservations, RSVPs, and guest messaging in one white-label platform built for venue teams and the clients they book.',
+		metaDesc: 'Floor plans, reservations, seating plans, and guest messaging in one white-label platform built for venue teams and the clients they book.',
 		nav: { features: 'Features', whiteLabel: 'White-label', pricing: 'Pricing', signIn: 'Sign in', getStarted: 'Get started' },
 		hero: {
 			line1: 'Your venue,',
 			accent: 'managed',
 			line2: 'perfectly.',
-			sub: 'Floor plans, reservations, RSVPs, and guest messaging. One platform for venue teams and the clients they book.',
+			sub: 'Floor plans, reservations, seating plans, and guest messaging. One platform for venue teams and the clients they book.',
 			cta: 'Get started free',
 			note: 'No credit card required. Free plan included.',
 		},
@@ -2311,18 +2324,18 @@ export const en: typeof sk = {
 			sub: 'No complex setup and no onboarding calls. Open Hallify and start.',
 			steps: [
 				{ title: 'Create your venue', desc: 'Set up your organization, add halls, and draw your floor plan in the visual editor.' },
-				{ title: 'Set up an event', desc: 'Create a reservation, pick a date and hall, choose a layout, and generate an RSVP form.' },
-				{ title: 'Manage everything', desc: 'Track RSVPs live, seat guests on the plan, and message your team as the event comes together.' },
+				{ title: 'Set up an event', desc: 'Create a reservation, pick a date and hall, and choose a table layout.' },
+				{ title: 'Manage everything', desc: 'Approve bookings, seat guests on the plan, and message your team as the event comes together.' },
 			],
 		},
 		pricing: {
 			heading: 'Pricing that grows with you',
 			sub: 'Start free on a Hallify subdomain. Move to your own domain whenever you are ready.',
 			mostPopular: 'Most popular',
-			free:         { name: 'Free',         price: '€0',     cadence: '/mo', blurb: 'For a single hall getting started.',                  cta: 'Get started',   features: ['1 hall', '2 organization members', '5 reservations / hall / month', '5 gallery images', 'Basic RSVP', 'Free Hallify subdomain'] },
-			starter:      { name: 'Starter',      price: '€29.99', cadence: '/mo', blurb: 'For growing venues that need their own brand.',       cta: 'Get started',   features: ['3 halls', '10 organization members', '12 reservations / hall / month', 'Custom domain', 'Custom branding', 'Webhooks', 'Advanced RSVP editing', '10 gallery images per hall'] },
-			professional: { name: 'Professional', price: '€79.99', cadence: '/mo', blurb: 'For busy venues running events at scale.',            cta: 'Get started',   features: ['10 halls', 'Unlimited organization members', '20 reservations / hall / month', 'Custom domain', 'Custom branding', 'Webhooks', 'Advanced RSVP editing', '20 gallery images per hall', 'Priority support'] },
-			enterprise:   { name: 'Enterprise',   price: 'Custom', cadence: '',    blurb: 'For groups and franchises.',                         cta: 'Contact sales', features: ['Unlimited halls, members & reservations', 'Unlimited gallery images', 'Custom domain', 'Custom branding', 'Webhooks', 'Advanced RSVP editing', 'Priority support', 'Service-level agreement', 'Dedicated support'] },
+			free:         { name: 'Free',         price: '€0',     cadence: '/mo', blurb: 'For a single hall getting started.',                  cta: 'Get started',   features: ['1 hall', '2 organization members', '5 reservations / hall / month', '5 gallery images', 'Free Hallify subdomain'] },
+			starter:      { name: 'Starter',      price: '€29.99', cadence: '/mo', blurb: 'For growing venues that need their own brand.',       cta: 'Get started',   features: ['3 halls', '10 organization members', '12 reservations / hall / month', 'Custom domain', 'Custom branding', 'Webhooks', '10 gallery images per hall'] },
+			professional: { name: 'Professional', price: '€79.99', cadence: '/mo', blurb: 'For busy venues running events at scale.',            cta: 'Get started',   features: ['10 halls', 'Unlimited organization members', '20 reservations / hall / month', 'Custom domain', 'Custom branding', 'Webhooks', '20 gallery images per hall', 'Priority support'] },
+			enterprise:   { name: 'Enterprise',   price: 'Custom', cadence: '',    blurb: 'For groups and franchises.',                         cta: 'Contact sales', features: ['Unlimited halls, members & reservations', 'Unlimited gallery images', 'Custom domain', 'Custom branding', 'Webhooks', 'Priority support', 'Service-level agreement', 'Dedicated support'] },
 		},
 		proof: [
 			{ num: 'Free',        label: 'to start, no card needed' },
@@ -3198,6 +3211,18 @@ export const en: typeof sk = {
 		dayFriday: "Friday",
 		daySaturday: "Saturday",
 	},
+	// Acceptance checkbox at signup and on the first-subscription dialog. Sentence
+	// fragments around the three document links, so each locale keeps its own grammar.
+	legalConsent: {
+		agreePre: "I agree to the ",
+		agreeOnBehalfPre: "On behalf of my organization, I agree to the ",
+		termsLink: "Terms of Service",
+		including: ", including the ",
+		dpaLink: "Data Processing Agreement",
+		privacyAck: ", and acknowledge the ",
+		privacyLink: "Privacy Policy",
+		end: ".",
+	},
 	authPages: {
 		registerTitle: "Create your organization",
 		registerSubtitle: "List your halls, handle bookings and grow your business.",
@@ -3416,6 +3441,7 @@ export const en: typeof sk = {
 		levelMajor: "Major",
 	},
 	serverErrors: {
+		mustAcceptTerms: "You must agree to the Terms of Service and the Data Processing Agreement to continue.",
 		tooManyAttempts: "Too many attempts. Try again in {minutes} min.",
 		hallUnavailable: "This hall is currently unavailable.",
 		chooseValidDate: "Please choose a valid date.",

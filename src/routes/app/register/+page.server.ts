@@ -4,6 +4,7 @@ import { dbFirst, dbRun } from '$lib/db/index';
 import { createSession } from '$lib/auth';
 import { st } from '$lib/i18n-server';
 import { rateLimit, rateLimitKey, tooManyAttemptsMessage, RATE_LIMITS } from '$lib/rateLimit';
+import { acceptedTerms, recordLegalAcceptance } from '$lib/legalAcceptance';
 import type { Actions, PageServerLoad } from './$types';
 
 export const load: PageServerLoad = ({ locals }) => {
@@ -23,6 +24,9 @@ export const actions: Actions = {
 
 		if (!email || !password || !firstName || !lastName) {
 			return fail(400, { error: st(locals.locale).serverErrors.allFieldsRequired });
+		}
+		if (!acceptedTerms(data)) {
+			return fail(400, { error: st(locals.locale).serverErrors.mustAcceptTerms });
 		}
 
 		const rl = await rateLimit(locals.db, rateLimitKey('register', getClientAddress()), RATE_LIMITS.register);
@@ -52,6 +56,7 @@ export const actions: Actions = {
 			"INSERT INTO users (id, email, password_hash, first_name, last_name, role, account_type) VALUES (?, ?, ?, ?, ?, ?, 'organization')",
 			userId, email, hash, firstName, lastName, role
 		);
+		await recordLegalAcceptance(locals.db, { userId, context: 'register' });
 
 		await createSession(userId, cookies, locals.db);
 		redirect(303, '/app/org/new');

@@ -17,6 +17,11 @@
  *    - the sidebar "RSVP templates" link
  *    - the RSVP panel on the staff reservation page and in FloorplanViewer
  *
+ *  Marketing copy is NOT wired to this flag. While RSVP is off it is kept out of the
+ *  plan feature lists in `plans.ts` (also the Stripe product description) and the
+ *  landing hero, "how it works" and pricing copy in `i18n.ts` — add it back there
+ *  when it ships.
+ *
  *  Before turning it back on, note that the RSVP form collects allergies/dietary
  *  requirements — Article 9 health data. That needs an explicit lawful basis (consent
  *  captured at the form) plus matching wording in the Privacy Policy and in the DPA's

@@ -279,7 +279,6 @@ const appHandle: Handle = async ({ event, resolve }) => {
       : platformBranding;
     autoCompletePastEvents(db);
     housekeeping(db, event.platform?.context);
-  housekeeping(db, event.platform?.context);
     return resolveWithLocale(event, resolve, domainOrg?.id ?? null, db);
   }
 

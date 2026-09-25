@@ -9,6 +9,10 @@ The app itself is in good shape: every authenticated route (24 tested), the publ
 the org bubble all render 200 with zero SSR errors. What's left is mostly the last mile —
 security flags, one broken flow, secret plumbing, and legal pages.
 
+> **Re-verified 2026-09-24** against the live site, DNS and Cloudflare. `LAUNCH.md` is the
+> current runbook. Items below are updated to what was checked that day; new findings are
+> in [Found 2026-09-24](#found-2026-09-24) at the end.
+
 **Cleared 2026-08-01 after Cloudflare account access was fixed** (account
 `46d0e242…`, all bindings resolve):
 - *Owed dev/prod migrations* — **already applied.** Both remote DBs have
@@ -79,9 +83,8 @@ security flags, one broken flow, secret plumbing, and legal pages.
       Verified locally: baseline applied with **all data preserved** (4 users / 3 orgs), recorded
       in `d1_migrations`, re-run reports "No migrations to apply!"; a scratch `ALTER TABLE`
       migration applied and tracked correctly, then was rolled back.
-      - [ ] **Baseline dev and prod** — needs a write to those databases, so it's left for you:
-            `npm run migrate:dev` then `npm run migrate:prod`. Both are no-ops that only record
-            the baseline (every statement is `IF NOT EXISTS`), but confirm before running.
+      - [x] ~~**Baseline dev and prod**~~ **Done** — verified 2026-09-24: both remote databases
+            have `d1_migrations`, `rate_limits` and `channel_reads`, i.e. 0001–0003 applied.
 
 - [ ] **Fill in the operator details in `src/lib/legal.ts`.** The `OPERATOR` constant at the top
       holds `[[ … ]]` placeholders for legal entity name, registered address, IČO, DIČ, commercial
@@ -162,26 +165,32 @@ security flags, one broken flow, secret plumbing, and legal pages.
       `STRIPE_PRICE_PROFESSIONAL` are **no longer used at all** (pricing is inline from
       `plans.ts`) yet are set as prod secrets *and* listed in `.env.example` and `wrangler.toml`'s
       header — delete all three copies. **[unverified]**
+      **2026-09-24:** the webhook could never have passed this — it rejected every genuine
+      event (see [Found 2026-09-24](#found-2026-09-24)). `STRIPE_PRICE_*` is gone from
+      `.env.example` and `wrangler.toml`; the prod secrets themselves still need deleting.
 
 - [ ] **Give dev its Stripe secrets** once `stripe.ts` reads them at runtime — dev currently has
       only `SESSION_SECRET`, `BREVO_API_KEY`, `CF_API_TOKEN`, `CF_ZONE_ID`, so billing can't be
-      exercised on `dev.hallify.sk` without them. **[verified]**
+      exercised on `dev.hallify.sk` without them. **[verified]** Still true on 2026-09-24.
 
 - [ ] **Verify email deliverability.** SPF/DKIM/DMARC for `hallify.sk` and a verified
       `noreply@hallify.sk` sender in Brevo. If `BREVO_API_KEY` is unset the app silently skips
       sends and logs them `failed` — so a misconfiguration looks like nothing happening. **[unverified]**
+      **2026-09-24:** SPF is now present (`include:spf.brevo.com`), DKIM resolves, DMARC is
+      `p=none`. But `hallify.sk` has **no MX record**, so inbound mail to `contact@`,
+      `privacy@` and `sales@` bounces.
 
 ---
 
 ## Medium — polish and ops
 
-- [ ] **No custom error page.** No `src/routes/+error.svelte`, so every 404 and 500 shows
-      SvelteKit's bare default. **[verified]**
+- [x] ~~**No custom error page.**~~ **Done** — `src/routes/+error.svelte` exists (PR #13).
 
-- [ ] **SEO gaps.** No `robots.txt`, no `sitemap.xml`, no `favicon.ico` (only `Hallify.svg`).
-      The landing page already emits canonical + hreflang tags, so this is half-finished. **[verified]**
+- [x] ~~**SEO gaps.**~~ **Done** — `robots.txt`, `sitemap.xml` and `favicon.svg` all serve
+      200 on prod (checked 2026-09-24).
 
-- [ ] **Stale pre-D1 artifacts mislead new developers.** `docker-compose.yml` (Postgres 16) and
+- [x] ~~**Stale pre-D1 artifacts mislead new developers.**~~ **Done** — `docker-compose.yml` is
+      gone and `.env.example` describes D1 (PR #13). `docker-compose.yml` (Postgres 16) and
       `.env.example` (`DATABASE_URL=postgres://…`) are leftovers from before the D1 migration, and
       `DESIGN.md`'s Stack table still lists "PostgreSQL 16 (Docker)" and `adapter-auto`. Delete the
       first two, correct the table. **[verified]**
@@ -190,7 +199,8 @@ security flags, one broken flow, secret plumbing, and legal pages.
       against the installed `wrangler@4.100.0`; the project only installs with
       `--legacy-peer-deps`. Adapter v7 declares `wrangler@^4` — upgrade and drop the flag. **[verified]**
 
-- [ ] **Expired rows are never reaped.** Holds are cleaned inline
+- [x] ~~**Expired rows are never reaped.**~~ **Done** — `src/lib/cleanup.ts`, run hourly from
+      `hooks.server.ts` and via `/api/cron/cleanup` (PR #13). Original finding: holds are cleaned inline
       (`availability.ts:87`), but `sessions`, `password_resets`, `organization_invites` and
       `reservation_invites` accumulate forever. No `[triggers]`/cron in `wrangler.toml`. **[verified]**
 
@@ -255,3 +265,46 @@ worst of both.
       claimed but unverified).
 - [ ] Backups: confirm D1 point-in-time recovery covers `hallify`, and that a restore has been
       rehearsed at least once.
+
+---
+
+## Found 2026-09-24
+
+Code items are fixed on branch `fix/first-sale-blockers`. Each was reproduced first, then
+verified in `workerd` against a local D1 (signed webhooks, signup and checkout form actions,
+the landing page) and covered by tests (28 → 52).
+
+- [x] **The Stripe webhook rejected every genuine event.** It used the synchronous
+      `constructEvent`, but the Worker bundle ships Stripe's worker build (the adapter
+      resolves the `workerd` export condition), whose Web Crypto provider only verifies
+      asynchronously. So a correctly signed event got **400**, same as a forged one, and a
+      paid checkout never upgraded the org. Fixed with `constructEventAsync`. The new
+      webhook suite runs against the worker build and fails if the sync call returns.
+      **[verified]**
+- [x] **Unpaid subscriptions kept the paid plan.** `toStatus()` mapped every unknown Stripe
+      status to `active`. `incomplete_expired`, `unpaid` and `paused` now drop the org to
+      Free. `incomplete` stays on the plan, because it can arrive after the `active` event.
+      **[verified]**
+- [x] **The upgrade preview always showed €0.00.** API basil (the pinned version) removed
+      `invoices.retrieveUpcoming` (absent from the installed SDK), moved the proration flag
+      to `line.parent`, and moved `current_period_*` onto subscription items. So the exact
+      preview always threw, and the fallback computed a zero-length period. Now uses
+      `invoices.createPreview`, and the fallback overestimates rather than showing zero.
+      **[verified]**
+- [x] **The renewal date was stored as null** for the same basil reason. It's now read from
+      the subscription item, with a fallback for pre-basil webhook payloads. **[verified]**
+- [x] **Nobody ever accepted the Terms or the DPA.** There's now a required checkbox at signup
+      and at a first paid checkout (the latter accepted on behalf of the organization),
+      stored in `legal_acceptances` (migration 0004). **[verified]**
+- [x] **The pricing sold RSVP, which is off for v1** — in plan features (also the Stripe
+      product description), pricing, the hero and "how it works". Removed. **[verified]**
+- [x] **Checkout collected no company details for invoices.** It now requires the billing
+      address and offers tax ID entry. **[verified]**
+- [ ] **No MX record for `hallify.sk`** — `contact@`, `privacy@` and `sales@` bounce.
+      **[verified]**
+- [ ] **VAT is undecided.** Checkout charges none, and prices don't say "s DPH / bez DPH".
+      Needs the operator's decision. **[verified]**
+- [ ] **Consumers' express consent** to start the service within the 14-day withdrawal
+      period (which the Terms rely on) is not collected. Question for the lawyer. **[doc]**
+- [ ] **Unused Worker secrets remain on prod:** `STRIPE_PRICE_*` and six `R2_*`. Revoke the
+      R2 API token too. **[verified]**

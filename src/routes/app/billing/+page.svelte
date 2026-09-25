@@ -1,7 +1,7 @@
 <script lang="ts">
   import { t } from '$lib/i18n.svelte';
-  import type { PageData } from './$types';
-  let { data }: { data: PageData } = $props();
+  import type { ActionData, PageData } from './$types';
+  let { data, form }: { data: PageData; form: ActionData } = $props();
 
   const currentPlan = $derived(data.currentOrg?.subscription.plan ?? 'free');
   const currentStatus = $derived(data.currentOrg?.subscription.status ?? 'active');
@@ -59,6 +59,9 @@
   {/if}
   {#if data.cancelled}
     <div class="alert-warning">{t.accountPages.checkoutCancelledNotice}</div>
+  {/if}
+  {#if form?.error}
+    <div class="alert-error">{form.error}</div>
   {/if}
 
   <!-- Current subscription -->
@@ -175,6 +178,10 @@
           {t.accountPages.checkoutIntroPre}
           <b>{target.name}</b> {t.accountPages.planAtPrice} €{target.priceMonthly}{t.accountPages.perMonthSuffix}.
         </p>
+        <label class="consent">
+          <input type="checkbox" name="acceptTerms" form="upgrade-form" required />
+          <span>{t.legalConsent.agreeOnBehalfPre}<a href="/terms" target="_blank" rel="noopener">{t.legalConsent.termsLink}</a>{t.legalConsent.including}<a href="/dpa" target="_blank" rel="noopener">{t.legalConsent.dpaLink}</a>{t.legalConsent.end}</span>
+        </label>
       {:else if targetIsUpgrade}
         <div class="charge-line">
           <span>{t.accountPages.chargedNow}</span>
@@ -197,7 +204,7 @@
 
       <div class="modal-actions">
         <button type="button" class="btn-outline" onclick={() => (confirmPlan = null)}>{t.common.cancel}</button>
-        <form method="POST" action="?/upgrade">
+        <form method="POST" action="?/upgrade" id="upgrade-form">
           <input type="hidden" name="plan" value={confirmPlan} />
           <button type="submit" class="btn-accent-sm">
             {#if isFirstSub}{t.accountPages.continueToCheckout}
@@ -332,6 +339,7 @@
 
   .alert-success { padding: 10px 14px; border-radius: 9px; font-size: 13px; font-weight: 500; margin-bottom: 16px; color: var(--success, #16a34a); background: color-mix(in srgb, var(--success, #22c55e) 12%, transparent); border: 1px solid color-mix(in srgb, var(--success, #22c55e) 26%, transparent); }
   .alert-warning { padding: 10px 14px; border-radius: 9px; font-size: 13px; font-weight: 500; margin-bottom: 16px; color: var(--warning, #b45309); background: color-mix(in srgb, var(--warning, #f59e0b) 14%, transparent); border: 1px solid color-mix(in srgb, var(--warning, #f59e0b) 30%, transparent); }
+  .alert-error { padding: 10px 14px; border-radius: 9px; font-size: 13px; font-weight: 500; margin-bottom: 16px; color: var(--danger, #dc2626); background: color-mix(in srgb, var(--danger, #ef4444) 10%, transparent); border: 1px solid color-mix(in srgb, var(--danger, #ef4444) 26%, transparent); }
 
   /* Plan-change dialog */
   .modal-backdrop {
@@ -351,6 +359,10 @@
   .charge-line b { font-size: 22px; font-weight: 800; color: var(--text-base); letter-spacing: -.02em; }
   .modal-body { font-size: 13px; line-height: 1.5; color: var(--text-muted); margin: 0 0 6px; }
   .modal-note { font-size: 11.5px; color: var(--text-subtle); margin: 0; }
+  .consent { display: flex; align-items: flex-start; gap: 9px; margin-top: 14px; font-size: 12.5px; line-height: 1.45; color: var(--text-muted); cursor: pointer; }
+  .consent input { margin-top: 2px; flex-shrink: 0; accent-color: var(--accent); }
+  .consent a { color: var(--accent); font-weight: 600; text-decoration: none; }
+  .consent a:hover { text-decoration: underline; }
   .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
   .modal-actions form { margin: 0; }
 

@@ -11,6 +11,7 @@ import { st } from '$lib/i18n-server';
 import type { PlanId } from '$lib/plans';
 import type { D1Database } from '@cloudflare/workers-types';
 import { requireOrgOwner } from '$lib/guards';
+import { acceptedTerms, recordLegalAcceptance } from '$lib/legalAcceptance';
 
 async function getSubId(db: D1Database, orgId: string): Promise<string | null> {
   const row = await dbFirst<{ stripe_subscription_id: string | null }>(db,
@@ -80,6 +81,11 @@ export const actions: Actions = {
 
     // First paid subscription → Checkout (creates the subscription).
     if (currentPlan === 'free' || !subId) {
+      // The owner accepts the Terms (incl. the DPA) for the organization here, so
+      // every paying venue has accepted them — also owners who signed up before
+      // signup asked for it.
+      if (!acceptedTerms(data)) return fail(400, { error: st(locals.locale).serverErrors.mustAcceptTerms });
+      await recordLegalAcceptance(locals.db, { userId: locals.user.id, orgId: locals.currentOrg.id, context: 'checkout' });
       const checkoutUrl = await createCheckoutSession({
         orgId:            locals.currentOrg.id,
         plan,

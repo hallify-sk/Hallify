@@ -52,6 +52,12 @@ Then write the SQL and apply it local → dev → prod.
   `src/lib/db/schema.sql`. Entirely `IF NOT EXISTS`, so applying it to the
   already-populated dev and prod databases is a no-op that just records the baseline.
   It supersedes the old `migration-009/010/011` files, which were folded into it.
+- `0002_rate_limits.sql` — fixed-window counters for `src/lib/rateLimit.ts`.
+- `0003_channel_reads.sql` — per-user channel read state (unread badges).
+- `0004_legal_acceptances.sql` — who accepted the Terms (incl. the DPA) and when: at
+  signup and at a first paid checkout. Apply it before deploying the code that writes
+  it. The write is best-effort, so a missing table only loses the evidence row; it
+  does not block signup or checkout.
 
 Seed data is **not** a migration — it stays at `src/lib/db/seed.sql`:
 
