@@ -200,6 +200,7 @@
   :global(.venue-map-pin.is-selected .venue-map-pin-inner){background:#f05ca1;color:#28111c;border-color:#f05ca1}
   :global(.venue-map-pin.is-selected .venue-map-pin-inner::after){border-color:#f05ca1}
   :global(.venue-map-pin:focus-visible){outline:3px solid var(--map-accent);outline-offset:4px;border-radius:3px}
+  @media(max-width:600px){.venue-map-container:has(:global(.layers-panel)){z-index:1100}}
   @media(max-width:480px){.map-heading{left:12px;top:12px;padding:10px;max-width:calc(100% - 150px)}.map-expand{right:12px;top:12px;padding:11px 10px;gap:10px;font-size:9px}.map-actions{right:12px}.map-message{top:80px;left:12px}}
   @media(max-width:480px){.map-heading{max-width:calc(100% - 160px)}.map-actions{grid-template-columns:repeat(2,32px);gap:5px;bottom:35px}.map-actions button{width:32px;height:32px}.map-actions .trackpad-control{display:none}.zoom-controls{display:flex;grid-column:span 2}.zoom-controls button+button{border-top:1px solid var(--map-border);border-left:0}.trackpad-hint{display:none}.with-expand .map-message{top:117px}}
 </style>
