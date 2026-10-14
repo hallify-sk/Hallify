@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="sk">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="color-scheme" content="dark">
+    <meta name="description" content="Hallify Spatial: interaktívny koncept hľadania a správy priestorov pre podujatia.">
+    <title>Hallify · Priestor pre váš plán</title>
+    <link rel="stylesheet" href="spatial.css">
+    <script src="spatial.js" defer></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Preskočiť na obsah</a>
+    <div id="app"></div>
+    <noscript><main class="no-script"><h1>Hallify Spatial</h1><p>Interaktívny koncept potrebuje JavaScript na zmenu usporiadania sály. Zapnite ho a obnovte stránku.</p></main></noscript>
+    <dialog id="demo-dialog" aria-labelledby="dialog-title">
+      <form method="dialog" class="dialog-close-form"><button class="close-dialog" aria-label="Zavrieť okno">×</button></form>
+      <p class="dialog-kicker">Hallify · lokálna ukážka</p>
+      <h2 id="dialog-title"></h2>
+      <p id="dialog-intro"></p>
+      <form id="demo-form">
+        <label for="event-name">Názov podujatia</label>
+        <input id="event-name" name="name" placeholder="Napríklad: Jesenná konferencia" maxlength="80" required>
+        <div class="date-fields">
+          <div><label for="event-start">Od</label><input id="event-start" name="start" type="date" required></div>
+          <div><label for="event-end">Do</label><input id="event-end" name="end" type="date" required></div>
+        </div>
+        <label for="event-guests">Počet hostí</label>
+        <input id="event-guests" name="guests" type="number" min="1" max="500" value="80" required>
+        <p class="form-note">Údaje zostanú iba v tejto ukážke. Dostupnosť ani rezerváciu tým nepotvrdzujete.</p>
+        <button type="submit" class="button primary">Vytvoriť ukážkový plán <span aria-hidden="true">↗</span></button>
+      </form>
+      <div id="demo-result" hidden aria-live="polite"></div>
+    </dialog>
+  </body>
+</html>

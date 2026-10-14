@@ -1,6 +1,6 @@
 <script lang="ts">
   import { enhance } from '$app/forms';
-  import { t } from '$lib/i18n.svelte';
+  import { t, getLocale } from '$lib/i18n.svelte';
   import type { PageData, ActionData } from './$types';
 
   let { data, form }: { data: PageData; form: ActionData } = $props();
@@ -100,6 +100,15 @@
         </div>
         <span class="sub-suffix">&lt;slug&gt;.hallify.sk</span>
         {#if form?.slugError}<span class="field-err">{form.slugError}</span>{/if}
+      </form>
+
+      <form method="POST" action="?/setPartner" use:enhance class="plan-form">
+        <label for="partner">Partner Hallify</label>
+        <div class="plan-row">
+          <label style="display:flex;align-items:center;gap:10px;font-size:12px"><input id="partner" name="partner" type="checkbox" checked={!!data.org.is_hallify_partner} />{getLocale() === 'en' ? 'Eligible for featured venues' : 'Zaradiť medzi partnerov vo výbere priestorov'}</label>
+          <button type="submit" class="btn-action">{t.platformOrgs.save}</button>
+        </div>
+        {#if form?.partnerSaved}<p class="hint">{getLocale() === 'en' ? 'Partner status saved.' : 'Partnerský stav bol uložený.'}</p>{/if}
       </form>
 
       <div class="danger-row">

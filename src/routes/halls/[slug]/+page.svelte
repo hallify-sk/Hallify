@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
+  import { booking } from '$lib/analytics';
   import type { PageData } from './$types';
   import type { HallDayHours } from '$lib/db/index';
   import { migrateToMultiFloor } from '$lib/floorplan-types';
@@ -7,6 +9,8 @@
 
   interface Props { data: PageData; }
   const { data }: Props = $props();
+
+  onMount(() => booking.viewHall(data.hall.slug ?? data.hall.id, data.hall.name));
 
   const hall = data.hall;
   const user = data.user;

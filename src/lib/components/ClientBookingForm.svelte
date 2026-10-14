@@ -1,5 +1,7 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
+	import { onMount } from 'svelte';
+	import { booking } from '$lib/analytics';
 	import { beforeNavigate } from '$app/navigation';
 	import { onDestroy } from 'svelte';
 	import MiniCalendar from '$lib/components/MiniCalendar.svelte';
@@ -49,6 +51,20 @@
 	const holdLabel = $derived(`${Math.floor(holdSeconds / 60)}:${String(holdSeconds % 60).padStart(2, '0')}`);
 	const holdActive = $derived(holdSeconds > 0 && !holdError);
 	const overCapacity = $derived(!!numGuests && Number(numGuests) > hall.max_people);
+
+	// ── Funnel instrumentation ────────────────────────────────────────────────
+	// Step events are what reveal WHERE a booking is abandoned; a single
+	// begin/purchase pair only tells you THAT it was. Each step fires once.
+	// The component's Hall prop has no slug; id is stable and unambiguous.
+	const hallSlug = hall.id;
+	onMount(() => booking.beginBooking(hallSlug, hall.name));
+	let firedDate = false, firedGuests = false;
+	$effect(() => {
+		if (selectedDate && !firedDate) { firedDate = true; booking.bookingStep(hallSlug, 'date_selected'); }
+	});
+	$effect(() => {
+		if (numGuests && !overCapacity && !firedGuests) { firedGuests = true; booking.bookingStep(hallSlug, 'guests_entered'); }
+	});
 	const canSubmit = $derived(!!selectedDate && holdActive && !overCapacity);
 
 	const guestsForExtras = $derived(Math.max(1, Number(numGuests) || 1));

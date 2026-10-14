@@ -1,6 +1,7 @@
 <script lang="ts">
   import { LEGAL_UPDATED, LEGAL_LABELS, LEGAL_PATHS, LEGAL_IS_DRAFT, type LegalDoc, type LegalKind } from '$lib/legal';
-  import { getLocale } from '$lib/i18n.svelte';
+  import { getLocale, t } from '$lib/i18n.svelte';
+  import { openConsentSettings } from '$lib/analytics';
 
   interface Props {
     doc: LegalDoc;
@@ -57,6 +58,8 @@
       <span class="sep">·</span>
     {/each}
     <a href="/">{L.backHome}</a>
+    <span class="sep">·</span>
+    <button type="button" class="consent-link" onclick={openConsentSettings}>{t.consent.settingsLink}</button>
   </footer>
 </div>
 
@@ -73,7 +76,7 @@
     background: var(--bg);
     color: var(--txt);
     min-height: 100vh;
-    font-family: system-ui, -apple-system, sans-serif;
+    font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
     padding: 0 24px 96px;
   }
 
@@ -151,7 +154,8 @@
     font-size: 0.9rem;
   }
 
-  .legal-foot a { color: var(--txt-muted); text-decoration: none; }
+  .legal-foot a, .consent-link { color: var(--txt-muted); text-decoration: none; }
+  .consent-link { background: none; border: none; padding: 0; font: inherit; cursor: pointer; }
   .legal-foot a:hover { color: var(--accent); }
   .sep { color: var(--txt-faint); margin: 0 10px; }
 

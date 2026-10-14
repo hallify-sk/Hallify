@@ -1,9 +1,12 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { saas } from '$lib/analytics';
   import { t } from '$lib/i18n.svelte';
   import { playSound } from '$lib/sounds';
   import type { PageData } from './$types';
   let { data }: { data: PageData } = $props();
+
+  onMount(() => saas.upgradeCompleted(data.planName ?? 'unknown', null));
 
   interface Piece { left: number; delay: number; duration: number; color: string; rot: number; size: number; round: boolean; }
   let confetti = $state<Piece[]>([]);

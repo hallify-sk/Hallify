@@ -1,0 +1,29 @@
+<script lang="ts">
+  import Icon from './Icon.svelte';
+  import { onMount } from 'svelte';
+  import { reveal } from './reveal';
+  import { getLocale } from '$lib/i18n.svelte';
+  import { saas } from '$lib/analytics';
+  import { PLANS } from '$lib/plans';
+  import BookingWorkflow from './BookingWorkflow.svelte';
+  import ProfileComparison from './ProfileComparison.svelte';
+  const en = $derived(getLocale() === 'en');
+  let workflow: { openInquiry: () => void };
+  function openDemo() { workflow.openInquiry(); }
+  onMount(() => {
+    const observer = new IntersectionObserver(entries => { if (entries.some(entry => entry.isIntersecting)) { saas.viewPricing(); observer.disconnect(); } });
+    const pricing = document.getElementById('pricing'); if (pricing) observer.observe(pricing);
+    return () => observer.disconnect();
+  });
+</script>
+
+<section class="business-hero wrap">
+  <div class="business-intro"><div class="business-copy"><p class="eyebrow">{en ? 'Hallify for businesses' : 'Hallify pre prevádzkovateľov'}</p><h1>{en ? 'Showcase your venue.' : 'Predstavte svoj priestor.'}<br><span>{en ? 'Manage bookings like never before.' : 'Spravujte rezervácie ako nikdy predtým.'}</span></h1></div><div class="business-intro-side"><p class="lead">{en ? 'Put your venue on the map. Keep reservations, room layouts and conversations in one place.' : 'Ukážte svoj priestor na mape. Rezervácie, rozloženie sály a komunikáciu majte na jednom mieste.'}</p><a class="primary" href="/app/register" onclick={() => saas.signUpStarted()}>{en ? 'Start with Hallify' : 'Vytvoriť účet'} <span aria-hidden="true"><Icon /></span></a></div></div>
+  <BookingWorkflow bind:this={workflow} english={en} />
+</section>
+
+<section use:reveal class="wrap partnership" id="features"><div class="section-heading"><p class="eyebrow">{en ? 'More than a listing' : 'Viac než záznam v katalógu'}</p><h2>{en ? 'From a pin on the map' : 'Od bodu na mape'}<br>{en ? 'to the full picture.' : 'k plnej prezentácii.'}</h2><p>{en ? 'Show what your venue can offer. Turn the first look into an inquiry your team can work with.' : 'Ukážte, čo váš priestor ponúka. Premeňte prvý pohľad na dopyt, s ktorým váš tím vie pracovať.'}</p></div><ProfileComparison english={en} /></section>
+
+<section use:reveal class="wrap operations" id="white-label"><div><h2>{en ? 'Your brand.' : 'Vaša značka.'}<br>{en ? 'Your venue.' : 'Vaše miesto.'}<br><span>{en ? 'One system.' : 'Jeden systém.'}</span></h2><p>{en ? 'Hallify connects public discovery with what your team handles every day.' : 'Hallify spojí verejné objavenie priestoru s tým, čo váš tím rieši každý deň.'}</p></div><div class="operations-content"><details open><summary>{en ? 'Reservations and conversations' : 'Rezervácie a komunikácia'} <span>+</span></summary><p>{en ? 'Keep inquiries and agreements with their booking. Your team and the client return to the same information.' : 'Dopyty a dohody pri konkrétnej rezervácii. Tím aj klient sa vracajú k rovnakým informáciám.'}</p></details><details><summary>{en ? 'Room layouts' : 'Rozloženie sály'} <span>+</span></summary><p>{en ? 'Arrange tables and seating for each event. Give your client a clearer idea of the venue.' : 'Pripravte stoly a sedenie podľa podujatia. Klient získa jasnejšiu predstavu o priestore.'}</p></details><details><summary>{en ? 'A booking page with your identity' : 'Rezervačná stránka vašej značky'} <span>+</span></summary><p>{en ? 'Present your venues and services on a separate booking page. Custom branding and domains are available on paid plans.' : 'Predstavte svoje sály a služby na samostatnej rezervačnej stránke. Vlastná značka a doména sú dostupné v platených plánoch.'}</p></details><button class="primary" onclick={openDemo}>{en ? 'Explore a sample inquiry' : 'Prejsť ukážkový dopyt'} <Icon /></button></div></section>
+
+<section use:reveal class="wrap pricing-section" id="pricing"><h2>{en ? 'A plan that fits your venue.' : 'Plán, ktorý sedí vašej prevádzke.'}</h2><p class="lead">{en ? 'Choose a plan for the size of your team and the number of events you manage.' : 'Vyberte plán podľa veľkosti tímu a počtu podujatí, ktoré spravujete.'}</p><div class="pricing-grid">{#each Object.values(PLANS) as plan}<article class="plan" class:featured={plan.id === 'starter'}><h3>{plan.name}</h3><p class="plan-price">{plan.priceMonthly === null ? (en ? 'Individual' : 'Individuálne') : new Intl.NumberFormat(en ? 'en-IE' : 'sk-SK', { style:'currency', currency:'EUR', maximumFractionDigits:2 }).format(plan.priceMonthly)}{#if plan.priceMonthly !== null}<small>{en ? '/month' : '/mesiac'}</small>{/if}</p><ul><li>{plan.limits.maxHalls === -1 ? (en ? 'Unlimited venues' : 'Neobmedzené sály') : `${plan.limits.maxHalls} ${en ? (plan.limits.maxHalls === 1 ? 'venue' : 'venues') : (plan.limits.maxHalls === 1 ? 'sála' : plan.limits.maxHalls < 5 ? 'sály' : 'sál')}`}</li><li>{plan.limits.maxMembers === -1 ? (en ? 'Unlimited team members' : 'Neobmedzený tím') : `${plan.limits.maxMembers} ${en ? 'team members' : (plan.limits.maxMembers === 2 ? 'členi tímu' : 'členov tímu')}`}</li><li>{plan.limits.maxReservationsPerHallMonth === -1 ? (en ? 'Unlimited reservations' : 'Neobmedzené rezervácie') : `${plan.limits.maxReservationsPerHallMonth} ${en ? 'reservations / venue / month' : 'rezervácií / sála / mesiac'}`}</li><li>{plan.limits.customDomains ? (en ? 'Custom branding and domain' : 'Vlastná značka a doména') : (en ? 'Hallify subdomain' : 'Subdoména Hallify')}</li></ul><a href={plan.id === 'enterprise' ? 'mailto:sales@hallify.sk' : '/app/register'} class={plan.id === 'starter' ? 'primary' : 'plan-link'} onclick={() => { if (plan.id !== 'enterprise') saas.signUpStarted(); }}>{plan.id === 'enterprise' ? (en ? 'Talk to us' : 'Dohodnúť konzultáciu') : (en ? 'Create an account' : 'Vytvoriť účet')} <Icon /></a></article>{/each}</div></section>

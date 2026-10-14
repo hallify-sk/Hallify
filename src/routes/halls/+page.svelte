@@ -1,9 +1,13 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
+  import { booking } from '$lib/analytics';
   import type { PageData } from './$types';
   import { t } from '$lib/i18n.svelte';
 
   interface Props { data: PageData; }
   const { data }: Props = $props();
+
+  onMount(() => booking.viewHallList((data.halls ?? []).length));
 
   function parseArr(v: unknown): string[] {
     if (!v) return [];

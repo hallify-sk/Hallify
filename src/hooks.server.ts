@@ -338,7 +338,8 @@ const securityHeaders: Handle = async ({ event, resolve }) => {
   response.headers.set('X-Content-Type-Options', 'nosniff');
   // Don't leak booking URLs (which contain ids) to third-party sites.
   response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
-  response.headers.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=(), usb=()');
+  const discoveryPage = event.url.pathname === '/' || event.url.pathname === '/priestory';
+  response.headers.set('Permissions-Policy', `camera=(), microphone=(), geolocation=${discoveryPage ? '(self)' : '()'}, payment=(), usb=()`);
 
   // HSTS only over HTTPS; browsers ignore it on http, and setting it in local dev
   // would pin localhost to https for the developer's whole browser profile.

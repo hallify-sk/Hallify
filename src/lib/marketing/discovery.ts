@@ -1,0 +1,47 @@
+import type { PublicVenue } from './types';
+
+export interface MapCenter { latitude: number; longitude: number }
+export const DEFAULT_CENTER: MapCenter = { latitude: 50.0755, longitude: 14.4378 };
+
+export function distanceKm(a: MapCenter, b: MapCenter): number {
+  const radians = Math.PI / 180;
+  const lat = (b.latitude - a.latitude) * radians, lng = (b.longitude - a.longitude) * radians;
+  const value = Math.sin(lat / 2) ** 2 + Math.cos(a.latitude * radians) * Math.cos(b.latitude * radians) * Math.sin(lng / 2) ** 2;
+  return 6371 * 2 * Math.atan2(Math.sqrt(value), Math.sqrt(Math.max(0, 1 - value)));
+}
+
+export function destination(center: MapCenter, distance: number, bearing: number): MapCenter {
+  const rad = Math.PI / 180, angular = distance / 6371, heading = bearing * rad;
+  const lat = center.latitude * rad, lng = center.longitude * rad;
+  const nextLat = Math.asin(Math.sin(lat) * Math.cos(angular) + Math.cos(lat) * Math.sin(angular) * Math.cos(heading));
+  const nextLng = lng + Math.atan2(Math.sin(heading) * Math.sin(angular) * Math.cos(lat), Math.cos(angular) - Math.sin(lat) * Math.sin(nextLat));
+  return { latitude: nextLat / rad, longitude: ((nextLng / rad + 540) % 360) - 180 };
+}
+
+/** Local illustrative places. These never become database records or bookable halls. */
+export function demoVenues(center: MapCenter = DEFAULT_CENTER, nearby = false, english = false): PublicVenue[] {
+  const names = english ? ['Riverside studio','Lakeside courtyard','City gallery','Garden pavilion','Oak hall','Old mill','Forest retreat'] : ['Ateliér pri rieke','Dvor pri jazere','Mestská galéria','Záhradný pavilón','Dubová sála','Starý mlyn','Lesný dvor'];
+  const capacities = [120,80,180,60,240,100,40], distances = [3,7,11,18,25,34,42];
+  return names.map((name, i) => ({
+    id: `demo-${i}`, name, slug: null, description: english ? 'An illustrative venue for trying map selection and filters.' : 'Ilustračný priestor na vyskúšanie výberu na mape a filtrov.',
+    address: nearby ? (english ? 'Your area · sample location' : 'Vaše okolie · ukážková poloha') : (english ? 'Prague area · sample location' : 'Okolie Prahy · ukážková poloha'),
+    ...destination(center, distances[i], 32 + i * 51), max_people: capacities[i],
+    cover_image_url: ['/marketing/venue-example.jpg','/marketing/venue-dinner.jpg','/marketing/venue-conference.jpg'][i % 3],
+    amenities: i % 2 ? ['parking','outdoor'] : ['wifi','catering'],
+    pricing_info: null, allow_reservations: i % 3 === 0 ? 0 : 1, has_floorplan: i % 2 ? 0 : 1, demo: true, is_partner: [0,2,4,5].includes(i),
+  }));
+}
+
+export function featuredVenues(venues: PublicVenue[], center: MapCenter = DEFAULT_CENTER): PublicVenue[] {
+  return venues.filter(venue => venue.is_partner === true && venue.latitude !== null && venue.longitude !== null &&
+    Number.isFinite(venue.latitude) && Number.isFinite(venue.longitude))
+    .sort((a,b) => distanceKm(center,a as MapCenter) - distanceKm(center,b as MapCenter) || a.name.localeCompare(b.name))
+    .slice(0,3);
+}
+
+export function filterVenues(venues: PublicVenue[], filters: { query: string; guests: number; floorplan: boolean; booking: boolean; center?: MapCenter | null; radius?: number }): PublicVenue[] {
+  const normalize = (text: string) => text.toLocaleLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  return venues.filter(venue => venue.max_people >= filters.guests && (!filters.floorplan || !!venue.has_floorplan) &&
+    (!filters.booking || !!venue.allow_reservations) && normalize(`${venue.name} ${venue.address ?? ''}`).includes(normalize(filters.query.trim())) &&
+    (!filters.center || !filters.radius || (venue.latitude !== null && venue.longitude !== null && distanceKm(filters.center, { latitude: venue.latitude, longitude: venue.longitude }) <= filters.radius)));
+}

@@ -14,9 +14,9 @@ const VALID_PLANS: PlanId[] = ['free', 'starter', 'professional', 'enterprise'];
 export const load: PageServerLoad = async ({ params, locals }) => {
   const org = await dbFirst<{
     id: string; name: string; slug: string; logo_url: string | null;
-    suspended_at: string | null; created_at: string; member_count: number; reservation_count: number;
+    suspended_at: string | null; created_at: string; member_count: number; reservation_count: number; is_hallify_partner: number;
   }>(locals.db, `
-    SELECT o.id, o.name, o.slug, o.logo_url, o.suspended_at, o.created_at,
+    SELECT o.id, o.name, o.slug, o.logo_url, o.suspended_at, o.created_at, o.is_hallify_partner,
            (SELECT COUNT(*) FROM organization_members m WHERE m.org_id = o.id) AS member_count,
            (SELECT COUNT(*) FROM reservations r WHERE r.org_id = o.id) AS reservation_count
     FROM organizations o WHERE o.id = ?`, params.id);
@@ -37,6 +37,14 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 };
 
 export const actions: Actions = {
+  setPartner: async ({ request, params, locals }) => {
+    requirePlatformAdmin(locals);
+    const org = await dbFirst<{ id: string }>(locals.db, 'SELECT id FROM organizations WHERE id = ?', params.id);
+    if (!org) error(404, st(locals.locale).serverErrors.organizationNotFound);
+    const form = await request.formData();
+    await dbRun(locals.db, 'UPDATE organizations SET is_hallify_partner = ? WHERE id = ?', form.get('partner') === 'on' ? 1 : 0, params.id);
+    return { partnerSaved: true };
+  },
   // Superadmin plan override — written straight to our subscriptions table.
   setPlan: async ({ request, params, locals }) => {
     requirePlatformAdmin(locals);

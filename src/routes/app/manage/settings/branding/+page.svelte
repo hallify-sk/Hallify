@@ -72,6 +72,20 @@
 	<button type="submit" class="btn-action btn-sm lang-save">{t.settingsPages.saveLanguage}</button>
 </form>
 
+<!-- ── Analytics (available to all plans; applies to this org's bubble only) ── -->
+<form method="POST" action="?/saveGtm" class="lang-card"
+	use:enhance={() => { return async ({ update }) => { await update({ reset: false }); }; }}>
+	<div class="lang-card-head">
+		<h2>{t.settingsPages.analyticsTitle}</h2>
+		<p>{t.settingsPages.analyticsHint}</p>
+	</div>
+	<input class="gtm-input" type="text" name="gtmContainerId" placeholder="GTM-XXXXXXX"
+		value={data.gtmContainerId ?? ''} autocomplete="off" spellcheck="false" />
+	{#if form?.error}<p class="gtm-err">{form.error}</p>{/if}
+	{#if form?.gtmSuccess}<p class="gtm-ok">{t.settingsPages.analyticsSaved}</p>{/if}
+	<button type="submit" class="btn-action btn-sm lang-save">{t.settingsPages.saveAnalytics}</button>
+</form>
+
 {#if data.locked}
 	<div class="locked-card">
 		<div class="locked-icon">
@@ -468,4 +482,11 @@
 		.theme-grid { grid-template-columns: 1fr; }
 		.field-row { grid-template-columns: 1fr; }
 	}
+	.gtm-input {
+		width: 100%; max-width: 320px; padding: 8px 11px; border-radius: 8px;
+		border: 1px solid var(--border); background: var(--bg-base);
+		color: var(--text-base); font-family: ui-monospace, monospace; font-size: 13px;
+	}
+	.gtm-err { color: var(--danger, #ef4444); font-size: 12px; margin: 6px 0 0; }
+	.gtm-ok  { color: var(--success, #22c55e); font-size: 12px; margin: 6px 0 0; }
 </style>

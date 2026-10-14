@@ -1,3 +1,27 @@
+/* Inter — self-hosted variable font (SIL Open Font License), 100–900 in one file.
+   This is the app's entire UI typeface (see the body rule below). It was declared in
+   the font stack but NEVER loaded: no @font-face, no stylesheet link. Machines with
+   Inter installed locally (common on design/dev Macs) rendered Inter; everyone else
+   fell through to Segoe UI on Windows or SF on macOS — which is why the UI looked
+   different per platform. A variable font covers all eight weights the UI asks for
+   (300–900, including the odd 650) in a single request. */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('/fonts/inter-variable-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('/fonts/inter-variable-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
 /* Poppins 900 italic — self-hosted (SIL Open Font License). Only the wordmark uses
    it. Previously loaded from fonts.googleapis.com, which the CSP blocks and which
    leaks visitor IPs to Google. latin-ext carries the Slovak diacritics. */

@@ -1,7 +1,11 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
+  import { saas } from '$lib/analytics';
   import { t } from '$lib/i18n.svelte';
   import type { PageData } from './$types';
   let { data }: { data: PageData } = $props();
+
+  onMount(() => saas.viewPlans(data.currentOrg?.subscription?.plan ?? 'free'));
 
   const currentPlan = $derived(data.currentOrg?.subscription.plan ?? 'free');
   const currentStatus = $derived(data.currentOrg?.subscription.status ?? 'active');

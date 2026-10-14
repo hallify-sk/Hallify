@@ -1,7 +1,8 @@
 <script lang="ts">
   import { enhance } from '$app/forms';
   import { slide } from 'svelte/transition';
-  import { t } from '$lib/i18n.svelte';
+  import { t, getLocale } from '$lib/i18n.svelte';
+  import VenueLocationPicker from '$lib/marketing/VenueLocationPicker.svelte';
   import { migrateToMultiFloor } from '$lib/floorplan-types';
   import type { FloorData } from '$lib/floorplan-types';
   import DateRangePicker from '$lib/components/DateRangePicker.svelte';
@@ -143,6 +144,8 @@
   let previewDescription = $state(data.hall.description ?? '');
   let previewMaxPeople   = $state(data.hall.max_people);
   let previewAddress     = $state(data.hall.address ?? '');
+  let previewLatitude = $state<number | null>(data.hall.latitude ?? null);
+  let previewLongitude = $state<number | null>(data.hall.longitude ?? null);
   let previewColor       = $state(data.hall.color);
   let previewPricing     = $state(data.hall.pricing_info ?? '');
   let previewPhone       = $state(data.hall.contact_phone ?? '');
@@ -227,6 +230,8 @@
     desc:      data.hall.description ?? '',
     maxPeople: data.hall.max_people,
     address:   data.hall.address ?? '',
+    latitude: data.hall.latitude ?? null,
+    longitude: data.hall.longitude ?? null,
     color:     data.hall.color,
     pricing:   data.hall.pricing_info ?? '',
     phone:     data.hall.contact_phone ?? '',
@@ -245,6 +250,8 @@
     previewDescription !== _init.desc      ||
     previewMaxPeople   !== _init.maxPeople ||
     previewAddress     !== _init.address   ||
+    previewLatitude !== _init.latitude ||
+    previewLongitude !== _init.longitude ||
     previewColor       !== _init.color     ||
     previewPricing     !== _init.pricing   ||
     previewPhone       !== _init.phone     ||
@@ -275,6 +282,8 @@
     previewDescription = _init.desc;
     previewMaxPeople   = _init.maxPeople;
     previewAddress     = _init.address;
+    previewLatitude = _init.latitude;
+    previewLongitude = _init.longitude;
     previewColor       = _init.color;
     previewPricing     = _init.pricing;
     previewPhone       = _init.phone;
@@ -560,6 +569,12 @@
                 placeholder={profileIsPublic ? t.hallAdmin.addressRequiredPlaceholder : t.hallAdmin.addressOptionalPlaceholder} />
             </div>
           </div>
+        </div>
+
+        <div class="profile-section">
+          <VenueLocationPicker bind:latitude={previewLatitude} bind:longitude={previewLongitude} english={getLocale() === "en"} />
+          <input type="hidden" name="latitude" value={previewLatitude ?? ""} />
+          <input type="hidden" name="longitude" value={previewLongitude ?? ""} />
         </div>
 
         <!-- Visibility -->
@@ -1033,6 +1048,8 @@
         <input type="hidden" name="color"       value={previewColor} />
         <input type="hidden" name="description" value={previewDescription} />
         <input type="hidden" name="address"     value={previewAddress} />
+        <input type="hidden" name="latitude" value={previewLatitude ?? ""} />
+        <input type="hidden" name="longitude" value={previewLongitude ?? ""} />
 
         <div class="settings-header">
           <h2 class="card-title">{t.hallAdmin.bookingSettings}</h2>

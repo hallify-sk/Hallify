@@ -7,6 +7,7 @@ import { serializeEventTypes } from '$lib/eventTypes';
 import { st } from '$lib/i18n-server';
 import type { Actions, PageServerLoad } from './$types';
 import { requireOrgStaff } from '$lib/guards';
+import { parseCoordinates } from '$lib/venue-location';
 
 const clamp = (n: number, lo: number, hi: number, dflt: number) =>
 	Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : dflt;
@@ -95,6 +96,8 @@ export const actions: Actions = {
 		const allowFeedback = data.get('allowFeedback') === 'on';
 		const minDaysAdvance = Number(data.get('minDaysAdvance') ?? 0);
 		const address = String(data.get('address') ?? '').trim();
+		const coordinates = parseCoordinates(data.get('latitude'), data.get('longitude'));
+		if (!coordinates) return fail(400, { infoError: locals.locale === 'en' ? 'Choose a valid location on the map.' : 'Vyberte platnú polohu na mape.' });
 		const preReservationText = String(data.get('preReservationText') ?? '').trim();
 		const autoApprove = data.get('autoApprove') === 'on';
 		const minCancelDays = Number(data.get('minCancelDays') ?? 0);
@@ -105,14 +108,14 @@ export const actions: Actions = {
 				name=?, description=?, max_people=?, color=?,
 				allow_reservations=?, custom_layouts=?,
 				force_layouts=?, allow_feedback=?,
-				min_days_advance=?, address=?,
+				min_days_advance=?, address=?, latitude=?, longitude=?,
 				pre_reservation_text=?, auto_approve=?,
 				min_cancel_days=?
 			WHERE id=? AND org_id=?`,
 			name, description || null, maxPeople, color,
 			allowReservations ? 1 : 0, customLayouts ? 1 : 0,
 			forceLayouts ? 1 : 0, allowFeedback ? 1 : 0,
-			minDaysAdvance, address || null,
+			minDaysAdvance, address || null, coordinates.latitude, coordinates.longitude,
 			preReservationText || null, autoApprove ? 1 : 0,
 			minCancelDays, params.id, requireOrgStaff(locals).id
 		);
@@ -317,6 +320,8 @@ export const actions: Actions = {
 		const color       = String(data.get('color') ?? '#3b82f6').trim();
 		const description = String(data.get('description') ?? '').trim() || null;
 		const address     = String(data.get('address') ?? '').trim() || null;
+		const coordinates = parseCoordinates(data.get('latitude'), data.get('longitude'));
+		if (!coordinates) return fail(400, { profileError: locals.locale === 'en' ? 'Choose a valid location on the map.' : 'Vyberte platnú polohu na mape.' });
 
 		if (!name) return fail(400, { profileError: st(locals.locale).serverErrors.hallNameRequired });
 		if (!Number.isFinite(maxPeople) || maxPeople < 1) return fail(400, { profileError: st(locals.locale).serverErrors.capacityAtLeastOne });
@@ -369,6 +374,8 @@ export const actions: Actions = {
 				color = ?,
 				description = ?,
 				address = ?,
+				latitude = ?,
+				longitude = ?,
 				is_public = ?,
 				slug = ?,
 				cover_image_url = ?,
@@ -385,6 +392,8 @@ export const actions: Actions = {
 			color,
 			description,
 			address,
+			coordinates.latitude,
+			coordinates.longitude,
 			isPublic ? 1 : 0,
 			slug,
 			coverImageUrl,

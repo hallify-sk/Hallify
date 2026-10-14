@@ -1,7 +1,11 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
+  import { saas } from '$lib/analytics';
   import { t } from '$lib/i18n.svelte';
   import type { ActionData } from './$types';
   let { form }: { form: ActionData } = $props();
+
+  onMount(() => saas.signUpCompleted());
 </script>
 
 <div class="auth-shell">

@@ -346,11 +346,14 @@ const privacySk: LegalDoc = {
     {
       heading: '5. Súbory cookie',
       blocks: [
-        { p: 'Používame len nevyhnutné cookies — žiadne reklamné ani analytické sledovanie tretích strán:' },
+        { p: 'Nevyhnutné cookies (nastavia sa vždy, bez nich služba nefunguje):' },
         { list: [
           'session_id — prihlásenie, platnosť 30 dní, httpOnly.',
           'hallify-lang — zvolený jazyk rozhrania, platnosť 1 rok.',
+          'hallify-consent — vaša voľba ohľadom analytických cookies, platnosť 1 rok.',
         ] },
+        { p: 'Analytické cookies (len s vaším súhlasom): používame Google Tag Manager a Google Analytics, aby sme videli, ako sa služba používa a kde sa používatelia strácajú. Bez vášho súhlasu sa nenačítajú vôbec — nejde len o ich vypnutie, skript sa vôbec nespustí. Súhlas môžete kedykoľvek zmeniť alebo odvolať cez odkaz „Nastavenia cookies“ v pätičke stránky — rovnako jednoducho, ako ste ho udelili.' },
+        { p: 'Analytické a marketingové cookies sú samostatné kategórie — môžete povoliť len jednu z nich. Do analytiky neposielame e-maily, mená ani obsah rezervácií — len pseudonymné identifikátory a údaje ako typ účtu, rola a plán.' },
       ],
     },
     {
@@ -361,6 +364,7 @@ const privacySk: LegalDoc = {
           'Cloudflare, Inc. — hosting aplikácie, databáza a úložisko nahraných súborov.',
           'Stripe, Inc. / Stripe Payments Europe — spracovanie platieb a fakturácia. Údaje o platobnej karte prijíma priamo Stripe; my ich nevidíme ani neuchovávame.',
           'Brevo (Sendinblue SAS) — odosielanie transakčných e-mailov.',
+          'Google Ireland Limited — Google Tag Manager a Google Analytics, len ak ste udelili súhlas s analytickými cookies.',
         ] },
         { p: 'Prenos mimo EÚ/EHP prebieha na základe štandardných zmluvných doložiek alebo iného vhodného právneho mechanizmu. Údaje inak neposkytujeme tretím osobám, s výnimkou zákonnej povinnosti.' },
       ],
@@ -466,11 +470,14 @@ const privacyEn: LegalDoc = {
     {
       heading: '5. Cookies',
       blocks: [
-        { p: 'We use strictly necessary cookies only — no advertising or third-party analytics tracking:' },
+        { p: 'Strictly necessary cookies (always set — the service does not work without them):' },
         { list: [
           'session_id — keeps you signed in, 30 days, httpOnly.',
           'hallify-lang — your interface language, 1 year.',
+          'hallify-consent — your choice about analytics cookies, 1 year.',
         ] },
+        { p: 'Analytics cookies (only with your consent): we use Google Tag Manager and Google Analytics to understand how the service is used and where people get stuck. Without your consent they are not loaded at all — the script never runs, rather than merely being disabled. You can change or withdraw consent at any time via the “Cookie settings” link in the page footer — as easily as you gave it.' },
+        { p: 'Analytics and marketing are separate categories — you can allow one without the other. We never send emails, names or reservation content to analytics — only pseudonymous identifiers and attributes such as account type, role and plan.' },
       ],
     },
     {
@@ -481,6 +488,7 @@ const privacyEn: LegalDoc = {
           'Cloudflare, Inc. — application hosting, database, and storage for uploaded files.',
           'Stripe, Inc. / Stripe Payments Europe — payment processing and invoicing. Card details go directly to Stripe; we never see or store them.',
           'Brevo (Sendinblue SAS) — transactional email delivery.',
+          'Google Ireland Limited — Google Tag Manager and Google Analytics, only where analytics consent has been given.',
         ] },
         { p: 'Any transfer outside the EU/EEA relies on Standard Contractual Clauses or another valid mechanism. We do not otherwise disclose data to third parties except where legally required.' },
       ],
@@ -610,6 +618,7 @@ const dpaSk: LegalDoc = {
           'Cloudflare, Inc. — hosting aplikácie, databáza, úložisko nahraných súborov.',
           'Stripe, Inc. / Stripe Payments Europe, Ltd. — spracovanie platieb a fakturácia.',
           'Brevo (Sendinblue SAS) — odosielanie transakčných e-mailov.',
+          'Google Ireland Limited — Google Tag Manager a Google Analytics, len ak ste udelili súhlas s analytickými cookies.',
         ] },
         { p: 'O zamýšľanej zmene alebo pridaní ďalšieho sprostredkovateľa informuje sprostredkovateľ vopred; prevádzkovateľ môže voči zmene v primeranej lehote namietať, pričom v takom prípade môže zmluvný vzťah ukončiť. Sprostredkovateľ ukladá ďalším sprostredkovateľom rovnaké povinnosti, aké vyplývajú z tejto zmluvy, a zodpovedá za ich plnenie.' },
       ],
@@ -729,6 +738,7 @@ const dpaEn: LegalDoc = {
           'Cloudflare, Inc. — application hosting, database, storage for uploaded files.',
           'Stripe, Inc. / Stripe Payments Europe, Ltd. — payment processing and invoicing.',
           'Brevo (Sendinblue SAS) — transactional email delivery.',
+          'Google Ireland Limited — Google Tag Manager and Google Analytics, only where analytics consent has been given.',
         ] },
         { p: 'The Processor will give advance notice of any intended change or addition, and the Controller may object within a reasonable period, in which case it may terminate the contract. The Processor imposes on each sub-processor the same obligations as in this agreement and remains liable for their performance.' },
       ],

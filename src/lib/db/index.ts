@@ -152,6 +152,8 @@ export interface HallRow {
   allow_feedback: number;
   min_days_advance: number;
   address: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
   pre_reservation_text: string | null;
   auto_approve: number;
   min_cancel_days: number;

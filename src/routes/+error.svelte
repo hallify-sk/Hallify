@@ -42,7 +42,7 @@
     text-align: center;
     background: var(--bg-base, #0b0e15);
     color: var(--text-primary, rgba(255, 255, 255, 0.92));
-    font-family: system-ui, -apple-system, sans-serif;
+    font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
   }
   .brand {
     display: inline-flex;

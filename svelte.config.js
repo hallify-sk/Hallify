@@ -15,11 +15,17 @@ const config = {
 			mode: 'auto',
 			directives: {
 				'default-src': ['self'],
-				'script-src': ['self'],
+				// GTM is loaded from Google only AFTER consent (see $lib/analytics).
+				// 'unsafe-inline' is required because GTM injects inline tag snippets it
+				// generates itself; there is no nonce-compatible mode for arbitrary tags.
+				// Our own scripts remain covered by 'self'.
+				'script-src': ['self', 'unsafe-inline', 'https://www.googletagmanager.com'],
 				'style-src': ['self', 'unsafe-inline'],
-				'img-src': ['self', 'data:', 'blob:'],
+				// GA4/Ads pixels are delivered as images.
+				'img-src': ['self', 'data:', 'blob:', 'https://tile.openstreetmap.org', 'https://www.googletagmanager.com', 'https://www.google-analytics.com', 'https://*.google-analytics.com'],
 				'font-src': ['self', 'data:'],
-				'connect-src': ['self'],
+				// Measurement beacons.
+				'connect-src': ['self', 'https://www.googletagmanager.com', 'https://www.google-analytics.com', 'https://*.google-analytics.com', 'https://*.analytics.google.com'],
 				'form-action': ['self'],
 				'base-uri': ['self'],
 				'object-src': ['none'],

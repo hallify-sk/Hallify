@@ -1,7 +1,34 @@
 import type { LayoutServerLoad } from './$types';
-import { dbAll } from '$lib/db/index';
+import { dbAll, dbFirst } from '$lib/db/index';
+import { env } from '$env/dynamic/private';
 import { unreadMessageCount } from '$lib/unread';
 import { unreadAnnouncementCount } from '$lib/announcements';
+
+/** Which GTM container applies to THIS surface.
+ *
+ *  On an org bubble the visitors belong to that venue, and the DPA makes the venue the
+ *  controller for their data — so only the venue's own container may run there, never
+ *  Hallify's. On the apex it is Hallify's own container. The two are never mixed, and
+ *  either may be absent (analytics is entirely opt-in). */
+async function resolveGtmId(locals: App.Locals): Promise<string | null> {
+  if (locals.domainOrg) {
+    try {
+      const row = await dbFirst<{ value: string }>(
+        locals.db,
+        "SELECT value FROM org_settings WHERE org_id = ? AND key = 'gtm'",
+        locals.domainOrg.id
+      );
+      if (!row?.value) return null;
+      const parsed = typeof row.value === 'string' ? JSON.parse(row.value) : row.value;
+      const id = (parsed as { containerId?: unknown })?.containerId;
+      return typeof id === 'string' && /^GTM-[A-Z0-9]+$/i.test(id) ? id : null;
+    } catch {
+      return null;
+    }
+  }
+  const id = env.GTM_CONTAINER_ID ?? '';
+  return /^GTM-[A-Z0-9]+$/i.test(id) ? id : null;
+}
 
 export const load: LayoutServerLoad = async ({ locals }) => {
   let unreadMessages = 0;
@@ -38,7 +65,29 @@ export const load: LayoutServerLoad = async ({ locals }) => {
     }
   }
 
+  // Analytics segmentation dimensions. Pseudonymous only — no email, no names, no
+  // org name. See the exclusion note in $lib/analytics.
+  const analyticsUser = {
+    logged_in: !!locals.user,
+    user_type: (!locals.user
+      ? 'anonymous'
+      : locals.user.is_platform_admin
+        ? 'platform_admin'
+        : locals.user.account_type === 'client'
+          ? 'client'
+          : 'organization') as 'anonymous' | 'client' | 'organization' | 'platform_admin',
+    user_id: locals.user?.id,
+    org_id: locals.currentOrg?.id ?? locals.domainOrg?.id,
+    org_role: locals.currentOrg?.role,
+    plan: locals.currentOrg?.subscription?.plan,
+    subscription_status: locals.currentOrg?.subscription?.status,
+    surface: (locals.domainOrg ? 'bubble' : 'apex') as 'apex' | 'bubble',
+    locale: locals.locale,
+  };
+
   return {
+    gtmId: await resolveGtmId(locals),
+    analyticsUser,
     user: locals.user,
     branding: locals.branding,
     currentOrg: locals.currentOrg,

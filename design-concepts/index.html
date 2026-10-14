@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="robots" content="noindex,nofollow"><title>Hallify | Design directions</title>
+  <link rel="icon" href="../static/Hallify.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="review.css">
+</head>
+<body>
+  <header class="review-bar">
+    <a class="review-brand" href="./"><img src="../static/Hallify.svg" alt=""><span>Hallify <small>Design studio</small></span></a>
+    <nav class="directions" aria-label="Design direction">
+      <button data-concept="atlas" aria-pressed="true"><span>A</span> Atlas</button>
+      <button data-concept="occasion" aria-pressed="false"><span>B</span> Occasion</button>
+      <button data-concept="spatial" aria-pressed="false"><span>C</span> Spatial</button>
+    </nav>
+    <div class="audiences" role="group" aria-label="Audience">
+      <button data-audience="customer" aria-pressed="true">For customers</button>
+      <button data-audience="business" aria-pressed="false">For businesses</button>
+    </div>
+    <button class="about-toggle" id="about" aria-label="Compare the design directions">Compare <span aria-hidden="true">↗</span></button>
+  </header>
+  <main><iframe id="concept" title="Atlas customer landing page concept" src="atlas.html?audience=customer"></iframe></main>
+  <div class="loading" id="loading" role="status">Opening concept…</div>
+  <dialog id="comparison" aria-labelledby="comparison-title">
+    <button class="close" aria-label="Close comparison">×</button>
+    <p class="eyebrow">One platform. Two entrances.</p>
+    <h1 id="comparison-title">Choose a direction.<br>Explore both sides.</h1>
+    <p class="intro">Six interactive landing concepts based on your 9 October meeting. Website copy stays in Slovak; this review layer is in English.</p>
+    <div class="comparison-grid">
+      <article><span class="letter">A</span><h2>Atlas</h2><p class="tag">Discovery first</p><p>A clear, map-led starting point. Search, filter and select venues. Operators see how discovery connects to everyday bookings.</p><p class="try">Try: map pins, guest filters, calendar dates.</p><button data-open="atlas">Explore Atlas ↗</button></article>
+      <article><span class="letter">B</span><h2>Occasion</h2><p class="tag">Inspiration first</p><p>A visual experience built around the event you want to create. The business story follows an inquiry through to a prepared venue.</p><p class="try">Try: occasion selector, inquiry preview, journey.</p><button data-open="occasion">Explore Occasion ↗</button></article>
+      <article><span class="letter">C</span><h2>Spatial</h2><p class="tag">Space first</p><p>An architectural view of Hallify. Visitors understand the room before they inquire; operators show how it can be configured.</p><p class="try">Try: 2D / 3D, room rotation, seating layouts.</p><button data-open="spatial">Explore Spatial ↗</button></article>
+    </div>
+    <div class="recommendation"><strong>Recommended starting point: Atlas.</strong><p>Make finding a suitable venue the public homepage’s main job. Use Occasion’s photography and Spatial’s room interaction deeper in a venue profile. Give operators a dedicated landing page.</p></div>
+    <p class="fine">These are local design prototypes. Venues, prices, map positions and bookings are illustrative; interactions do not send requests. <a href="STRATEGY.md" target="_blank">Read the design rationale ↗</a></p>
+  </dialog>
+  <script src="review.js"></script>
+</body>
+</html>

@@ -6,6 +6,8 @@
 	import { themeStore } from '$lib/stores/theme.svelte';
 	import { setLocale } from '$lib/i18n.svelte';
 	import { playSound } from '$lib/sounds';
+	import ConsentBanner from '$lib/components/ConsentBanner.svelte';
+	import { setUserContext } from '$lib/analytics';
 
 	const { children, data } = $props();
 
@@ -56,6 +58,12 @@
 		return () => clearInterval(timer);
 	});
 
+	// Push segmentation context on load and whenever it changes (login, org switch,
+	// plan change). setUserContext de-dupes, so navigation doesn't spam the dataLayer.
+	$effect(() => {
+		if (data.analyticsUser) setUserContext(data.analyticsUser);
+	});
+
 	const branding = $derived(data.branding);
 
 	function hexToRgb(hex: string): string {
@@ -80,7 +88,7 @@
 
 	const AUTH_PATHS = ['/app/login', '/app/register', '/app/forgot-password', '/app/reset-password', '/app/invite', '/login'];
 	const isAuthPage = $derived(AUTH_PATHS.some(p => $page.url.pathname.startsWith(p)));
-	const isLandingPage = $derived($page.url.pathname === '/');
+	const isLandingPage = $derived(['/', '/pre-prevadzkovatelov', '/priestory'].includes($page.url.pathname));
 	const isPublicHallsPage = $derived($page.url.pathname.startsWith('/halls'));
 	// Document-style pages (printable seating manifest) render without the app shell.
 	const isDocPage = $derived($page.url.pathname.endsWith('/manifest'));
@@ -106,6 +114,9 @@
 		}
 	});
 </script>
+
+<!-- Consent gate for GTM. Renders nothing when no container is configured. -->
+<ConsentBanner containerId={data.gtmId ?? null} />
 
 {#if isLandingPage || isPublicHallsPage || isDocPage || isLegalPage}
 	<div style={brandStyle}>

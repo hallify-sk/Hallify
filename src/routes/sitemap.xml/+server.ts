@@ -29,6 +29,10 @@ export const GET: RequestHandler = async ({ url, locals }) => {
   } else {
     entries.push(urlEntry(`${origin}/`, null, '1.0'));
     entries.push(urlEntry(`${origin}/?lang=en`, null, '0.9'));
+    entries.push(urlEntry(`${origin}/pre-prevadzkovatelov`, null, '0.9'));
+    entries.push(urlEntry(`${origin}/pre-prevadzkovatelov?lang=en`, null, '0.8'));
+    entries.push(urlEntry(`${origin}/priestory`, null, '0.9'));
+    entries.push(urlEntry(`${origin}/priestory?lang=en`, null, '0.8'));
     for (const p of ['/terms', '/privacy', '/dpa']) entries.push(urlEntry(`${origin}${p}`, null, '0.3'));
   }
 

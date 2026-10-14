@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
+  import { saas } from '$lib/analytics';
 	import { enhance } from '$app/forms';
 	import { t } from '$lib/i18n.svelte';
 	import AuthShell from '$lib/components/AuthShell.svelte';
@@ -6,6 +8,8 @@
 
 	interface Props { form: ActionData; }
 	const { form }: Props = $props();
+
+  onMount(() => saas.signUpStarted());
 </script>
 
 <svelte:head><title>{t.auth.createAccount} – Hallify</title></svelte:head>
