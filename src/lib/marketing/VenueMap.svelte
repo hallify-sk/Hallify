@@ -1,11 +1,12 @@
 <script lang="ts">
   import Icon from './Icon.svelte';
+  import MapLayers from './MapLayers.svelte';
   import { getContext, onMount, tick, untrack } from 'svelte';
   import type * as Leaflet from 'leaflet';
   import 'leaflet/dist/leaflet.css';
   import type { MapCenter } from './discovery';
   import { userLocation, locateUser } from './user-location.svelte';
-  import { mapPreferences, loadMapPreferences, saveMapStyle, type MapStyle } from './map-preferences.svelte';
+  import { mapPreferences, loadMapPreferences } from './map-preferences.svelte';
 
   export interface MapPoint { id: string; name: string; latitude: number; longitude: number; label?: string; demo?: boolean }
   let { points = [], selected = null, selectionRevision = 0, onselect, onpick, onlocation, english = false, fitKey = '', areaCenter = null, radiusKm = 50, explorerHref = '', theme, fullScreen = false }: {
@@ -152,7 +153,7 @@
   <div bind:this={container} class="venue-map-surface" aria-label={english ? 'Interactive venue map' : 'Interaktívna mapa priestorov'}></div>
   {#if !onpick}<div class="map-heading"><span>{areaCenter ? `${english ? 'Around you' : 'Vo vašom okolí'} / ${radiusKm} km` : (english ? 'Find your venue' : 'Nájdite svoj priestor')}</span><small>{points.length} {english ? 'on the map' : 'na mape'}</small></div>{/if}
   {#if explorerHref}<a class="map-expand" href={explorerHref}>{english ? 'All venues' : 'Všetky priestory'} <span aria-hidden="true"><Icon name="expand" /></span></a>{/if}
-  <div class="map-style-picker"><label><span class="sr-only">{english ? 'Map theme' : 'Štýl mapy'}</span><span class="select-wrap"><select value={mapPreferences.style} onchange={(event) => saveMapStyle(event.currentTarget.value as MapStyle)}><option value="street">{english ? 'Street map' : 'Farebná mapa'}</option><option value="light">{english ? 'Light map' : 'Svetlá mapa'}</option><option value="dark">{english ? 'Dark map' : 'Tmavá mapa'}</option><option value="auto">{english ? 'Match website' : 'Podľa stránky'}</option></select><Icon name="chevron" /></span></label></div>
+  <MapLayers {english} websiteTheme={mapTheme} raised={!!selected && !onpick} />
   <div class="map-actions" aria-label={english ? 'Map controls' : 'Ovládanie mapy'}>
     {#if !onpick}<button type="button" class="location-control" class:location-active={!!areaCenter} disabled={userLocation.status === 'loading'} onclick={useLocation} aria-label={english ? `Use my location and show a ${radiusKm} km area` : `Použiť moju polohu a zobraziť okolie ${radiusKm} km`} title={english ? 'Use my location' : 'Použiť moju polohu'}><Icon name="locate" /></button>{/if}
     <button type="button" onclick={fit} title={english ? 'Show all venues' : 'Zobraziť všetky priestory'} aria-label={english ? 'Reset map view' : 'Obnoviť pohľad na mapu'}><Icon name="expand" /></button>
@@ -183,14 +184,7 @@
   .map-actions button{width:36px;height:36px;display:grid;place-items:center;border:1px solid var(--map-border);background:var(--map-panel);color:var(--map-ink);border-radius:3px;font-family:inherit;font-size:21px;cursor:pointer}.map-actions button:disabled{opacity:.45;cursor:default}.map-actions button.location-active{color:var(--map-accent);border-color:var(--map-accent)}.zoom-controls{display:grid}.zoom-controls button+button{border-top:0;border-radius:0 0 3px 3px}.zoom-controls button:first-child{border-radius:3px 3px 0 0}
   .map-message{position:absolute;top:92px;left:20px;right:70px;z-index:1000;padding:10px 13px;border:1px solid var(--map-border);background:var(--map-panel);color:var(--map-muted);border-radius:3px;font-size:10px;line-height:1.7}.map-message button{background:none;border:0;color:var(--map-accent);font-size:10px;font-weight:600;cursor:pointer;margin-left:8px}
   .picker .map-message{top:15px}.picker .map-actions{bottom:35px}
-  button:focus-visible,a:focus-visible,select:focus-visible{outline:3px solid var(--map-accent);outline-offset:3px}
-  .map-style-picker{position:absolute;right:20px;top:20px;width:142px;z-index:1000}
-  .with-expand .map-style-picker{top:80px}
-  .map-style-picker .select-wrap{display:block;position:relative}
-  .map-style-picker select{appearance:none;-webkit-appearance:none;display:block;width:100%;min-height:36px;padding:9px 31px 9px 12px;border:1px solid var(--map-border);border-radius:3px;background:var(--map-panel);color:var(--map-ink);font:400 10px/1.5 Inter,sans-serif;cursor:pointer}
-  .map-style-picker option{background:var(--map-panel);color:var(--map-ink)}
-  .map-style-picker .select-wrap>:global(.ui-icon){position:absolute;right:9px;top:50%;transform:translateY(-50%);color:var(--map-muted);pointer-events:none}
-  .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+  button:focus-visible,a:focus-visible{outline:3px solid var(--map-accent);outline-offset:3px}
   .with-expand .map-message{top:126px}
   .trackpad-hint{position:absolute;left:110px;bottom:10px;z-index:1000;font-size:8px;line-height:1.6;color:var(--map-muted);background:var(--map-panel);padding:4px 7px;border-radius:3px;max-width:calc(100% - 300px);margin:0;pointer-events:none}
   /* Filter individual images, not the entire transformed tile pane. */
@@ -207,5 +201,5 @@
   :global(.venue-map-pin.is-selected .venue-map-pin-inner::after){border-color:#f05ca1}
   :global(.venue-map-pin:focus-visible){outline:3px solid var(--map-accent);outline-offset:4px;border-radius:3px}
   @media(max-width:480px){.map-heading{left:12px;top:12px;padding:10px;max-width:calc(100% - 150px)}.map-expand{right:12px;top:12px;padding:11px 10px;gap:10px;font-size:9px}.map-actions{right:12px}.map-message{top:80px;left:12px}}
-  @media(max-width:480px){.map-style-picker{top:12px;right:12px;width:127px}.with-expand .map-style-picker{top:73px}.map-heading{max-width:calc(100% - 160px)}.map-actions{grid-template-columns:repeat(2,32px);gap:5px;bottom:35px}.map-actions button{width:32px;height:32px}.map-actions .trackpad-control{display:none}.zoom-controls{display:flex;grid-column:span 2}.zoom-controls button+button{border-top:1px solid var(--map-border);border-left:0}.trackpad-hint{display:none}.with-expand .map-message{top:117px}}
+  @media(max-width:480px){.map-heading{max-width:calc(100% - 160px)}.map-actions{grid-template-columns:repeat(2,32px);gap:5px;bottom:35px}.map-actions button{width:32px;height:32px}.map-actions .trackpad-control{display:none}.zoom-controls{display:flex;grid-column:span 2}.zoom-controls button+button{border-top:1px solid var(--map-border);border-left:0}.trackpad-hint{display:none}.with-expand .map-message{top:117px}}
 </style>

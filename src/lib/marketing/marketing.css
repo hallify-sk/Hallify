@@ -2691,3 +2691,6 @@
 @media(max-width:600px){.marketing .select-wrap>select{font-size:12px;min-height:40px}.marketing .explorer-search .select-wrap>select{font-size:11px}.marketing .search-row{gap:13px}.marketing .discovery-group-heading{font-size:17px}.marketing .workflow-facts label{gap:11px}}
 
 .marketing .nearby-status{font-size:10px;color:var(--muted);line-height:1.5}
+
+.marketing .map-selection-hint{left:108px;max-width:calc(100% - 190px)}
+@media(max-width:600px){.marketing .map-selection-hint{left:86px;max-width:calc(100% - 156px)}}

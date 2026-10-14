@@ -53,9 +53,9 @@
 
 <section class="discovery-hero wrap">
   <div class="hero-copy">
-    <p class="eyebrow">{en ? 'Where great gatherings begin' : 'Miesto, kde sa začínajú stretnutia'}</p>
-    <h1>{en ? 'Big plans.' : 'Veľké plány.'}<br><span>{en ? 'The right place.' : 'Správne miesto.'}</span></h1>
-    <p class="lead">{en ? 'Find a venue with room for your guests and everything you have in mind.' : 'Nájdite priestor, do ktorého sa zmestia vaši hostia aj vaše predstavy.'}</p>
+    <p class="eyebrow">{en ? 'Discover event venues' : 'Sály a priestory na podujatia'}</p>
+    <h1>{en ? 'Find a venue' : 'Nájdite priestor'}<br><span>{en ? 'for your event.' : 'pre svoju akciu.'}</span></h1>
+    <p class="lead">{en ? 'Venues for weddings, celebrations and business events. Compare locations, capacity and amenities on the map.' : 'Priestory na svadby, oslavy a firemné podujatia. Porovnajte ich na mape podľa miesta, kapacity a vybavenia.'}</p>
     <form class="search-form" method="GET" action="/priestory" onsubmit={search}>
       {#if floorplanOnly}<input type="hidden" name="floorplan" value="1">{/if}
       <input type="hidden" name="demo" value={demo ? '1' : '0'}>

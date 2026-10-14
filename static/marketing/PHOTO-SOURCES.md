@@ -9,3 +9,5 @@ Downloaded from Unsplash's image CDN on 2026-10-13. Files have been visually ins
 Source provider and license: https://unsplash.com/license
 
 Existing brand assets: `static/Hallify.svg`, `static/fonts/inter-variable-latin.woff2`, `static/fonts/inter-variable-latin-ext.woff2`.
+
+Map-style preview: OpenStreetMap raster tile (z11), © OpenStreetMap contributors, https://www.openstreetmap.org/copyright. Used beside the map’s persistent attribution.
