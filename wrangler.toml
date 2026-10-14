@@ -18,7 +18,7 @@ name = "hallify"
 main = ".svelte-kit/cloudflare/_worker.js"
 # Set explicitly: without it, any login with access to more than one account makes
 # every non-interactive wrangler command fail with "More than one account available".
-# account_id = "<your Cloudflare account id>"
+account_id = "46d0e242dd6f2bba5cc3de0a393b8eb6"
 compatibility_date = "2026-06-13"
 compatibility_flags = ["nodejs_compat"]
 
