@@ -34,7 +34,7 @@ npm run migrate:prod
 npm run deploy:prod
 ```
 
-No remote migration or deployment was performed. Add coordinates to published venue profiles to populate their markers.
+The production redesign is released through the existing Cloudflare Workers Builds integration on pushes to `main`. The build account is explicitly set in Wrangler configuration. `.npmrc` preserves the peer-dependency install mode used by the lockfile. Add coordinates to published venue profiles to populate their markers.
 
 Leaflet installation uses `--legacy-peer-deps` because the repository already combines adapter-cloudflare 4 with Wrangler 4, while that adapter declares a Wrangler 3 peer requirement. No adapter or Wrangler upgrade was included.
 
@@ -42,7 +42,7 @@ Leaflet installation uses `--legacy-peer-deps` because the repository already co
 
 - Svelte/TypeScript check: zero errors, existing application warnings remain.
 - Production build succeeds.
-- All 51 tests pass, including coordinate validation, geodesic demo positions within 50 km, longitude wrapping, combined discovery filters, partner-only eligibility and nearest-three ranking.
+- All 57 tests pass, including coordinate validation, geodesic demo positions within 50 km, longitude wrapping, combined discovery filters, partner-only eligibility and nearest-three ranking.
 - SQLite migration-chain and visibility checks confirm private, plan-locked and suspended records are excluded.
 - Homepage, explorer and business routes return HTTP 200 in SK and EN. Explorer and business pages appear in the sitemap. Geolocation is enabled for self only on the homepage and explorer; other routes retain their denial policy.
 - Browser review was blocked by the browser permission policy because local preview access was declined. Responsive rules and interactions were reviewed in source; visual rendering and live tile loading still need browser review.
@@ -70,3 +70,9 @@ Select elements now share styled fields and chevrons, marketing actions use Tabl
 The homepage “Nájsť priestor” form navigates to `/priestory`, preserving the city/venue query, guest count, floorplan filter, demo visibility and language. The “Všetky priestory” map link uses the same selection. The destination initializes its filters from the URL, including on direct visits or reloads.
 
 The “V mojom okolí” / “Around me” button toggles the nearby radius filter on and off. Disabling it restores venues outside the radius, removes the radius overlay and clears the active control styling while retaining the approximate location in memory. Trackpad panning uses a 1.8× movement multiplier; pinch zoom uses Leaflet’s 40 ms debounce and 60 pixels per zoom level.
+
+## Production schema rollout
+
+Public discovery has a narrowly scoped bootstrap for migrations 0004 and 0005. Only when the public query reports one of the three new columns missing, the server checks the existing halls/organizations schema and applies the missing additive columns, index and Wrangler migration records through its existing D1 binding in a transactional batch. Existing records are not changed, coordinates default to null, and partner eligibility defaults to false. Simultaneous requests retry after a duplicate-column race. Normal requests use the full directory query directly without schema writes.
+
+If schema administration fails, the legacy-safe directory query keeps existing venues visible without fabricated coordinates or partner status. Unrelated query failures are still surfaced. `X-Hallify-Directory-Ready: 1` on the customer and explorer responses confirms the full schema query succeeded; `0` identifies the compatibility fallback. Release tests cover data preservation, constraints, migration tracking, repeat execution and concurrent bootstrap. No general-purpose database-administration endpoint is exposed.

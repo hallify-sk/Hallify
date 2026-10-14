@@ -2,7 +2,7 @@ import { redirect } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 import { publicVenues } from '$lib/server/public-venues';
 
-export const load: PageServerLoad = async ({ locals, url }) => {
+export const load: PageServerLoad = async ({ locals, url, setHeaders }) => {
   // On a bubble (org subdomain / custom domain) hooks already redirect "/" → /halls,
   // so this only runs on the main app. Staff keep their dashboard shortcut;
   // client accounts can discover public venues here.
@@ -14,7 +14,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
   const q = (url.searchParams.get('q') ?? '').trim().slice(0, 150);
   const requestedGuests = Number(url.searchParams.get('guests') ?? 0);
   const guests = Number.isInteger(requestedGuests) && requestedGuests >= 0 && requestedGuests <= 10000 ? requestedGuests : 0;
-  const halls = await publicVenues(locals.db);
+  const halls = await publicVenues(locals.db, ready => setHeaders({ 'x-hallify-directory-ready': ready ? '1' : '0' }));
 
   return {
     lang,
