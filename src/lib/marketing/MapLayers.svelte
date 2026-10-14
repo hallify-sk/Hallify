@@ -51,16 +51,16 @@
 </div>
 
 <style>
-  .map-layers{position:absolute;left:16px;bottom:46px;z-index:1100;font-family:Inter,Arial,sans-serif;color:var(--map-ink)}
-  .map-layers.raised{bottom:180px}
+  .map-layers{position:absolute;left:16px;bottom:34px;z-index:1100;font-family:Inter,Arial,sans-serif;color:var(--map-ink)}
+  .map-layers.raised{bottom:124px}
   button{font-family:inherit;cursor:pointer;color:inherit}
-  .layers-trigger{display:flex;flex-direction:column;align-items:center;gap:5px;width:72px;min-height:80px;padding:5px 5px 7px;background:var(--map-panel);border:1px solid var(--map-border);border-radius:5px;box-shadow:0 2px 8px #11151120;font-size:10px;line-height:1.2;font-weight:600}
+  .layers-trigger{display:flex;flex-direction:column;align-items:center;gap:5px;width:52px;min-height:59px;padding:4px 4px 5px;background:var(--map-panel);border:1px solid var(--map-border);border-radius:5px;box-shadow:0 2px 8px #11151120;font-size:10px;line-height:1.2;font-weight:600}
   .layers-trigger[aria-expanded=true]{border-color:var(--map-accent)}
   .layer-preview{position:relative;display:block;width:100%;height:57px;border-radius:3px;background:#e8e9e5 url('/marketing/map-preview.png') center/cover;overflow:hidden;isolation:isolate}
   .layer-preview::before{content:'';position:absolute;inset:0;background:inherit;z-index:-1}
   .layer-preview[data-style=light]::before{filter:grayscale(1) brightness(1.03) contrast(1.12)}
   .layer-preview[data-style=dark]::before{filter:grayscale(1) invert(1) brightness(.92) contrast(1.04)}
-  .trigger-preview{height:49px}
+  .trigger-preview{height:30px}
   .layers-symbol{display:grid;place-items:center;position:absolute;inset:0;color:#fff;background:#10181038;text-shadow:none}
   .layers-symbol :global(svg){filter:drop-shadow(0 1px 2px #0008)}
   .layers-panel{position:absolute;left:0;bottom:calc(100% + 10px);width:280px;padding:15px;background:var(--map-panel);border:1px solid var(--map-border);border-radius:5px;box-shadow:0 10px 30px #11151125;outline:none}
@@ -83,5 +83,5 @@
   .layers-auto input:checked+.switch-track::after{transform:translateX(14px);background:var(--map-panel)}
   button:focus-visible,.layers-auto input:focus-visible+.switch-track{outline:2px solid var(--map-accent);outline-offset:3px}
   @media(prefers-reduced-motion:reduce){.switch-track::after{transition:none}}
-  @media(max-width:600px){.map-layers{left:12px;bottom:40px}.map-layers.raised{bottom:155px}.layers-trigger{width:62px;min-height:67px;font-size:9px}.trigger-preview{height:39px}.layers-panel{position:fixed;left:12px;right:12px;bottom:16px;width:auto;max-width:320px;padding:12px}}
+  @media(max-width:600px){.map-layers{left:12px;bottom:30px}.map-layers.raised{bottom:116px}.layers-trigger{width:48px;min-height:54px;font-size:9px}.trigger-preview{height:27px}.layers-panel{position:fixed;left:12px;right:12px;bottom:16px;width:auto;max-width:320px;padding:12px}}
 </style>

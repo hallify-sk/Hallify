@@ -24,7 +24,7 @@
   const visible = $derived(filterVenues(allVenues, { query, guests, floorplan: floorplanOnly, booking: false }));
   const featured = $derived(featuredVenues(visible, userLocation.center ?? DEFAULT_CENTER));
   const others = $derived(visible.filter(venue => !featured.some(item => item.id === venue.id)));
-  const active = $derived(visible.find(h => h.id === activeId) ?? visible.find(h => hasCoordinates(h)) ?? visible[0] ?? null);
+  const active = $derived(visible.find(h => h.id === activeId) ?? null);
   const points = $derived(visible.filter(h => hasCoordinates(h)).map(h => ({ id: h.id, name: h.name, latitude: h.latitude!, longitude: h.longitude!, label: `${h.max_people} ${en ? 'guests' : 'hostí'}`, demo: h.demo })));
   const explorerHref = $derived(`/priestory?${new URLSearchParams({ ...(query.trim() ? { q: query.trim() } : {}), ...(guests ? { guests: String(guests) } : {}), ...(floorplanOnly ? { floorplan: '1' } : {}), demo: demo ? '1' : '0', ...(en ? { lang: 'en' } : {}) })}`);
   function openVenue(venue: PublicVenue) { if (venue.demo) preview.open(venue); else void goto(venueHref(venue)); }
@@ -71,7 +71,7 @@
   </div>
   <div class="map-panel" id="home-map" aria-label={en ? 'Venue locations' : 'Polohy priestorov'}>
     <VenueMap {points} {selectionRevision} selected={active?.id} onselect={(id) => { activeId = id; selectionRevision += 1; }} onlocation={() => query = ''} english={en} fitKey={query} areaCenter={userLocation.center} {explorerHref} />
-    {#if active}<SelectedVenue venue={active} english={en} onopen={openVenue} />{/if}
+    {#if active}<SelectedVenue venue={active} english={en} onopen={openVenue} onclose={() => activeId = null} />{/if}
   </div>
 </section>
 

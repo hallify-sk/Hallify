@@ -1,10 +1,14 @@
 <script lang="ts">
   import Icon from './Icon.svelte';
   import type { PublicVenue } from './types';
-  let { venue, english = false, onopen }: { venue: PublicVenue; english?: boolean; onopen: (venue: PublicVenue) => void } = $props();
+  let { venue, english = false, onopen, onclose }: { venue: PublicVenue; english?: boolean; onopen: (venue: PublicVenue) => void; onclose?: () => void } = $props();
+  let imageFailed = $state(false);
+  $effect(() => { venue.cover_image_url; imageFailed = false; });
 </script>
 <div class="map-venue-detail" aria-live="polite">
-  {#if venue.cover_image_url}<img src={venue.cover_image_url} alt="" width="78" height="78">{/if}
-  <div class="map-venue-copy"><p class="map-venue-status">{venue.demo ? (english ? 'Demo venue' : 'Ukážkový priestor') : (venue.has_floorplan ? (english ? 'With a floorplan' : 'S pôdorysom') : (english ? 'Venue profile' : 'Profil priestoru'))}</p><h3>{venue.name}</h3><p>{venue.max_people} {english ? 'guests' : 'hostí'} · {venue.pricing_info ? (english ? 'Pricing available' : 'Cenové informácie') : (english ? 'Price on request' : 'Cena na dopyt')}</p></div>
-  <button type="button" onclick={() => onopen(venue)} aria-label={`${english ? 'Open' : 'Otvoriť'} ${venue.name}`}><Icon /></button>
+  <button type="button" class="map-venue-summary" onclick={() => onopen(venue)} aria-label={`${english ? 'Open venue details:' : 'Otvoriť detail priestoru:'} ${venue.name}`}>
+    {#if venue.cover_image_url && !imageFailed}<img src={venue.cover_image_url} onerror={() => imageFailed = true} alt="" width="52" height="52">{:else}<span class="map-venue-placeholder" aria-hidden="true"><Icon name="pin" size={22} /></span>{/if}
+    <span class="map-venue-copy">{#if venue.demo}<small>{english ? 'Demo venue' : 'Ukážkový priestor'}</small>{/if}<strong>{venue.name}</strong><span>{venue.max_people} {english ? 'guests' : 'hostí'}{venue.has_floorplan ? (english ? ' · Floorplan' : ' · Pôdorys') : ''}</span></span>
+  </button>
+  {#if onclose}<button type="button" class="map-venue-close" onclick={onclose} aria-label={english ? 'Close selected venue' : 'Zavrieť vybraný priestor'}><Icon name="close" size={16} /></button>{/if}
 </div>

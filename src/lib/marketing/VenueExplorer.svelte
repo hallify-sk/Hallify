@@ -92,6 +92,6 @@
       {#if visible.some(v => !hasCoordinates(v))}<p class="fine">{en ? 'Venues without a saved position appear in the list.' : 'Priestory bez nastavenej polohy nájdete v zozname.'}</p>{/if}
     </div>
   </aside>
-  <section class="explorer-map" aria-label={en ? 'Venue map' : 'Mapa priestorov'}><VenueMap fullScreen {points} {selectionRevision} selected={selected?.id} onselect={(id) => select(id,true)} onlocation={() => { nearby = true; query = ''; }} english={en} fitKey={query} areaCenter={nearby ? userLocation.center : null} radiusKm={radius} />{#if selected}<SelectedVenue venue={selected} english={en} onopen={open} />{:else}<div class="map-selection-hint">{en ? 'Choose a pin or a venue from the list.' : 'Vyberte bod na mape alebo priestor zo zoznamu.'}</div>{/if}</section>
+  <section class="explorer-map" aria-label={en ? 'Venue map' : 'Mapa priestorov'}><VenueMap fullScreen {points} {selectionRevision} selected={selected?.id} onselect={(id) => select(id,true)} onlocation={() => { nearby = true; query = ''; }} english={en} fitKey={query} areaCenter={nearby ? userLocation.center : null} radiusKm={radius} />{#if selected}<SelectedVenue venue={selected} english={en} onopen={open} onclose={() => selectedId = null} />{/if}</section>
 </div>
 <VenuePreview bind:this={preview} english={en} />

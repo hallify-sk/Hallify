@@ -1489,63 +1489,6 @@
   text-align: left;
   white-space: nowrap;
 }
-.marketing .map-venue-detail {
-  position: absolute;
-  z-index: 1000;
-  left: 18px;
-  right: 66px;
-  bottom: 42px;
-  display: flex;
-  align-items: center;
-  gap: 15px;
-  padding: 13px;
-  border: 1px solid var(--line);
-  background: var(--surface);
-  color: var(--ink);
-  border-radius: 3px;
-  box-shadow: 0 8px 20px #10181025;
-}
-.marketing .map-venue-detail>img {
-  width: 68px;
-  height: 68px;
-  object-fit: cover;
-  border-radius: 2px;
-  flex-shrink: 0;
-}
-.marketing .map-venue-copy {
-  min-width: 0;
-  flex: 1;
-}
-.marketing .map-venue-status {
-  font-size: 8px;
-  color: var(--accent-ink);
-  margin-bottom: 7px;
-}
-.marketing .map-venue-copy h3 {
-  font-size: 16px;
-  letter-spacing: -.035em;
-  font-weight: 550;
-  margin: 0 0 7px;
-  line-height: 1.15;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.marketing .map-venue-copy>p:last-child {
-  font-size: 9px;
-  color: var(--muted);
-  line-height: 1.6;
-}
-.marketing .map-venue-detail>button {
-  width: 33px;
-  height: 33px;
-  border: 1px solid var(--line);
-  border-radius: 3px;
-  background: var(--subtle);
-  color: var(--accent);
-  font-size: 19px;
-  flex-shrink: 0;
-}
 .marketing .venue-preview-dialog .preview-success {
   margin-bottom: 20px;
 }
@@ -1862,25 +1805,6 @@
   min-height: 0;
   position: relative;
   overflow: hidden;
-}
-.marketing .explorer-map .map-venue-detail {
-  max-width: 460px;
-  left: 25px;
-  right: 65px;
-  bottom: 40px;
-}
-.marketing .map-selection-hint {
-  position: absolute;
-  z-index: 1000;
-  left: 20px;
-  bottom: 40px;
-  background: var(--surface);
-  border: 1px solid var(--line);
-  padding: 12px 16px;
-  color: var(--muted);
-  font-size: 10px;
-  border-radius: 3px;
-  max-width: calc(100% - 90px);
 }
 .marketing .explorer-empty {
   padding: 20px 9px;
@@ -2526,27 +2450,6 @@
     gap: 4px;
     padding: 0;
   }
-  .marketing .explorer-map .map-venue-detail {
-    left: 12px;
-    bottom: 35px;
-    padding: 10px;
-    gap: 10px;
-  }
-  .marketing .map-venue-detail>img {
-    height: 50px;
-    width: 50px;
-  }
-  .marketing .map-venue-copy h3 {
-    font-size: 14px;
-  }
-  .marketing .map-venue-copy>p:last-child {
-    font-size: 8px;
-  }
-  .marketing .map-selection-hint {
-    font-size: 9px;
-    padding: 10px 12px;
-    bottom: 32px;
-  }
   .marketing .profile-comparison {
     grid-template-columns: 1fr;
     gap: 22px;
@@ -2613,31 +2516,6 @@
     flex-wrap: wrap;
     gap: 7px;
   }
-  .marketing .map-venue-detail {
-    left: 12px;
-    right: 58px;
-    padding: 10px;
-    gap: 10px;
-  }
-  .marketing .map-venue-detail>img {
-    width: 46px;
-    height: 46px;
-  }
-  .marketing .map-venue-copy h3 {
-    font-size: 13px;
-  }
-  .marketing .map-venue-status {
-    font-size: 7px;
-    margin-bottom: 5px;
-  }
-  .marketing .map-venue-copy>p:last-child {
-    font-size: 8px;
-  }
-  .marketing .map-venue-detail>button {
-    width: 27px;
-    height: 27px;
-    font-size: 17px;
-  }
   .marketing .partner-capabilities {
     grid-template-columns: repeat(2,1fr);
     padding: 23px;
@@ -2691,6 +2569,17 @@
 @media(max-width:600px){.marketing .select-wrap>select{font-size:12px;min-height:40px}.marketing .explorer-search .select-wrap>select{font-size:11px}.marketing .search-row{gap:13px}.marketing .discovery-group-heading{font-size:17px}.marketing .workflow-facts label{gap:11px}}
 
 .marketing .nearby-status{font-size:10px;color:var(--muted);line-height:1.5}
+@media(max-width:600px){}
 
-.marketing .map-selection-hint{left:108px;max-width:calc(100% - 190px)}
-@media(max-width:600px){.marketing .map-selection-hint{left:86px;max-width:calc(100% - 156px)}}
+.marketing .map-venue-detail{position:absolute;z-index:1000;left:16px;bottom:34px;width:min(340px,calc(100% - 88px));border:1px solid var(--line);border-radius:4px;background:var(--surface);color:var(--ink);overflow:hidden;box-shadow:0 3px 12px #10181015}
+.marketing .map-venue-summary{display:flex;align-items:center;gap:12px;width:100%;padding:10px 43px 10px 10px;border:0;background:transparent;color:inherit;text-align:left;cursor:pointer}
+.marketing .map-venue-summary>img,.marketing .map-venue-placeholder{width:52px;height:52px;object-fit:cover;border-radius:3px;flex-shrink:0}
+.marketing .map-venue-placeholder{display:grid;place-items:center;background:var(--subtle);color:var(--muted)}
+.marketing .map-venue-copy{display:flex;flex-direction:column;gap:5px;min-width:0}
+.marketing .map-venue-copy strong{font-size:15px;line-height:1.3;font-weight:550;white-space:nowrap;text-overflow:ellipsis;overflow:hidden}
+.marketing .map-venue-copy>span{font-size:10px;line-height:1.4;color:var(--muted)}
+.marketing .map-venue-copy small{font-size:9px;color:var(--accent-ink)}
+.marketing .map-venue-summary:hover strong{text-decoration:underline;text-underline-offset:3px}
+.marketing .map-venue-close{position:absolute;right:7px;top:50%;transform:translateY(-50%);display:grid;place-items:center;width:30px;height:30px;padding:0;border:0;border-radius:3px;background:transparent;color:var(--muted);cursor:pointer}
+.marketing .map-venue-close:hover{background:var(--subtle);color:var(--ink)}
+@media(max-width:600px){.marketing .map-venue-detail{left:12px;bottom:30px;width:calc(100% - 72px)}.marketing .map-venue-copy strong{font-size:14px}}
