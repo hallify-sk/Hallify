@@ -20,15 +20,28 @@ import type { Locale } from './i18n';
 export const OPERATOR = {
   legalName: 'Richard Marcinčák',
   address: 'Teplička 124, 052 01 Spišská Nová Ves, Slovensko',
+  /** Same address, English country name — it is read inside English sentences,
+   *  where "Slovensko" reads as a typo. Street and town are proper nouns and
+   *  stay as they are. */
+  addressEn: 'Teplička 124, 052 01 Spišská Nová Ves, Slovakia',
+  /** IČO — check digit verified. */
   companyId: '57644420',
-  vatId: '[[ DIČ ]]',
+  /** DIČ. Named taxId, not vatId: the operator is NOT registered for VAT, and a
+   *  DIČ is not an IČ DPH. Conflating them in a published document would state
+   *  something untrue about the operator's tax status. */
+  taxId: '1131175749',
   /** Sole trader, so this is the TRADE register (živnostenský), not the commercial
    *  register. Phrased as a noun ("Zápis: …") rather than a participle so the
    *  sentence does not have to agree in gender with the operator's name. */
-  registerEntry: '[[ Živnostenský register Okresného úradu …, č. … ]]',
-  contactEmail: '[[ contact@hallify.sk ]]',
-  privacyEmail: '[[ privacy@hallify.sk ]]',
+  registerEntry: 'Okresný úrad Spišská Nová Ves, odbor živnostenského podnikania, číslo živnostenského registra 860-34172',
+  contactEmail: 'admin@hallify.sk',
+  privacyEmail: 'admin@hallify.sk',
 } as const;
+
+/** The operator is not a VAT payer, so listed prices are final and no VAT is added.
+ *  Stated explicitly in both documents: silence would leave a buyer to assume VAT
+ *  is either included or about to be added. */
+export const OPERATOR_VAT_REGISTERED = false;
 
 /** Last substantive revision. Bump when the text changes. */
 export const LEGAL_UPDATED = '2026-08-01';
@@ -59,7 +72,8 @@ const termsSk: LegalDoc = {
     {
       heading: '1. Prevádzkovateľ',
       blocks: [
-        { p: `Službu Hallify („služba“) prevádzkuje ${OPERATOR.legalName}, miesto podnikania ${OPERATOR.address}, IČO ${OPERATOR.companyId}, DIČ ${OPERATOR.vatId}. Zápis: ${OPERATOR.registerEntry} („prevádzkovateľ“, „my“).` },
+        { p: `Službu Hallify („služba“) prevádzkuje ${OPERATOR.legalName}, miesto podnikania ${OPERATOR.address}, IČO ${OPERATOR.companyId}, DIČ ${OPERATOR.taxId}. Zápis: ${OPERATOR.registerEntry} („prevádzkovateľ“, „my“).` },
+        { p: 'Prevádzkovateľ nie je platiteľom DPH. Uvedené ceny sú konečné.' },
         { p: `Kontakt: ${OPERATOR.contactEmail}.` },
       ],
     },
@@ -178,7 +192,8 @@ const termsEn: LegalDoc = {
     {
       heading: '1. Who we are',
       blocks: [
-        { p: `Hallify (the "Service") is operated by ${OPERATOR.legalName}, a sole trader with place of business at ${OPERATOR.address}, business ID (IČO) ${OPERATOR.companyId}, tax ID (DIČ) ${OPERATOR.vatId}. Registration: ${OPERATOR.registerEntry} ("we", "us").` },
+        { p: `Hallify (the "Service") is operated by ${OPERATOR.legalName}, a sole trader with place of business at ${OPERATOR.addressEn}, business ID (IČO) ${OPERATOR.companyId}, tax ID (DIČ) ${OPERATOR.taxId}. Registration: ${OPERATOR.registerEntry} ("we", "us").` },
+        { p: 'The operator is not registered for VAT. Listed prices are final and no VAT is added.' },
         { p: `Contact: ${OPERATOR.contactEmail}.` },
       ],
     },
@@ -423,7 +438,7 @@ const privacyEn: LegalDoc = {
     {
       heading: '1. Controller',
       blocks: [
-        { p: `${OPERATOR.legalName}, ${OPERATOR.address}, company ID ${OPERATOR.companyId}.` },
+        { p: `${OPERATOR.legalName}, ${OPERATOR.addressEn}, company ID ${OPERATOR.companyId}.` },
         { p: `Data protection contact: ${OPERATOR.privacyEmail}.` },
       ],
     },
@@ -674,7 +689,7 @@ const dpaEn: LegalDoc = {
     {
       heading: '1. Parties and purpose',
       blocks: [
-        { p: `This agreement is made between the organization using Hallify (the "Controller") and ${OPERATOR.legalName}, ${OPERATOR.address}, company ID ${OPERATOR.companyId} (the "Processor").` },
+        { p: `This agreement is made between the organization using Hallify (the "Controller") and ${OPERATOR.legalName}, ${OPERATOR.addressEn}, company ID ${OPERATOR.companyId} (the "Processor").` },
         { p: 'It forms an integral annex to the Terms of Service and is entered into when the Controller begins using the Service. It governs the processing of personal data the Controller puts into the Service, under Article 28 of Regulation (EU) 2016/679 (GDPR).' },
         { p: 'In case of conflict with the Terms of Service, this agreement prevails on data protection matters.' },
       ],
@@ -832,4 +847,6 @@ export const LEGAL_PATHS: Record<LegalKind, string> = {
  *  Checks EVERY field, not just the name: filling the name alone used to switch the
  *  banner off while `[[ DIČ ]]` was still rendering verbatim in the published
  *  documents — the one state in which the warning matters most. */
-export const LEGAL_IS_DRAFT = Object.values(OPERATOR).some((v) => v.includes('[['));
+export const LEGAL_IS_DRAFT = Object.values(OPERATOR).some(
+  (v) => typeof v === 'string' && v.includes('[[')
+);
