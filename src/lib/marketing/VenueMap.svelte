@@ -9,10 +9,15 @@
   import { mapPreferences, loadMapPreferences } from './map-preferences.svelte';
 
   export interface MapPoint { id: string; name: string; latitude: number; longitude: number; label?: string; demo?: boolean }
-  let { points = [], selected = null, selectionRevision = 0, onselect, onpick, onlocation, english = false, fitKey = '', areaCenter = null, radiusKm = 50, explorerHref = '', theme, fullScreen = false }: {
+  let { points = [], selected = null, selectionRevision = 0, onselect, onpick, onlocation, english = false, fitKey = '', areaCenter = null, areaLabel = null, radiusKm = 50, explorerHref = '', theme, fullScreen = false }: {
     points?: MapPoint[]; selected?: string | null; onselect?: (id: string) => void;
     onpick?: (lat: number, lng: number) => void; english?: boolean; fitKey?: string;
-    areaCenter?: MapCenter | null; radiusKm?: number; explorerHref?: string; theme?: 'light' | 'dark';
+    areaCenter?: MapCenter | null;
+    /** Names the place the area is centred on, when it came from a search rather
+     *  than the visitor's own position. Without it the badge claims "around you"
+     *  even when the map is centred on a city they typed. */
+    areaLabel?: string | null;
+    radiusKm?: number; explorerHref?: string; theme?: 'light' | 'dark';
     selectionRevision?: number;
     onlocation?: (center: MapCenter) => void;
     fullScreen?: boolean;
@@ -140,20 +145,21 @@
     }
   });
   $effect(() => {
-    const center = userLocation.center, L = library, instance = map;
+    const center = userLocation.center, area = areaCenter, L = library, instance = map;
     if (!instance || !L || onpick) return;
     locationMarker?.remove(); radiusCircle?.remove();
-    if (center) {
-      const coords: [number,number] = [center.latitude,center.longitude];
-      locationMarker = L.circleMarker(coords,{radius:6,color:'#f5dce8',weight:2,fillColor:'#f05ca1',fillOpacity:1}).addTo(instance).bindTooltip(english ? 'Your approximate location' : 'Vaša približná poloha');
-      if (areaCenter) radiusCircle = L.circle([areaCenter.latitude,areaCenter.longitude],{radius:radiusKm * 1000,color:'#f05ca1',weight:1,dashArray:'4 7',fillOpacity:.015,interactive:false}).addTo(instance);
-    }
+    locationMarker = null; radiusCircle = null;
+    if (center) locationMarker = L.circleMarker([center.latitude,center.longitude],{radius:6,color:'#f5dce8',weight:2,fillColor:'#f05ca1',fillOpacity:1}).addTo(instance).bindTooltip(english ? 'Your approximate location' : 'Vaša približná poloha');
+    // The ring marks the area being ranked, which is the place that was searched for
+    // when there is one -- so it must not depend on the visitor's own position being
+    // known, or a typed city gets a label and a map view but no visible area.
+    if (area) radiusCircle = L.circle([area.latitude,area.longitude],{radius:radiusKm * 1000,color:'#f05ca1',weight:1,dashArray:'4 7',fillOpacity:.015,interactive:false}).addTo(instance);
   });
 </script>
 
 <div class="venue-map-container" data-map-theme={mapTheme} data-map-style={tileStyle} class:with-expand={!!explorerHref} class:picker={!!onpick}>
   <div bind:this={container} class="venue-map-surface" title={english ? 'Click to pan with two fingers. Pinch to zoom.' : 'Kliknite pre posun dvoma prstami. Priblížte roztiahnutím prstov.'} aria-label={english ? 'Interactive venue map' : 'Interaktívna mapa priestorov'}></div>
-  {#if !onpick && areaCenter}<div class="map-area-label">{english ? 'Around you' : 'Vo vašom okolí'} · {radiusKm} km</div>{/if}
+  {#if !onpick && areaCenter}<div class="map-area-label">{areaLabel ? (english ? `Around ${areaLabel}` : `Okolie: ${areaLabel}`) : (english ? 'Around you' : 'Vo vašom okolí')} · {radiusKm} km</div>{/if}
   {#if explorerHref}<a class="map-expand" href={explorerHref}>{english ? 'All venues' : 'Všetky priestory'} <span aria-hidden="true"><Icon name="expand" /></span></a>{/if}
   <MapLayers {english} websiteTheme={mapTheme} raised={!!selected && !onpick} />
   <div class="map-actions" aria-label={english ? 'Map controls' : 'Ovládanie mapy'}>

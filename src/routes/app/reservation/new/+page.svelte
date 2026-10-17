@@ -4,7 +4,7 @@
 	import { untrack, onDestroy } from 'svelte';
 	import { t } from '$lib/i18n.svelte';
 	import { migrateToMultiFloor } from '$lib/floorplan-types';
-	import { parseEventTypes, normalizeEventType } from '$lib/eventTypes';
+	import { parseEventTypes, normalizeEventType, CUSTOM_EVENT_TYPE_MAX } from '$lib/eventTypes';
 	import SectionHeader from '$lib/components/SectionHeader.svelte';
 	import MiniCalendar from '$lib/components/MiniCalendar.svelte';
 	import type { PageData, ActionData } from './$types';
@@ -17,8 +17,16 @@
 	let selectedHall = $state<string>(untrack(() => data.selectedHallId ?? ''));
 	let selectedTemplate = $state('');
 	let eventType = $state('');
+	let eventTypeOther = $state('');
 	let selectedDate = $state<string>('');
 	let step = $state(1);
+
+	// Step 2's fields are unmounted once the operator walks on to the layout step,
+	// so they cannot carry their own `name` — the browser would submit nothing for
+	// them. They are bound here and posted through the hidden inputs below, the
+	// same way the hall, date and guest count already were.
+	let title = $state('');
+	let description = $state('');
 
 	// Optional event time + guests
 	let specifyTime = $state(false);
@@ -49,11 +57,23 @@
 		})
 	);
 
-	const showLayoutStep = $derived(!!selectedHallData?.custom_layouts && filteredTemplates.length > 0);
-	const maxStep = $derived(showLayoutStep ? 3 : 2);
 	const layoutRequired = $derived(!!selectedHallData?.force_layouts);
+	// A hall that FORCES a layout must show the layout step even when it does not
+	// otherwise offer custom layouts — without this the step is skipped, no template
+	// can be chosen, and canSubmit below can never become true.
+	const showLayoutStep = $derived(
+		(!!selectedHallData?.custom_layouts || layoutRequired) && filteredTemplates.length > 0
+	);
+	const maxStep = $derived(showLayoutStep ? 3 : 2);
+	/** The hall demands a layout but this event type matches no template, so there is
+	 *  nothing the person can pick. Say so instead of disabling submit in silence. */
+	const layoutUnavailable = $derived(layoutRequired && filteredTemplates.length === 0);
 	const overCapacity = $derived(!!selectedHallData && !!numGuests && Number(numGuests) > selectedHallData.max_people);
-	const canSubmit = $derived(!!selectedHall && !!selectedDate && holdActive && !overCapacity && (!layoutRequired || !!selectedTemplate));
+	const customTypeTooLong = $derived(eventTypeOther.trim().length > CUSTOM_EVENT_TYPE_MAX);
+	const canSubmit = $derived(
+		!!selectedHall && !!selectedDate && !!title.trim() && holdActive && !overCapacity &&
+		!customTypeTooLong && (!layoutRequired || !!selectedTemplate)
+	);
 
 	// Blocked dates from hall rules (taken/held are passed separately to the calendar).
 	const blockedDateStrings = $derived.by(() => {
@@ -167,6 +187,7 @@
 <svelte:head><title>{t.createEvent.title} – Hallify</title></svelte:head>
 
 <div class="page">
+<div class="wrap">
 	<SectionHeader overline={t.createEvent.overview} title={t.createEvent.title} />
 
 	{#if form?.error}
@@ -224,19 +245,23 @@
 		<input type="hidden" name="startTime" value={specifyTime ? startTime : ''} />
 		<input type="hidden" name="endTime" value={specifyTime ? endTime : ''} />
 		<input type="hidden" name="numGuests" value={numGuests} />
+		<input type="hidden" name="title" value={title} />
+		<input type="hidden" name="description" value={description} />
+		<input type="hidden" name="eventType" value={eventType} />
+		<input type="hidden" name="eventTypeOther" value={eventType === 'other' ? eventTypeOther : ''} />
 
 		<!-- Step 1: Hall & Date -->
 		{#if step === 1}
-			<div class="step-content">
+			<section class="section section--lead step-content">
 				<div class="step1-grid">
 					<!-- Left: Hall selection -->
 					<div class="step1-halls">
-						<h2 class="step-section-title">{t.createEvent.selectHall}</h2>
-						<div class="hall-grid">
+						<div class="section-head"><h2>{t.createEvent.selectHall}</h2></div>
+						<div class="row-list">
 							{#each data.halls as h}
 								<button
 									type="button"
-									class="hall-card"
+									class="row-item hall-card"
 									class:selected={selectedHall === h.id}
 									class:closed={!h.allow_reservations}
 									disabled={!h.allow_reservations}
@@ -281,7 +306,7 @@
 						</div>
 
 						{#if selectedHallData?.pre_reservation_text}
-							<div class="info-banner">
+							<div class="card card--inset info-banner">
 								<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0; margin-top: 1px;">
 									<circle cx="12" cy="12" r="10"/>
 									<line x1="12" y1="16" x2="12" y2="12"/>
@@ -294,9 +319,9 @@
 
 					<!-- Right: Calendar -->
 					<div class="step1-calendar">
-						<h2 class="step-section-title">{t.createEvent.selectDate}</h2>
+						<div class="section-head"><h2>{t.createEvent.selectDate}</h2></div>
 						{#if !selectedHall}
-							<div class="cal-placeholder">{t.createEvent?.pickHallFirst ?? 'Select a hall to see available dates.'}</div>
+							<div class="card card--inset cal-placeholder">{t.createEvent?.pickHallFirst ?? 'Select a hall to see available dates.'}</div>
 						{:else}
 							<MiniCalendar
 								blockedDates={blockedDateStrings}
@@ -340,30 +365,29 @@
 						</svg>
 					</button>
 				</div>
-			</div>
+			</section>
 		{/if}
 
 		<!-- Step 2: Event Details -->
 		{#if step === 2}
-			<div class="step-content">
-				<div class="card step-card">
-					<h2 class="step-section-title" style="margin-bottom: 20px;">{t.event?.details ?? 'Event Details'}</h2>
+			<section class="section section--lead step-content">
+				<div class="step-card">
+					<div class="section-head"><h2>{t.event?.details ?? 'Event Details'}</h2></div>
 
 					<div class="field">
 						<label for="title">{t.createEvent.eventName} *</label>
 						<input
 							id="title"
-							name="title"
 							type="text"
+							bind:value={title}
 							placeholder={t.createEvent.eventNamePlaceholder}
 							class="input-large"
-							required
 						/>
 					</div>
 
 					<div class="field">
 						<label for="eventType">{t.createEvent.eventType}</label>
-						<select id="eventType" name="eventType" bind:value={eventType}>
+						<select id="eventType" bind:value={eventType}>
 							<option value="">—</option>
 							{#each EVENT_TYPES_KEYS as key}
 								<option value={key}>{t.eventTypes[key]}</option>
@@ -371,9 +395,28 @@
 						</select>
 					</div>
 
+					{#if eventType === 'other'}
+						<div class="field">
+							<label for="eventTypeOther">{t.createEvent.eventTypeOther}</label>
+							<input
+								id="eventTypeOther"
+								type="text"
+								bind:value={eventTypeOther}
+								maxlength={CUSTOM_EVENT_TYPE_MAX}
+								placeholder={t.createEvent.eventTypeOtherPlaceholder}
+								aria-describedby="eventTypeOtherHint"
+							/>
+							<span id="eventTypeOtherHint" class="field-hint" class:err={customTypeTooLong}>
+								{customTypeTooLong
+									? t.createEvent.eventTypeOtherTooLong(CUSTOM_EVENT_TYPE_MAX)
+									: t.createEvent.eventTypeOtherHint}
+							</span>
+						</div>
+					{/if}
+
 					<div class="field">
 						<label for="description">{t.createEvent.eventDescription}</label>
-						<textarea id="description" name="description" rows="3" placeholder="…"></textarea>
+						<textarea id="description" bind:value={description} rows="3" placeholder="…"></textarea>
 					</div>
 
 					<div class="field-row">
@@ -446,11 +489,12 @@
 
 					{#if maxStep === 2}
 						<!-- No layout step: this is the final step -->
-						<button type="submit" class="btn-action" disabled={!canSubmit}>
+						{#if layoutUnavailable}<p class="alert-warning submit-blocked">{t.createEvent.layoutUnavailable}</p>{/if}
+					<button type="submit" class="btn-action" disabled={!canSubmit}>
 							{t.createEvent.submit}
 						</button>
 					{:else}
-						<button type="button" class="btn-action" onclick={nextStep}>
+						<button type="button" class="btn-action" disabled={!title.trim() || customTypeTooLong} onclick={nextStep}>
 							{t.reservationAdmin.continue}
 							<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
 								<line x1="5" y1="12" x2="19" y2="12"/>
@@ -459,14 +503,14 @@
 						</button>
 					{/if}
 				</div>
-			</div>
+			</section>
 		{/if}
 
 		<!-- Step 3: Layout (only if templates exist) -->
 		{#if step === 3}
-			<div class="step-content">
-				<div class="card step-card">
-					<h2 class="step-section-title" style="margin-bottom: 20px;">{t.createEvent.suggestedLayouts}</h2>
+			<section class="section section--lead step-content">
+				<div class="step-card">
+					<div class="section-head"><h2>{t.createEvent.suggestedLayouts}</h2></div>
 
 					<div class="templates-grid">
 						<!-- Blank layout card first -->
@@ -484,6 +528,7 @@
 
 						{#each filteredTemplates as tmpl}
 							{@const tmplFloor = migrateToMultiFloor(tmpl.layout_json).floors[0]}
+							{@const tmplTypes = parseEventTypes(tmpl.event_type as string | null)}
 							<label class="template-card" class:selected={selectedTemplate === tmpl.id}>
 								<input type="radio" name="_templateRadio" value={tmpl.id} bind:group={selectedTemplate} />
 								<div class="template-preview">
@@ -504,8 +549,10 @@
 									</svg>
 								</div>
 								<span class="template-name">{tmpl.name}</span>
-								{#if tmpl.event_type}
-									<span class="template-tag">{tmpl.event_type}</span>
+								{#if tmplTypes.length}
+									<!-- The column holds a JSON array of keys; printing it raw showed
+									     `["wedding","ball"]` on the card. -->
+									<span class="template-tag">{tmplTypes.map(k => t.eventTypes[k]).join(' · ')}</span>
 								{/if}
 							</label>
 						{/each}
@@ -520,21 +567,31 @@
 						</svg>
 						{t.common.back}
 					</button>
+					{#if layoutUnavailable}<p class="alert-warning submit-blocked">{t.createEvent.layoutUnavailable}</p>{/if}
 					<button type="submit" class="btn-action" disabled={!canSubmit}>
 						{t.createEvent.submit}
 					</button>
 				</div>
-			</div>
+			</section>
 		{/if}
 	</form>
 </div>
+</div>
 
 <style>
+	.submit-blocked { margin-bottom: 10px; }
+
 	.page {
-		padding: 32px 40px;
+		padding: 32px 0 48px;
 		overflow-y: auto;
 		height: 100%;
-		max-width: 900px;
+	}
+
+	/* The wizard is a narrow flow, not a full-width operator table: it keeps the
+	   900px measure it had before the recomposition, so the step indicator and
+	   all three steps stay the same width as the user walks through them. */
+	.page > .wrap {
+		width: min(900px, calc(100% - var(--page-gutter) * 2));
 	}
 
 	/* ── Step indicator ─────────────────────────────────────────────── */
@@ -543,7 +600,7 @@
 		display: flex;
 		align-items: center;
 		gap: 0;
-		margin-bottom: 32px;
+		margin-bottom: 8px;
 	}
 
 	.step-item {
@@ -562,7 +619,7 @@
 		height: 26px;
 		border-radius: 50%;
 		font-size: 12px;
-		font-weight: 700;
+		font-weight: 650;
 		display: flex;
 		align-items: center;
 		justify-content: center;
@@ -586,7 +643,7 @@
 	.step-item.active .step-num {
 		background: var(--accent);
 		border-color: var(--accent);
-		color: #fff;
+		color: var(--accent-contrast);
 	}
 
 	.step-item.active .step-label {
@@ -598,11 +655,11 @@
 	.step-item.done .step-num {
 		background: var(--accent-dim);
 		border-color: var(--accent);
-		color: var(--accent);
+		color: var(--accent-ink);
 	}
 
 	.step-item.done .step-label {
-		color: var(--accent);
+		color: var(--accent-ink);
 	}
 
 	/* Future step (already default, just explicit) */
@@ -621,6 +678,7 @@
 	}
 
 	/* ── Step content wrapper ───────────────────────────────────────── */
+	/* Each step is a .section; this only stacks its parts. */
 
 	.step-content {
 		display: flex;
@@ -631,13 +689,6 @@
 	.step-card {
 		display: flex;
 		flex-direction: column;
-	}
-
-	.step-section-title {
-		font-size: 15px;
-		font-weight: 600;
-		color: var(--text-base);
-		margin-bottom: 14px;
 	}
 
 	/* ── Step 1 layout ──────────────────────────────────────────────── */
@@ -663,56 +714,48 @@
 		top: 20px;
 	}
 
-	/* ── Hall cards ─────────────────────────────────────────────────── */
-
-	.hall-grid {
-		display: grid;
-		grid-template-columns: 1fr;
-		gap: 10px;
-	}
+	/* ── Hall rows ──────────────────────────────────────────────────── */
+	/* Hairline .row-item rows; the selected one is marked by a tint, not a box. */
 
 	.hall-card {
-		border: 1.5px solid var(--border);
-		border-radius: 10px;
-		padding: 14px 16px;
 		cursor: pointer;
-		display: flex;
-		align-items: center;
 		gap: 12px;
-		transition: border-color 0.15s, background 0.15s;
-		background: var(--bg-panel);
+		padding-inline: 10px;
+		margin-inline: -10px;
+		border-radius: var(--radius-sm);
+		transition: background 0.15s;
+		background: transparent;
+		border-top: none;
+		border-left: none;
+		border-right: none;
 		text-align: left;
-		width: 100%;
+		width: auto;
 	}
 
 	.hall-card:hover {
-		border-color: var(--text-subtle);
 		background: var(--bg-hover);
 	}
 
 	.hall-card.selected {
-		border-color: var(--accent);
 		background: var(--accent-dim);
 	}
 
 	.hall-icon {
 		width: 36px;
 		height: 36px;
-		border-radius: 8px;
-		background: var(--bg-panel2);
-		border: 1px solid var(--border);
+		border-radius: var(--radius);
+		background: var(--bg-hover);
 		display: flex;
 		align-items: center;
 		justify-content: center;
 		color: var(--text-muted);
 		flex-shrink: 0;
-		transition: background 0.15s, border-color 0.15s;
+		transition: background 0.15s, color 0.15s;
 	}
 
 	.hall-card.selected .hall-icon {
 		background: var(--accent-dim);
-		border-color: var(--accent);
-		color: var(--accent);
+		color: var(--accent-ink);
 	}
 
 	.hall-info {
@@ -726,39 +769,30 @@
 	.hall-name {
 		font-size: 14px;
 		font-weight: 600;
+		letter-spacing: -.03em;
 		color: var(--text-base);
-	}
-
-	.hall-desc {
-		font-size: 12px;
-		color: var(--text-muted);
-		white-space: nowrap;
-		overflow: hidden;
-		text-overflow: ellipsis;
 	}
 
 	.hall-badge {
 		font-size: 11px;
 		font-weight: 600;
 		color: var(--text-muted);
-		background: var(--bg-panel2);
-		border: 1px solid var(--border);
-		border-radius: 20px;
+		background: var(--bg-hover);
+		border-radius: 3px;
 		padding: 3px 9px;
 		white-space: nowrap;
 		flex-shrink: 0;
-		transition: background 0.15s, border-color 0.15s, color 0.15s;
+		transition: background 0.15s, color 0.15s;
 	}
 
 	.hall-card.selected .hall-badge {
 		background: var(--accent);
-		border-color: var(--accent);
-		color: #fff;
+		color: var(--accent-contrast);
 	}
 
 	.hall-cover-img {
-		width: 48px; height: 36px; border-radius: 6px; overflow: hidden;
-		flex-shrink: 0; position: relative; border: 1px solid var(--border);
+		width: 48px; height: 36px; border-radius: var(--radius-sm); overflow: hidden;
+		flex-shrink: 0; position: relative;
 	}
 	.hall-cover-img img { width: 100%; height: 100%; object-fit: cover; display: block; }
 	.hall-cover-strip {
@@ -770,21 +804,20 @@
 		gap: 4px; flex-shrink: 0;
 	}
 	.hall-profile-link {
-		font-size: 10px; font-weight: 600; color: var(--accent);
+		font-size: 10px; font-weight: 600; color: var(--accent-ink);
 		text-decoration: none; white-space: nowrap;
 		transition: opacity .1s;
 	}
 	.hall-profile-link:hover { opacity: .75; }
 
-	/* ── Info banner (pre_reservation_text) ─────────────────────────── */
+	/* ── Info callout (pre_reservation_text) ────────────────────────── */
+	/* .card--inset supplies the fill; this only sets the row and the tint. */
 
 	.info-banner {
 		display: flex;
 		align-items: flex-start;
 		gap: 10px;
 		background: var(--accent-dim);
-		border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
-		border-radius: 8px;
 		padding: 12px 14px;
 		color: var(--text-base);
 		font-size: 13px;
@@ -792,48 +825,20 @@
 	}
 
 	.info-banner svg {
-		color: var(--accent);
+		color: var(--accent-ink);
 	}
 
 	.info-banner p { margin: 0; }
 
 	/* ── Calendar area (step 1) ──────────────────────────────────────── */
 
-	.selected-date-note {
-		display: flex;
-		align-items: center;
-		gap: 8px;
-		padding: 11px 16px;
-		font-size: 13px;
-		font-weight: 500;
-		color: var(--accent);
-	}
+	.cal-placeholder { padding: 40px 20px; text-align: center; font-size: 13px; color: var(--text-subtle); }
 
-	.legend {
-		display: flex;
-		flex-direction: column;
-		gap: 6px;
-		padding: 0 4px;
-	}
-
-	.legend-item {
-		display: flex;
-		align-items: center;
-		gap: 8px;
-		font-size: 11px;
-		color: var(--text-muted);
-	}
-
-	.dot {
-		width: 8px;
-		height: 8px;
-		border-radius: 50%;
-		flex-shrink: 0;
-	}
-
-	.dot.today   { background: var(--accent); }
-	.dot.blocked { background: var(--danger); }
-	.dot.event   { background: var(--warning); }
+	.hold-banner { display: flex; align-items: center; gap: 8px; margin-top: 12px; padding: 10px 12px; border-radius: var(--radius); font-size: 13px; font-weight: 500; color: var(--text-muted); background: var(--bg-hover); }
+	.hold-banner.ok { color: var(--text-base); background: var(--accent-dim); }
+	.hold-banner.ok svg { color: var(--accent-ink); }
+	.hold-banner.err { color: var(--danger); background: var(--danger-dim); }
+	.hold-timer { margin-left: auto; font-size: 11px; font-weight: 650; font-variant-numeric: tabular-nums; padding: 3px 9px; border-radius: 3px; background: color-mix(in srgb, var(--accent) 22%, transparent); color: var(--accent-ink); white-space: nowrap; }
 
 	/* ── Step 2: event details ──────────────────────────────────────── */
 
@@ -858,11 +863,16 @@
 		font-size: 12px;
 		font-weight: 500;
 		color: var(--text-muted);
-		background: var(--bg-panel2);
-		border: 1px solid var(--border);
-		border-radius: 20px;
+		background: var(--bg-hover);
+		border-radius: 3px;
 		padding: 4px 10px;
 	}
+
+	.time-toggle { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 400; color: var(--text-muted); cursor: pointer; padding-top: 6px; }
+	.time-toggle input { width: 16px; height: 16px; accent-color: var(--accent); }
+	.whole-day-note { font-size: 12px; color: var(--text-subtle); margin: 4px 0 0; line-height: 1.5; }
+	.field-hint { font-size: 11.5px; margin-top: 4px; color: var(--text-muted); }
+	.field-hint.err { color: var(--danger); }
 
 	/* ── Step 3: templates ──────────────────────────────────────────── */
 
@@ -881,16 +891,18 @@
 
 	.template-card input { display: none; }
 
+	/* A quiet filled tile, not a box; selection is an accent ring. */
 	.template-preview {
-		border: 2px solid var(--border);
-		border-radius: 8px;
+		border-radius: var(--radius);
 		aspect-ratio: 1.4;
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		background: var(--bg-panel2);
+		background: var(--bg-hover);
 		overflow: hidden;
-		transition: border-color 0.15s;
+		outline: 2px solid transparent;
+		outline-offset: -2px;
+		transition: outline-color 0.15s, background 0.15s;
 		flex-direction: column;
 		gap: 6px;
 	}
@@ -909,7 +921,7 @@
 	}
 
 	.template-card.selected .template-preview {
-		border-color: var(--accent);
+		outline-color: var(--accent);
 		background: var(--accent-dim);
 	}
 
@@ -921,8 +933,9 @@
 
 	.template-tag {
 		font-size: 10px;
-		color: var(--accent);
-		font-weight: 600;
+		color: var(--text-muted);
+		font-weight: 650;
+		letter-spacing: .13em;
 		text-transform: uppercase;
 	}
 
@@ -942,26 +955,12 @@
 
 	.btn-action:disabled:hover {
 		background: var(--accent);
+		transform: none;
 	}
 
-	/* ── Redesign additions ── */
 	.hall-card:disabled, .hall-card.closed { opacity: .55; cursor: not-allowed; }
 	.hall-tags { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 5px; }
-	.hall-tag { font-size: 10.5px; font-weight: 600; padding: 2px 7px; border-radius: 99px; background: var(--bg-panel2, var(--bg-base)); color: var(--text-muted); border: 1px solid var(--border); }
-	.hall-tag.ok { color: var(--success, #16a34a); background: color-mix(in srgb, var(--success, #16a34a) 12%, transparent); border-color: transparent; }
-	.hall-tag.warn { color: var(--danger); background: color-mix(in srgb, var(--danger) 12%, transparent); border-color: transparent; }
-
-	.cal-placeholder { padding: 40px 20px; text-align: center; font-size: 13px; color: var(--text-subtle); border: 1px dashed var(--border); border-radius: 12px; }
-
-	.hold-banner { display: flex; align-items: center; gap: 8px; margin-top: 12px; padding: 10px 12px; border-radius: 9px; font-size: 13px; font-weight: 500; color: var(--text-muted); background: var(--bg-panel2, var(--bg-base)); border: 1px solid var(--border); }
-	.hold-banner.ok { color: var(--text-base); border-color: color-mix(in srgb, var(--accent) 35%, var(--border)); background: var(--accent-dim); }
-	.hold-banner.ok svg { color: var(--accent); }
-	.hold-banner.err { color: var(--danger); background: color-mix(in srgb, var(--danger) 9%, transparent); border-color: color-mix(in srgb, var(--danger) 25%, transparent); }
-	.hold-timer { margin-left: auto; font-size: 11px; font-weight: 700; font-variant-numeric: tabular-nums; padding: 3px 9px; border-radius: 99px; background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent); white-space: nowrap; }
-
-	.time-toggle { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 400; color: var(--text-muted); cursor: pointer; padding-top: 6px; }
-	.time-toggle input { width: 16px; height: 16px; accent-color: var(--accent); }
-	.whole-day-note { font-size: 12px; color: var(--text-subtle); margin: 4px 0 0; line-height: 1.5; }
-	.field-hint { font-size: 11.5px; margin-top: 4px; }
-	.field-hint.err { color: var(--danger); }
+	.hall-tag { font-size: 10.5px; font-weight: 600; padding: 2px 7px; border-radius: 3px; background: var(--bg-hover); color: var(--text-muted); }
+	.hall-tag.ok { color: var(--success); background: var(--success-dim); }
+	.hall-tag.warn { color: var(--danger); background: var(--danger-dim); }
 </style>

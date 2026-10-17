@@ -28,20 +28,66 @@ export function demoVenues(center: MapCenter = DEFAULT_CENTER, nearby = false, e
     ...destination(center, distances[i], 32 + i * 51), max_people: capacities[i],
     cover_image_url: ['/marketing/venue-example.jpg','/marketing/venue-dinner.jpg','/marketing/venue-conference.jpg'][i % 3],
     amenities: i % 2 ? ['parking','outdoor'] : ['wifi','catering'],
-    pricing_info: null, allow_reservations: i % 3 === 0 ? 0 : 1, has_floorplan: i % 2 ? 0 : 1, demo: true, is_partner: [0,2,4,5].includes(i),
+    pricing_info: null, price_band: ([1,2,3] as const)[i % 3], allow_reservations: i % 3 === 0 ? 0 : 1, has_floorplan: i % 2 ? 0 : 1, demo: true, is_partner: [0,2,4,5].includes(i),
   }));
 }
 
-export function featuredVenues(venues: PublicVenue[], center: MapCenter = DEFAULT_CENTER): PublicVenue[] {
-  return venues.filter(venue => venue.is_partner === true && venue.latitude !== null && venue.longitude !== null &&
-    Number.isFinite(venue.latitude) && Number.isFinite(venue.longitude))
-    .sort((a,b) => distanceKm(center,a as MapCenter) - distanceKm(center,b as MapCenter) || a.name.localeCompare(b.name))
-    .slice(0,3);
+/** How many partner venues the featured strip can show. */
+export const FEATURED_LIMIT = 3;
+
+/**
+ * Day index since the epoch. Stable for a whole day, so server and client agree
+ * during hydration and the order does not churn while someone browses.
+ */
+export function rotationSeed(now: Date): number {
+  return Math.floor(now.getTime() / 86_400_000);
 }
 
-export function filterVenues(venues: PublicVenue[], filters: { query: string; guests: number; floorplan: boolean; booking: boolean; center?: MapCenter | null; radius?: number }): PublicVenue[] {
+/**
+ * The partner venues to feature.
+ *
+ * `center` should be whatever location the visitor is actually thinking about: the
+ * place they searched for if they picked one, otherwise their detected position.
+ * The caller passes it through rather than this defaulting to the map origin --
+ * otherwise someone who searched Kosice gets venues ranked around Prague.
+ *
+ * With no location at all, distance cannot rank anything, and a plain alphabetical
+ * sort would permanently hand the top slots to whoever named their venue "A...".
+ * Rotating by day gives every eligible partner the same share of exposure over
+ * time while staying stable within a day, so it is cacheable, survives hydration,
+ * and is explainable to a partner who asks why they are not on top.
+ */
+export function featuredVenues(
+  venues: PublicVenue[],
+  center?: MapCenter | null,
+  options: { limit?: number; seed?: number } = {}
+): PublicVenue[] {
+  const limit = options.limit ?? FEATURED_LIMIT;
+  const partners = venues.filter(venue => venue.is_partner === true);
+
+  if (center) {
+    return partners
+      .filter(venue => venue.latitude !== null && venue.longitude !== null &&
+        Number.isFinite(venue.latitude) && Number.isFinite(venue.longitude))
+      .sort((a, b) =>
+        distanceKm(center, a as MapCenter) - distanceKm(center, b as MapCenter) ||
+        a.name.localeCompare(b.name))
+      .slice(0, limit);
+  }
+
+  const seed = options.seed ?? rotationSeed(new Date());
+  const ordered = [...partners].sort((a, b) => a.id.localeCompare(b.id));
+  if (ordered.length <= limit) return ordered;
+  const offset = ((seed % ordered.length) + ordered.length) % ordered.length;
+  return Array.from({ length: limit }, (_, i) => ordered[(offset + i) % ordered.length]);
+}
+
+export function filterVenues(venues: PublicVenue[], filters: { query: string; guests: number; floorplan: boolean; booking: boolean; center?: MapCenter | null; radius?: number; bands?: number[] }): PublicVenue[] {
   const normalize = (text: string) => text.toLocaleLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  // An unstated band must not pass a band filter: it is unknown, not cheap.
+  const bands = filters.bands?.length ? new Set(filters.bands) : null;
   return venues.filter(venue => venue.max_people >= filters.guests && (!filters.floorplan || !!venue.has_floorplan) &&
     (!filters.booking || !!venue.allow_reservations) && normalize(`${venue.name} ${venue.address ?? ''}`).includes(normalize(filters.query.trim())) &&
+    (!bands || (venue.price_band !== null && bands.has(venue.price_band))) &&
     (!filters.center || !filters.radius || (venue.latitude !== null && venue.longitude !== null && distanceKm(filters.center, { latitude: venue.latitude, longitude: venue.longitude }) <= filters.radius)));
 }

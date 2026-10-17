@@ -64,17 +64,12 @@
 </div>
 
 <style>
+  /* No private palette here any more: the document inherits the real theme tokens
+     from app.css, so --accent / --accent-ink / --accent-contrast (and the org
+     branding override that recomputes them) apply to legal pages too. */
   .legal {
-    --bg: #0b0e15;
-    --panel: #111726;
-    --border: rgba(255, 255, 255, 0.08);
-    --txt: rgba(255, 255, 255, 0.9);
-    --txt-muted: rgba(255, 255, 255, 0.56);
-    --txt-faint: rgba(255, 255, 255, 0.4);
-    --accent: #4f6ef7;
-
-    background: var(--bg);
-    color: var(--txt);
+    background: var(--bg-base);
+    color: var(--text-base);
     min-height: 100vh;
     font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
     padding: 0 24px 96px;
@@ -92,30 +87,38 @@
     align-items: center;
     gap: 10px;
     text-decoration: none;
-    color: var(--txt);
+    color: var(--text-base);
     margin-bottom: 40px;
   }
+  .brand:hover { text-decoration: none; }
   .brand-logo { width: 26px; height: 26px; }
-  .brand-name { font-weight: 600; font-size: 1.05rem; letter-spacing: -0.01em; }
+  /* The wordmark — the one place Poppins 900 italic is allowed. */
+  .brand-name {
+    font-family: 'Poppins', 'Segoe UI', system-ui, -apple-system, sans-serif;
+    font-weight: 900;
+    font-style: italic;
+    font-size: 1.05rem;
+    letter-spacing: -0.05em;
+  }
 
   h1 {
     font-size: clamp(1.9rem, 4vw, 2.6rem);
-    line-height: 1.15;
-    letter-spacing: -0.02em;
+    line-height: 1.08;
+    letter-spacing: -0.055em;
     margin: 0 0 12px;
-    font-weight: 650;
+    font-weight: 550;
   }
 
-  .subtitle { color: var(--txt-muted); font-size: 1.05rem; margin: 0 0 20px; line-height: 1.5; }
-  .updated { color: var(--txt-faint); font-size: 0.85rem; margin: 0; }
+  .subtitle { color: var(--text-muted); font-size: 1.05rem; margin: 0 0 20px; line-height: 1.75; }
+  .updated { color: var(--text-subtle); font-size: 0.85rem; margin: 0; }
 
   .draft {
     margin: 20px 0 0;
     padding: 10px 14px;
-    border: 1px solid rgba(245, 158, 11, 0.35);
-    background: rgba(245, 158, 11, 0.08);
-    color: #fbbf24;
-    border-radius: 8px;
+    border: 1px solid color-mix(in srgb, var(--warning) 35%, transparent);
+    background: var(--warning-dim);
+    color: var(--warning);
+    border-radius: var(--radius);
     font-size: 0.85rem;
   }
 
@@ -125,14 +128,14 @@
 
   h2 {
     font-size: 1.15rem;
-    font-weight: 600;
-    letter-spacing: -0.01em;
+    font-weight: 550;
+    letter-spacing: -0.045em;
     margin: 0 0 14px;
   }
 
   p {
-    color: var(--txt-muted);
-    line-height: 1.7;
+    color: var(--text-muted);
+    line-height: 1.8;
     margin: 0 0 14px;
     font-size: 0.95rem;
   }
@@ -140,8 +143,8 @@
   ul { margin: 0 0 14px; padding-left: 20px; }
 
   li {
-    color: var(--txt-muted);
-    line-height: 1.7;
+    color: var(--text-muted);
+    line-height: 1.8;
     margin-bottom: 7px;
     font-size: 0.95rem;
   }
@@ -154,10 +157,10 @@
     font-size: 0.9rem;
   }
 
-  .legal-foot a, .consent-link { color: var(--txt-muted); text-decoration: none; }
-  .consent-link { background: none; border: none; padding: 0; font: inherit; cursor: pointer; }
-  .legal-foot a:hover { color: var(--accent); }
-  .sep { color: var(--txt-faint); margin: 0 10px; }
+  .legal-foot a, .consent-link { color: var(--text-muted); text-decoration: none; }
+  .consent-link { background: none; border: none; padding: 0; font: inherit; cursor: pointer; transition: color .15s; }
+  .legal-foot a:hover, .consent-link:hover { color: var(--accent-ink); }
+  .sep { color: var(--text-subtle); margin: 0 10px; }
 
   @media (max-width: 640px) {
     .legal-head { padding-top: 36px; }

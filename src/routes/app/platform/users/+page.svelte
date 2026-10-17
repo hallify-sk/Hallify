@@ -4,67 +4,75 @@
   let { data }: { data: PageData } = $props();
 </script>
 
-<div class="page-wrap">
-  <div class="page-header">
-    <h1>{t.platformMisc.allUsersTitle}</h1>
-    <span class="count">{data.users.length} {t.platformMisc.total}</span>
-  </div>
+<div class="wrap page">
+  <section class="section section--lead">
+    <div class="section-head section-head--row">
+      <div class="head-text">
+        <p class="eyebrow">{t.platformOrgs.platformAdmin}</p>
+        <h1>{t.platformMisc.allUsersTitle}</h1>
+      </div>
+      <span class="count">{data.users.length} {t.platformMisc.total}</span>
+    </div>
 
-  <div class="card">
-    <table class="table">
-      <thead>
-        <tr><th>{t.platformMisc.colUserName}</th><th>{t.platformMisc.colEmail}</th><th>{t.platformMisc.colOrgs}</th><th>{t.platformMisc.colJoined}</th><th>{t.platformMisc.colPlatformAdmin}</th><th></th></tr>
-      </thead>
-      <tbody>
-        {#each data.users as user}
-          <tr>
-            <td><a class="user-link" href="/app/platform/users/{user.id}"><strong>{user.first_name} {user.last_name}</strong></a></td>
-            <td class="muted">{user.email}</td>
-            <td class="muted">{user.org_count}</td>
-            <td class="muted">{new Date(user.created_at).toLocaleDateString()}</td>
-            <td>
-              {#if user.is_platform_admin}
-                <span class="badge badge-admin">{t.platformMisc.yes}</span>
-              {:else}
-                <span class="badge badge-no">{t.platformMisc.no}</span>
-              {/if}
-            </td>
-            <td class="row-actions">
-              <a href="/app/platform/users/{user.id}" class="btn-outline btn-sm">{t.platformMisc.view}</a>
-              {#if user.is_platform_admin}
-                <form method="POST" action="?/revokePlatformAdmin" style="display:inline">
-                  <input type="hidden" name="id" value={user.id} />
-                  <button type="submit" class="btn-danger btn-sm">{t.platformMisc.revokeAdmin}</button>
-                </form>
-              {:else}
-                <form method="POST" action="?/grantPlatformAdmin" style="display:inline">
-                  <input type="hidden" name="id" value={user.id} />
-                  <button type="submit" class="btn-outline btn-sm">{t.platformMisc.makeAdmin}</button>
-                </form>
-              {/if}
-            </td>
-          </tr>
-        {/each}
-      </tbody>
-    </table>
-  </div>
+    <div class="row-list user-rows" role="table">
+      <div role="row" class="row-item row-head">
+        <span role="columnheader">{t.platformMisc.colUserName}</span><span role="columnheader">{t.platformMisc.colEmail}</span><span role="columnheader">{t.platformMisc.colOrgs}</span><span role="columnheader">{t.platformMisc.colJoined}</span><span role="columnheader">{t.platformMisc.colPlatformAdmin}</span><span role="columnheader"></span>
+      </div>
+
+      {#each data.users as user}
+        <div role="row" class="row-item">
+          <span role="cell" class="cell-name"><a class="user-link" href="/app/platform/users/{user.id}"><strong>{user.first_name} {user.last_name}</strong></a></span>
+          <span role="cell" class="muted">{user.email}</span>
+          <span role="cell" class="muted">{user.org_count}</span>
+          <span role="cell" class="muted">{new Date(user.created_at).toLocaleDateString()}</span>
+          <span role="cell">
+            {#if user.is_platform_admin}
+              <span class="badge badge-admin">{t.platformMisc.yes}</span>
+            {:else}
+              <span class="badge badge-no">{t.platformMisc.no}</span>
+            {/if}
+          </span>
+          <span role="cell" class="row-actions">
+            <a href="/app/platform/users/{user.id}" class="btn-outline btn-sm">{t.platformMisc.view}</a>
+            {#if user.is_platform_admin}
+              <form method="POST" action="?/revokePlatformAdmin" style="display:inline">
+                <input type="hidden" name="id" value={user.id} />
+                <button type="submit" class="btn-danger btn-sm">{t.platformMisc.revokeAdmin}</button>
+              </form>
+            {:else}
+              <form method="POST" action="?/grantPlatformAdmin" style="display:inline">
+                <input type="hidden" name="id" value={user.id} />
+                <button type="submit" class="btn-outline btn-sm">{t.platformMisc.makeAdmin}</button>
+              </form>
+            {/if}
+          </span>
+        </div>
+      {/each}
+    </div>
+  </section>
 </div>
 
 <style>
-  .page-wrap { padding: 2rem; }
-  .page-header { display: flex; align-items: center; gap: 1rem; margin-bottom: 1.5rem; }
-  h1 { font-size: 1.4rem; margin: 0; }
+  .page { padding-block: 24px; }
+  h1 { font-size: var(--display-size); font-weight: 550; letter-spacing: -.055em; line-height: 1.08; margin: 0; }
+  .head-text .eyebrow { display: block; margin-bottom: 12px; }
   .count { font-size: .875rem; color: var(--text-muted); }
-  .table { width: 100%; border-collapse: collapse; font-size: .875rem; }
-  .table th { text-align: left; padding: .6rem 1rem; font-size: .75rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: .04em; border-bottom: 1px solid var(--border); }
-  .table td { padding: .75rem 1rem; border-bottom: 1px solid var(--border); }
-  .table tr:last-child td { border-bottom: none; }
+
+  /* ── Hairline rows ── */
+  .user-rows .row-item { display: grid; grid-template-columns: 1.4fr 1.6fr .6fr .9fr .8fr auto; gap: 12px; align-items: center; font-size: 13px; }
+  .row-head { font-size: 10px; font-weight: 650; color: var(--text-muted); text-transform: uppercase; letter-spacing: .13em; border-bottom-color: var(--border); padding-bottom: 9px; }
   .muted { color: var(--text-muted); }
   .user-link { color: var(--text-base); text-decoration: none; }
-  .user-link:hover { color: var(--accent); }
-  .row-actions { display: flex; gap: 6px; align-items: center; }
+  .user-link:hover { color: var(--accent-ink); }
+  .row-actions { display: flex; gap: 6px; align-items: center; justify-content: flex-end; }
   .row-actions .btn-outline { text-decoration: none; }
-  .badge { display: inline-block; padding: 2px 8px; border-radius: 20px; font-size: .7rem; font-weight: 700; }
-  .badge-admin { background: var(--accent-action-dim); color: var(--accent-action); }
+  .badge { display: inline-block; padding: 2px 9px; border-radius: 3px; font-size: .7rem; font-weight: 650; letter-spacing: .03em; }
+  .badge-admin { background: var(--accent-action-dim); color: var(--accent-ink); }
   .badge-no { background: var(--bg-panel2); color: var(--text-muted); }
+
+  @media (max-width: 900px) {
+    .user-rows .row-item { grid-template-columns: 1fr 1fr; row-gap: 8px; align-items: start; }
+    .row-head { display: none; }
+    .row-actions { grid-column: 1 / -1; justify-content: flex-start; }
+  }
 </style>

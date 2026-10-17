@@ -158,7 +158,7 @@
 
 		<!-- Section: Load template -->
 		{#if data.templates.length > 0}
-			<div class="settings-section card template-loader">
+			<div class="section template-loader">
 				<div class="template-loader-row">
 					<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
 						<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
@@ -180,7 +180,7 @@
 		{/if}
 
 		<!-- Section: Appearance -->
-		<div class="settings-section card">
+		<div class="section section--lead">
 			<h3 class="section-title">{t.rsvpEditor.primaryColor} / {t.rsvpEditor.bgColor}</h3>
 			<div class="color-row">
 				<div class="color-picker-group">
@@ -213,7 +213,7 @@
 		</div>
 
 		<!-- Section: Style -->
-		<div class="settings-section card">
+		<div class="section">
 			<h3 class="section-title">{t.rsvpEditor.style}</h3>
 			<p class="template-hint" style="margin-bottom:10px">{t.rsvpEditor.styleHint}</p>
 			<div class="style-grid">
@@ -228,7 +228,7 @@
 		</div>
 
 		<!-- Section: Content -->
-		<div class="settings-section card">
+		<div class="section">
 			<h3 class="section-title">{t.rsvpEditor.description}</h3>
 			<div class="field compact">
 				<textarea id="description" bind:value={description} rows="3"
@@ -247,7 +247,7 @@
 		</div>
 
 		<!-- Section: Form Fields -->
-		<div class="settings-section card">
+		<div class="section">
 			<div class="fields-header">
 				<h3 class="section-title" style="margin-bottom:0">{t.rsvpEditor.fields}</h3>
 				<button type="button" class="btn-outline btn-sm" onclick={addField}>
@@ -503,10 +503,10 @@
 	.rsvp-upsell {
 		max-width: 460px; margin: 60px auto; text-align: center;
 		display: flex; flex-direction: column; align-items: center; gap: 12px;
-		padding: 32px 28px; background: var(--bg-panel); border: 1px solid var(--border); border-radius: 16px;
+		padding: 32px 28px; background: var(--bg-panel); border: 1px solid var(--border); border-radius: var(--radius-lg);
 	}
-	.rsvp-upsell svg { color: var(--accent); }
-	.rsvp-upsell h2 { font-size: 17px; font-weight: 700; margin: 0; }
+	.rsvp-upsell svg { color: var(--accent-ink); }
+	.rsvp-upsell h2 { font-size: 17px; font-weight: 650; letter-spacing: -.03em; margin: 0; }
 	.rsvp-upsell p { font-size: 13px; color: var(--text-muted); line-height: 1.5; margin: 0; }
 	.rsvp-upsell .btn-action { margin-top: 6px; text-decoration: none; }
 
@@ -544,7 +544,8 @@
 		left: 50%;
 		transform: translateX(-50%);
 		font-size: 15px;
-		font-weight: 700;
+		font-weight: 600;
+		letter-spacing: -.03em;
 		color: var(--text-base);
 		white-space: nowrap;
 	}
@@ -564,13 +565,13 @@
 		align-items: center;
 		gap: 8px;
 		padding: 10px 20px;
-		background: #f0fdf4;
-		border: 1px solid #bbf7d0;
+		background: var(--success-dim);
+		border: 1px solid color-mix(in srgb, var(--success) 30%, transparent);
 		color: var(--success);
-		border-radius: 8px;
+		border-radius: var(--radius);
 		font-size: 13px;
 		font-weight: 600;
-		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+		box-shadow: var(--shadow);
 		animation: toast-in 0.25s ease-out;
 	}
 
@@ -610,7 +611,7 @@
 	.template-select {
 		flex: 1;
 		height: 34px;
-		border-radius: 6px;
+		border-radius: var(--radius-sm);
 		border: 1px solid var(--border);
 		padding: 0 10px;
 		font-size: 13px;
@@ -625,17 +626,14 @@
 		margin-top: 6px;
 	}
 
-	/* ===== Section cards ===== */
-	.settings-section {
-		/* .card class provides base */
-	}
 
 	.section-title {
-		font-size: 13px;
-		font-weight: 700;
+		font-size: 10px;
+		font-weight: 650;
 		color: var(--text-muted);
 		text-transform: uppercase;
-		letter-spacing: 0.04em;
+		letter-spacing: .13em;
+		line-height: 1.7;
 		margin-bottom: 14px;
 	}
 
@@ -698,7 +696,7 @@
 	.color-hex {
 		flex: 1;
 		height: 34px;
-		border-radius: 6px;
+		border-radius: var(--radius-sm);
 		border: 1px solid var(--border);
 		padding: 0 10px;
 		font-size: 13px;
@@ -732,7 +730,7 @@
 	.field-card {
 		background: var(--bg-panel2);
 		border: 1px solid var(--border);
-		border-radius: 10px;
+		border-radius: var(--radius);
 		padding: 12px 14px;
 		margin-bottom: 8px;
 	}
@@ -754,7 +752,7 @@
 		color: var(--text-muted);
 		background: var(--bg-panel);
 		border: 1px solid var(--border);
-		border-radius: 4px;
+		border-radius: var(--radius-sm);
 		padding: 1px 6px;
 		line-height: 1.4;
 	}
@@ -767,7 +765,7 @@
 	.btn-icon {
 		width: 24px;
 		height: 24px;
-		border-radius: 5px;
+		border-radius: var(--radius-sm);
 		border: 1px solid var(--border);
 		background: var(--bg-panel);
 		color: var(--text-muted);
@@ -779,8 +777,8 @@
 		transition: background 0.15s, color 0.15s;
 	}
 
-	.btn-icon:hover { background: var(--accent-dim); color: var(--accent); }
-	.btn-icon.danger:hover { background: #fef2f2; color: var(--danger); }
+	.btn-icon:hover { background: var(--accent-dim); color: var(--accent-ink); }
+	.btn-icon.danger:hover { background: var(--danger-dim); color: var(--danger); }
 	.btn-icon:disabled { opacity: 0.3; cursor: not-allowed; }
 
 	/* ===== Toggle switch ===== */
@@ -792,8 +790,11 @@
 		position: relative;
 		width: 36px;
 		height: 20px;
-		border-radius: 10px;
-		background: var(--border);
+		border-radius: 4px;
+		/* --border is only ~1.2:1 against the --bg-panel2 field card it sits on, so the
+		   "off" track was effectively invisible. --text-subtle clears the 3:1 the spec
+		   wants for a control state. */
+		background: var(--text-subtle);
 		border: none;
 		cursor: pointer;
 		transition: background 0.2s;
@@ -812,9 +813,9 @@
 		width: 16px;
 		height: 16px;
 		border-radius: 50%;
-		background: white;
+		background: var(--bg-panel);
 		transition: transform 0.2s;
-		box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+		box-shadow: var(--shadow-xs);
 	}
 
 	.toggle-switch.on .toggle-knob {
@@ -828,7 +829,7 @@
 		padding: 12px 20px;
 		background: var(--bg-panel);
 		border-top: 1px solid var(--border);
-		border-radius: 0 0 12px 12px;
+		border-radius: 0 0 var(--radius-lg) var(--radius-lg);
 		display: flex;
 		align-items: center;
 		justify-content: flex-end;
@@ -840,13 +841,22 @@
 		align-items: center;
 	}
 
+	/* Both Save buttons are disabled while saving; without this they would still take
+	   the new signature hover lift and the accent-hover wash. */
+	.btn-action:disabled:hover {
+		background: var(--accent);
+		transform: none;
+	}
+
 	/* ===== Spinner ===== */
+	/* Inherits the button's own ink (--accent-contrast on the accent fill), so it
+	   stays legible whatever the org's brand colour is. */
 	.spinner {
 		display: inline-block;
 		width: 14px;
 		height: 14px;
-		border: 2px solid rgba(255, 255, 255, 0.3);
-		border-top-color: #fff;
+		border: 2px solid color-mix(in srgb, currentColor 30%, transparent);
+		border-top-color: currentColor;
 		border-radius: 50%;
 		animation: spin 0.6s linear infinite;
 	}
@@ -871,16 +881,17 @@
 	}
 
 	.preview-panel-header h3 {
-		font-size: 13px;
-		font-weight: 700;
+		font-size: 10px;
+		font-weight: 650;
 		color: var(--text-muted);
 		text-transform: uppercase;
-		letter-spacing: 0.04em;
+		letter-spacing: .13em;
+		line-height: 1.7;
 	}
 
 	.preview-card {
 		border: 1px solid var(--border);
-		border-radius: 14px;
+		border-radius: var(--radius-lg);
 		min-height: 400px;
 		display: flex;
 		align-items: center;
@@ -891,23 +902,25 @@
 	.preview-inner {
 		width: 100%;
 		max-width: 340px;
-		background: white;
-		border-radius: 12px;
+		background: var(--bg-panel);
+		border-radius: var(--radius-lg);
 		padding: 28px 24px;
-		box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+		box-shadow: var(--shadow);
 	}
 
 	.preview-inner h2 {
 		font-size: 18px;
-		font-weight: 700;
+		font-weight: 550;
+		letter-spacing: -.055em;
+		line-height: 1.08;
 		margin-bottom: 8px;
 	}
 
 	.preview-desc {
 		font-size: 13px;
-		color: #666;
+		color: var(--text-muted);
 		margin-bottom: 12px;
-		line-height: 1.5;
+		line-height: 1.75;
 	}
 
 	.preview-arrival {
@@ -916,7 +929,7 @@
 		gap: 6px;
 		font-size: 13px;
 		font-weight: 600;
-		color: #555;
+		color: var(--text-muted);
 		margin-bottom: 20px;
 	}
 
@@ -937,7 +950,7 @@
 		display: block;
 		font-size: 12px;
 		font-weight: 600;
-		color: #333;
+		color: var(--text-base);
 		margin-bottom: 4px;
 		text-transform: none;
 		letter-spacing: 0;
@@ -948,10 +961,10 @@
 	.preview-field select {
 		width: 100%;
 		padding: 8px 12px;
-		border: 1px solid #ddd;
-		border-radius: 6px;
+		border: 1px solid var(--border);
+		border-radius: var(--radius-sm);
 		font-size: 13px;
-		background: #f9f9f9;
+		background: var(--bg-panel2);
 	}
 
 	.checkbox-row {
@@ -970,7 +983,7 @@
 	.checkbox-label {
 		font-size: 12px;
 		font-weight: 600;
-		color: #333;
+		color: var(--text-base);
 		user-select: none;
 		line-height: 1;
 	}
@@ -979,10 +992,10 @@
 		width: 100%;
 		padding: 10px;
 		border: none;
-		border-radius: 8px;
-		color: white;
+		border-radius: var(--radius-sm);
+		color: var(--accent-contrast);
 		font-size: 14px;
-		font-weight: 600;
+		font-weight: 650;
 		cursor: default;
 	}
 
@@ -1006,19 +1019,19 @@
 		height: 40px;
 		border-radius: 50%;
 		border: none;
-		background: white;
+		background: var(--bg-panel);
 		color: var(--text-base);
 		cursor: pointer;
 		display: flex;
 		align-items: center;
 		justify-content: center;
 		transition: background 0.15s, box-shadow 0.15s;
-		box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+		box-shadow: var(--shadow-sm);
 	}
 
 	.fullscreen-close:hover {
-		background: #f5f5f5;
-		box-shadow: 0 2px 12px rgba(0, 0, 0, 0.25);
+		background: var(--bg-hover);
+		box-shadow: var(--shadow);
 	}
 
 	.fullscreen-content {
@@ -1048,7 +1061,7 @@
 		align-items: center;
 		gap: 6px;
 		font-size: 12px;
-		color: #333;
+		color: var(--text-base);
 		cursor: default;
 	}
 
@@ -1070,10 +1083,10 @@
 	.allergy-other-input {
 		width: 100%;
 		padding: 6px 10px;
-		border: 1px solid #ddd;
-		border-radius: 6px;
+		border: 1px solid var(--border);
+		border-radius: var(--radius-sm);
 		font-size: 12px;
-		background: #f9f9f9;
+		background: var(--bg-panel2);
 	}
 
 	/* ===== Style picker grid ===== */
@@ -1089,7 +1102,7 @@
 		gap: 2px;
 		padding: 10px 12px;
 		border: 2px solid var(--border);
-		border-radius: 10px;
+		border-radius: var(--radius-lg);
 		background: var(--bg-panel2);
 		cursor: pointer;
 		transition: border-color 0.15s, background 0.15s;
@@ -1098,8 +1111,8 @@
 	}
 
 	.style-option:hover {
-		border-color: var(--accent);
-		background: var(--accent-dim);
+		border-color: var(--text-subtle);
+		background: var(--bg-hover);
 	}
 
 	.style-option.active {
@@ -1109,7 +1122,8 @@
 
 	.style-name {
 		font-size: 13px;
-		font-weight: 700;
+		font-weight: 650;
+		letter-spacing: -.03em;
 		color: var(--text-base);
 	}
 
@@ -1119,41 +1133,41 @@
 	}
 
 	/* ===== Preview style variants ===== */
-	:global(.rsvp-style-elegant) .preview-inner { font-family: 'Georgia', serif; border-radius: 20px; }
+	:global(.rsvp-style-elegant) .preview-inner { font-family: 'Georgia', serif; border-radius: var(--radius-xl); }
 	:global(.rsvp-style-elegant) .preview-inner h2 { font-family: 'Georgia', serif; font-style: italic; font-weight: 400; }
 	:global(.rsvp-style-elegant) .preview-submit { border-radius: 24px; }
 	:global(.rsvp-style-elegant) .preview-field input,
 	:global(.rsvp-style-elegant) .preview-field select { border-radius: 12px; }
 
-	:global(.rsvp-style-modern) .preview-inner { font-family: 'Inter', sans-serif; border-radius: 0; border: 2px solid #111; }
-	:global(.rsvp-style-modern) .preview-inner h2 { font-weight: 900; text-transform: uppercase; letter-spacing: 0.05em; font-size: 15px; }
+	:global(.rsvp-style-modern) .preview-inner { font-family: 'Inter', sans-serif; border-radius: 0; border: 2px solid var(--text-base); }
+	:global(.rsvp-style-modern) .preview-inner h2 { font-weight: 650; text-transform: uppercase; letter-spacing: 0.05em; font-size: 15px; }
 	:global(.rsvp-style-modern) .preview-submit { border-radius: 0; text-transform: uppercase; letter-spacing: 0.08em; }
 	:global(.rsvp-style-modern) .preview-field input,
-	:global(.rsvp-style-modern) .preview-field select { border-radius: 0; border: 2px solid #ccc; }
+	:global(.rsvp-style-modern) .preview-field select { border-radius: 0; border: 2px solid var(--border); }
 
-	:global(.rsvp-style-romantic) .preview-inner { font-family: 'Georgia', serif; border-radius: 24px; }
+	:global(.rsvp-style-romantic) .preview-inner { font-family: 'Georgia', serif; border-radius: var(--radius-xl); }
 	:global(.rsvp-style-romantic) .preview-inner h2 { font-family: 'Brush Script MT', 'Segoe Script', cursive; font-weight: 400; font-size: 22px; }
 	:global(.rsvp-style-romantic) .preview-submit { border-radius: 28px; }
 	:global(.rsvp-style-romantic) .preview-field input,
 	:global(.rsvp-style-romantic) .preview-field select { border-radius: 14px; }
 
-	:global(.rsvp-style-minimal) .preview-inner { font-family: 'Helvetica Neue', sans-serif; border-radius: 6px; padding: 36px 28px; }
+	:global(.rsvp-style-minimal) .preview-inner { font-family: 'Helvetica Neue', sans-serif; border-radius: var(--radius-sm); padding: 36px 28px; }
 	:global(.rsvp-style-minimal) .preview-inner h2 { font-weight: 300; letter-spacing: 0.02em; }
 	:global(.rsvp-style-minimal) .preview-submit { border-radius: 4px; font-weight: 400; }
 	:global(.rsvp-style-minimal) .preview-field input,
 	:global(.rsvp-style-minimal) .preview-field select { border-radius: 4px; }
 
-	:global(.rsvp-style-festive) .preview-inner { font-family: 'Verdana', sans-serif; border-radius: 18px; border: 2px dashed currentColor; }
-	:global(.rsvp-style-festive) .preview-inner h2 { font-weight: 800; }
-	:global(.rsvp-style-festive) .preview-submit { border-radius: 50px; font-weight: 800; }
+	:global(.rsvp-style-festive) .preview-inner { font-family: 'Verdana', sans-serif; border-radius: 4px; border: 2px dashed currentColor; }
+	:global(.rsvp-style-festive) .preview-inner h2 { font-weight: 650; }
+	:global(.rsvp-style-festive) .preview-submit { border-radius: 50px; font-weight: 650; }
 	:global(.rsvp-style-festive) .preview-field input,
 	:global(.rsvp-style-festive) .preview-field select { border-radius: 10px; }
 
-	:global(.rsvp-style-classic) .preview-inner { font-family: 'Palatino Linotype', serif; border-radius: 10px; border: 1px solid #d4d0c8; }
-	:global(.rsvp-style-classic) .preview-inner h2 { font-family: 'Palatino Linotype', serif; font-weight: 600; }
+	:global(.rsvp-style-classic) .preview-inner { font-family: 'Palatino Linotype', serif; border-radius: var(--radius); border: 1px solid var(--border); }
+	:global(.rsvp-style-classic) .preview-inner h2 { font-family: 'Palatino Linotype', serif; font-weight: 550; }
 	:global(.rsvp-style-classic) .preview-submit { border-radius: 8px; }
 	:global(.rsvp-style-classic) .preview-field input,
-	:global(.rsvp-style-classic) .preview-field select { border-radius: 6px; border: 1px solid #d4d0c8; }
+	:global(.rsvp-style-classic) .preview-field select { border-radius: 6px; border: 1px solid var(--border); }
 
 	/* ===== Responsive ===== */
 	@media (max-width: 840px) {

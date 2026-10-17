@@ -19,8 +19,12 @@
 		allowZones?: boolean;                // …but still allow zones (e.g. clients organising space)
 		lockFloors?: boolean;                // Hide add/remove-floor controls (reservation editor)
 		tablesFromTypesOnly?: boolean;       // Only place defined admin table types (no freeform)
+		/** Seat real people on this layout. A hall's own floor plan and its templates
+		 *  describe the ROOM, which has no guests — a guest list only means something
+		 *  once a layout belongs to a booked event. Off unless a caller opts in. */
+		allowGuests?: boolean;
 	}
-	const { initialState, onchange, tableTypes, hiddenTools = [], protectWallsZones = false, allowZones = false, lockFloors = false, tablesFromTypesOnly = false }: Props = $props();
+	const { initialState, onchange, tableTypes, hiddenTools = [], protectWallsZones = false, allowZones = false, lockFloors = false, tablesFromTypesOnly = false, allowGuests = false }: Props = $props();
 
 	// Walls (the venue shell) can be protected while zones stay editable.
 	const wallsLocked = $derived(protectWallsZones);
@@ -187,6 +191,8 @@
 	let noteEditId   = $state<string | null>(null);
 	let chairPopover = $state<ChairPopover | null>(null);
 	let activeTab    = $state<'props' | 'guests'>('props');
+	// Never strand the panel on a tab that is not rendered.
+	$effect(() => { if (!allowGuests && activeTab === 'guests') activeTab = 'props'; });
 
 	// ─── Floor management ────────────────────────────────────────────────────
 	/** Flush working copy back into floors array */
@@ -271,6 +277,28 @@
 	const wx = (x: number) => x * zoom + panX;
 	const wy = (y: number) => y * zoom + panY;
 	const ws = (s: number) => s * zoom;
+	/**
+	 * How close the cursor must be to the first point to CLOSE a shape.
+	 *
+	 * Screen-space, not world-space. `zoom` is pixels-per-metre, so the old
+	 * `gridSnap * 1.5` radius grew with zoom: at 60 px/m it covered 45 px, and zoomed
+	 * in it swallowed the fourth corner of a square, turning it into a triangle. A
+	 * constant 12 px feels identical at every zoom and is small enough that a square
+	 * of any visible size can be drawn.
+	 *
+	 * It is also deliberately independent of grid snap, so closing still works — and
+	 * still previews green — with snapping switched off.
+	 */
+	const CLOSE_HIT_PX = 12;
+	const closeRadius = $derived(CLOSE_HIT_PX / zoom);
+
+	/** True when `p` is close enough to the first drawn point to finish the shape. */
+	function nearFirstPoint(p: Point): boolean {
+		if (drawPts.length < 3) return false;
+		const first = drawPts[0];
+		return Math.hypot(p.x - first.x, p.y - first.y) < closeRadius;
+	}
+
 	const sx = (px: number) => (px - panX) / zoom;
 	const sy = (py: number) => (py - panY) / zoom;
 
@@ -971,8 +999,7 @@
 
 		if (tool === 'wall' || tool === 'zone') {
 			if (!isDrawing) { isDrawing = true; drawPts = [pos]; return; }
-			const first = drawPts[0];
-			if (drawPts.length >= 3 && Math.hypot(pos.x - first.x, pos.y - first.y) < (gridSnap || 0.5) * 1.5) {
+			if (nearFirstPoint(pos)) {
 				finishDrawing();
 			} else { drawPts = [...drawPts, pos]; }
 			return;
@@ -1500,14 +1527,14 @@
 				{#each walls as wall}
 					{@const pts = wall.points.map(p => `${wx(p.x)},${wy(p.y)}`).join(' ')}
 					{@const sel = wall.id === selectedId}
-					<polygon points={pts} fill="var(--editor-wall)" stroke={sel ? '#7b6cf0' : 'none'}
+					<polygon points={pts} fill="var(--editor-wall)" stroke={sel ? 'var(--accent)' : 'none'}
 						stroke-width={sel ? 3 : 0}
 						style={tool === 'select' && !wallsLocked ? 'cursor:move' : ''}
 						pointer-events={tool === 'select' || tool === 'eraser' ? 'auto' : 'none'}/>
 					{#if sel && !wallsLocked}
 						{#each wall.points as p, vi}
 							<circle cx={wx(p.x)} cy={wy(p.y)} r="6"
-								fill={vertexDragIdx === vi && isVertexDragging ? '#5b4cd0' : '#7b6cf0'}
+								fill={vertexDragIdx === vi && isVertexDragging ? 'var(--accent-hover)' : 'var(--accent)'}
 								stroke="white" stroke-width="2" style="cursor:grab"
 								pointer-events="auto"/>
 						{/each}
@@ -1555,11 +1582,11 @@
 						{#if table.shape === 'rect'}
 							<rect x={-ws(table.width/2)} y={-ws(table.height/2)}
 								width={ws(table.width)} height={ws(table.height)} rx={ws(0.06)}
-								fill="#92400e" stroke={sel ? '#7b6cf0' : '#78350f'}
+								fill="#92400e" stroke={sel ? 'var(--accent)' : '#78350f'}
 								stroke-width={sel ? 3 : 1.5}/>
 						{:else}
 							<circle cx={0} cy={0} r={ws(table.radius)}
-								fill="#92400e" stroke={sel ? '#7b6cf0' : '#78350f'}
+								fill="#92400e" stroke={sel ? 'var(--accent)' : '#78350f'}
 								stroke-width={sel ? 3 : 1.5}/>
 						{/if}
 
@@ -1596,7 +1623,7 @@
 								<!-- Initials (only if assigned + zoomed in enough) -->
 								{#if g && zoom >= 55}
 									<text x={0} y={ws(0.09)} text-anchor="middle" dominant-baseline="middle"
-										font-size={Math.max(6, ws(0.18))} font-weight="800"
+										font-size={Math.max(6, ws(0.18))} font-weight="650"
 										fill="white" pointer-events="none">
 										{g.firstName[0]}{g.lastName[0]}
 									</text>
@@ -1607,9 +1634,9 @@
 						<!-- Rotation handle -->
 						{#if sel}
 							<line x1={0} y1={-ws(rotH)} x2={0} y2={-ws(rotH+0.65)}
-								stroke="#7b6cf0" stroke-width="1.5" stroke-dasharray="3,2" pointer-events="none"/>
+								stroke="var(--accent)" stroke-width="1.5" stroke-dasharray="3,2" pointer-events="none"/>
 							<circle cx={0} cy={-ws(rotH+0.65)} r={6}
-								fill="#7b6cf0" stroke="white" stroke-width="2"
+								fill="var(--accent)" stroke="white" stroke-width="2"
 								style="cursor:grab"
 								onpointerdown={(e) => startRotate(e, table)}/>
 						{/if}
@@ -1637,7 +1664,7 @@
 							}
 						}}>
 						{#if ssel}
-							<circle cx={0} cy={0} r={ws(0.32)} fill="none" stroke="#7b6cf0" stroke-width="2.5"/>
+							<circle cx={0} cy={0} r={ws(0.32)} fill="none" stroke="var(--accent)" stroke-width="2.5"/>
 						{/if}
 						<!-- Chair back bar -->
 						<rect x={-ws(0.21)} y={-ws(0.24)} width={ws(0.42)} height={ws(0.09)}
@@ -1648,7 +1675,7 @@
 							stroke={sg ? '#14532d' : '#475569'} stroke-width="1"/>
 						{#if sg && zoom >= 55}
 							<text x={0} y={ws(0.05)} text-anchor="middle" dominant-baseline="middle"
-								font-size={Math.max(6, ws(0.18))} font-weight="800"
+								font-size={Math.max(6, ws(0.18))} font-weight="650"
 								fill="white" pointer-events="none">
 								{sg.firstName[0]}{sg.lastName[0]}
 							</text>
@@ -1670,7 +1697,7 @@
 						stroke={tool==='wall'?'#2b3462':zoneColor} stroke-width="1.5"
 						stroke-dasharray="4,3" opacity="0.6" pointer-events="none"/>
 					{#each drawPts as p, i}
-						{@const near = i===0 && drawPts.length>=3 && Math.hypot(cursorPos.x-p.x,cursorPos.y-p.y)<gridSnap*1.5}
+						{@const near = i===0 && nearFirstPoint(cursorPos)}
 						<circle cx={wx(p.x)} cy={wy(p.y)} r={i===0?(near?9:6):4}
 							fill={near?'#16a34a':(tool==='wall'?'#2b3462':zoneColor)}
 							stroke="white" stroke-width="1.5" pointer-events="none"/>
@@ -1699,9 +1726,9 @@
 				<!-- ── Cursor guidelines (full canvas hairlines) ── -->
 				{#if tool !== 'select' && tool !== 'eraser'}
 					<line x1={0} y1={wy(cursorPos.y)} x2="100%" y2={wy(cursorPos.y)}
-						stroke="rgba(123,108,240,0.25)" stroke-width="1" stroke-dasharray="4,4" pointer-events="none"/>
+						stroke="color-mix(in srgb, var(--accent) 25%, transparent)" stroke-width="1" stroke-dasharray="4,4" pointer-events="none"/>
 					<line x1={wx(cursorPos.x)} y1={0} x2={wx(cursorPos.x)} y2="100%"
-						stroke="rgba(123,108,240,0.25)" stroke-width="1" stroke-dasharray="4,4" pointer-events="none"/>
+						stroke="color-mix(in srgb, var(--accent) 25%, transparent)" stroke-width="1" stroke-dasharray="4,4" pointer-events="none"/>
 				{/if}
 
 				<!-- ── Snap guides ── -->
@@ -1726,9 +1753,9 @@
 					{@const mx = (wx(measureStart.x) + wx(cursorPos.x)) / 2}
 					{@const my = (wy(measureStart.y) + wy(cursorPos.y)) / 2}
 					<rect x={mx - 28} y={my - 10} width="56" height="20" rx="4"
-						fill="white" stroke="var(--accent)" stroke-width="1" pointer-events="none"/>
+						fill="var(--bg-panel)" stroke="var(--accent)" stroke-width="1" pointer-events="none"/>
 					<text x={mx} y={my + 4} text-anchor="middle" font-size="11" font-weight="600"
-						fill="var(--accent)" font-family="monospace" pointer-events="none">{dist.toFixed(2)}m</text>
+						fill="var(--accent-ink)" font-family="monospace" pointer-events="none">{dist.toFixed(2)}m</text>
 				{/if}
 				{#if measureStart && measureEnd}
 					<line x1={wx(measureStart.x)} y1={wy(measureStart.y)}
@@ -1742,9 +1769,9 @@
 					{@const mx = (wx(measureStart.x) + wx(measureEnd.x)) / 2}
 					{@const my = (wy(measureStart.y) + wy(measureEnd.y)) / 2}
 					<rect x={mx - 28} y={my - 10} width="56" height="20" rx="4"
-						fill="white" stroke="var(--accent)" stroke-width="1" pointer-events="none"/>
+						fill="var(--bg-panel)" stroke="var(--accent)" stroke-width="1" pointer-events="none"/>
 					<text x={mx} y={my + 4} text-anchor="middle" font-size="11" font-weight="600"
-						fill="var(--accent)" font-family="monospace" pointer-events="none">{dist.toFixed(2)}m</text>
+						fill="var(--accent-ink)" font-family="monospace" pointer-events="none">{dist.toFixed(2)}m</text>
 				{/if}
 			</svg>
 
@@ -1786,7 +1813,7 @@
 			</div>
 
 			<!-- Chair assignment popover -->
-			{#if chairPopover}
+			{#if chairPopover && allowGuests}
 				<div class="overlay" role="presentation"
 					onclick={() => { chairPopover = null; guestSearch = ''; }}
 					onkeydown={(e) => e.key==='Escape' && (chairPopover = null)}></div>
@@ -1862,12 +1889,14 @@
 			<!-- Tabs -->
 			<div class="tabs">
 				<button class="tab" class:active={activeTab==='props'} onclick={() => activeTab='props'}>{tr.editor.properties}</button>
-				<button class="tab" class:active={activeTab==='guests'} onclick={() => activeTab='guests'}>
-					{tr.editor.guests}
-					{#if guests.length > 0}
-						<span class="tab-badge">{totalAssigned}/{guests.length}</span>
-					{/if}
-				</button>
+				{#if allowGuests}
+					<button class="tab" class:active={activeTab==='guests'} onclick={() => activeTab='guests'}>
+						{tr.editor.guests}
+						{#if guests.length > 0}
+							<span class="tab-badge">{totalAssigned}/{guests.length}</span>
+						{/if}
+					</button>
+				{/if}
 			</div>
 
 			<!-- ── Properties tab ── -->
@@ -2138,7 +2167,7 @@
 						<div class="sec-title">{tr.editor.tips}</div>
 						<ul class="tips">
 							<li>{tr.editor.tipAssign}</li>
-							<li>{tr.editor.tipRotatePre}<b style="color:#7b6cf0">{tr.editor.tipRotateHandle}</b>{tr.editor.tipRotatePost}</li>
+							<li>{tr.editor.tipRotatePre}<b style="color:var(--accent-ink)">{tr.editor.tipRotateHandle}</b>{tr.editor.tipRotatePost}</li>
 							<li><kbd>Delete</kbd> {tr.editor.tipDelete}</li>
 							<li><kbd>Enter</kbd> {tr.editor.tipEnter}</li>
 							<li><kbd>Esc</kbd> {tr.editor.tipEsc}</li>
@@ -2268,17 +2297,17 @@
 header {
 	display:flex; align-items:center; gap:20px; padding:0 16px; height:44px;
 	background:var(--bg-panel); border-bottom:1px solid var(--border);
-	flex-shrink:0; box-shadow:0 1px 3px rgba(0,0,0,0.06); z-index:20;
+	flex-shrink:0; box-shadow:var(--shadow-xs); z-index:20;
 }
 .header-controls { display:flex; align-items:center; gap:16px; flex:1; }
 
 /* ── Custom Select ── */
 .custom-select {
 	position:relative; display:inline-flex; align-items:center; gap:4px;
-	padding:4px 8px; min-width:72px; border-radius:6px;
+	padding:4px 8px; min-width:72px; border-radius:var(--radius-sm);
 	border:1px solid var(--border); background:var(--bg-panel);
 	font-size:12px; color:var(--text-base); cursor:pointer;
-	user-select:none; transition:border-color 0.12s;
+	user-select:none; transition:border-color 0.15s;
 }
 .custom-select:hover { border-color:var(--accent); }
 .custom-select-value { flex:1; }
@@ -2286,18 +2315,18 @@ header {
 .custom-select-dropdown {
 	position:absolute; top:calc(100% + 4px); left:0; right:0;
 	background:var(--bg-panel); border:1px solid var(--border);
-	border-radius:8px; padding:4px; box-shadow:0 8px 24px rgba(0,0,0,0.10);
+	border-radius:var(--radius); padding:4px; box-shadow:var(--shadow);
 	z-index:50;
 }
 .custom-select-option {
-	display:block; width:100%; padding:5px 8px; border-radius:5px;
+	display:block; width:100%; padding:5px 8px; border-radius:var(--radius-sm);
 	font-size:12px; color:var(--text-base); text-align:left;
 	background:none; border:none; cursor:pointer; font-family:inherit;
 }
 .custom-select-option:hover { background:var(--bg-panel2); }
-.custom-select-option.selected { color:var(--accent); font-weight:600; }
+.custom-select-option.selected { color:var(--accent-ink); font-weight:600; }
 .ctrl { display:flex; align-items:center; gap:7px; font-size:12px; }
-.val { font-size:11px; color:var(--accent); min-width:52px; font-variant-numeric:tabular-nums; }
+.val { font-size:11px; color:var(--accent-ink); min-width:52px; font-variant-numeric:tabular-nums; }
 .hint-text { font-size:11px; color:var(--text-muted); margin-left:8px; }
 
 /* ── Body ── */
@@ -2311,18 +2340,18 @@ header {
 }
 .tool-btn {
 	display:flex; align-items:center; gap:9px; padding:9px 10px;
-	width:100%; border-radius:7px; color:var(--text-muted);
-	font-size:12px; font-weight:500; transition:background 0.1s, color 0.1s;
+	width:100%; border-radius:var(--radius); color:var(--text-muted);
+	font-size:12px; font-weight:500; transition:background 0.15s, color 0.15s;
 	text-align:left;
 }
 .tool-btn:hover:not(:disabled) { background:var(--bg-panel2); color:var(--text-base); }
-.tool-btn.active { background:var(--accent-dim); color:var(--accent); font-weight:600; }
+.tool-btn.active { background:var(--accent-dim); color:var(--accent-ink); font-weight:600; }
 .tool-btn:disabled { opacity:0.3; cursor:default; }
 .sep { height:1px; background:var(--border); margin:6px 4px; }
-.finish { color:#16a34a; }
-.finish:hover { background:rgba(22,163,74,0.1); }
-.cancel { color:#ef4444; }
-.cancel:hover { background:rgba(239,68,68,0.1); }
+.finish { color:var(--success); }
+.finish:hover { background:var(--success-dim); }
+.cancel { color:var(--danger); }
+.cancel:hover { background:var(--danger-dim); }
 
 /* ── Canvas ── */
 .canvas-wrap { flex:1; position:relative; overflow:hidden; display:flex; flex-direction:column; }
@@ -2342,29 +2371,29 @@ header {
 .overlay { position:absolute; inset:0; z-index:40; }
 .chair-popover {
 	position:absolute; z-index:50; background:var(--bg-panel);
-	border:1px solid var(--border); border-radius:10px;
-	box-shadow:0 8px 24px rgba(0,0,0,0.14); width:240px;
+	border:1px solid var(--border); border-radius:var(--radius-lg);
+	box-shadow:var(--shadow); width:240px;
 	overflow:hidden;
 }
 .pop-header {
 	display:flex; justify-content:space-between; align-items:center;
 	padding:10px 12px 8px; font-size:12px; font-weight:600; color:var(--text-base);
-	border-bottom:1px solid var(--border);
+	letter-spacing:-.03em; border-bottom:1px solid var(--border);
 }
-.pop-close { color:var(--text-muted); font-size:14px; line-height:1; padding:2px 4px; border-radius:4px; }
+.pop-close { color:var(--text-muted); font-size:14px; line-height:1; padding:2px 4px; border-radius:var(--radius-sm); }
 .pop-close:hover { background:var(--bg-panel2); color:var(--text-base); }
 .pop-assigned {
 	display:flex; align-items:center; gap:6px; padding:8px 12px;
-	background:rgba(22,163,74,0.08); border-bottom:1px solid var(--border);
+	background:var(--success-dim); border-bottom:1px solid var(--border);
 }
-.pop-name { font-size:12px; font-weight:600; color:#15803d; flex:1; }
-.pop-group { font-size:10px; color:var(--text-muted); background:var(--bg-panel2); padding:1px 5px; border-radius:4px; }
-.pop-clear { font-size:11px; color:#ef4444; padding:3px 8px; border-radius:5px; background:rgba(239,68,68,0.1); }
-.pop-clear:hover { background:rgba(239,68,68,0.2); }
+.pop-name { font-size:12px; font-weight:600; color:var(--success); flex:1; }
+.pop-group { font-size:10px; color:var(--text-muted); background:var(--bg-panel2); padding:1px 5px; border-radius:var(--radius-sm); }
+.pop-clear { font-size:11px; color:var(--danger); padding:3px 8px; border-radius:var(--radius-sm); background:var(--danger-dim); }
+.pop-clear:hover { background:color-mix(in srgb, var(--danger) 15%, transparent); }
 .pop-note {
 	display:flex; align-items:flex-start; gap:6px; padding:6px 10px;
-	font-size:11px; line-height:1.4; color:var(--warning, #b45309);
-	background:rgba(180,83,9,0.08); border-radius:6px; margin:0 0 2px;
+	font-size:11px; line-height:1.4; color:var(--warning);
+	background:var(--warning-dim); border-radius:var(--radius-sm); margin:0 0 2px;
 }
 .pop-note svg { flex-shrink:0; margin-top:1px; }
 .pop-empty { padding:8px 12px; font-size:12px; color:var(--text-muted); border-bottom:1px solid var(--border); }
@@ -2372,18 +2401,18 @@ header {
 	display:block; width:100%; padding:8px 12px; border:none; border-bottom:1px solid var(--border);
 	background:var(--bg-panel2); font-size:12px; outline:none; border-radius:0;
 }
-.pop-search:focus { background:#f0f2f7; }
+.pop-search:focus { background:var(--bg-hover); }
 .pop-list { max-height:200px; overflow-y:auto; }
 .pop-guest {
 	display:flex; align-items:center; gap:6px; padding:8px 12px; width:100%;
 	font-size:12px; text-align:left; border-bottom:1px solid var(--border);
-	transition:background 0.1s;
+	transition:background 0.15s;
 }
 .pop-guest:hover { background:var(--bg-panel2); }
-.pop-guest.current { background:rgba(123,108,240,0.08); }
+.pop-guest.current { background:var(--accent-dim); }
 .pop-gname { flex:1; color:var(--text-base); }
-.pop-ggroup { font-size:10px; color:var(--text-muted); background:var(--bg-panel2); padding:1px 5px; border-radius:4px; }
-.pop-check { color:var(--accent); font-weight:700; }
+.pop-ggroup { font-size:10px; color:var(--text-muted); background:var(--bg-panel2); padding:1px 5px; border-radius:var(--radius-sm); }
+.pop-check { color:var(--accent-ink); font-weight:650; }
 
 /* ── Right panel ── */
 .panel {
@@ -2393,21 +2422,22 @@ header {
 .tabs { display:flex; border-bottom:1px solid var(--border); flex-shrink:0; }
 .tab {
 	flex:1; padding:9px 0; font-size:12px; font-weight:500; color:var(--text-muted);
-	border-bottom:2px solid transparent; transition:color 0.1s, border-color 0.1s;
+	border-bottom:2px solid transparent; transition:color 0.15s, border-color 0.15s;
 }
 .tab:hover { color:var(--text-base); }
-.tab.active { color:var(--accent); border-bottom-color:var(--accent); font-weight:600; }
+.tab.active { color:var(--accent-ink); border-bottom-color:var(--accent); font-weight:600; }
 .tab-badge {
-	display:inline-block; background:var(--accent-dim); color:var(--accent);
-	font-size:9px; padding:1px 5px; border-radius:10px; margin-left:4px; font-weight:700;
+	display:inline-block; background:var(--accent-dim); color:var(--accent-ink);
+	font-size:9px; padding:1px 5px; border-radius: 3px; margin-left:4px; font-weight:650;
 }
 /* panel scroll area */
 .panel > :not(.tabs) { overflow-y:auto; flex:1; }
 
 section { padding:12px; border-bottom:1px solid var(--border); }
+/* Eyebrow — the uppercase overline motif of the paper language. */
 .sec-title {
-	font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.08em;
-	color:var(--accent); margin-bottom:10px;
+	font-size:10px; font-weight:650; text-transform:uppercase; letter-spacing:0.13em;
+	color:var(--text-muted); margin-bottom:10px;
 }
 .sec-title-row { display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; }
 .field { display:flex; flex-direction:column; gap:4px; margin-bottom:9px; }
@@ -2417,8 +2447,8 @@ section { padding:12px; border-bottom:1px solid var(--border); }
 .gf-combo { position:relative; }
 .gf-suggest {
 	position:absolute; top:100%; left:0; right:0; z-index:30; margin-top:3px;
-	background:var(--bg-panel); border:1px solid var(--border); border-radius:7px;
-	box-shadow:0 8px 24px rgba(0,0,0,0.14); overflow:hidden auto; max-height:158px;
+	background:var(--bg-panel); border:1px solid var(--border); border-radius:var(--radius);
+	box-shadow:var(--shadow); overflow:hidden auto; max-height:158px;
 }
 .gf-suggest-item {
 	display:block; width:100%; text-align:left; padding:7px 10px; font-size:12px;
@@ -2427,16 +2457,16 @@ section { padding:12px; border-bottom:1px solid var(--border); }
 .gf-suggest-item:hover { background:var(--bg-panel2); }
 .toggle-row { flex-direction:row; justify-content:space-between; align-items:center; }
 .toggle {
-	padding:3px 10px; border-radius:12px; font-size:11px; font-weight:600;
+	padding:3px 10px; border-radius:var(--radius-lg); font-size:11px; font-weight:600;
 	background:var(--bg-panel2); border:1px solid var(--border); color:var(--text-muted);
-	transition:all 0.12s;
+	transition:background 0.15s, border-color 0.15s, color 0.15s;
 }
-.toggle.on { background:var(--accent-dim); border-color:var(--accent); color:var(--accent); }
+.toggle.on { background:var(--accent-dim); border-color:var(--accent); color:var(--accent-ink); }
 
 .swatches { display:flex; flex-wrap:wrap; gap:5px; align-items:center; margin-top:4px; }
 .swatch {
 	width:20px; height:20px; border-radius:50%; border:2px solid transparent;
-	cursor:pointer; transition:transform 0.1s, border-color 0.1s;
+	cursor:pointer; transition:transform 0.2s, border-color 0.15s;
 }
 .swatch:hover { transform:scale(1.15); }
 .swatch.on { border-color:var(--text-base); transform:scale(1.15); }
@@ -2446,7 +2476,7 @@ input[type="color"] {
 }
 
 .seat-summary { margin:4px 0 8px; }
-.stat-total { border-top:1px solid var(--border, rgba(255,255,255,.08)); margin-top:6px; padding-top:6px; opacity:.85; }
+.stat-total { border-top:1px solid var(--border); margin-top:6px; padding-top:6px; opacity:.85; }
 .seat-summary span { font-size:11px; color:var(--text-muted); }
 .seat-dots { display:flex; flex-wrap:wrap; gap:3px; margin-top:5px; }
 .dot {
@@ -2460,25 +2490,28 @@ input[type="color"] {
 .summary { margin-top:auto; }
 
 .btn-del {
-	width:100%; padding:7px; border-radius:7px; background:rgba(239,68,68,0.08);
-	color:#ef4444; font-size:12px; font-weight:600; transition:background 0.1s; margin-top:4px;
+	width:100%; padding:7px; border-radius:var(--radius-sm); background:var(--danger-dim);
+	color:var(--danger); font-size:12px; font-weight:600; transition:background 0.15s; margin-top:4px;
 }
-.btn-del:hover { background:rgba(239,68,68,0.18); }
+.btn-del:hover { background:color-mix(in srgb, var(--danger) 15%, transparent); }
 
+/* The section's primary action — accent fill, ink-on-accent text, signature lift. */
 .btn-add {
-	width:100%; padding:8px; border-radius:7px; background:var(--accent-dim);
-	color:var(--accent); font-size:12px; font-weight:600; transition:background 0.1s;
+	width:100%; padding:8px; border-radius:var(--radius-sm); background:var(--accent);
+	color:var(--accent-contrast); font-size:12px; font-weight:650;
+	transition:transform 0.2s, background 0.2s;
 }
-.btn-add:hover { background:#d8d2ff; }
+.btn-add:hover { background:var(--accent-hover); transform:translateY(-2px); }
+.btn-add:active { transform:translateY(0); }
 
 .guest-actions { display:flex; gap:5px; }
 .btn-sm {
-	padding:4px 9px; border-radius:5px; font-size:11px; font-weight:600;
-	background:var(--accent-dim); color:var(--accent); transition:background 0.1s;
+	padding:4px 9px; border-radius:var(--radius-sm); font-size:11px; font-weight:600;
+	background:var(--accent-dim); color:var(--accent-ink); transition:background 0.15s;
 }
-.btn-sm:hover { background:#d8d2ff; }
-.btn-sm-danger { background:rgba(239,68,68,0.08); color:#ef4444; }
-.btn-sm-danger:hover { background:rgba(239,68,68,0.18); }
+.btn-sm:hover { background:color-mix(in srgb, var(--accent) 22%, transparent); }
+.btn-sm-danger { background:var(--danger-dim); color:var(--danger); }
+.btn-sm-danger:hover { background:color-mix(in srgb, var(--danger) 15%, transparent); }
 
 .guest-list { display:flex; flex-direction:column; max-height:340px; overflow-y:auto; margin-top:4px; }
 .guest-row {
@@ -2489,30 +2522,30 @@ input[type="color"] {
 .guest-info { display:flex; flex-direction:column; gap:2px; flex:1; min-width:0; }
 .guest-name { font-size:12px; color:var(--text-base); font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .guest-grp  { font-size:10px; color:var(--text-muted); }
-.guest-seat { font-size:10px; color:var(--accent); font-weight:600; }
+.guest-seat { font-size:10px; color:var(--accent-ink); font-weight:600; }
 .guest-note {
 	display:inline-flex; align-items:center; gap:4px; font-size:10px; line-height:1.3;
-	color:var(--warning, #b45309); max-width:100%;
+	color:var(--warning); max-width:100%;
 }
 .guest-note svg { flex-shrink:0; }
-.guest-row.seated .guest-name { color:var(--accent); }
+.guest-row.seated .guest-name { color:var(--accent-ink); }
 .guest-row-actions { display:flex; align-items:center; gap:2px; flex-shrink:0; }
-.btn-icon { font-size:11px; color:var(--text-muted); padding:3px 5px; border-radius:4px; flex-shrink:0; }
-.btn-icon:hover { background:rgba(239,68,68,0.1); color:#ef4444; }
-.btn-icon.active { color:var(--accent); }
-.btn-icon.active:hover { background:var(--accent-dim); color:var(--accent); }
+.btn-icon { font-size:11px; color:var(--text-muted); padding:3px 5px; border-radius:var(--radius-sm); flex-shrink:0; }
+.btn-icon:hover { background:var(--danger-dim); color:var(--danger); }
+.btn-icon.active { color:var(--accent-ink); }
+.btn-icon.active:hover { background:var(--accent-dim); color:var(--accent-ink); }
 .guest-note-edit { padding:0 0 8px; }
 .guest-note-edit textarea {
 	width:100%; resize:vertical; font:inherit; font-size:11px; line-height:1.4;
-	padding:6px 8px; border:1px solid var(--border); border-radius:6px;
+	padding:6px 8px; border:1px solid var(--border); border-radius:var(--radius-sm);
 	background:var(--bg-panel2); color:var(--text-base);
 }
-.guest-note-edit textarea:focus { outline:none; border-color:var(--accent); }
+.guest-note-edit textarea:focus { outline:none; border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-dim); }
 
 .tips { list-style:none; display:flex; flex-direction:column; gap:6px; }
 .tips li { font-size:11px; color:var(--text-muted); line-height:1.5; }
 kbd {
-	display:inline-block; padding:1px 5px; border-radius:3px;
+	display:inline-block; padding:1px 5px; border-radius:var(--radius-sm);
 	background:var(--bg-panel2); border:1px solid var(--border);
 	font-size:10px; font-family:monospace;
 }
@@ -2523,62 +2556,62 @@ kbd {
 /* Inventory */
 .inventory-list { display:flex; flex-direction:column; gap:4px; margin-top:6px; }
 .inventory-item {
-	display:flex; align-items:center; gap:10px; padding:8px 10px; border-radius:8px;
+	display:flex; align-items:center; gap:10px; padding:8px 10px; border-radius:var(--radius);
 	background:var(--bg-panel2); border:1px solid var(--border); text-align:left;
-	cursor:pointer; transition:border-color 0.12s, background 0.12s;
+	cursor:pointer; transition:border-color 0.15s, background 0.15s;
 }
 .inventory-item:hover { border-color:var(--accent); }
 .inventory-item.active { border-color:var(--accent); background:var(--accent-dim); }
 .inv-preview { width:36px; height:36px; flex-shrink:0; }
 .inv-preview svg { width:100%; height:100%; }
 .inv-info { display:flex; flex-direction:column; gap:2px; }
-.inv-name { font-size:12px; font-weight:600; color:var(--text-base); }
+.inv-name { font-size:12px; font-weight:600; letter-spacing:-.03em; color:var(--text-base); }
 .inv-detail { font-size:10px; color:var(--text-muted); }
 .inv-selected-info {
-	margin-top:8px; padding:8px 10px; border-radius:6px; background:var(--accent-dim);
-	font-size:11px; color:var(--accent); font-weight:500; text-align:center;
+	margin-top:8px; padding:8px 10px; border-radius:var(--radius-sm); background:var(--accent-dim);
+	font-size:11px; color:var(--accent-ink); font-weight:500; text-align:center;
 }
 .chair-limit-hint {
-	font-size:11px; color:var(--accent); font-weight:600; margin-bottom:6px;
+	font-size:11px; color:var(--accent-ink); font-weight:600; margin-bottom:6px;
 	text-align:right;
 }
 .inv-locked-info {
-	margin-bottom:8px; padding:6px 10px; border-radius:6px; background:var(--bg-panel2);
+	margin-bottom:8px; padding:6px 10px; border-radius:var(--radius-sm); background:var(--bg-panel2);
 	font-size:11px; color:var(--text-muted); text-align:center; border:1px solid var(--border);
 }
 
 /* ── Snap toggle ── */
 .snap-toggle {
-	display:flex; align-items:center; gap:5px; padding:4px 10px; border-radius:6px;
+	display:flex; align-items:center; gap:5px; padding:4px 10px; border-radius:var(--radius-sm);
 	font-size:11px; font-weight:600; color:var(--text-muted);
 	background:var(--bg-panel2); border:1px solid var(--border);
-	transition:all 0.12s; cursor:pointer;
+	transition:background 0.15s, border-color 0.15s, color 0.15s; cursor:pointer;
 }
 .snap-toggle:hover { border-color:var(--accent); color:var(--text-base); }
-.snap-toggle.active { background:var(--accent-dim); border-color:var(--accent); color:var(--accent); }
+.snap-toggle.active { background:var(--accent-dim); border-color:var(--accent); color:var(--accent-ink); }
 
 /* ── Floor tabs ── */
 .floor-tabs {
 	display:flex; align-items:center; gap:2px; margin-left:auto;
 }
 .floor-tab {
-	padding:4px 12px; border-radius:5px; font-size:11px; font-weight:500;
+	padding:4px 12px; border-radius:var(--radius-sm); font-size:11px; font-weight:500;
 	color:var(--text-muted); background:transparent; border:1px solid transparent;
-	cursor:pointer; transition:all 0.12s;
+	cursor:pointer; transition:background 0.15s, border-color 0.15s, color 0.15s;
 }
 .floor-tab:hover { background:var(--bg-panel2); color:var(--text-base); }
 .floor-tab.active {
-	background:var(--accent-dim); color:var(--accent); font-weight:600;
+	background:var(--accent-dim); color:var(--accent-ink); font-weight:600;
 	border-color:var(--accent);
 }
 .floor-tab-add {
-	font-size:14px; font-weight:700; padding:2px 8px; color:var(--accent);
+	font-size:14px; font-weight:650; padding:2px 8px; color:var(--accent-ink);
 }
 .floor-tab-add:hover { background:var(--accent-dim); }
 .floor-tab-del {
-	font-size:12px; color:#ef4444; padding:2px 8px; margin-left:auto;
+	font-size:12px; color:var(--danger); padding:2px 8px; margin-left:auto;
 }
-.floor-tab-del:hover { background:rgba(239,68,68,0.1); }
+.floor-tab-del:hover { background:var(--danger-dim); }
 
 /* ── Edge rulers ── */
 .ruler-corner {
@@ -2620,5 +2653,10 @@ kbd {
 .ruler-cursor-v {
 	position:absolute; left:0; right:0; height:1px; background:var(--accent); opacity:0.6;
 	pointer-events:none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.btn-add:hover { transform:none; }
+	.swatch:hover:not(.on) { transform:none; }
 }
 </style>

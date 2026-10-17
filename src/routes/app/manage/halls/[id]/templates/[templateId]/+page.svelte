@@ -147,6 +147,7 @@
 	.layout-toolbar h1 {
 		font-size: 15px;
 		font-weight: 600;
+		letter-spacing: -0.03em;
 		margin: 0;
 	}
 
@@ -164,8 +165,8 @@
 
 	.save-status { font-size: 12px; font-weight: 600; min-width: 90px; text-align: right; }
 	.save-status.save-saving { color: var(--text-muted); }
-	.save-status.save-dirty  { color: var(--warning, #b45309); }
-	.save-status.save-saved  { color: var(--success, #16a34a); }
+	.save-status.save-dirty  { color: var(--warning); }
+	.save-status.save-saved  { color: var(--success); }
 	.save-status.save-idle   { color: transparent; }
 
 	/* Edit-details dialog */
@@ -175,41 +176,58 @@
 	}
 	.meta-dialog {
 		width: 440px; max-width: calc(100vw - 32px);
-		background: var(--bg-panel); border: 1px solid var(--border); border-radius: 14px;
-		box-shadow: 0 20px 60px rgba(0,0,0,.25);
+		background: var(--bg-panel); border: 1px solid var(--border); border-radius: var(--radius-lg);
+		box-shadow: var(--shadow);
 	}
 	.meta-header {
 		display: flex; align-items: center; justify-content: space-between;
 		padding: 18px 22px 14px; border-bottom: 1px solid var(--border);
 	}
-	.meta-header h2 { font-size: 15px; font-weight: 700; color: var(--text-base); margin: 0; }
+	.meta-header h2 {
+		font-size: 15px; font-weight: 600; letter-spacing: -0.03em; color: var(--text-base); margin: 0;
+	}
 	.meta-close {
-		width: 28px; height: 28px; border-radius: 6px; border: none; background: none;
+		width: 28px; height: 28px; border-radius: var(--radius-sm); border: none; background: none;
 		color: var(--text-muted); cursor: pointer; display: flex; align-items: center; justify-content: center;
 	}
 	.meta-close:hover { background: var(--bg-hover); }
 	.meta-dialog form { padding: 18px 22px 20px; display: flex; flex-direction: column; gap: 16px; }
 	.meta-err {
-		font-size: 12.5px; color: #dc2626; background: color-mix(in srgb, #dc2626 8%, transparent);
-		border: 1px solid color-mix(in srgb, #dc2626 24%, transparent); border-radius: 8px; padding: 8px 12px;
+		font-size: 12.5px; color: var(--danger); background: var(--danger-dim);
+		border: 1px solid color-mix(in srgb, var(--danger) 25%, transparent);
+		border-radius: var(--radius-sm); padding: 8px 12px;
 	}
 	.meta-field { display: flex; flex-direction: column; gap: 6px; }
-	.meta-field label, .meta-label {
-		font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--text-subtle);
+	/* A form-control label, not a section overline: it keeps the muted micro-label
+	   treatment the rest of the app's forms use. The accent-ink eyebrow is reserved
+	   for group overlines (see .meta-label below). */
+	.meta-field label {
+		font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .12em;
+		color: var(--text-muted);
+	}
+	/* The uppercase overline above the event-type chips — the eyebrow motif. */
+	.meta-label {
+		font-size: 10px; font-weight: 650; text-transform: uppercase; letter-spacing: .13em;
+		line-height: 1.7; color: var(--text-muted);
 	}
 	.meta-field input {
-		padding: 8px 11px; border: 1px solid var(--border); border-radius: 8px;
-		background: var(--bg-panel2, var(--bg-base)); font-size: 13px; color: var(--text-base);
-		font-family: inherit; outline: none; transition: border-color .12s;
+		padding: 9px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm);
+		background: var(--bg-panel2); font-size: 13px; color: var(--text-base);
+		font-family: inherit; outline: none; transition: border-color .15s, box-shadow .15s;
 	}
-	.meta-field input:focus { border-color: var(--accent); }
+	.meta-field input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-dim); }
 	.meta-chips { display: flex; flex-wrap: wrap; gap: 6px; }
 	.meta-chip {
-		font-size: 12px; font-weight: 600; padding: 5px 11px; border-radius: 999px;
-		border: 1px solid var(--border); background: var(--bg-panel2, var(--bg-base));
-		color: var(--text-muted); cursor: pointer; transition: all .12s;
+		font-size: 12px; font-weight: 600; padding: 6px 12px; border-radius: 3px;
+		border: 1px solid var(--border); background: transparent;
+		color: var(--text-muted); cursor: pointer;
+		transition: background .15s, border-color .15s, color .15s;
 	}
-	.meta-chip:hover { border-color: var(--accent); }
-	.meta-chip.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+	.meta-chip:hover { border-color: var(--accent); background: var(--bg-hover); color: var(--text-base); }
+	/* A selected filter chip inverts to ink, matching the .chip.active primitive in
+	   app.css and the landing page's occasion filter. */
+	.meta-chip.on {
+		background: var(--text-base); border-color: var(--text-base); color: var(--bg-panel);
+	}
 	.meta-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 2px; }
 </style>

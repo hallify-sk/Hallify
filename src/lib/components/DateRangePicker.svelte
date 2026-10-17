@@ -129,7 +129,7 @@
 	}
 </script>
 
-<div class="range-picker">
+<div class="range-picker card card--raised">
 	<div class="rp-nav">
 		<div class="rp-month">
 			<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="2">
@@ -195,7 +195,7 @@
 	</table>
 
 	{#if selStart}
-		<div class="rp-selection">
+		<div class="rp-selection row-item">
 			<span class="rp-sel-label">{formatDate(selStart)}</span>
 			{#if selEnd}
 				<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
@@ -211,18 +211,14 @@
 </div>
 
 <style>
-	.range-picker {
-		background: var(--bg-panel);
-		border: 1px solid var(--border);
-		border-radius: 10px;
-		padding: 16px;
-	}
+	/* A picker genuinely floats above the page it edits, so this one keeps a
+	   surface — .card--raised supplies it. No local chrome. */
 
 	.rp-nav {
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
-		margin-bottom: 12px;
+		margin-bottom: var(--grid-gap);
 	}
 
 	.rp-month {
@@ -242,7 +238,7 @@
 	.rp-arrow {
 		width: 30px;
 		height: 30px;
-		border-radius: 6px;
+		border-radius: var(--radius-sm);
 		border: 1px solid var(--border);
 		background: var(--bg-panel);
 		display: flex;
@@ -250,9 +246,9 @@
 		justify-content: center;
 		cursor: pointer;
 		color: var(--text-muted);
-		transition: background 0.12s;
+		transition: background .15s, color .15s;
 	}
-	.rp-arrow:hover { background: var(--bg-panel2); color: var(--text-base); }
+	.rp-arrow:hover { background: var(--bg-hover); color: var(--text-base); }
 
 	.rp-grid {
 		width: 100%;
@@ -302,20 +298,22 @@
 		cursor: default;
 		margin: 0 auto;
 		font-family: inherit;
-		transition: background 0.1s, box-shadow 0.1s;
+		transition: background .15s, box-shadow .15s, color .15s;
 		position: relative;
 	}
 
 	.rp-day.out { color: var(--border); }
-	/* Today: ring outline (not filled) so it's distinct from selected */
-	.rp-day.today:not(.selected) { box-shadow: inset 0 0 0 2px var(--accent); color: var(--accent); font-weight: 700; }
-	/* Selected (range bounds): filled accent */
-	.rp-day.selected { background: var(--accent); color: #fff; font-weight: 700; }
+	/* Today: ring outline (not filled) so it's distinct from selected. The ring is
+	   an accent FILL; the numeral on paper has to be the accent ink. */
+	.rp-day.today:not(.selected) { box-shadow: inset 0 0 0 2px var(--accent); color: var(--accent-ink); font-weight: 650; }
+	/* Selected (range bounds): filled accent — white fails on it, so the label
+	   takes --accent-contrast. */
+	.rp-day.selected { background: var(--accent); color: var(--accent-contrast); font-weight: 650; }
 	.rp-day.sunday:not(.today):not(.selected) { color: var(--danger); }
 	.rp-day.blocked { color: var(--danger); text-decoration: line-through; opacity: 0.5; }
 	.rp-day.past { color: var(--text-muted); opacity: 0.4; }
 	.rp-day.clickable { cursor: pointer; }
-	.rp-day.clickable:hover:not(.today):not(.selected) { background: var(--bg-panel2); }
+	.rp-day.clickable:hover:not(.today):not(.selected) { background: var(--bg-hover); }
 
 	.event-dot {
 		position: absolute;
@@ -325,17 +323,17 @@
 		width: 4px;
 		height: 4px;
 		border-radius: 50%;
-		background: var(--warning, #f59e0b);
+		background: var(--warning);
 	}
+	/* On a selected endpoint the dot sits ON the accent fill, where the warning
+	   amber drops to 1.7:1. A mark on a fill takes --accent-contrast. */
+	.rp-day.selected .event-dot { background: var(--accent-contrast); }
 
+	/* The chosen range reads as a hairline row under the grid, not a sub-panel. */
 	.rp-selection {
-		display: flex;
-		align-items: center;
 		gap: 8px;
 		margin-top: 12px;
-		padding: 8px 10px;
-		background: var(--bg-panel2);
-		border-radius: 8px;
+		border-top: 1px solid var(--border-subtle);
 		font-size: 13px;
 		color: var(--text-base);
 	}
@@ -355,6 +353,7 @@
 		display: flex;
 		align-items: center;
 		justify-content: center;
+		transition: background .15s, color .15s;
 	}
-	.rp-clear:hover { background: var(--border); color: var(--text-base); }
+	.rp-clear:hover { background: var(--bg-hover); color: var(--text-base); }
 </style>

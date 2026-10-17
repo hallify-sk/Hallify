@@ -162,7 +162,7 @@
   .logo-svg { width: 26px; height: 26px; }
   .logo-text {
     font-family: 'Poppins', 'Segoe UI', system-ui, -apple-system, sans-serif; font-weight: 900;
-    font-style: italic; font-size: 15px; color: #334155;
+    font-style: italic; font-size: 15px; color: var(--text-base); letter-spacing: -0.05em;
   }
 
   .org-switcher-wrap { margin-right: 8px; flex-shrink: 0; }
@@ -173,21 +173,21 @@
 
   .nav-link {
     display: flex; align-items: center; gap: 5px;
-    padding: 5px 10px; border-radius: 6px;
+    padding: 5px 10px; border-radius: var(--radius-sm);
     font-size: 13px; font-weight: 500;
     color: var(--text-muted); text-decoration: none;
-    transition: background 0.12s, color 0.12s; white-space: nowrap;
+    transition: background 0.15s, color 0.15s; white-space: nowrap;
   }
   .nav-link:hover, .nav-link.active {
-    background: var(--accent-dim); color: var(--accent); text-decoration: none;
+    background: var(--accent-dim); color: var(--accent-ink); text-decoration: none;
   }
 
   .nav-divider { width: 1px; height: 20px; background: var(--border); margin: 0 6px; flex-shrink: 0; }
 
-  .mode-switch { color: var(--accent); font-weight: 600; font-size: 12px; }
+  .mode-switch { color: var(--accent-ink); font-weight: 600; font-size: 12px; }
   .mode-switch:hover { background: var(--accent-dim); }
 
-  .platform-link { color: var(--accent-action); font-weight: 600; font-size: 12px; }
+  .platform-link { color: var(--accent-ink); font-weight: 600; font-size: 12px; }
   .platform-link:hover { background: var(--accent-action-dim); }
 
   .nav-user { display: flex; align-items: center; gap: 10px; margin-left: auto; }
@@ -196,16 +196,16 @@
 
   .user-btn {
     display: flex; align-items: center; gap: 8px;
-    padding: 3px 6px; border-radius: 8px;
-    cursor: pointer; background: none; border: none; transition: background 0.12s;
+    padding: 3px 6px; border-radius: var(--radius);
+    cursor: pointer; background: none; border: none; transition: background 0.15s;
   }
-  .user-btn:hover { background: var(--bg-panel2); }
+  .user-btn:hover { background: var(--bg-hover); }
 
   .avatar {
     width: 30px; height: 30px; border-radius: 50%;
-    background: var(--accent); color: #fff;
+    background: var(--accent); color: var(--accent-contrast);
     display: flex; align-items: center; justify-content: center;
-    font-size: 11px; font-weight: 700; flex-shrink: 0;
+    font-size: 11px; font-weight: 650; flex-shrink: 0;
   }
 
   .user-info { display: flex; flex-direction: column; align-items: flex-start; line-height: 1.2; }
@@ -215,26 +215,27 @@
   .user-dropdown {
     position: absolute; top: 100%; right: 0; margin-top: 4px;
     background: var(--bg-panel); border: 1px solid var(--border);
-    border-radius: 10px; padding: 6px; min-width: 160px;
-    box-shadow: 0 8px 24px rgba(0,0,0,0.08); z-index: 201;
+    border-radius: var(--radius-lg); padding: 6px; min-width: 160px;
+    box-shadow: var(--shadow); z-index: 201;
   }
 
   .dropdown-item {
     display: flex; align-items: center; gap: 8px;
-    width: 100%; padding: 8px 14px; border-radius: 6px;
+    width: 100%; padding: 8px 14px; border-radius: var(--radius-sm);
     font-size: 13px; font-weight: 500; color: var(--text-base);
     text-decoration: none; cursor: pointer;
     background: none; border: none; font-family: inherit;
+    transition: background 0.15s;
   }
-  .dropdown-item:hover { background: var(--bg-panel2); }
+  .dropdown-item:hover { background: var(--bg-hover); }
 
   .unauth-label { font-size: 12px; color: var(--text-muted); }
-  .sign-in-link { font-size: 12px; font-weight: 600; color: var(--accent); text-decoration: none; }
+  .sign-in-link { font-size: 12px; font-weight: 600; color: var(--accent-ink); text-decoration: none; }
   .sign-in-link:hover { text-decoration: underline; }
 
   .unread-badge {
     display: inline-flex; align-items: center; justify-content: center;
-    min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px;
-    background: var(--danger); color: white; font-size: 10px; font-weight: 700; line-height: 1;
+    min-width: 16px; height: 16px; padding: 0 4px; border-radius: 3px;
+    background: var(--danger); color: var(--on-danger); font-size: 10px; font-weight: 650; line-height: 1;
   }
 </style>

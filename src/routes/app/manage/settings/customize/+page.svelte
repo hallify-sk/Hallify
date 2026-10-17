@@ -1,7 +1,6 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
 	import { t } from '$lib/i18n.svelte';
-	import SectionHeader from '$lib/components/SectionHeader.svelte';
 	import type { PageData, ActionData } from './$types';
 
 	interface Props { data: PageData; form: ActionData; }
@@ -16,14 +15,32 @@
 	] as const;
 
 	const themes = $derived([
-		{ id: 'slate', name: t.settingsPages.themeSlate, desc: t.settingsPages.themeSlateDesc, accent: '#4f6ef7', bg: '#f3f4f6', panel: '#ffffff', border: '#e3e6ed' },
-		{ id: 'dark',  name: t.settingsPages.themeDark,  desc: t.settingsPages.themeDarkDesc,  accent: '#818cf8', bg: '#0f1117', panel: '#16181f', border: '#2a2c36' },
-		{ id: 'warm',  name: t.settingsPages.themeWarm,  desc: t.settingsPages.themeWarmDesc,  accent: '#7c3aed', bg: '#faf9f7', panel: '#ffffff', border: '#e5e0d8' },
+		{ id: 'slate', name: t.settingsPages.themeSlate, desc: t.settingsPages.themeSlateDesc, accent: '#f05ca1', bg: '#f9f9f7', panel: '#fefefd', border: '#dfe2dd' },
+		{ id: 'dark',  name: t.settingsPages.themeDark,  desc: t.settingsPages.themeDarkDesc,  accent: '#f05ca1', bg: '#181c1a', panel: '#222723', border: '#384038' },
+		{ id: 'warm',  name: t.settingsPages.themeWarm,  desc: t.settingsPages.themeWarmDesc,  accent: '#f05ca1', bg: '#faf7f3', panel: '#fffefc', border: '#e5ddd2' },
 	] as const);
 
 	let uploading = $state(false);
 	let logoUrl = $state(branding?.logoUrl ?? '');
 	let logoPreview = $derived(logoUrl || '/Hallify.svg');
+
+	// The hex readout and the stored accent both follow the picker. Without this the
+	// swatch changed, the hex underneath it did not, and the hidden accentColor field
+	// still posted the previously saved colour.
+	let primaryColor = $state(data.branding?.primaryColor ?? '#f05ca1');
+
+	// The logo and the colour are the only two fields held in client state; the rest are
+	// plain inputs that Svelte re-syncs from `data` on their own. Re-seed these two when
+	// the saved branding changes, so "Reset to defaults" actually clears the preview
+	// instead of leaving the old logo and colour on screen.
+	let lastSaved = ''; // plain let on purpose: a marker, not reactive state
+	$effect(() => {
+		const snapshot = `${data.branding?.logoUrl ?? ''}|${data.branding?.primaryColor ?? ''}`;
+		if (snapshot === lastSaved) return;
+		lastSaved = snapshot;
+		logoUrl = data.branding?.logoUrl ?? '';
+		primaryColor = data.branding?.primaryColor ?? '#f05ca1';
+	});
 
 	async function uploadLogo(e: Event) {
 		const input = e.target as HTMLInputElement;
@@ -46,17 +63,41 @@
 
 <svelte:head><title>{t.settingsPages.customizeTitle} – {t.settings.title} – Hallify</title></svelte:head>
 
-<div class="page">
-<SectionHeader overline={t.settingsPages.organization} title={t.settingsPages.customizeTitle} />
+<p class="tab-intro">{t.settingsPages.customizeSub}</p>
 
 {#if form?.success}
 	<div class="alert-success">{t.settingsPages.changesSaved}</div>
 {/if}
+{#if form?.error}
+	<div class="alert-error">{form.error}</div>
+{/if}
+
+{#if form?.renamed}
+	<div class="alert-success">{t.settingsPages.orgNameSaved}</div>
+{/if}
+
+<!-- ── Organization name (all plans; owner or platform admin) ──────────── -->
+<form method="POST" action="?/renameOrg" class="section section--lead"
+	use:enhance={() => { return async ({ update }) => { await update({ reset: false }); }; }}>
+	<div class="section-head">
+		<!-- No eyebrow: the Settings header already says ORGANIZATION a few rows above,
+		     and repeating it verbatim makes the motif meaningless. -->
+		<h2>{t.settingsPages.orgNameTitle}</h2>
+		<p>{t.settingsPages.orgNameHint}</p>
+	</div>
+	{#if form?.renameError}<div class="alert-error">{form.renameError}</div>{/if}
+	<div class="name-row">
+		<label class="sr-only" for="org-name">{t.settingsPages.orgNameTitle}</label>
+		<input id="org-name" name="orgName" type="text" maxlength="80" required
+			value={data.orgName} />
+		<button type="submit" class="btn-action">{t.settingsPages.renameOrg}</button>
+	</div>
+</form>
 
 <!-- ── Default language (available to all plans) ──────────── -->
-<form method="POST" action="?/saveLanguage" class="lang-card"
+<form method="POST" action="?/saveLanguage" class="section section--lead"
 	use:enhance={() => { return async ({ update }) => { await update({ reset: false }); }; }}>
-	<div class="lang-card-head">
+	<div class="section-head">
 		<h2>{t.settingsPages.defaultLanguage}</h2>
 		<p>{t.settingsPages.defaultLanguageHintPre} <code>?lang=</code> {t.settingsPages.defaultLanguageHintPost}</p>
 	</div>
@@ -69,26 +110,12 @@
 			</label>
 		{/each}
 	</div>
-	<button type="submit" class="btn-action btn-sm lang-save">{t.settingsPages.saveLanguage}</button>
-</form>
-
-<!-- ── Analytics (available to all plans; applies to this org's bubble only) ── -->
-<form method="POST" action="?/saveGtm" class="lang-card"
-	use:enhance={() => { return async ({ update }) => { await update({ reset: false }); }; }}>
-	<div class="lang-card-head">
-		<h2>{t.settingsPages.analyticsTitle}</h2>
-		<p>{t.settingsPages.analyticsHint}</p>
-	</div>
-	<input class="gtm-input" type="text" name="gtmContainerId" placeholder="GTM-XXXXXXX"
-		value={data.gtmContainerId ?? ''} autocomplete="off" spellcheck="false" />
-	{#if form?.error}<p class="gtm-err">{form.error}</p>{/if}
-	{#if form?.gtmSuccess}<p class="gtm-ok">{t.settingsPages.analyticsSaved}</p>{/if}
-	<button type="submit" class="btn-action btn-sm lang-save">{t.settingsPages.saveAnalytics}</button>
+	<button type="submit" class="btn-action btn-sm">{t.settingsPages.saveLanguage}</button>
 </form>
 
 {#if data.locked}
-	<div class="locked-card">
-		<div class="locked-icon">
+	<div class="card--inset locked-card">
+		<div class="icon-tile">
 			<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
 		</div>
 		<h3>{t.settingsPages.customizationLockedTitle}</h3>
@@ -100,12 +127,10 @@
 	<input type="hidden" name="logoUrl" value={logoUrl} />
 
 	<!-- ── Theme ──────────────────────────────────── -->
-	<div class="card section-card">
+	<section class="section">
 		<div class="section-head">
-			<div>
-				<div class="section-title">{t.settingsPages.defaultTheme}</div>
-				<p class="section-hint">{t.settingsPages.defaultThemeHint}</p>
-			</div>
+			<h2>{t.settingsPages.defaultTheme}</h2>
+			<p>{t.settingsPages.defaultThemeHint}</p>
 		</div>
 		<div class="theme-grid">
 			{#each themes as th}
@@ -130,12 +155,14 @@
 				</label>
 			{/each}
 		</div>
-	</div>
+	</section>
 
 	<!-- ── Identity ───────────────────────────────── -->
-	<div class="card section-card">
-		<div class="section-title">{t.settingsPages.identity}</div>
-		<p class="section-hint">{t.settingsPages.identityHint}</p>
+	<section class="section">
+		<div class="section-head">
+			<h2>{t.settingsPages.identity}</h2>
+			<p>{t.settingsPages.identityHint}</p>
+		</div>
 
 		<!-- Logo -->
 		<div class="field" style="margin-bottom:20px">
@@ -174,91 +201,70 @@
 				<input id="brand-tagline" name="tagline" type="text" value={branding?.tagline ?? ''} placeholder={t.settingsPages.taglinePlaceholder} />
 			</div>
 		</div>
-	</div>
+	</section>
 
 	<!-- ── Accent color ───────────────────────────── -->
-	<div class="card section-card">
-		<div class="section-title">{t.settingsPages.accentColor}</div>
-		<p class="section-hint">{t.settingsPages.accentColorHint}</p>
+	<section class="section">
+		<div class="section-head">
+			<h2>{t.settingsPages.accentColor}</h2>
+			<p>{t.settingsPages.accentColorHint}</p>
+		</div>
 		<div class="color-row">
-			<input id="brand-primary" name="primaryColor" type="color" value={branding?.primaryColor ?? '#4f6ef7'} />
+			<input id="brand-primary" name="primaryColor" type="color" bind:value={primaryColor} />
 			<div class="color-meta">
-				<span class="color-hex">{branding?.primaryColor ?? '#4f6ef7'}</span>
+				<span class="color-hex">{primaryColor}</span>
 				<span class="color-hint">{t.settingsPages.clickToChange}</span>
 			</div>
 		</div>
-		<input type="hidden" name="accentColor" value={branding?.accentColor ?? branding?.primaryColor ?? '#4f6ef7'} />
-	</div>
+		<input type="hidden" name="accentColor" value={primaryColor} />
+	</section>
 
-	<div class="form-footer">
+	<div class="section form-footer">
 		<button type="submit" class="btn-action">{t.settingsPages.saveChanges}</button>
 		<button type="submit" formaction="?/resetDefaults" class="btn-reset">{t.settingsPages.resetToDefaults}</button>
 	</div>
 </form>
 {/if}
-</div>
 
 <style>
-	.page { padding: 28px 32px; }
-
-	.lang-card {
-		background: var(--bg-panel); border: 1px solid var(--border); border-radius: 16px;
-		padding: 22px 24px; margin-bottom: 20px;
+	/* Input + button on one line. align-items: stretch so the button matches the
+	   field's height instead of sitting short beside it. */
+	.name-row {
+		display: flex;
+		align-items: stretch;
+		gap: 10px;
+		max-width: 520px;
 	}
-	.lang-card-head h2 { font-size: 15px; font-weight: 700; color: var(--text-base); margin: 0 0 4px; }
-	.lang-card-head p { font-size: 13px; color: var(--text-muted); line-height: 1.55; margin: 0 0 16px; max-width: 60ch; }
-	.lang-card-head code { font-family: ui-monospace, monospace; font-size: 12px; background: var(--bg-hover); padding: 1px 5px; border-radius: 4px; }
+	.name-row input { flex: 1; min-width: 0; }
+	.name-row button { flex-shrink: 0; }
+
+	.sr-only {
+		position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+		overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+	}
+
+	/* The page shell, title and tab strip live in the Settings layout. */
+	.tab-intro { font-size: 13px; color: var(--text-muted); line-height: 1.7; margin: 20px 0 0; max-width: 70ch; }
+
+	.section-head code { font-family: ui-monospace, monospace; font-size: 12px; background: var(--bg-hover); padding: 1px 5px; border-radius: var(--radius-sm); }
+
 	.lang-options { display: flex; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; }
 	.lang-option {
 		display: flex; align-items: center; gap: 9px; cursor: pointer;
-		padding: 10px 14px; border: 1px solid var(--border); border-radius: 10px;
-		transition: border-color .12s, background .12s; min-width: 150px;
+		padding: 10px 14px; border: 1px solid var(--border); border-radius: var(--radius);
+		transition: border-color .15s, background .15s; min-width: 150px;
 	}
 	.lang-option:hover { border-color: var(--accent); }
 	.lang-option.sel { border-color: var(--accent); background: var(--accent-dim); }
 	.lang-option input { accent-color: var(--accent); }
-	.lang-short { font-size: 11px; font-weight: 800; letter-spacing: .04em; color: var(--accent); }
+	.lang-short { font-size: 11px; font-weight: 650; letter-spacing: .04em; color: var(--accent-ink); }
 	.lang-name { font-size: 13.5px; font-weight: 600; color: var(--text-base); }
 
-	.locked-card {
-		background: var(--bg-panel); border: 1px solid var(--border); border-radius: 16px;
-		padding: 40px 28px; text-align: center; max-width: 460px; margin: 8px auto 0;
-	}
-	.locked-icon {
-		width: 52px; height: 52px; border-radius: 14px; margin: 0 auto 16px;
-		display: flex; align-items: center; justify-content: center;
-		background: var(--accent-dim, color-mix(in srgb, var(--accent) 12%, transparent)); color: var(--accent);
-	}
-	.locked-card h3 { font-size: 16px; font-weight: 700; color: var(--text-base); margin: 0 0 8px; }
+	.locked-card { text-align: center; max-width: 460px; margin: 8px auto 0; }
+	.locked-card .icon-tile { width: 52px; height: 52px; margin: 0 auto 16px; }
+	.locked-card h3 { font-size: 16px; font-weight: 650; letter-spacing: -.03em; color: var(--text-base); margin: 0 0 8px; }
 	.locked-card p { font-size: 13px; color: var(--text-muted); line-height: 1.6; margin: 0 0 20px; }
 	.locked-cta { display: inline-block; text-decoration: none; }
-
-	/* Section cards */
-	.section-card {
-		padding: 22px 24px;
-		margin-bottom: 16px;
-	}
-
-	.section-head {
-		display: flex;
-		align-items: flex-start;
-		justify-content: space-between;
-		margin-bottom: 16px;
-	}
-
-	.section-title {
-		font-size: 13px;
-		font-weight: 700;
-		color: var(--text-base);
-		margin-bottom: 4px;
-	}
-
-	.section-hint {
-		font-size: 12px;
-		color: var(--text-subtle);
-		line-height: 1.5;
-		margin-bottom: 16px;
-	}
 
 	/* Theme grid */
 	.theme-grid {
@@ -276,7 +282,7 @@
 	.theme-option input[type="radio"] { display: none; }
 
 	.theme-preview {
-		border-radius: 8px;
+		border-radius: var(--radius);
 		border: 2px solid transparent;
 		overflow: hidden;
 		display: flex;
@@ -322,7 +328,7 @@
 
 	.preview-card {
 		flex: 1;
-		border-radius: 4px;
+		border-radius: var(--radius-sm);
 		border: 1px solid;
 	}
 
@@ -354,7 +360,7 @@
 	.logo-preview {
 		width: 48px;
 		height: 48px;
-		border-radius: 10px;
+		border-radius: var(--radius-lg);
 		border: 1px solid var(--border);
 		background: var(--bg-panel2);
 		display: flex;
@@ -382,14 +388,14 @@
 		align-items: center;
 		gap: 6px;
 		padding: 6px 14px;
-		border-radius: 6px;
+		border-radius: var(--radius-sm);
 		border: 1px solid var(--border);
 		background: var(--bg-panel2);
 		color: var(--text-base);
 		font-size: 12px;
 		font-weight: 500;
 		cursor: pointer;
-		transition: background .1s, border-color .1s;
+		transition: background .15s, border-color .15s;
 		font-family: inherit;
 	}
 	.upload-btn:hover { background: var(--bg-hover); border-color: var(--text-subtle); }
@@ -429,7 +435,7 @@
 	.color-row input[type="color"] {
 		width: 44px;
 		height: 44px;
-		border-radius: 8px;
+		border-radius: var(--radius);
 		border: 1px solid var(--border);
 		padding: 3px;
 		cursor: pointer;
@@ -446,26 +452,25 @@
 		display: flex;
 		align-items: center;
 		gap: 12px;
-		margin-top: 4px;
 	}
 
 	.btn-reset {
 		padding: 7px 16px;
-		border-radius: 6px;
+		border-radius: var(--radius-sm);
 		font-size: 13px;
 		font-weight: 500;
 		border: 1px solid var(--border);
 		background: var(--bg-panel);
 		color: var(--text-muted);
 		cursor: pointer;
-		transition: border-color .12s, color .12s;
+		transition: border-color .15s, color .15s;
 		font-family: inherit;
 	}
 	.btn-reset:hover { border-color: var(--danger); color: var(--danger); }
 
 	.alert-success {
 		padding: 10px 16px;
-		border-radius: 8px;
+		border-radius: var(--radius-sm);
 		background: var(--success-dim);
 		color: var(--success);
 		font-size: 13px;
@@ -478,15 +483,7 @@
 	.spin { animation: spin .8s linear infinite; }
 
 	@media (max-width: 640px) {
-		.page { padding: 20px 16px; }
 		.theme-grid { grid-template-columns: 1fr; }
 		.field-row { grid-template-columns: 1fr; }
 	}
-	.gtm-input {
-		width: 100%; max-width: 320px; padding: 8px 11px; border-radius: 8px;
-		border: 1px solid var(--border); background: var(--bg-base);
-		color: var(--text-base); font-family: ui-monospace, monospace; font-size: 13px;
-	}
-	.gtm-err { color: var(--danger, #ef4444); font-size: 12px; margin: 6px 0 0; }
-	.gtm-ok  { color: var(--success, #22c55e); font-size: 12px; margin: 6px 0 0; }
 </style>

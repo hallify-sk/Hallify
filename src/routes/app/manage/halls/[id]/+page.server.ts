@@ -8,9 +8,71 @@ import { st } from '$lib/i18n-server';
 import type { Actions, PageServerLoad } from './$types';
 import { requireOrgStaff } from '$lib/guards';
 import { parseCoordinates } from '$lib/venue-location';
+import { geocodeAddress } from '$lib/server/geocode';
 
 const clamp = (n: number, lo: number, hi: number, dflt: number) =>
 	Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : dflt;
+
+/** An organisation's own amenity. Built-ins are translated keys; these carry their
+ *  own per-locale label, and `slug` is what lands in halls.amenities. */
+interface OrgAmenityRow {
+	id: string;
+	slug: string;
+	label_sk: string | null;
+	label_en: string | null;
+}
+
+/** The ten amenities the app translates itself. Anything else a hall claims must be
+ *  one of the organisation's own rows — a client can post any string it likes. */
+const BUILT_IN_AMENITIES = [
+	'parking', 'catering', 'av', 'wifi', 'ac',
+	'accessible', 'outdoor', 'stage', 'dancefloor', 'bar'
+] as const;
+
+/** One organisation cannot be allowed to grow this table without bound. */
+const MAX_CUSTOM_AMENITIES = 40;
+
+function slugifyAmenity(label: string): string {
+	return label
+		.toLowerCase()
+		.normalize('NFD').replace(/[̀-ͯ]/g, '')
+		.replace(/[^a-z0-9]+/g, '-')
+		.replace(/^-+|-+$/g, '')
+		.slice(0, 40);
+}
+
+/** 1 / 2 / 3 or NULL — the schema's CHECK constraint, enforced before it gets there
+ *  so a bad value is a 400 rather than a database error. Anything unrecognised that
+ *  is not an explicit clear is rejected rather than quietly stored as "not stated". */
+function parsePriceBand(raw: FormDataEntryValue | null): 1 | 2 | 3 | null | 'invalid' {
+	const text = String(raw ?? '').trim();
+	if (!text) return null;
+	const n = Number(text);
+	return n === 1 || n === 2 || n === 3 ? n : 'invalid';
+}
+
+/**
+ * Fill in coordinates from the address when the operator left the pin unset.
+ *
+ * Two rules: it never overwrites a position somebody placed by hand, and it never
+ * fails the save. A geocode is a convenience on top of someone's edit — losing their
+ * work because a free third-party lookup was slow would be far worse than a venue
+ * with no pin, which they can always drop themselves.
+ */
+async function coordinatesForSave(
+	db: App.Locals['db'],
+	address: string | null,
+	chosen: { latitude: number | null; longitude: number | null }
+): Promise<{ latitude: number | null; longitude: number | null }> {
+	if (!address || chosen.latitude !== null || chosen.longitude !== null) return chosen;
+	try {
+		const hit = await geocodeAddress(db, address);
+		if (hit) return { latitude: hit.latitude, longitude: hit.longitude };
+	} catch {
+		/* lookup unavailable — save the venue without a pin */
+	}
+	return chosen;
+}
 
 type ParsedTableType = {
 	name: string; shape: 'rect' | 'round';
@@ -35,7 +97,11 @@ function parseTableType(data: FormData, locale: 'sk' | 'en'): ParsedTableType | 
 
 export const load: PageServerLoad = async ({ params, locals }) => {
 	const orgId = locals.currentOrg!.id;
-	const hall = await dbFirst<HallRow>(locals.db, 'SELECT * FROM halls WHERE id = ? AND org_id = ?', params.id, orgId);
+	// price_band arrived with 0006 and is not on HallRow yet; widen it here rather
+	// than wait for the shared type.
+	const hall = await dbFirst<HallRow & { price_band: number | null }>(
+		locals.db, 'SELECT * FROM halls WHERE id = ? AND org_id = ?', params.id, orgId
+	);
 	if (!hall) error(404, st(locals.locale).serverErrors.hallNotFound);
 
 	const templates = await dbAll<TemplateRow>(
@@ -62,8 +128,22 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 	const extras = await dbAll<HallExtraRow>(locals.db,
 		'SELECT * FROM hall_extras WHERE hall_id = ? ORDER BY created_at', params.id);
 
+	// The organisation's own amenities. Wrapped because 0006 may still be rolling
+	// out on a deployed database; a missing table means "no custom amenities yet",
+	// not a 500 on the whole hall editor.
+	let orgAmenities: OrgAmenityRow[] = [];
+	try {
+		orgAmenities = await dbAll<OrgAmenityRow>(
+			locals.db,
+			'SELECT id, slug, label_sk, label_en FROM org_amenities WHERE org_id = ? ORDER BY created_at',
+			orgId
+		);
+	} catch {
+		orgAmenities = [];
+	}
+
 	const plan = getPlan(locals.currentOrg!.subscription.plan);
-	return { hall, templates, blocks, tableTypes, reservations, extras, plan };
+	return { hall, templates, blocks, tableTypes, reservations, extras, plan, orgAmenities };
 };
 
 /** The hall in the URL must belong to the acting organization. Every action below
@@ -89,15 +169,16 @@ export const actions: Actions = {
 		if (!Number.isFinite(maxPeople) || maxPeople < 1) {
 			return fail(400, { error: st(locals.locale).serverErrors.chooseValidDate });
 		}
-		const color = String(data.get('color') ?? '#3b82f6').trim();
+		const color = String(data.get('color') ?? '#f05ca1').trim();
 		const allowReservations = data.get('allowReservations') === 'on';
 		const customLayouts = data.get('customLayouts') === 'on';
 		const forceLayouts = data.get('forceLayouts') === 'on';
 		const allowFeedback = data.get('allowFeedback') === 'on';
 		const minDaysAdvance = Number(data.get('minDaysAdvance') ?? 0);
 		const address = String(data.get('address') ?? '').trim();
-		const coordinates = parseCoordinates(data.get('latitude'), data.get('longitude'));
-		if (!coordinates) return fail(400, { infoError: locals.locale === 'en' ? 'Choose a valid location on the map.' : 'Vyberte platnú polohu na mape.' });
+		const chosen = parseCoordinates(data.get('latitude'), data.get('longitude'));
+		if (!chosen) return fail(400, { infoError: locals.locale === 'en' ? 'Choose a valid location on the map.' : 'Vyberte platnú polohu na mape.' });
+		const coordinates = await coordinatesForSave(locals.db, address || null, chosen);
 		const preReservationText = String(data.get('preReservationText') ?? '').trim();
 		const autoApprove = data.get('autoApprove') === 'on';
 		const minCancelDays = Number(data.get('minCancelDays') ?? 0);
@@ -310,6 +391,54 @@ export const actions: Actions = {
 		return { extraSuccess: true };
 	},
 
+	// ─── Custom amenities (organisation-wide) ───────────────────────────────
+	// Built-in amenities are translated keys. One an operator invents has no key to
+	// translate, so it carries its own label per locale — and only one of the two is
+	// required: writing "Vírivka" should not oblige anybody to also write "Hot tub".
+	addAmenity: async ({ request, locals }) => {
+		const orgId = requireOrgStaff(locals).id;
+		const data = await request.formData();
+		const labelSk = String(data.get('labelSk') ?? '').trim().slice(0, 60);
+		const labelEn = String(data.get('labelEn') ?? '').trim().slice(0, 60);
+		if (!labelSk && !labelEn) {
+			return fail(400, { amenityError: st(locals.locale).serverErrors.amenityLabelRequired });
+		}
+
+		const existing = await dbAll<{ slug: string }>(
+			locals.db, 'SELECT slug FROM org_amenities WHERE org_id = ?', orgId
+		);
+		if (existing.length >= MAX_CUSTOM_AMENITIES) {
+			return fail(403, { amenityError: st(locals.locale).serverErrors.amenityLimitReached });
+		}
+
+		// A slug is derived from whichever label exists; a label with no ASCII left
+		// (all punctuation, say) still needs a stable id, hence the fallback.
+		const base = slugifyAmenity(labelSk || labelEn) || 'amenity';
+		const taken = new Set(existing.map((row) => row.slug));
+		let slug = `custom-${base}`;
+		for (let n = 2; taken.has(slug); n++) slug = `custom-${base}-${n}`;
+
+		await dbRun(
+			locals.db,
+			'INSERT INTO org_amenities (id, org_id, slug, label_sk, label_en) VALUES (?, ?, ?, ?, ?)',
+			crypto.randomUUID(), orgId, slug, labelSk || null, labelEn || null
+		);
+		return { amenityAdded: slug };
+	},
+
+	deleteAmenity: async ({ request, locals }) => {
+		const orgId = requireOrgStaff(locals).id;
+		const data = await request.formData();
+		const id = String(data.get('id') ?? '');
+		if (!id) return fail(400, { amenityError: st(locals.locale).serverErrors.missingId });
+		const row = await dbFirst<{ slug: string }>(
+			locals.db, 'SELECT slug FROM org_amenities WHERE id = ? AND org_id = ?', id, orgId
+		);
+		if (!row) return fail(404, { amenityError: st(locals.locale).serverErrors.missingId });
+		await dbRun(locals.db, 'DELETE FROM org_amenities WHERE id = ? AND org_id = ?', id, orgId);
+		return { amenityRemoved: row.slug };
+	},
+
 	saveProfile: async ({ request, params, locals }) => {
 	  requireOrgStaff(locals);
 		await assertHallInOrg(locals.db, params.id, requireOrgStaff(locals).id);
@@ -317,30 +446,56 @@ export const actions: Actions = {
 
 		const name        = String(data.get('name') ?? '').trim();
 		const maxPeople   = Number(data.get('maxPeople') ?? 100);
-		const color       = String(data.get('color') ?? '#3b82f6').trim();
+		const color       = String(data.get('color') ?? '#f05ca1').trim();
 		const description = String(data.get('description') ?? '').trim() || null;
 		const address     = String(data.get('address') ?? '').trim() || null;
-		const coordinates = parseCoordinates(data.get('latitude'), data.get('longitude'));
-		if (!coordinates) return fail(400, { profileError: locals.locale === 'en' ? 'Choose a valid location on the map.' : 'Vyberte platnú polohu na mape.' });
+		const chosen      = parseCoordinates(data.get('latitude'), data.get('longitude'));
+		if (!chosen) return fail(400, { profileError: locals.locale === 'en' ? 'Choose a valid location on the map.' : 'Vyberte platnú polohu na mape.' });
 
 		if (!name) return fail(400, { profileError: st(locals.locale).serverErrors.hallNameRequired });
 		if (!Number.isFinite(maxPeople) || maxPeople < 1) return fail(400, { profileError: st(locals.locale).serverErrors.capacityAtLeastOne });
 
+		// Geocode only an address that has no pin, and only after the cheap checks
+		// above have passed — a rejected save should not cost a network lookup.
+		const coordinates = await coordinatesForSave(locals.db, address, chosen);
+
 		const isPublic = data.get('isPublic') === 'on';
-		const slugRaw = String(data.get('slug') ?? '').trim().toLowerCase()
+		const normalizeSlug = (value: string) => value.trim().toLowerCase()
 			.normalize('NFD').replace(/[̀-ͯ]/g, '')
 			.replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
-		const slug = slugRaw || null;
+		const typedSlug = normalizeSlug(String(data.get('slug') ?? ''));
+		// New halls arrive listed (migration 0006's note), so a hall can reach a save
+		// with the toggle on and nothing typed in the URL field. Deriving the slug
+		// from the name keeps that from being a dead end; a typed slug is never
+		// touched, and only a derived one gets a numeric suffix to clear a clash.
+		const derivedSlug = !typedSlug && isPublic ? normalizeSlug(name) : '';
+		let slug = typedSlug || derivedSlug || null;
 		const coverImageUrl = String(data.get('coverImageUrl') ?? '').trim() || null;
 
-		// A publicly visible hall must have everything a visitor needs to find and
-		// trust it: a public URL, a location, and a cover image.
+		// A listed hall needs the two things discovery cannot work without: an address
+		// to place it and a URL to send people to. A cover image is strongly
+		// recommended and the editor says so loudly, but it no longer blocks the save
+		// — a venue with no photo listed is better than a venue not listed at all.
 		if (isPublic) {
 			if (!slug) return fail(400, { profileError: st(locals.locale).serverErrors.publicUrlRequired });
 			if (!address) return fail(400, { profileError: st(locals.locale).serverErrors.addressRequiredForPublic });
-			if (!coverImageUrl) return fail(400, { profileError: st(locals.locale).serverErrors.coverImageRequiredForPublic });
 		}
-		const amenities = data.getAll('amenities').map(String);
+
+		const priceBand = parsePriceBand(data.get('priceBand'));
+		if (priceBand === 'invalid') return fail(400, { profileError: st(locals.locale).serverErrors.invalidPriceBand });
+
+		// A client can post any amenity string; only the built-in keys and this
+		// organisation's own slugs are allowed to reach the column.
+		let ownSlugs: string[] = [];
+		try {
+			ownSlugs = (await dbAll<{ slug: string }>(
+				locals.db, 'SELECT slug FROM org_amenities WHERE org_id = ?', requireOrgStaff(locals).id
+			)).map((row) => row.slug);
+		} catch {
+			ownSlugs = [];
+		}
+		const allowedAmenities = new Set<string>([...BUILT_IN_AMENITIES, ...ownSlugs]);
+		const amenities = [...new Set(data.getAll('amenities').map(String))].filter((a) => allowedAmenities.has(a));
 		const galleryImages = data.getAll('galleryImages').map(String).filter(Boolean);
 		const planLimit = getPlan(locals.currentOrg!.subscription.plan).limits.maxGalleryImages;
 		if (planLimit !== -1 && galleryImages.length > planLimit) {
@@ -354,9 +509,24 @@ export const actions: Actions = {
 		let openingHours: Record<string, unknown> = {};
 		try { openingHours = JSON.parse(openingHoursRaw); } catch { openingHours = {}; }
 
+		// The slug is the public URL (/halls/<slug>), so it has to be unique across
+		// every organisation, not just this one — two orgs holding "grand-hall" would
+		// send visitors to whichever row the lookup happened to return first.
 		if (slug) {
-			const conflict = await dbFirst<{ id: string }>(locals.db, 'SELECT id FROM halls WHERE slug = ? AND id != ? AND org_id = ?', slug, params.id, requireOrgStaff(locals).id);
-			if (conflict) return fail(400, { profileError: st(locals.locale).serverErrors.slugAlreadyTaken });
+			const isTaken = async (candidate: string) => !!(await dbFirst<{ id: string }>(
+				locals.db, 'SELECT id FROM halls WHERE slug = ? AND id != ?', candidate, params.id
+			));
+			if (await isTaken(slug)) {
+				if (!derivedSlug) return fail(400, { profileError: st(locals.locale).serverErrors.slugAlreadyTaken });
+				let candidate = '';
+				for (let n = 2; n < 200; n++) {
+					candidate = `${derivedSlug}-${n}`;
+					if (!(await isTaken(candidate))) break;
+					candidate = '';
+				}
+				if (!candidate) return fail(400, { profileError: st(locals.locale).serverErrors.slugAlreadyTaken });
+				slug = candidate;
+			}
 		}
 
 		// A hall suspended by a plan downgrade cannot be made public until the owner
@@ -382,6 +552,7 @@ export const actions: Actions = {
 				gallery_images = ?,
 				amenities = ?,
 				pricing_info = ?,
+				price_band = ?,
 				contact_phone = ?,
 				contact_email = ?,
 				contact_website = ?,
@@ -400,6 +571,7 @@ export const actions: Actions = {
 			toJson(galleryImages),
 			toJson(amenities),
 			pricingInfo,
+			priceBand,
 			contactPhone,
 			contactEmail,
 			contactWebsite,

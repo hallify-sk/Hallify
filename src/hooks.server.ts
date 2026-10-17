@@ -14,8 +14,8 @@ import type { D1Database } from '@cloudflare/workers-types';
 const DEFAULT_BRANDING: Branding = {
   appName: 'Hallify',
   logoUrl: '/Hallify.svg',
-  primaryColor: '#3b82f6',
-  accentColor: '#e91e8a',
+  primaryColor: '#f05ca1',
+  accentColor: '#f05ca1',
 };
 
 // Platform-level branding cache (30s TTL) — cache time managed in $lib/branding-cache

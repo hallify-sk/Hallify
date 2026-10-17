@@ -10,11 +10,10 @@
 		minDate?: string;            // earliest selectable day (YYYY-MM-DD); earlier days are disabled
 		showLegend?: boolean;
 		onselect?: (date: string) => void;
-		title?: string;
 	}
 	const {
 		selectedDate, events = [], blockedDates = [], takenDates = [], heldDates = [],
-		minDate, showLegend = false, onselect, title,
+		minDate, showLegend = false, onselect,
 	}: Props = $props();
 
 	let viewYear = $state(new Date().getFullYear());
@@ -107,18 +106,14 @@
 	}
 </script>
 
-<div class="mini-cal card">
-	{#if title}
-		<div class="cal-title">{title}</div>
-	{/if}
-
+<div class="mini-cal">
 	<div class="cal-nav">
 		<div class="cal-month-display">
 			<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="2">
 				<rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/>
 				<line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
 			</svg>
-			<span>{t.monthNames[viewMonth].toLowerCase()} {viewYear}</span>
+			<span>{t.monthNames[viewMonth]} {viewYear}</span>
 		</div>
 		<div class="cal-nav-btns">
 			<button type="button" onclick={prevMonth} class="cal-arrow" aria-label={t.components.prevMonth}>
@@ -156,7 +151,7 @@
 								class:selected={cell.isSelected}
 								class:clickable={!!onselect && cell.inMonth && !isLocked(cell)}
 								onclick={() => onDayClick(cell)}
-								disabled={!!onselect && cell.inMonth && isLocked(cell)}
+								disabled={!onselect || !cell.inMonth || isLocked(cell)}
 								title={cell.isTaken ? t.components.calBooked : cell.isHeld ? t.components.calBeingBooked : cell.isBlocked ? t.components.calUnavailable : ''}
 							>
 								{cell.day}
@@ -181,21 +176,15 @@
 </div>
 
 <style>
-	.mini-cal {
-		padding: 20px;
-	}
-
-	.cal-title {
-		font-size: 15px;
-		font-weight: 600;
-		margin-bottom: 16px;
-	}
+	/* No box and no padding of its own: the calendar sits in whatever section or
+	   field holds it, and takes its rhythm from the density. */
+	.mini-cal { min-width: 0; }
 
 	.cal-nav {
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
-		margin-bottom: 16px;
+		margin-bottom: var(--grid-gap);
 	}
 
 	.cal-month-display {
@@ -215,7 +204,7 @@
 	.cal-arrow {
 		width: 32px;
 		height: 32px;
-		border-radius: 6px;
+		border-radius: var(--radius-sm);
 		border: 1px solid var(--border);
 		background: var(--bg-panel);
 		display: flex;
@@ -223,11 +212,11 @@
 		justify-content: center;
 		cursor: pointer;
 		color: var(--text-muted);
-		transition: background 0.12s;
+		transition: background .15s, color .15s;
 	}
 
 	.cal-arrow:hover {
-		background: var(--bg-panel2);
+		background: var(--bg-hover);
 		color: var(--text-base);
 	}
 
@@ -257,7 +246,9 @@
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		border-radius: 50%;
+		/* Square, like every other surface in this language. The round cell was the
+		   last leftover of the old design here. */
+		border-radius: var(--radius-sm);
 		font-size: 13px;
 		font-weight: 500;
 		color: var(--text-base);
@@ -267,16 +258,19 @@
 		position: relative;
 		margin: 0 auto;
 		font-family: inherit;
+		transition: background .15s, color .15s;
 	}
 
 	.cal-day.out {
 		color: var(--border);
 	}
 
+	/* Today is an accent FILL, so its numeral takes --accent-contrast; white on
+	   the accent only reaches 3.1:1. */
 	.cal-day.today {
 		background: var(--accent);
-		color: #fff;
-		font-weight: 700;
+		color: var(--accent-contrast);
+		font-weight: 650;
 	}
 
 	.cal-day.sunday:not(.today) {
@@ -303,8 +297,8 @@
 
 	/* Held by someone else right now */
 	.cal-day.held:not(.today) {
-		background: color-mix(in srgb, var(--warning, #f59e0b) 32%, var(--bg-panel));
-		color: color-mix(in srgb, var(--warning, #f59e0b) 70%, var(--text-base));
+		background: color-mix(in srgb, var(--warning) 32%, var(--bg-panel));
+		color: color-mix(in srgb, var(--warning) 70%, var(--text-base));
 		cursor: not-allowed;
 	}
 
@@ -315,10 +309,11 @@
 	}
 	.cal-day.past.sunday { color: var(--border); }
 
+	/* Selected day: soft accent wash, so the label is the accent INK, not the fill. */
 	.cal-day.selected:not(.today) {
 		background: var(--accent-dim);
-		color: var(--accent);
-		font-weight: 700;
+		color: var(--accent-ink);
+		font-weight: 650;
 	}
 
 	.cal-day.clickable {
@@ -326,7 +321,7 @@
 	}
 
 	.cal-day.clickable:hover:not(.today):not(.selected) {
-		background: var(--bg-panel2);
+		background: var(--bg-hover);
 	}
 
 	.event-dot {
@@ -339,6 +334,12 @@
 		border-radius: 50%;
 		background: var(--accent);
 	}
+	/* On the today cell the dot sits ON an accent fill, where accent-on-accent
+	   disappears — a mark on a fill takes --accent-contrast. */
+	.cal-day.today .event-dot { background: var(--accent-contrast); }
+	/* Same problem one step lighter: on the selected day's --accent-dim wash an
+	   accent dot is 2.6:1. The ink is 6.2:1. */
+	.cal-day.selected:not(.today) .event-dot { background: var(--accent-ink); }
 
 	.cal-legend {
 		display: flex;
@@ -346,11 +347,11 @@
 		flex-wrap: wrap;
 		margin-top: 14px;
 		padding-top: 12px;
-		border-top: 1px solid var(--border);
+		border-top: 1px solid var(--border-subtle);
 	}
 	.lg { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; color: var(--text-muted); }
-	.lg-dot { width: 10px; height: 10px; border-radius: 3px; }
+	.lg-dot { width: 10px; height: 10px; border-radius: 50%; }
 	.lg-taken { background: color-mix(in srgb, var(--text-muted) 45%, transparent); }
-	.lg-held { background: color-mix(in srgb, var(--warning, #f59e0b) 60%, transparent); }
+	.lg-held { background: color-mix(in srgb, var(--warning) 60%, transparent); }
 	.lg-blocked { background: color-mix(in srgb, var(--danger) 55%, transparent); }
 </style>

@@ -61,7 +61,7 @@
   }
 
   function avatarColor(id: string) {
-    const colors = ['#4f6ef7','#22c55e','#f59e0b','#8b5cf6','#14b8a6','#ec4899','#f97316'];
+    const colors = ['#a6225e','#2f7a52','#9a6512','#6b4fa0','#1f6b74','#c3362c','#4a5d3f'];
     let h = 0;
     for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) & 0xffffffff;
     return colors[Math.abs(h) % colors.length];
@@ -111,13 +111,15 @@
         {#if members.length > 8}<div class="presence-av-more">+{members.length - 8}</div>{/if}
       </div>
 
-      {#each channels as ch}
-        <a href="/app/messages?c={ch.id}" class="nav-item" class:active={activeChannel?.id === ch.id}>
-          <span class="ch-icon">{ch.type === 'announcement' ? '📣' : '#'}</span>
-          <span class="nav-item-name">{ch.name}</span>
-          {#if parseInt(ch.unread_count) > 0}<span class="unread-badge">{ch.unread_count}</span>{/if}
-        </a>
-      {/each}
+      <div class="row-list">
+        {#each channels as ch}
+          <a href="/app/messages?c={ch.id}" class="row-item nav-item" class:active={activeChannel?.id === ch.id}>
+            <span class="ch-icon">{ch.type === 'announcement' ? '📣' : '#'}</span>
+            <span class="nav-item-name">{ch.name}</span>
+            {#if parseInt(ch.unread_count) > 0}<span class="unread-badge">{ch.unread_count}</span>{/if}
+          </a>
+        {/each}
+      </div>
 
       {#if orgRole === 'owner' || orgRole === 'admin'}
         <button class="nav-new-btn" type="button" onclick={() => { showNewChannel = !showNewChannel; showNewTicket = false; }}>
@@ -168,17 +170,19 @@
         </form>
       {/if}
 
-      {#each tickets as t}
-        <a href="/app/messages?t={t.id}" class="nav-item nav-item-ticket" class:active={activeTicket?.id === t.id}>
-          <span class="ticket-status-dot" class:open={t.status === 'open'} class:closed={t.status === 'closed'}></span>
-          <span class="nav-item-name">
-            {#if t.hall_name}{t.hall_name}{:else}{t.subject}{/if}
-          </span>
-          {#if t.unread}<span class="unread-dot"></span>{/if}
-        </a>
-      {:else}
-        <p class="nav-empty">{tr.memberMessages.noThreadsYet}</p>
-      {/each}
+      <div class="row-list">
+        {#each tickets as t}
+          <a href="/app/messages?t={t.id}" class="row-item nav-item nav-item-ticket" class:active={activeTicket?.id === t.id}>
+            <span class="ticket-status-dot" class:open={t.status === 'open'} class:closed={t.status === 'closed'}></span>
+            <span class="nav-item-name">
+              {#if t.hall_name}{t.hall_name}{:else}{t.subject}{/if}
+            </span>
+            {#if t.unread}<span class="unread-dot"></span>{/if}
+          </a>
+        {:else}
+          <p class="nav-empty">{tr.memberMessages.noThreadsYet}</p>
+        {/each}
+      </div>
     </div>
   </nav>
 
@@ -199,8 +203,13 @@
       <div class="msg-thread" bind:this={threadEl}>
         {#if channelMessages.length === 0}
           <div class="thread-empty">
-            <p class="thread-empty-title">{tr.memberMessages.startOf} #{activeChannel.name}</p>
-            <p class="thread-empty-sub">{tr.memberMessages.sayHello}</p>
+            <div class="card card--inset thread-empty-inner">
+              <div class="icon-tile">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+              </div>
+              <p class="thread-empty-title">{tr.memberMessages.startOf} #{activeChannel.name}</p>
+              <p class="thread-empty-sub">{tr.memberMessages.sayHello}</p>
+            </div>
           </div>
         {/if}
 
@@ -362,8 +371,13 @@
           {/if}
         {:else}
           <div class="thread-empty">
-            <p class="thread-empty-title">{tr.memberMessages.threadOpened}</p>
-            <p class="thread-empty-sub">{tr.memberMessages.noRepliesYet}</p>
+            <div class="card card--inset thread-empty-inner">
+              <div class="icon-tile">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+              </div>
+              <p class="thread-empty-title">{tr.memberMessages.threadOpened}</p>
+              <p class="thread-empty-sub">{tr.memberMessages.noRepliesYet}</p>
+            </div>
           </div>
         {/each}
       </div>
@@ -382,8 +396,12 @@
 
     {:else}
       <div class="empty-state">
-        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-        <p>{tr.memberMessages.selectToStart}</p>
+        <div class="card card--inset empty-state-inner">
+          <div class="icon-tile">
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+          </div>
+          <p>{tr.memberMessages.selectToStart}</p>
+        </div>
       </div>
     {/if}
   </div>
@@ -410,7 +428,6 @@
   .msg-nav {
     width: 224px;
     flex-shrink: 0;
-    background: var(--bg-panel);
     border-right: 1px solid var(--border);
     display: flex;
     flex-direction: column;
@@ -428,99 +445,108 @@
     padding: 0 14px 6px;
   }
   .nav-section-label {
-    font-size: 10px; font-weight: 700;
-    text-transform: uppercase; letter-spacing: .07em;
-    color: var(--text-subtle);
+    font-size: 10px; font-weight: 650;
+    text-transform: uppercase; letter-spacing: .13em;
+    line-height: 1.7;
+    color: var(--text-muted);
   }
 
   .online-pill {
     display: inline-flex; align-items: center; gap: 4px;
     font-size: 10px; font-weight: 600;
-    color: var(--success, #22c55e);
-    background: color-mix(in srgb, var(--success, #22c55e) 12%, transparent);
-    border-radius: 99px; padding: 1px 7px;
+    color: var(--success);
+    background: var(--success-dim);
+    border-radius: 3px; padding: 1px 7px;
   }
-  .online-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--success, #22c55e); }
+  .online-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--success); }
 
   .presence-strip { display: flex; flex-wrap: wrap; gap: 5px; padding: 2px 14px 10px; }
   .presence-av { position: relative; width: 26px; height: 26px; cursor: default; }
   .av-inner {
-    width: 26px; height: 26px; border-radius: 7px;
+    width: 26px; height: 26px; border-radius: var(--radius-sm);
     display: flex; align-items: center; justify-content: center;
-    font-size: 9px; font-weight: 700; color: #fff;
+    font-size: 9px; font-weight: 650; color: #fff;
   }
   .presence-dot {
     position: absolute; bottom: -1px; right: -1px;
     width: 8px; height: 8px; border-radius: 50%;
-    border: 2px solid var(--bg-panel); background: var(--border);
+    border: 2px solid var(--bg-base); background: var(--border);
   }
-  .presence-dot.online { background: var(--success, #22c55e); }
+  .presence-dot.online { background: var(--success); }
   .presence-av-more { font-size: 10px; font-weight: 600; color: var(--text-subtle); line-height: 26px; }
 
+  /* Hairline rows (.row-item) at nav density. */
   .nav-item {
-    display: flex; align-items: center; gap: 7px;
-    padding: 5px 14px;
+    gap: 7px;
+    padding: 6px 14px;
     font-size: 13px; font-weight: 500;
     color: var(--text-muted); text-decoration: none;
-    transition: background .1s, color .1s;
+    transition: background .15s, color .15s;
   }
   .nav-item:hover { background: var(--bg-hover); color: var(--text-base); }
   .nav-item.active {
-    background: color-mix(in srgb, var(--accent) 10%, transparent);
-    color: var(--accent); font-weight: 600;
+    background: var(--accent-dim);
+    color: var(--accent-ink); font-weight: 600;
   }
   .ch-icon { font-size: 12px; width: 14px; text-align: center; flex-shrink: 0; }
   .nav-item-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .unread-badge {
-    background: var(--accent); color: #fff;
-    font-size: 9px; font-weight: 700; border-radius: 99px; padding: 1px 5px; flex-shrink: 0;
+    background: var(--accent); color: var(--accent-contrast);
+    font-size: 9px; font-weight: 650; border-radius: var(--radius-sm); padding: 1px 5px; flex-shrink: 0;
   }
   .unread-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); flex-shrink: 0; }
   .ticket-status-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
-  .ticket-status-dot.open   { background: var(--success, #22c55e); }
+  .ticket-status-dot.open   { background: var(--success); }
   .ticket-status-dot.closed { background: var(--text-subtle); }
 
   .nav-new-btn {
     display: block; width: 100%; padding: 5px 14px;
     font-size: 12px; font-weight: 500; color: var(--text-subtle);
     background: none; border: none; text-align: left; cursor: pointer;
-    transition: color .1s; font-family: inherit;
+    transition: color .15s; font-family: inherit;
   }
-  .nav-new-btn:hover { color: var(--accent); }
+  .nav-new-btn:hover { color: var(--accent-ink); }
   .nav-new-btn-inline {
     font-size: 10px; font-weight: 600; color: var(--text-subtle);
     background: none; border: none; cursor: pointer; padding: 0; font-family: inherit;
   }
-  .nav-new-btn-inline:hover { color: var(--accent); }
+  .nav-new-btn-inline:hover { color: var(--accent-ink); }
 
   .inline-form { padding: 4px 12px 8px; }
   .inline-input {
-    display: block; width: 100%; padding: 5px 8px;
-    border: 1px solid var(--border); border-radius: 5px;
-    background: var(--bg-panel2, var(--bg-base));
+    display: block; width: 100%; padding: 6px 9px;
+    border: 1px solid var(--border); border-radius: var(--radius-sm);
+    background: var(--bg-panel2);
     font-size: 12px; color: var(--text-base); font-family: inherit;
     margin-bottom: 4px; box-sizing: border-box; outline: none;
+    transition: border-color .15s, box-shadow .15s;
   }
-  .inline-input:focus { border-color: var(--accent); }
+  .inline-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-dim); }
   .inline-textarea { resize: none; height: 50px; }
   .inline-select { appearance: none; cursor: pointer; }
   .inline-label {
-    display: block; font-size: 10px; font-weight: 600;
-    color: var(--text-subtle); text-transform: uppercase; letter-spacing: .05em;
-    margin-bottom: 2px;
+    display: block; font-size: 10px; font-weight: 650;
+    color: var(--text-muted); text-transform: uppercase; letter-spacing: .13em;
+    line-height: 1.7; margin-bottom: 2px;
   }
   .inline-hint { font-size: 11px; color: var(--text-subtle); padding: 2px 0 6px; margin: 0; }
   .inline-actions { display: flex; gap: 6px; margin-top: 4px; }
 
   .btn-xs {
-    padding: 3px 10px; border-radius: 5px;
+    padding: 4px 11px; border-radius: var(--radius-sm);
     font-size: 11px; font-weight: 500;
     border: 1px solid var(--border);
-    background: var(--bg-panel2, var(--bg-base));
+    background: var(--bg-panel2);
     color: var(--text-muted); cursor: pointer; font-family: inherit;
+    transition: background .15s, border-color .15s;
   }
-  .btn-accent { background: var(--accent); color: #fff; border-color: var(--accent); }
-  .btn-accent:hover { opacity: .88; }
+  .btn-xs:hover { background: var(--bg-hover); border-color: var(--text-subtle); }
+  .btn-accent {
+    background: var(--accent); color: var(--accent-contrast); border-color: var(--accent);
+    font-weight: 650; transition: transform .2s, background .2s;
+  }
+  .btn-accent:hover { background: var(--accent-hover); border-color: var(--accent-hover); transform: translateY(-2px); }
+  .btn-accent:active { transform: translateY(0); }
 
   .nav-divider { height: 1px; background: var(--border); margin: 4px 0; }
   .nav-empty { font-size: 12px; color: var(--text-subtle); padding: 4px 14px 8px; }
@@ -538,13 +564,12 @@
     justify-content: space-between;
     padding: 12px 20px;
     border-bottom: 1px solid var(--border);
-    background: var(--bg-panel);
     flex-shrink: 0; min-height: 52px; gap: 12px;
   }
   .msg-header-left { display: flex; align-items: center; gap: 8px; min-width: 0; }
   .header-icon { font-size: 16px; flex-shrink: 0; }
   .header-title {
-    font-size: 14px; font-weight: 700; color: var(--text-base);
+    font-size: 14px; font-weight: 650; letter-spacing: -.03em; color: var(--text-base);
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
   .header-desc {
@@ -554,21 +579,21 @@
   .member-count { font-size: 11px; color: var(--text-subtle); font-weight: 500; flex-shrink: 0; }
   .ticket-header-info { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
   .header-action-btn {
-    padding: 5px 12px; border-radius: 6px; font-size: 12px; font-weight: 500;
-    border: 1px solid var(--border); background: var(--bg-panel2, var(--bg-base));
+    padding: 6px 13px; border-radius: var(--radius-sm); font-size: 12px; font-weight: 500;
+    border: 1px solid var(--border); background: var(--bg-panel2);
     color: var(--text-muted); cursor: pointer; font-family: inherit;
-    transition: color .1s, border-color .1s;
+    transition: color .15s, border-color .15s;
   }
-  .header-action-btn:hover { color: var(--danger, #ef4444); border-color: var(--danger, #ef4444); }
-  .header-action-reopen { color: var(--success, #22c55e); border-color: color-mix(in srgb, var(--success, #22c55e) 40%, transparent); }
-  .header-action-reopen:hover { opacity: .8; }
+  .header-action-btn:hover { color: var(--danger); border-color: var(--danger); }
+  .header-action-reopen { color: var(--success); border-color: color-mix(in srgb, var(--success) 40%, transparent); }
+  .header-action-reopen:hover { color: var(--success); border-color: var(--success); }
 
   .ticket-header-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
-  .ticket-header-dot.open   { background: var(--success, #22c55e); }
+  .ticket-header-dot.open   { background: var(--success); }
   .ticket-header-dot.closed { background: var(--text-subtle); }
-  .ticket-badge { font-size: 10px; font-weight: 600; border-radius: 99px; padding: 1px 8px; flex-shrink: 0; }
-  .badge-open   { background: color-mix(in srgb, var(--success, #22c55e) 14%, transparent); color: var(--success, #22c55e); }
-  .badge-closed { background: var(--bg-panel2, var(--bg-base)); color: var(--text-subtle); }
+  .ticket-badge { font-size: 10px; font-weight: 600; border-radius: var(--radius-sm); padding: 1px 8px; flex-shrink: 0; }
+  .badge-open   { background: var(--success-dim); color: var(--success); }
+  .badge-closed { background: var(--bg-panel2); color: var(--text-subtle); }
 
   /* ── Thread ── */
   .msg-thread {
@@ -578,9 +603,10 @@
     scrollbar-width: thin;
   }
 
+  /* A transcript, not a stack of cards: no box per message, just rhythm. */
   .msg-row {
     display: flex; gap: 10px;
-    padding: 3px 8px; border-radius: 6px;
+    padding: 4px 8px;
     position: relative; align-items: flex-start;
   }
   .msg-row:hover { background: var(--bg-hover); }
@@ -589,15 +615,15 @@
 
   .msg-av-wrap { position: relative; flex-shrink: 0; margin-top: 1px; }
   .msg-av {
-    width: 32px; height: 32px; border-radius: 8px;
+    width: 32px; height: 32px; border-radius: var(--radius);
     display: flex; align-items: center; justify-content: center;
-    font-size: 11px; font-weight: 700; color: #fff;
+    font-size: 11px; font-weight: 650; color: #fff;
   }
   .msg-av-spacer { width: 32px; flex-shrink: 0; }
   .av-online-dot {
     position: absolute; bottom: -1px; right: -1px;
     width: 9px; height: 9px; border-radius: 50%;
-    background: var(--success, #22c55e);
+    background: var(--success);
     border: 2px solid var(--bg-base);
   }
 
@@ -605,13 +631,13 @@
   .msg-meta { display: flex; align-items: baseline; gap: 6px; margin-bottom: 1px; }
   .msg-author { font-size: 13px; font-weight: 600; color: var(--text-base); }
   .msg-role {
-    font-size: 9px; font-weight: 700; text-transform: uppercase;
-    letter-spacing: .05em; border-radius: 4px; padding: 1px 5px;
+    font-size: 9px; font-weight: 650; text-transform: uppercase;
+    letter-spacing: .08em; border-radius: var(--radius-sm); padding: 1px 5px;
   }
   .role-owner, .role-admin {
-    background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent);
+    background: var(--accent-dim); color: var(--accent-ink);
   }
-  .role-member { background: var(--bg-panel2, var(--bg-base)); color: var(--text-subtle); }
+  .role-member { background: var(--bg-panel2); color: var(--text-subtle); }
   .msg-time { font-size: 11px; color: var(--text-subtle); }
   .msg-text {
     font-size: 13.5px; color: var(--text-base);
@@ -620,83 +646,95 @@
   .msg-edited { font-size: 10px; color: var(--text-subtle); }
   .msg-system { text-align: center; font-size: 11px; color: var(--text-subtle); padding: 6px 0; }
   .msg-image {
-    max-width: 320px; max-height: 240px; border-radius: 8px;
+    max-width: 320px; max-height: 240px; border-radius: var(--radius);
     border: 1px solid var(--border); margin-top: 4px; display: block;
   }
   .msg-file {
     display: inline-flex; align-items: center; gap: 5px;
-    font-size: 12px; color: var(--accent); text-decoration: none; margin-top: 4px;
+    font-size: 12px; color: var(--accent-ink); text-decoration: none; margin-top: 4px;
   }
   .msg-file:hover { text-decoration: underline; }
 
   .msg-actions {
     position: absolute; right: 8px; top: 4px;
-    opacity: 0; transition: opacity .12s;
+    opacity: 0; transition: opacity .15s;
     display: flex; gap: 2px;
     background: var(--bg-panel); border: 1px solid var(--border);
-    border-radius: 6px; padding: 2px 4px;
-    box-shadow: 0 1px 6px rgba(0,0,0,.12);
+    border-radius: var(--radius-sm); padding: 2px 4px;
+    box-shadow: var(--shadow-sm);
   }
   .action-btn {
     background: none; border: none; color: var(--text-muted);
-    cursor: pointer; padding: 3px; border-radius: 4px;
-    display: flex; align-items: center; transition: color .1s, background .1s;
+    cursor: pointer; padding: 3px; border-radius: var(--radius-sm);
+    display: flex; align-items: center; transition: color .15s, background .15s;
   }
   .action-btn:hover { color: var(--text-base); background: var(--bg-hover); }
-  .action-btn-danger:hover { color: var(--danger, #ef4444); }
+  .action-btn-danger:hover { color: var(--danger); }
 
   .edit-input {
-    width: 100%; padding: 5px 8px;
-    border: 1px solid var(--accent); border-radius: 6px;
-    background: var(--bg-panel); font-size: 13px;
+    width: 100%; padding: 6px 9px;
+    border: 1px solid var(--accent); border-radius: var(--radius-sm);
+    background: var(--bg-panel2); font-size: 13px;
     color: var(--text-base); font-family: inherit;
     box-sizing: border-box; outline: none;
+    transition: box-shadow .15s;
   }
+  .edit-input:focus { box-shadow: 0 0 0 3px var(--accent-dim); }
   .edit-actions { display: flex; gap: 6px; margin-top: 4px; }
 
   .thread-empty {
     flex: 1; display: flex; flex-direction: column;
     align-items: center; justify-content: center;
-    padding: 48px 20px; text-align: center;
+    padding: 20px; text-align: center;
   }
-  .thread-empty-title { font-size: 14px; font-weight: 600; color: var(--text-base); margin-bottom: 4px; }
+  .thread-empty-inner {
+    display: flex; flex-direction: column; align-items: center;
+    max-width: 44ch;
+  }
+  .thread-empty-title { font-size: 14px; font-weight: 600; letter-spacing: -.03em; color: var(--text-base); margin: 14px 0 4px; }
   .thread-empty-sub   { font-size: 13px; color: var(--text-subtle); margin: 0; }
 
   .empty-state {
     flex: 1; display: flex; flex-direction: column;
     align-items: center; justify-content: center;
-    gap: 12px; color: var(--text-subtle); font-size: 13px;
+    color: var(--text-subtle); font-size: 13px;
   }
+  .empty-state-inner {
+    display: flex; flex-direction: column; align-items: center; gap: 12px;
+    text-align: center;
+  }
+  .empty-state-inner p { margin: 0; }
 
   /* ── Compose ── */
   .compose {
     display: flex; align-items: center; gap: 8px;
     padding: 10px 16px 12px;
     border-top: 1px solid var(--border);
-    background: var(--bg-panel); flex-shrink: 0;
+    flex-shrink: 0;
   }
   .compose-input {
-    flex: 1; min-width: 0; padding: 8px 12px;
-    border: 1px solid var(--border); border-radius: 8px;
-    background: var(--bg-panel2, var(--bg-base));
+    flex: 1; min-width: 0; padding: 9px 13px;
+    border: 1px solid var(--border); border-radius: var(--radius-sm);
+    background: var(--bg-panel2);
     font-size: 13px; color: var(--text-base);
-    font-family: inherit; transition: border-color .12s; outline: none;
+    font-family: inherit; transition: border-color .15s, box-shadow .15s; outline: none;
   }
-  .compose-input:focus { border-color: var(--accent); }
+  .compose-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-dim); }
   .compose-input::placeholder { color: var(--text-subtle); }
 
   .compose-send {
-    width: 34px; height: 34px; border-radius: 8px;
-    background: var(--accent); color: #fff; border: none;
+    width: 34px; height: 34px; border-radius: var(--radius-sm);
+    background: var(--accent); color: var(--accent-contrast); border: none;
     cursor: pointer; display: flex; align-items: center; justify-content: center;
-    transition: opacity .12s, transform .1s; flex-shrink: 0;
+    transition: transform .2s, background .2s; flex-shrink: 0;
   }
-  .compose-send:hover:not(:disabled) { opacity: .9; transform: scale(1.05); }
+  .compose-send:hover:not(:disabled) { background: var(--accent-hover); transform: translateY(-2px); }
+  .compose-send:active:not(:disabled) { transform: translateY(0); }
   .compose-send:disabled { opacity: .35; cursor: default; }
 
   .compose-closed {
     padding: 12px 20px; font-size: 12px; color: var(--text-subtle);
-    border-top: 1px solid var(--border); background: var(--bg-panel);
+    border-top: 1px solid var(--border);
     text-align: center; flex-shrink: 0;
   }
 </style>

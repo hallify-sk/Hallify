@@ -158,6 +158,7 @@
 				allowZones={true}
 				lockFloors={true}
 				tablesFromTypesOnly={true}
+				allowGuests={true}
 			/>
 		{/key}
 	</div>
@@ -169,56 +170,69 @@
 		display: flex; align-items: center; justify-content: space-between;
 		padding: 10px 20px; border-bottom: 1px solid var(--border); background: var(--bg-panel); flex-shrink: 0;
 	}
-	.layout-toolbar h1 { font-size: 15px; font-weight: 600; margin: 0; }
+	.layout-toolbar h1 { font-size: 15px; font-weight: 550; letter-spacing: -.03em; margin: 0; }
 	.toolbar-actions { display: flex; gap: 10px; align-items: center; }
 	.editor-wrap { flex: 1; overflow: hidden; position: relative; }
 	.save-status { font-size: 12px; font-weight: 600; min-width: 90px; text-align: right; }
 	.save-status.save-saving { color: var(--text-muted); }
-	.save-status.save-dirty  { color: var(--warning, #b45309); }
-	.save-status.save-saved  { color: var(--success, #16a34a); }
+	.save-status.save-dirty  { color: var(--warning); }
+	.save-status.save-saved  { color: var(--success); }
 	.save-status.save-idle   { color: transparent; }
 
 	/* Template picker */
 	.tmpl-picker { position: relative; }
 	.tmpl-backdrop { position: fixed; inset: 0; z-index: 40; background: transparent; border: none; cursor: default; }
+	/* A genuinely floating popover, so it keeps a shadow rather than a hairline. */
 	.tmpl-dropdown {
 		position: absolute; top: calc(100% + 6px); right: 0; z-index: 50; width: 320px;
-		background: var(--bg-panel); border: 1px solid var(--border); border-radius: 10px;
-		box-shadow: 0 8px 28px rgba(0,0,0,.18); padding: 10px; display: flex; flex-direction: column; gap: 8px;
+		background: var(--bg-panel); border: 1px solid var(--border); border-radius: var(--radius-lg);
+		box-shadow: var(--shadow); padding: 12px; display: flex; flex-direction: column; gap: 9px;
 	}
 	.tmpl-search {
-		width: 100%; padding: 7px 10px; font-size: 13px; border-radius: 7px;
-		border: 1px solid var(--border); background: var(--bg-base); color: var(--text-base);
+		width: 100%; padding: 8px 12px; font-size: 13px; border-radius: var(--radius-sm);
+		border: 1px solid var(--border); background: var(--bg-panel2); color: var(--text-base);
+		outline: none; transition: border-color .15s, box-shadow .15s;
 	}
+	.tmpl-search:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-dim); }
 	.tmpl-typefilter { display: flex; flex-wrap: wrap; gap: 4px; }
 	.tf-chip {
-		font-size: 11px; font-weight: 600; padding: 3px 9px; border-radius: 999px;
+		font-size: 11px; font-weight: 600; padding: 3px 10px; border-radius: 3px;
 		border: 1px solid var(--border); background: transparent; color: var(--text-muted); cursor: pointer;
+		transition: background .15s, border-color .15s, color .15s;
 	}
-	.tf-chip:hover { border-color: var(--accent); }
-	.tf-chip.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+	.tf-chip:hover { border-color: var(--accent); color: var(--text-base); }
+	/* Selected chip sits ON the accent fill, so its label takes --accent-contrast. */
+	.tf-chip.on { background: var(--accent); border-color: var(--accent); color: var(--accent-contrast); }
 	.tmpl-guesthint { margin: 0; font-size: 11.5px; color: var(--text-muted); }
-	.tmpl-guesthint strong { color: var(--text-base); }
+	/* <strong> would otherwise take the UA bold (700 in Chrome, bolder/900 in
+	   Firefox), which the type scale forbids. */
+	.tmpl-guesthint strong { color: var(--text-base); font-weight: 650; }
 	.tmpl-list { display: flex; flex-direction: column; gap: 2px; max-height: 280px; overflow-y: auto; }
 	.tmpl-item {
-		display: flex; flex-direction: column; gap: 3px;
-		width: 100%; text-align: left; padding: 8px 10px; border: 1px solid transparent; border-radius: 7px;
+		display: flex; flex-direction: column; gap: 4px;
+		width: 100%; text-align: left; padding: 9px 11px; border: 1px solid transparent; border-radius: var(--radius);
 		background: transparent; cursor: pointer; color: var(--text-base);
+		transition: background .15s, border-color .15s;
 	}
 	.tmpl-item:hover { background: var(--bg-hover); }
 	.tmpl-item.recommended { border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); background: var(--accent-dim); }
 	.tmpl-item-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-	.tmpl-item-name { font-size: 13px; font-weight: 600; }
+	.tmpl-item-name { font-size: 13px; font-weight: 600; letter-spacing: -.03em; }
+	/* Badge ON the accent fill → --accent-contrast. */
 	.tmpl-rec {
-		font-size: 9.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em;
-		color: #fff; background: var(--accent); padding: 2px 6px; border-radius: 5px; flex-shrink: 0;
+		font-size: 9.5px; font-weight: 650; text-transform: uppercase; letter-spacing: .08em;
+		color: var(--accent-contrast); background: var(--accent); padding: 2px 7px; border-radius: var(--radius-sm); flex-shrink: 0;
 	}
 	.tmpl-item-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; }
 	.tmpl-seats { font-size: 11px; font-weight: 600; color: var(--text-muted); }
+	/* Badge on the accent tint → --accent-ink. */
 	.tmpl-item-type {
-		font-size: 9.5px; font-weight: 700; color: var(--accent); text-transform: uppercase; letter-spacing: .04em;
-		background: var(--accent-dim); padding: 1px 5px; border-radius: 4px;
+		font-size: 9.5px; font-weight: 650; color: var(--accent-ink); text-transform: uppercase; letter-spacing: .08em;
+		background: var(--accent-dim); padding: 1px 6px; border-radius: var(--radius-sm);
 	}
+	/* A recommended row is itself filled with --accent-dim, so the badge's own
+	   --accent-dim background disappears into it. Lift it onto the panel surface. */
+	.tmpl-item.recommended .tmpl-item-type { background: var(--bg-panel); }
 	.tmpl-empty { margin: 6px; font-size: 12.5px; color: var(--text-muted); text-align: center; }
 	.tmpl-note { margin: 2px 2px 0; font-size: 11px; color: var(--text-muted); }
 </style>

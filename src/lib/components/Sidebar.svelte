@@ -35,10 +35,14 @@
 
   let userMenuOpen = $state(false);
 
+  // The swatch shows each theme's PAPER colour — the accent is the same pink in
+  // all three, so a per-theme accent dot would say nothing. Warm's page colour is
+  // a near-twin of slate's and indistinguishable at 9px, so warm shows the most
+  // saturated tone of its own paper ramp (its --border value) instead.
   const THEMES = [
-    { id: 'slate', label: 'Slate', dot: '#4f6ef7' },
-    { id: 'dark',  label: 'Dark',  dot: '#818cf8' },
-    { id: 'warm',  label: 'Warm',  dot: '#7c3aed' },
+    { id: 'slate', label: 'Slate', dot: '#f9f9f7' },
+    { id: 'dark',  label: 'Dark',  dot: '#181c1a' },
+    { id: 'warm',  label: 'Warm',  dot: '#e5ddd2' },
   ] as const;
 
   function setTheme(id: string) {
@@ -187,37 +191,14 @@
             </svg>
             {t.sidebar.billingPlan}
           </a>
-          <a href="/app/manage/settings/branding" class="nav-item" class:active={$page.url.pathname.startsWith('/app/manage/settings/branding')}>
+          <!-- Customize, Domains, Webhooks, Email and Analytics live as tabs under
+               Settings now; one entry replaces five. -->
+          <a href="/app/manage/settings" class="nav-item" class:active={$page.url.pathname.startsWith('/app/manage/settings') || $page.url.pathname.startsWith('/app/manage/domains')}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <circle cx="13.5" cy="6.5" r=".5" fill="currentColor"/>
-              <circle cx="17.5" cy="10.5" r=".5" fill="currentColor"/>
-              <circle cx="8.5" cy="7.5" r=".5" fill="currentColor"/>
-              <circle cx="6.5" cy="12.5" r=".5" fill="currentColor"/>
-              <path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z"/>
+              <circle cx="12" cy="12" r="3"/>
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
             </svg>
-            {t.sidebar.customize}
-          </a>
-          <a href="/app/manage/domains" class="nav-item" class:active={$page.url.pathname.startsWith('/app/manage/domains')}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <circle cx="12" cy="12" r="10"/>
-              <line x1="2" y1="12" x2="22" y2="12"/>
-              <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
-            </svg>
-            {t.sidebar.domains}
-          </a>
-          <a href="/app/manage/settings/webhooks" class="nav-item" class:active={$page.url.pathname.startsWith('/app/manage/settings/webhooks')}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
-              <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
-            </svg>
-            {t.sidebar.webhooks}
-          </a>
-          <a href="/app/manage/settings/email" class="nav-item" class:active={$page.url.pathname.startsWith('/app/manage/settings/email')}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <rect x="2" y="4" width="20" height="16" rx="2"/>
-              <path d="m22 7-10 5L2 7"/>
-            </svg>
-            {t.settings.tabEmail}
+            {t.sidebar.settings}
           </a>
           <a href="/app/manage/help" class="nav-item" class:active={$page.url.pathname.startsWith('/app/manage/help')}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -378,9 +359,9 @@
     font-family: 'Poppins', 'Segoe UI', system-ui, -apple-system, sans-serif;
     font-weight: 900;
     font-style: italic;
-    font-size: 14px;
+    font-size: 15px;
     color: var(--text-base);
-    letter-spacing: -0.01em;
+    letter-spacing: -0.05em;
   }
 
   /* Org switcher */
@@ -416,40 +397,41 @@
 
   .nav-label {
     display: block;
-    padding: 6px 8px 3px;
+    padding: 8px 9px 4px;
     font-size: 10px;
-    font-weight: 700;
+    font-weight: 650;
     text-transform: uppercase;
-    letter-spacing: .07em;
-    color: var(--text-subtle);
+    letter-spacing: .13em;
+    line-height: 1.7;
+    color: var(--text-muted);
   }
 
   .nav-item {
     display: flex;
     align-items: center;
     gap: 8px;
-    padding: 6px 9px;
-    border-radius: 6px;
+    padding: 7px 9px;
+    border-radius: var(--radius-sm);
     font-size: 13px;
     font-weight: 500;
     color: var(--text-muted);
     text-decoration: none;
-    transition: background .1s, color .1s;
+    transition: background .15s, color .15s;
     cursor: pointer;
     position: relative;
   }
   .nav-item:hover { background: var(--bg-hover); color: var(--text-base); text-decoration: none; }
-  .nav-item.active { background: var(--accent-dim); color: var(--accent); font-weight: 600; }
+  .nav-item.active { background: var(--accent-dim); color: var(--accent-ink); font-weight: 600; }
   .nav-item svg { flex-shrink: 0; }
 
   .nav-badge {
     margin-left: auto;
     background: var(--danger);
-    color: #fff;
+    color: var(--on-danger);
     font-size: 10px;
-    font-weight: 700;
+    font-weight: 650;
     padding: 1px 5px;
-    border-radius: 10px;
+    border-radius: var(--radius-sm);
     min-width: 16px;
     text-align: center;
     line-height: 1.4;
@@ -457,12 +439,12 @@
   .nav-ping {
     margin-left: auto;
     width: 8px; height: 8px; border-radius: 50%;
-    background: var(--danger, #ef4444); flex-shrink: 0;
-    box-shadow: 0 0 0 0 color-mix(in srgb, var(--danger, #ef4444) 70%, transparent);
+    background: var(--danger); flex-shrink: 0;
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--danger) 70%, transparent);
     animation: nav-ping-pulse 1.8s ease-out infinite;
   }
   @keyframes nav-ping-pulse {
-    0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--danger, #ef4444) 60%, transparent); }
+    0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--danger) 60%, transparent); }
     70% { box-shadow: 0 0 0 6px transparent; }
     100% { box-shadow: 0 0 0 0 transparent; }
   }
@@ -481,12 +463,12 @@
     gap: 8px;
     width: 100%;
     padding: 6px 7px;
-    border-radius: 8px;
+    border-radius: var(--radius);
     background: none;
     border: none;
     cursor: pointer;
     font-family: inherit;
-    transition: background .1s;
+    transition: background .15s;
   }
   .user-btn:hover { background: var(--bg-hover); }
 
@@ -495,12 +477,12 @@
     height: 26px;
     border-radius: 50%;
     background: var(--accent);
-    color: #fff;
+    color: var(--accent-contrast);
     display: flex;
     align-items: center;
     justify-content: center;
     font-size: 10px;
-    font-weight: 700;
+    font-weight: 650;
     flex-shrink: 0;
   }
 
@@ -544,8 +526,8 @@
     right: 10px;
     background: var(--bg-panel);
     border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 4px;
+    border-radius: var(--radius-lg);
+    padding: 6px;
     box-shadow: var(--shadow);
     z-index: 200;
   }
@@ -556,7 +538,7 @@
     gap: 8px;
     width: 100%;
     padding: 7px 10px;
-    border-radius: 6px;
+    border-radius: var(--radius-sm);
     font-size: 13px;
     font-weight: 500;
     color: var(--text-base);
@@ -565,7 +547,7 @@
     background: none;
     border: none;
     font-family: inherit;
-    transition: background .1s;
+    transition: background .15s;
   }
   .dropdown-item:hover { background: var(--bg-hover); text-decoration: none; }
 
@@ -575,7 +557,7 @@
     padding: 8px;
     font-size: 13px;
     font-weight: 600;
-    color: var(--accent);
+    color: var(--accent-ink);
     text-decoration: none;
   }
 
@@ -596,7 +578,7 @@
     justify-content: center;
     gap: 5px;
     padding: 5px 6px;
-    border-radius: 6px;
+    border-radius: var(--radius-sm);
     border: 1px solid transparent;
     background: none;
     cursor: pointer;
@@ -604,7 +586,7 @@
     font-size: 11px;
     font-weight: 500;
     color: var(--text-subtle);
-    transition: background .1s, border-color .1s, color .1s;
+    transition: background .15s, border-color .15s, color .15s;
   }
 
   .theme-btn:hover {
@@ -619,10 +601,13 @@
     font-weight: 600;
   }
 
+  /* The dot is the theme's paper colour, so the pale ones need a ring to read
+     as a swatch rather than a hole in the button. */
   .theme-dot {
-    width: 7px;
-    height: 7px;
+    width: 9px;
+    height: 9px;
     border-radius: 50%;
+    border: 1px solid var(--border);
     flex-shrink: 0;
   }
 
@@ -639,15 +624,16 @@
   .lang-btn {
     flex: 1;
     padding: 5px 6px;
-    border-radius: 6px;
+    border-radius: var(--radius-sm);
     border: 1px solid transparent;
     background: none;
     cursor: pointer;
     font-family: inherit;
     font-size: 11px;
     font-weight: 500;
+    letter-spacing: .04em;
     color: var(--text-subtle);
-    transition: background .1s, border-color .1s, color .1s;
+    transition: background .15s, border-color .15s, color .15s;
   }
   .lang-btn:hover { background: var(--bg-hover); color: var(--text-muted); }
   .lang-btn.active {

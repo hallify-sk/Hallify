@@ -35,6 +35,10 @@ export const RATE_LIMITS = {
   loginEmail:       { limit: 8,  windowSeconds: 15 * 60 },
   /** Account creation from one IP. */
   register:         { limit: 5,  windowSeconds: 60 * 60 },
+  /** Address lookups from one IP. Nominatim is a donated service and asks callers to
+      stay near one request a second; this also stops the endpoint being used as a
+      free geocoding proxy. */
+  geocode:          { limit: 30, windowSeconds: 60 },
   /** Password-reset requests from one IP (email bombing). */
   forgotIp:         { limit: 8,  windowSeconds: 60 * 60 },
   /** Password-reset requests for one address. */

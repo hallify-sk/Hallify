@@ -4,11 +4,29 @@ import { dbFirst, dbRun } from '$lib/db/index';
 import { isReservedSubdomain } from '$lib/reserved-subdomains';
 import { st } from '$lib/i18n-server';
 
-export const load: PageServerLoad = ({ locals }) => {
-  if (!locals.user) redirect(303, '/app/login');
+/** Who may reach the org form.
+ *
+ *  Registration no longer funnels anyone here: an apex account is a plain personal
+ *  account, and creating an organisation is a separate, explicit step the same
+ *  account takes later. So this route has to stand on its own and re-check every
+ *  precondition itself rather than trusting where the visitor came from.
+ *
+ *  Returns a redirect target, or null when the visitor may proceed. */
+function orgFormGuard(locals: App.Locals): string | null {
+  if (!locals.user) return '/app/login';
+  // Per-org client accounts live inside one org's bubble and own nothing on the
+  // apex. They can't authenticate here today, but the check costs nothing and
+  // keeps the rule in the route rather than in the login query.
+  if (locals.user.account_type === 'client') return '/app/client';
   // Creating organizations is disabled inside an org's bubble (subdomain / custom
   // domain) — you manage only this org here. Create new orgs from the main app (apex).
-  if (locals.domainOrg) redirect(303, '/app/manage');
+  if (locals.domainOrg) return '/app/manage';
+  return null;
+}
+
+export const load: PageServerLoad = ({ locals }) => {
+  const away = orgFormGuard(locals);
+  if (away) redirect(303, away);
   return {};
 };
 
@@ -22,14 +40,21 @@ function toSlug(name: string): string {
 
 export const actions: Actions = {
   default: async ({ request, locals, cookies }) => {
-    if (!locals.user) redirect(303, '/app/login');
-    if (locals.domainOrg) redirect(303, '/app/manage');
+    const away = orgFormGuard(locals);
+    if (away) redirect(303, away);
+    // orgFormGuard has already redirected when there is no user; the helper's
+    // string return just doesn't narrow locals.user for the compiler.
+    const userId = locals.user!.id;
 
     const data = await request.formData();
     const name = (data.get('name') as string)?.trim();
 
     if (!name || name.length < 2) {
       return fail(400, { name, error: st(locals.locale).serverErrors.orgNameMin2 });
+    }
+    // The input carries maxlength="80"; a posted form need not.
+    if (name.length > 80) {
+      return fail(400, { name, error: st(locals.locale).serverErrors.orgNameMax80 });
     }
 
     // Derive a unique slug. The slug doubles as the org's free subdomain
@@ -63,7 +88,7 @@ export const actions: Actions = {
       'INSERT INTO organization_members (id, org_id, user_id, role) VALUES (?, ?, ?, ?)',
       crypto.randomUUID(),
       orgId,
-      locals.user.id,
+      userId,
       'owner'
     );
 

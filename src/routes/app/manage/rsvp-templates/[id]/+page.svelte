@@ -3,6 +3,7 @@
 	import { t } from '$lib/i18n.svelte';
 	import type { PageData, ActionData } from './$types';
 	import type { RsvpConfig } from '$lib/db/index';
+	import { readableInkOn } from '$lib/contrast';
 
 	interface Props { data: PageData; form: ActionData; }
 	let { data, form }: Props = $props();
@@ -10,9 +11,15 @@
 	const initial = (data.template.config ?? {}) as RsvpConfig;
 	let templateName = $state(data.template.name);
 	let eventType = $state(data.template.event_type ?? '');
-	let primaryColor = $state(initial.primaryColor ?? '#e91e8a');
-	let bgColor = $state(initial.bgColor ?? '#ffffff');
+	// Defaults are colour literals, not tokens: both are written into the saved config
+	// and fed to <input type="color">, which only accepts a hex. They mirror the new
+	// palette — the brand accent on paper (see design-concepts/APP-DESIGN-SYSTEM.md).
+	let primaryColor = $state(initial.primaryColor ?? '#f05ca1');
+	let bgColor = $state(initial.bgColor ?? '#f9f9f7');
 	let bgImage = $state(initial.bgImage ?? '');
+	// The preview button is filled with the colour being picked right now, so its label
+	// has to be derived from that colour rather than fixed to a token.
+	const previewInk = $derived(readableInkOn(primaryColor));
 	let description = $state(initial.description ?? '');
 	let fields = $state<NonNullable<RsvpConfig['fields']>>(
 		initial.fields && initial.fields.length > 0 && initial.fields[0].name === 'name'
@@ -116,7 +123,7 @@
 	<div class="settings-col">
 
 		<!-- Section: Template info -->
-		<div class="settings-section card">
+		<div class="section section--lead">
 			<h3 class="section-title">{t.rsvpTemplates.editTemplate}</h3>
 			<div class="field-row">
 				<div class="field">
@@ -136,7 +143,7 @@
 		</div>
 
 		<!-- Section: Appearance -->
-		<div class="settings-section card">
+		<div class="section">
 			<h3 class="section-title">{t.rsvpEditor.primaryColor} / {t.rsvpEditor.bgColor}</h3>
 			<div class="color-row">
 				<div class="color-picker-group">
@@ -169,7 +176,7 @@
 		</div>
 
 		<!-- Section: Content -->
-		<div class="settings-section card">
+		<div class="section">
 			<h3 class="section-title">{t.rsvpEditor.description}</h3>
 			<div class="field compact" style="margin-bottom:0">
 				<textarea id="description" bind:value={description} rows="3"
@@ -178,7 +185,7 @@
 		</div>
 
 		<!-- Section: Form Fields -->
-		<div class="settings-section card">
+		<div class="section">
 			<div class="fields-header">
 				<h3 class="section-title" style="margin-bottom:0">{t.rsvpEditor.fields}</h3>
 				<button type="button" class="btn-outline btn-sm" onclick={addField}>
@@ -350,7 +357,7 @@
 							</div>
 						{/each}
 					</div>
-					<button class="preview-submit" style="background:{primaryColor}">
+					<button class="preview-submit" style="background:{primaryColor}; color:{previewInk}">
 						{t.rsvp.submit}
 					</button>
 				</div>
@@ -417,7 +424,7 @@
 						</div>
 					{/each}
 				</div>
-				<button class="preview-submit" style="background:{primaryColor}">
+				<button class="preview-submit" style="background:{primaryColor}; color:{previewInk}">
 					{t.rsvp.submit}
 				</button>
 			</div>
@@ -460,7 +467,8 @@
 		left: 50%;
 		transform: translateX(-50%);
 		font-size: 15px;
-		font-weight: 700;
+		font-weight: 600;
+		letter-spacing: -0.03em;
 		color: var(--text-base);
 		white-space: nowrap;
 	}
@@ -480,13 +488,13 @@
 		align-items: center;
 		gap: 8px;
 		padding: 10px 20px;
-		background: #f0fdf4;
-		border: 1px solid #bbf7d0;
+		background: var(--success-dim);
+		border: 1px solid color-mix(in srgb, var(--success) 25%, transparent);
 		color: var(--success);
-		border-radius: 8px;
+		border-radius: var(--radius);
 		font-size: 13px;
 		font-weight: 600;
-		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+		box-shadow: var(--shadow);
 		animation: toast-in 0.25s ease-out;
 	}
 
@@ -511,12 +519,14 @@
 		position: relative;
 	}
 
+	/* The uppercase overline above a section — the eyebrow motif of the language. */
 	.section-title {
-		font-size: 13px;
-		font-weight: 700;
+		font-size: 10px;
+		font-weight: 650;
 		color: var(--text-muted);
 		text-transform: uppercase;
-		letter-spacing: 0.04em;
+		letter-spacing: 0.13em;
+		line-height: 1.7;
 		margin-bottom: 14px;
 	}
 
@@ -578,7 +588,7 @@
 	.color-hex {
 		flex: 1;
 		height: 34px;
-		border-radius: 6px;
+		border-radius: var(--radius-sm);
 		border: 1px solid var(--border);
 		padding: 0 10px;
 		font-size: 13px;
@@ -609,8 +619,8 @@
 	.field-card {
 		background: var(--bg-panel2);
 		border: 1px solid var(--border);
-		border-radius: 10px;
-		padding: 12px 14px;
+		border-radius: var(--radius);
+		padding: 14px 16px;
 		margin-bottom: 8px;
 	}
 
@@ -629,7 +639,7 @@
 		color: var(--text-muted);
 		background: var(--bg-panel);
 		border: 1px solid var(--border);
-		border-radius: 4px;
+		border-radius: var(--radius-sm);
 		padding: 1px 6px;
 		line-height: 1.4;
 	}
@@ -639,7 +649,7 @@
 	.btn-icon {
 		width: 24px;
 		height: 24px;
-		border-radius: 5px;
+		border-radius: var(--radius-sm);
 		border: 1px solid var(--border);
 		background: var(--bg-panel);
 		color: var(--text-muted);
@@ -651,8 +661,8 @@
 		transition: background 0.15s, color 0.15s;
 	}
 
-	.btn-icon:hover { background: var(--accent-dim); color: var(--accent); }
-	.btn-icon.danger:hover { background: #fef2f2; color: var(--danger); }
+	.btn-icon:hover { background: var(--accent-dim); color: var(--accent-ink); }
+	.btn-icon.danger:hover { background: var(--danger-dim); color: var(--danger); }
 	.btn-icon:disabled { opacity: 0.3; cursor: not-allowed; }
 
 	/* ===== Toggle switch ===== */
@@ -662,8 +672,8 @@
 		position: relative;
 		width: 36px;
 		height: 20px;
-		border-radius: 10px;
-		background: var(--border);
+		border-radius: 4px;
+		background: var(--text-subtle);
 		border: none;
 		cursor: pointer;
 		transition: background 0.2s;
@@ -680,9 +690,9 @@
 		width: 16px;
 		height: 16px;
 		border-radius: 50%;
-		background: white;
+		background: var(--bg-panel);
 		transition: transform 0.2s;
-		box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+		box-shadow: var(--shadow-xs);
 	}
 
 	.toggle-switch.on .toggle-knob { transform: translateX(16px); }
@@ -694,7 +704,7 @@
 		padding: 12px 20px;
 		background: var(--bg-panel);
 		border-top: 1px solid var(--border);
-		border-radius: 0 0 12px 12px;
+		border-radius: 0 0 var(--radius-lg) var(--radius-lg);
 		display: flex;
 		align-items: center;
 		justify-content: flex-end;
@@ -704,12 +714,14 @@
 	.save-bar form { display: flex; align-items: center; }
 
 	/* ===== Spinner ===== */
+	/* Inherits the button's own ink (--accent-contrast on the accent fill), so it
+	   stays legible whatever the org's brand colour is. */
 	.spinner {
 		display: inline-block;
 		width: 14px;
 		height: 14px;
-		border: 2px solid rgba(255, 255, 255, 0.3);
-		border-top-color: #fff;
+		border: 2px solid color-mix(in srgb, currentColor 30%, transparent);
+		border-top-color: currentColor;
 		border-radius: 50%;
 		animation: spin 0.6s linear infinite;
 	}
@@ -731,17 +743,19 @@
 		margin-bottom: 12px;
 	}
 
+	/* The uppercase overline above a section — the eyebrow motif of the language. */
 	.preview-panel-header h3 {
-		font-size: 13px;
-		font-weight: 700;
+		font-size: 10px;
+		font-weight: 650;
 		color: var(--text-muted);
 		text-transform: uppercase;
-		letter-spacing: 0.04em;
+		letter-spacing: 0.13em;
+		line-height: 1.7;
 	}
 
 	.preview-card {
 		border: 1px solid var(--border);
-		border-radius: 14px;
+		border-radius: var(--radius-lg);
 		min-height: 400px;
 		display: flex;
 		align-items: center;
@@ -752,36 +766,41 @@
 	.preview-inner {
 		width: 100%;
 		max-width: 340px;
-		background: white;
-		border-radius: 12px;
-		padding: 28px 24px;
-		box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+		background: var(--bg-panel);
+		border-radius: var(--radius-lg);
+		padding: 32px 28px;
+		box-shadow: var(--shadow);
 	}
 
-	.preview-inner h2 { font-size: 18px; font-weight: 700; margin-bottom: 8px; }
-	.preview-desc { font-size: 13px; color: #666; margin-bottom: 20px; line-height: 1.5; }
+	.preview-inner h2 {
+		font-size: 20px; font-weight: 550; letter-spacing: -0.045em; margin-bottom: 10px;
+	}
+	.preview-desc { font-size: 13px; color: var(--text-muted); margin-bottom: 20px; line-height: 1.75; }
 
-	.preview-fields { display: flex; flex-direction: column; gap: 12px; margin-bottom: 20px; }
+	.preview-fields { display: flex; flex-direction: column; gap: 14px; margin-bottom: 22px; }
 
 	.preview-field label {
-		display: block; font-size: 12px; font-weight: 600; color: #333;
-		margin-bottom: 4px; text-transform: none; letter-spacing: 0;
+		display: block; font-size: 12px; font-weight: 600; color: var(--text-base);
+		margin-bottom: 5px; text-transform: none; letter-spacing: 0;
 	}
 
 	.preview-field input[type="text"],
 	.preview-field input[type="email"],
 	.preview-field select {
-		width: 100%; padding: 8px 12px; border: 1px solid #ddd;
-		border-radius: 6px; font-size: 13px; background: #f9f9f9;
+		width: 100%; padding: 9px 13px; border: 1px solid var(--border);
+		border-radius: var(--radius-sm); font-size: 13px; background: var(--bg-panel2);
 	}
 
 	.checkbox-row { display: flex; align-items: center; gap: 8px; }
 	.checkbox-row input[type="checkbox"] { width: 16px; height: 16px; margin: 0; flex-shrink: 0; }
-	.checkbox-label { font-size: 12px; font-weight: 600; color: #333; user-select: none; line-height: 1; }
+	.checkbox-label {
+		font-size: 12px; font-weight: 600; color: var(--text-base); user-select: none; line-height: 1;
+	}
 
 	.preview-submit {
-		width: 100%; padding: 10px; border: none; border-radius: 8px;
-		color: white; font-size: 14px; font-weight: 600; cursor: default;
+		width: 100%; padding: 12px; border: none; border-radius: var(--radius-sm);
+		/* Overridden inline from the picked colour; this is only the unset fallback. */
+		color: var(--accent-contrast); font-size: 14px; font-weight: 650; cursor: default;
 	}
 
 	/* ===== Fullscreen overlay ===== */
@@ -794,13 +813,13 @@
 	.fullscreen-close {
 		position: fixed; top: 16px; right: 20px; z-index: 10000;
 		width: 40px; height: 40px; border-radius: 50%; border: none;
-		background: white; color: var(--text-base); cursor: pointer;
+		background: var(--bg-panel); color: var(--text-base); cursor: pointer;
 		display: flex; align-items: center; justify-content: center;
 		transition: background 0.15s, box-shadow 0.15s;
-		box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+		box-shadow: var(--shadow-sm);
 	}
 
-	.fullscreen-close:hover { background: #f5f5f5; box-shadow: 0 2px 12px rgba(0, 0, 0, 0.25); }
+	.fullscreen-close:hover { background: var(--bg-hover); box-shadow: var(--shadow); }
 
 	.fullscreen-content {
 		width: 100%; height: 100%;
@@ -823,7 +842,8 @@
 		align-items: center;
 		gap: 6px;
 		font-size: 12px;
-		color: #333;
+		line-height: 1.5;
+		color: var(--text-base);
 		cursor: default;
 	}
 
@@ -844,11 +864,11 @@
 
 	.allergy-other-input {
 		width: 100%;
-		padding: 6px 10px;
-		border: 1px solid #ddd;
-		border-radius: 6px;
+		padding: 7px 11px;
+		border: 1px solid var(--border);
+		border-radius: var(--radius-sm);
 		font-size: 12px;
-		background: #f9f9f9;
+		background: var(--bg-panel2);
 	}
 
 	/* ===== Responsive ===== */

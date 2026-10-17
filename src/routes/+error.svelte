@@ -25,8 +25,8 @@
   <h1>{isNotFound ? t.errorPage.notFoundTitle : t.errorPage.genericTitle}</h1>
   <p class="detail">{detail}</p>
   <div class="actions">
-    <a class="btn" href="/">{t.errorPage.backHome}</a>
-    <button class="btn btn-ghost" type="button" onclick={() => history.back()}>{t.errorPage.goBack}</button>
+    <a class="btn-action" href="/">{t.errorPage.backHome}</a>
+    <button class="btn-outline" type="button" onclick={() => history.back()}>{t.errorPage.goBack}</button>
   </div>
 </div>
 
@@ -40,8 +40,8 @@
     gap: 10px;
     padding: 32px 24px;
     text-align: center;
-    background: var(--bg-base, #0b0e15);
-    color: var(--text-primary, rgba(255, 255, 255, 0.92));
+    background: var(--bg-base);
+    color: var(--text-base);
     font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
   }
   .brand {
@@ -53,45 +53,37 @@
     margin-bottom: 22px;
     opacity: 0.85;
   }
+  .brand:hover { text-decoration: none; }
   .brand img { width: 24px; height: 24px; }
-  .brand span { font-weight: 600; }
+  /* The wordmark — the one place Poppins 900 italic is allowed. */
+  .brand span {
+    font-family: 'Poppins', 'Segoe UI', system-ui, -apple-system, sans-serif;
+    font-weight: 900;
+    font-style: italic;
+    letter-spacing: -0.05em;
+  }
   .code {
     font-size: 3.2rem;
-    font-weight: 700;
-    letter-spacing: -0.03em;
+    font-weight: 550;
+    letter-spacing: -0.055em;
     margin: 0;
     opacity: 0.28;
     line-height: 1;
   }
   h1 {
     font-size: 1.35rem;
-    font-weight: 620;
+    font-weight: 550;
     margin: 6px 0 0;
-    letter-spacing: -0.01em;
+    letter-spacing: -0.045em;
   }
   .detail {
-    color: var(--text-secondary, rgba(255, 255, 255, 0.56));
+    color: var(--text-muted);
     margin: 0;
     max-width: 42ch;
-    line-height: 1.6;
+    line-height: 1.75;
     font-size: 0.95rem;
   }
   .actions { display: flex; gap: 10px; margin-top: 20px; flex-wrap: wrap; justify-content: center; }
-  .btn {
-    padding: 9px 18px;
-    border-radius: 9px;
-    background: var(--accent, #4f6ef7);
-    color: #fff;
-    text-decoration: none;
-    font-size: 0.9rem;
-    font-weight: 560;
-    border: none;
-    cursor: pointer;
-    font-family: inherit;
-  }
-  .btn-ghost {
-    background: transparent;
-    color: var(--text-secondary, rgba(255, 255, 255, 0.6));
-    border: 1px solid var(--border, rgba(255, 255, 255, 0.14));
-  }
+  /* The two ways out use the shared button primitives (.btn-action keeps the
+     hover lift, .btn-outline is the quiet one), so nothing is restated here. */
 </style>

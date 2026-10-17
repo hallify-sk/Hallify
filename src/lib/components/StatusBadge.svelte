@@ -8,19 +8,22 @@
 	const { status, label }: Props = $props();
 
 	const COLOR: Record<string, string> = {
-		pending:         '#f59e0b',
-		waiting_payment: '#6366f1',
-		approved:        '#22c55e',
-		planned:         '#3b82f6',
-		completed:       '#94a3b8',
-		cancelled:       '#ef4444',
-		set:             '#22c55e',
-		unset:           '#94a3b8',
-		open:            '#3b82f6',
-		closed:          '#94a3b8',
+		pending:         'var(--warning)',
+		waiting_payment: 'var(--accent-ink)',
+		approved:        'var(--success)',
+		planned:         'var(--text-base)',
+		completed:       'var(--text-muted)',
+		cancelled:       'var(--danger)',
+		set:             'var(--success)',
+		unset:           'var(--text-muted)',
+		open:            'var(--text-base)',
+		closed:          'var(--text-muted)',
 	};
 
-	const color = $derived(COLOR[status] ?? '#94a3b8');
+	// The label is also the tint the pill is mixed from, so the neutral statuses
+	// take --text-muted, not --text-subtle: subtle lands at ~2.8:1 on its own
+	// 12% wash, which is below AA for an 11px label.
+	const color = $derived(COLOR[status] ?? 'var(--text-muted)');
 	const displayLabel = $derived(label ?? (t.status as Record<string, string>)[status] ?? status);
 </script>
 
@@ -29,8 +32,9 @@
 <style>
 	.badge {
 		display: inline-flex; align-items: center;
-		padding: 3px 9px; border-radius: 99px;
-		font-size: 11px; font-weight: 700; white-space: nowrap;
+		padding: 3px 9px; border-radius: var(--radius-sm);
+		font-size: 11px; font-weight: 650; white-space: nowrap;
+		letter-spacing: .01em;
 		background: color-mix(in srgb, var(--c) 12%, transparent);
 		color: var(--c);
 	}

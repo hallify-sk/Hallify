@@ -74,11 +74,14 @@
 		gap: 6px;
 		font-size: 14px;
 		font-weight: 600;
+		letter-spacing: -.02em;
 		color: var(--text-base);
 		text-decoration: none;
+		transition: color .15s;
 	}
 
-	.back-link:hover { color: var(--accent); text-decoration: none; }
+	/* The accent is a fill colour; text written in it must use --accent-ink. */
+	.back-link:hover { color: var(--accent-ink); text-decoration: none; }
 
 	.topbar-actions {
 		display: flex;

@@ -11,6 +11,10 @@ const BREVO_ENDPOINT = 'https://api.brevo.com/v3/smtp/email';
 const FROM_EMAIL = env.EMAIL_FROM || 'noreply@hallify.sk';
 const FROM_NAME = env.EMAIL_FROM_NAME || 'Hallify';
 
+/** The four emails addressed to the venue's own staff. Each can be aimed at a
+ *  subset of the team from Settings → Advanced. */
+export type TeamNotifyEvent = 'newReservation' | 'guestMessage' | 'guestCancel' | 'guestEdit';
+
 export interface EmailNotifyConfig {
 	// Notify the org's owners/admins
 	newReservation: boolean;
@@ -20,6 +24,10 @@ export interface EmailNotifyConfig {
 	// Notify the guest
 	statusChange: boolean;
 	newMessage: boolean;
+	/** Per-event staff recipients, written by Settings → Advanced. `null` or absent
+	 *  means "every owner and admin", so a member invited tomorrow is included
+	 *  without anyone revisiting that screen. An explicit list is honoured as-is. */
+	recipients?: Partial<Record<TeamNotifyEvent, string[] | null>>;
 }
 
 export interface EmailTemplates {
@@ -138,13 +146,37 @@ export async function sendTestEmail(db: D1Database, to: string): Promise<{ ok: b
 	return ok ? { ok: true } : { ok: false, error: 'Check the BREVO_API_KEY secret and that hallify.sk is an authenticated sender in Brevo.' };
 }
 
-// Send an email to every owner/admin of an organization.
-async function emailOrgStaff(db: D1Database, orgId: string, subject: string, html: string, templateName: string) {
-	const recipients = await dbAll<{ email: string }>(db,
-		`SELECT u.email FROM organization_members m JOIN users u ON u.id = m.user_id
-		 WHERE m.org_id = ? AND m.role IN ('owner', 'admin')`,
-		orgId
-	);
+// Send an email to the owners/admins of an organization.
+//
+// `onlyUserIds` is the per-event recipient list saved in Settings → Advanced:
+//   null / undefined → every owner and admin (the default)
+//   []               → nobody (the event is switched off)
+//   [ids]            → those members, still filtered to current owners/admins, so a
+//                      stale id or a demoted member never receives staff mail.
+async function emailOrgStaff(
+	db: D1Database,
+	orgId: string,
+	subject: string,
+	html: string,
+	templateName: string,
+	onlyUserIds?: string[] | null
+) {
+	const scoped = Array.isArray(onlyUserIds);
+	if (scoped && onlyUserIds!.length === 0) return;
+
+	const recipients = scoped
+		? await dbAll<{ email: string }>(db,
+			`SELECT u.email FROM organization_members m JOIN users u ON u.id = m.user_id
+			 WHERE m.org_id = ? AND m.role IN ('owner', 'admin')
+			   AND u.id IN (${onlyUserIds!.map(() => '?').join(',')})`,
+			orgId, ...onlyUserIds!
+		)
+		: await dbAll<{ email: string }>(db,
+			`SELECT u.email FROM organization_members m JOIN users u ON u.id = m.user_id
+			 WHERE m.org_id = ? AND m.role IN ('owner', 'admin')`,
+			orgId
+		);
+
 	for (const r of recipients) {
 		await sendEmail(db, r.email, subject, html, templateName);
 	}
@@ -156,7 +188,7 @@ export async function notifyNewReservation(db: D1Database, orgId: string, title:
 	if (!notify.newReservation) return;
 	const templates = await getEmailTemplates(db);
 	const html = renderTemplate(templates.newReservation, { title, userName, hallName, date });
-	await emailOrgStaff(db, orgId, `New reservation: ${title}`, html, 'newReservation');
+	await emailOrgStaff(db, orgId, `New reservation: ${title}`, html, 'newReservation', notify.recipients?.newReservation ?? null);
 }
 
 // Guest sent a message → email the organization's owners and admins.
@@ -165,7 +197,7 @@ export async function notifyGuestMessage(db: D1Database, orgId: string, senderNa
 	if (!notify.guestMessage) return;
 	const templates = await getEmailTemplates(db);
 	const html = renderTemplate(templates.guestMessage, { senderName, subject, message });
-	await emailOrgStaff(db, orgId, `New message: ${subject}`, html, 'guestMessage');
+	await emailOrgStaff(db, orgId, `New message: ${subject}`, html, 'guestMessage', notify.recipients?.guestMessage ?? null);
 }
 
 // Guest cancelled a booking → email the organization's owners and admins.
@@ -174,7 +206,7 @@ export async function notifyGuestCancel(db: D1Database, orgId: string, guestName
 	if (!notify.guestCancel) return;
 	const templates = await getEmailTemplates(db);
 	const html = renderTemplate(templates.guestCancel, { guestName, title, hallName, date });
-	await emailOrgStaff(db, orgId, `Booking cancelled: ${title}`, html, 'guestCancel');
+	await emailOrgStaff(db, orgId, `Booking cancelled: ${title}`, html, 'guestCancel', notify.recipients?.guestCancel ?? null);
 }
 
 // Guest edited a booking → email the organization's owners and admins.
@@ -183,7 +215,7 @@ export async function notifyGuestEdit(db: D1Database, orgId: string, guestName: 
 	if (!notify.guestEdit) return;
 	const templates = await getEmailTemplates(db);
 	const html = renderTemplate(templates.guestEdit, { guestName, title, hallName, date });
-	await emailOrgStaff(db, orgId, `Booking updated: ${title}`, html, 'guestEdit');
+	await emailOrgStaff(db, orgId, `Booking updated: ${title}`, html, 'guestEdit', notify.recipients?.guestEdit ?? null);
 }
 
 // Reservation status change → email the guest who made the booking.
@@ -218,15 +250,15 @@ export async function sendAnnouncementEmail(
 ): Promise<void> {
 	if (!orgIds.length) return;
 	const safe = (s: string) => String(s).replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c] as string));
-	const accent = ({ info: '#4f46e5', success: '#16a34a', warning: '#b45309', error: '#dc2626' } as Record<string, string>)[opts.level] ?? '#4f46e5';
+	const accent = ({ info: '#a6225e', success: '#2f7a52', warning: '#955f10', error: '#c3362c' } as Record<string, string>)[opts.level] ?? '#a6225e';
 	const html = `
-	<div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;max-width:520px;margin:0 auto;padding:24px;color:#0f172a">
+	<div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;max-width:520px;margin:0 auto;padding:24px;color:#202322">
 		<div style="border-left:4px solid ${accent};padding-left:14px;margin-bottom:16px">
 			<h2 style="font-size:19px;font-weight:800;margin:0 0 6px">${safe(opts.title)}</h2>
 			<div style="font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:${accent};font-weight:700">${safe(opts.level)}</div>
 		</div>
-		<p style="font-size:14px;line-height:1.6;color:#334155;white-space:pre-wrap;margin:0">${safe(opts.body)}</p>
-		<p style="font-size:12px;color:#94a3b8;margin:22px 0 0">— The Hallify team</p>
+		<p style="font-size:14px;line-height:1.6;color:#454a45;white-space:pre-wrap;margin:0">${safe(opts.body)}</p>
+		<p style="font-size:12px;color:#878f87;margin:22px 0 0">— The Hallify team</p>
 	</div>`;
 	// De-dupe recipients across orgs (an owner of two targeted orgs gets one email).
 	const seen = new Set<string>();
@@ -250,21 +282,21 @@ export async function sendOrgInviteEmail(
 ): Promise<boolean> {
 	const safe = (s: string) => String(s).replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c] as string));
 	const html = `
-	<div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;max-width:480px;margin:0 auto;padding:24px;color:#0f172a">
+	<div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;max-width:480px;margin:0 auto;padding:24px;color:#202322">
 		<h2 style="font-size:20px;font-weight:800;margin:0 0 12px">You've been invited to ${safe(opts.orgName)}</h2>
-		<p style="font-size:14px;line-height:1.6;color:#475569;margin:0 0 8px">
+		<p style="font-size:14px;line-height:1.6;color:#5d635d;margin:0 0 8px">
 			${safe(opts.inviterName)} invited you to join <strong>${safe(opts.orgName)}</strong> on Hallify as a <strong>${safe(opts.role)}</strong>.
 		</p>
-		<p style="font-size:14px;line-height:1.6;color:#475569;margin:0 0 20px">
+		<p style="font-size:14px;line-height:1.6;color:#5d635d;margin:0 0 20px">
 			Click below to accept. If you don't have an account yet, you'll be able to create one.
 		</p>
-		<a href="${opts.inviteUrl}" style="display:inline-block;background:#4f46e5;color:#fff;text-decoration:none;font-weight:700;font-size:14px;padding:11px 22px;border-radius:9px">
+		<a href="${opts.inviteUrl}" style="display:inline-block;background:#f05ca1;color:#27131c;text-decoration:none;font-weight:700;font-size:14px;padding:11px 22px;border-radius:12px">
 			Accept invitation
 		</a>
-		<p style="font-size:12px;color:#94a3b8;margin:22px 0 0">
+		<p style="font-size:12px;color:#878f87;margin:22px 0 0">
 			Or paste this link into your browser:<br><span style="word-break:break-all">${opts.inviteUrl}</span>
 		</p>
-		<p style="font-size:12px;color:#94a3b8;margin:14px 0 0">This invitation expires in 7 days.</p>
+		<p style="font-size:12px;color:#878f87;margin:14px 0 0">This invitation expires in 7 days.</p>
 	</div>`;
 	return sendEmail(db, to, `You've been invited to ${opts.orgName} on Hallify`, html, 'orgInvite');
 }
@@ -303,22 +335,22 @@ export async function sendReservationInviteEmail(
 		};
 
 	const html = `
-	<div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;max-width:480px;margin:0 auto;padding:24px;color:#0f172a">
+	<div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;max-width:480px;margin:0 auto;padding:24px;color:#202322">
 		<h2 style="font-size:20px;font-weight:800;margin:0 0 12px">${tx.heading}</h2>
-		<p style="font-size:14px;line-height:1.6;color:#475569;margin:0 0 16px">${tx.intro}</p>
-		<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:14px 16px;margin:0 0 18px;font-size:14px;color:#334155">
+		<p style="font-size:14px;line-height:1.6;color:#5d635d;margin:0 0 16px">${tx.intro}</p>
+		<div style="background:#f9f9f7;border:1px solid #dfe2dd;border-radius:10px;padding:14px 16px;margin:0 0 18px;font-size:14px;color:#454a45">
 			<div style="margin:0 0 4px"><strong>${tx.event}:</strong> ${esc(opts.eventTitle)}</div>
 			<div style="margin:0 0 4px"><strong>${tx.hall}:</strong> ${esc(opts.hallName)}</div>
 			<div><strong>${tx.date}:</strong> ${esc(opts.date)}</div>
 		</div>
-		<p style="font-size:14px;line-height:1.6;color:#475569;margin:0 0 20px">${tx.body}</p>
-		<a href="${opts.inviteUrl}" style="display:inline-block;background:#4f46e5;color:#fff;text-decoration:none;font-weight:700;font-size:14px;padding:11px 22px;border-radius:9px">
+		<p style="font-size:14px;line-height:1.6;color:#5d635d;margin:0 0 20px">${tx.body}</p>
+		<a href="${opts.inviteUrl}" style="display:inline-block;background:#f05ca1;color:#27131c;text-decoration:none;font-weight:700;font-size:14px;padding:11px 22px;border-radius:12px">
 			${tx.cta}
 		</a>
-		<p style="font-size:12px;color:#94a3b8;margin:22px 0 0">
+		<p style="font-size:12px;color:#878f87;margin:22px 0 0">
 			${tx.or}<br><span style="word-break:break-all">${opts.inviteUrl}</span>
 		</p>
-		<p style="font-size:12px;color:#94a3b8;margin:14px 0 0">${tx.expires}</p>
+		<p style="font-size:12px;color:#878f87;margin:14px 0 0">${tx.expires}</p>
 	</div>`;
 	return sendEmail(db, to, tx.subject, html, 'reservationInvite');
 }
@@ -347,15 +379,15 @@ export async function notifyEventAssigned(
 		};
 
 	const html = `
-	<div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;max-width:480px;margin:0 auto;padding:24px;color:#0f172a">
+	<div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;max-width:480px;margin:0 auto;padding:24px;color:#202322">
 		<h2 style="font-size:20px;font-weight:800;margin:0 0 12px">${tx.heading}</h2>
-		<p style="font-size:14px;line-height:1.6;color:#475569;margin:0 0 16px">${tx.intro}</p>
-		<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:14px 16px;margin:0 0 18px;font-size:14px;color:#334155">
+		<p style="font-size:14px;line-height:1.6;color:#5d635d;margin:0 0 16px">${tx.intro}</p>
+		<div style="background:#f9f9f7;border:1px solid #dfe2dd;border-radius:10px;padding:14px 16px;margin:0 0 18px;font-size:14px;color:#454a45">
 			<div style="margin:0 0 4px"><strong>${tx.event}:</strong> ${esc(opts.eventTitle)}</div>
 			<div style="margin:0 0 4px"><strong>${tx.hall}:</strong> ${esc(opts.hallName)}</div>
 			<div><strong>${tx.date}:</strong> ${esc(opts.date)}</div>
 		</div>
-		<a href="${opts.eventUrl}" style="display:inline-block;background:#4f46e5;color:#fff;text-decoration:none;font-weight:700;font-size:14px;padding:11px 22px;border-radius:9px">
+		<a href="${opts.eventUrl}" style="display:inline-block;background:#f05ca1;color:#27131c;text-decoration:none;font-weight:700;font-size:14px;padding:11px 22px;border-radius:12px">
 			${tx.cta}
 		</a>
 	</div>`;

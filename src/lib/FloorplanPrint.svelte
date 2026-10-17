@@ -96,25 +96,26 @@
 	<!-- bounds -->
 	{#if floor.bounds}
 		<rect x={floor.bounds.x} y={floor.bounds.y} width={floor.bounds.w} height={floor.bounds.h}
-			fill="none" stroke="#cbd5e1" stroke-width="0.03" stroke-dasharray="0.15 0.1" />
+			fill="none" stroke="var(--border)" stroke-width="0.03" stroke-dasharray="0.15 0.1" />
 	{/if}
 	<!-- zones -->
 	{#each floor.zones as z}
-		<polygon points={polyPoints(z.points)} fill="#00000008" stroke="#94a3b8" stroke-width="0.025" />
+		<polygon points={polyPoints(z.points)} fill="color-mix(in srgb, var(--text-base) 4%, transparent)"
+			stroke="var(--text-subtle)" stroke-width="0.025" />
 	{/each}
 	<!-- walls (closed filled polygons, matching the editor) -->
 	{#each floor.walls as w}
-		<polygon points={polyPoints(w.points)} fill="#334155" stroke="#1e293b" stroke-width="0.02" stroke-linejoin="round" />
+		<polygon points={polyPoints(w.points)} fill="var(--editor-wall)" stroke="var(--text-base)" stroke-width="0.02" stroke-linejoin="round" />
 	{/each}
 	<!-- tables + numbered chairs -->
 	{#each floor.tables as t, ti}
 		{@const chairs = worldChairs(t)}
 		<g transform="translate({t.x} {t.y}) rotate({t.rotation})">
 			{#if t.shape === 'round'}
-				<circle cx="0" cy="0" r={t.radius} fill="#f1f5f9" stroke="#0f172a" stroke-width="0.035" />
+				<circle cx="0" cy="0" r={t.radius} fill="var(--bg-panel2)" stroke="var(--text-base)" stroke-width="0.035" />
 			{:else}
 				<rect x={-t.width / 2} y={-t.height / 2} width={t.width} height={t.height}
-					fill="#f1f5f9" stroke="#0f172a" stroke-width="0.035" />
+					fill="var(--bg-panel2)" stroke="var(--text-base)" stroke-width="0.035" />
 			{/if}
 		</g>
 		<!-- Unique table tag (T1, T2…) above the name so same-named tables are distinguishable -->
@@ -123,32 +124,46 @@
 		{@const half = (t.shape === 'round' ? t.radius : t.height / 2)}
 		{@const off = Math.min(0.26, half * 0.42)}
 		<text x={t.x} y={t.y - off} text-anchor="middle" dominant-baseline="central"
-			font-size={Math.min(0.42, half * 0.7)} font-weight="800" fill="#0f172a">T{ti + 1}</text>
+			font-size={Math.min(0.42, half * 0.7)} font-weight="650" fill="var(--text-base)">T{ti + 1}</text>
 		<text x={t.x} y={t.y + off} text-anchor="middle" dominant-baseline="central"
-			font-size={Math.min(nFont, half * 0.5)} font-weight="600" fill="#475569">{tName}</text>
+			font-size={Math.min(nFont, half * 0.5)} font-weight="600" fill="var(--text-muted)">{tName}</text>
 		<!-- chairs drawn on top so their seat numbers stay legible -->
 		{#each chairs as c}
 			{@const occupied = !!t.assignments[c.idx]}
-			<circle cx={c.x} cy={c.y} r={CR} fill={occupied ? '#1e293b' : '#fff'} stroke="#1e293b" stroke-width="0.02" />
+			<circle cx={c.x} cy={c.y} r={CR} fill={occupied ? 'var(--text-base)' : 'var(--bg-panel)'} stroke="var(--text-base)" stroke-width="0.02" />
 			<text x={c.x} y={c.y} text-anchor="middle" dominant-baseline="central"
-				font-size="0.22" font-weight="700" fill={occupied ? '#fff' : '#475569'}>{c.idx + 1}</text>
+				font-size="0.22" font-weight="650" fill={occupied ? 'var(--bg-panel)' : 'var(--text-muted)'}>{c.idx + 1}</text>
 		{/each}
 	{/each}
 	<!-- standalone chairs (numbered, lettered prefix to distinguish from table seats) -->
 	{#each floor.seats ?? [] as s, si}
 		{@const occupied = !!s.assignment}
-		<circle cx={s.x} cy={s.y} r={CR * 1.15} fill={occupied ? '#1e293b' : '#fff'} stroke="#1e293b" stroke-width="0.025" />
+		<circle cx={s.x} cy={s.y} r={CR * 1.15} fill={occupied ? 'var(--text-base)' : 'var(--bg-panel)'} stroke="var(--text-base)" stroke-width="0.025" />
 		<text x={s.x} y={s.y} text-anchor="middle" dominant-baseline="central"
-			font-size="0.2" font-weight="700" fill={occupied ? '#fff' : '#475569'}>C{si + 1}</text>
+			font-size="0.2" font-weight="650" fill={occupied ? 'var(--bg-panel)' : 'var(--text-muted)'}>C{si + 1}</text>
 	{/each}
 </svg>
 
 <style>
+	/* This sheet is printed, so it is always ink on paper — never a themed
+	   surface. The "paper" light values are pinned here so a dark or warm UI
+	   theme cannot invert the plan into pale ink on a white page. Everything
+	   above draws through these tokens rather than raw hex. */
 	.fp {
+		color-scheme: light;
+
+		--text-base:   #202322;
+		--text-muted:  #686d68;
+		--text-subtle: #878f87;
+		--border:      #dfe2dd;
+		--bg-panel:    #fefefd;
+		--bg-panel2:   #f3f4f0;
+		--editor-wall: #3b443c;
+
 		width: 100%;
 		height: auto;
 		max-height: 220mm;
-		background: #fff;
+		background: var(--bg-panel);
 		display: block;
 	}
 </style>

@@ -242,6 +242,9 @@ export interface ReservationRow {
   rsvp_config: string;
   num_guests: number | null;
   extras_json: string | null;
+  /** The occasion, as `$lib/eventTypes` serializes it: a canonical key, or
+   *  `other:<label>` when the operator typed their own. */
+  event_type: string | null;
   created_at: string;
   // joined fields
   hall_name?: string;

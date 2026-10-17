@@ -18,15 +18,15 @@
 
 <svelte:head><title>{t.membersAdmin.helpTitle} – Hallify</title></svelte:head>
 
-<div class="page">
-  <div class="page-header">
+<div class="wrap page">
+  <div class="page-head">
     <h1 class="page-title">{t.membersAdmin.helpTitle}</h1>
+    <p class="page-sub">{t.membersAdmin.helpSub}</p>
   </div>
-  <p class="page-sub">{t.membersAdmin.helpSub}</p>
 
   <!-- Onboarding checklist -->
-  <section class="card checklist-card">
-    <div class="cl-head">
+  <section class="section section--lead">
+    <div class="section-head section-head--row">
       <div>
         <h2>{t.membersAdmin.setupChecklist}</h2>
         <span class="cl-sub">{data.completed} {t.membersAdmin.progressOf} {data.total} {t.membersAdmin.progressDone}</span>
@@ -44,9 +44,9 @@
       </div>
     {/if}
 
-    <ul class="cl-list">
+    <ul class="row-list cl-list">
       {#each data.checklist as item}
-        <li class="cl-item" class:done={item.done}>
+        <li class="row-item cl-item" class:done={item.done}>
           <span class="cl-check">
             {#if item.done}
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
@@ -65,72 +65,76 @@
   </section>
 
   <!-- Knowledgebase -->
-  <h2 class="kb-title">{t.membersAdmin.knowledgebase}</h2>
-  {#each grouped as [category, articles]}
-    <div class="kb-group">
-      <span class="kb-cat">{category}</span>
-      <div class="kb-grid">
-        {#each articles as a}
-          <a href="/app/manage/help/{a.slug}" class="kb-card">
-            <span class="kb-card-title">{a.title}</span>
-            <span class="kb-card-summary">{a.summary}</span>
-            <span class="kb-card-arrow">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
-            </span>
-          </a>
-        {/each}
-      </div>
+  <section class="section">
+    <div class="section-head">
+      <h2>{t.membersAdmin.knowledgebase}</h2>
     </div>
-  {/each}
+    {#each grouped as [category, articles]}
+      <div class="kb-group">
+        <span class="eyebrow kb-cat">{category}</span>
+        <div class="row-list">
+          {#each articles as a}
+            <a href="/app/manage/help/{a.slug}" class="row-item kb-item">
+              <span class="icon-tile" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="13" y2="17"/></svg>
+              </span>
+              <span class="kb-copy">
+                <span class="kb-card-title">{a.title}</span>
+                <span class="kb-card-summary">{a.summary}</span>
+              </span>
+              <span class="kb-card-arrow">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+              </span>
+            </a>
+          {/each}
+        </div>
+      </div>
+    {/each}
+  </section>
 </div>
 
 <style>
-  .page { padding: 24px 28px; }
-  .page-title { font-size: 18px; font-weight: 800; letter-spacing: -.025em; margin: 0; }
+  .page { padding: 24px 0; }
+  .page-head { margin-bottom: 4px; }
+  .page-title { font-size: var(--display-size); font-weight: 550; letter-spacing: -.055em; margin: 0; }
   .page-sub { font-size: 13px; color: var(--text-muted); margin: 4px 0 20px; }
 
-  .card { background: var(--bg-panel); border: 1px solid var(--border); border-radius: 14px; padding: 20px 22px; }
-  .checklist-card { margin-bottom: 28px; }
-  .cl-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 16px; }
-  .cl-head h2 { font-size: 15px; font-weight: 700; margin: 0; }
+  /* Checklist */
   .cl-sub { font-size: 12px; color: var(--text-muted); }
   .cl-progress { display: flex; align-items: center; gap: 10px; min-width: 180px; }
   .cl-bar { flex: 1; height: 7px; border-radius: 99px; background: var(--bg-panel2, var(--bg-base)); overflow: hidden; }
   .cl-bar-fill { height: 100%; background: var(--accent); border-radius: 99px; transition: width .3s ease; }
-  .cl-pct { font-size: 12px; font-weight: 700; color: var(--text-muted); min-width: 34px; text-align: right; }
+  .cl-pct { font-size: 12px; font-weight: 650; color: var(--text-muted); min-width: 34px; text-align: right; }
 
-  .cl-done-banner { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; color: var(--success, #16a34a); margin-bottom: 14px; }
+  .cl-done-banner { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; color: var(--success); margin-bottom: 14px; }
 
-  .cl-list { list-style: none; display: flex; flex-direction: column; gap: 2px; }
-  .cl-item { display: flex; align-items: center; gap: 12px; padding: 11px 0; border-bottom: 1px solid var(--border-subtle, var(--border)); }
-  .cl-item:last-child { border-bottom: none; }
+  /* .row-list / .row-item carry the rules and the rhythm; only the marker,
+     the text stack and the call to action are local. */
+  .cl-list { list-style: none; }
   .cl-check {
     flex-shrink: 0; width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--border);
-    display: flex; align-items: center; justify-content: center; color: #fff;
+    display: flex; align-items: center; justify-content: center; color: var(--on-success);
   }
-  .cl-item.done .cl-check { background: var(--success, #16a34a); border-color: var(--success, #16a34a); }
+  .cl-item.done .cl-check { background: var(--success); border-color: var(--success); }
   .cl-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
   .cl-label { font-size: 13.5px; font-weight: 600; color: var(--text-base); }
   .cl-item.done .cl-label { color: var(--text-muted); text-decoration: line-through; }
   .cl-desc { font-size: 12px; color: var(--text-muted); }
   .cl-cta {
-    flex-shrink: 0; font-size: 12.5px; font-weight: 600; color: var(--accent); text-decoration: none;
-    padding: 6px 12px; border: 1px solid var(--border); border-radius: 8px; transition: border-color .12s;
+    flex-shrink: 0; font-size: 12.5px; font-weight: 600; color: var(--accent-ink); text-decoration: none;
+    padding: 6px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); transition: border-color .15s;
   }
   .cl-cta:hover { border-color: var(--accent); }
 
-  .kb-title { font-size: 16px; font-weight: 800; margin: 0 0 14px; }
+  /* Knowledgebase index */
   .kb-group { margin-bottom: 22px; }
-  .kb-cat { display: block; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--text-subtle); margin-bottom: 10px; }
-  .kb-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
-  .kb-card {
-    position: relative; display: flex; flex-direction: column; gap: 5px; padding: 15px 38px 15px 16px;
-    background: var(--bg-panel); border: 1px solid var(--border); border-radius: 12px; text-decoration: none;
-    transition: border-color .12s, transform .12s;
-  }
-  .kb-card:hover { border-color: var(--accent); transform: translateY(-1px); }
-  .kb-card-title { font-size: 13.5px; font-weight: 700; color: var(--text-base); }
+  .kb-group:last-child { margin-bottom: 0; }
+  .kb-cat { display: block; color: var(--text-muted); margin-bottom: 6px; }
+  .kb-item { text-decoration: none; }
+  .kb-item:hover { text-decoration: none; }
+  .kb-copy { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+  .kb-card-title { font-size: 13.5px; font-weight: 600; letter-spacing: -.03em; color: var(--text-base); }
   .kb-card-summary { font-size: 12px; color: var(--text-muted); line-height: 1.45; }
-  .kb-card-arrow { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); color: var(--text-subtle); }
-  .kb-card:hover .kb-card-arrow { color: var(--accent); }
+  .kb-card-arrow { flex-shrink: 0; display: flex; color: var(--text-muted); }
+  .kb-item:hover .kb-card-arrow { color: var(--accent-ink); }
 </style>

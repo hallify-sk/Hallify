@@ -87,7 +87,7 @@
 					</button>
 					{#if pickerOpen}
 						<button type="button" class="tmpl-backdrop" onclick={() => pickerOpen = false} aria-label={t.myRes.close}></button>
-						<div class="tmpl-dropdown">
+						<div class="card card--raised tmpl-dropdown">
 							<input class="tmpl-search" type="text" bind:value={tmplSearch} placeholder={t.myRes.searchTemplates} />
 							<div class="tmpl-typefilter">
 								<button type="button" class="tf-chip" class:on={selectedType === ''} onclick={() => selectedType = ''}>{t.myRes.allTypes}</button>
@@ -98,9 +98,9 @@
 							{#if numGuests != null}
 								<p class="tmpl-guesthint">{t.myRes.bestFitFor} <strong>{numGuests}</strong> {t.myRes.guestsSuffix}</p>
 							{/if}
-							<div class="tmpl-list">
+							<div class="row-list tmpl-list">
 								{#each rankedTemplates as { tm } (tm.id)}
-									<button type="button" class="tmpl-item" class:recommended={tm.id === recommendedId} onclick={() => chooseTemplate(tm.id)}>
+									<button type="button" class="row-item tmpl-item" class:recommended={tm.id === recommendedId} onclick={() => chooseTemplate(tm.id)}>
 										<span class="tmpl-item-top">
 											<span class="tmpl-item-name">{tm.name}</span>
 											{#if tm.id === recommendedId}<span class="tmpl-rec">{t.myRes.recommended}</span>{/if}
@@ -160,6 +160,7 @@
 				allowZones={true}
 				lockFloors={true}
 				tablesFromTypesOnly={true}
+				allowGuests={true}
 			/>
 		{/key}
 	</div>
@@ -177,7 +178,7 @@
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
-		padding: 10px 20px;
+		padding: 10px var(--page-gutter);
 		border-bottom: 1px solid var(--border);
 		background: var(--bg-panel);
 		flex-shrink: 0;
@@ -185,7 +186,8 @@
 
 	.layout-toolbar h1 {
 		font-size: 15px;
-		font-weight: 600;
+		font-weight: 550;
+		letter-spacing: -.045em;
 		margin: 0;
 	}
 
@@ -203,50 +205,52 @@
 
 	.save-status { font-size: 12px; font-weight: 600; min-width: 90px; text-align: right; }
 	.save-status.save-saving { color: var(--text-muted); }
-	.save-status.save-dirty  { color: var(--warning, #b45309); }
-	.save-status.save-saved  { color: var(--success, #16a34a); }
+	.save-status.save-dirty  { color: var(--warning); }
+	.save-status.save-saved  { color: var(--success); }
 	.save-status.save-idle   { color: transparent; }
 
-	/* Template picker */
+	/* Template picker — a popover, so it opts back into a floating surface. */
 	.tmpl-picker { position: relative; }
 	.tmpl-backdrop { position: fixed; inset: 0; z-index: 40; background: transparent; border: none; cursor: default; }
 	.tmpl-dropdown {
 		position: absolute; top: calc(100% + 6px); right: 0; z-index: 50; width: 320px;
-		background: var(--bg-panel); border: 1px solid var(--border); border-radius: 10px;
-		box-shadow: 0 8px 28px rgba(0,0,0,.18); padding: 10px; display: flex; flex-direction: column; gap: 8px;
+		padding: 10px; display: flex; flex-direction: column; gap: 8px;
 	}
 	.tmpl-search {
-		width: 100%; padding: 7px 10px; font-size: 13px; border-radius: 7px;
-		border: 1px solid var(--border); background: var(--bg-base); color: var(--text-base);
+		width: 100%; padding: 7px 10px; font-size: 13px; border-radius: var(--radius-sm);
+		border: 1px solid var(--border); background: var(--bg-panel2); color: var(--text-base);
 	}
 	.tmpl-typefilter { display: flex; flex-wrap: wrap; gap: 4px; }
 	.tf-chip {
-		font-size: 11px; font-weight: 600; padding: 3px 9px; border-radius: 999px;
+		font-size: 11px; font-weight: 600; padding: 3px 9px; border-radius: 3px;
 		border: 1px solid var(--border); background: transparent; color: var(--text-muted); cursor: pointer;
+		transition: background .15s, border-color .15s, color .15s;
 	}
-	.tf-chip:hover { border-color: var(--accent); }
-	.tf-chip.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+	.tf-chip:hover { border-color: var(--accent); background: var(--bg-hover); color: var(--text-base); }
+	/* Pink is a fill, so the label on it is accent-contrast, never white. */
+	.tf-chip.on { background: var(--accent); border-color: var(--accent); color: var(--accent-contrast); }
 	.tmpl-guesthint { margin: 0; font-size: 11.5px; color: var(--text-muted); }
 	.tmpl-guesthint strong { color: var(--text-base); }
-	.tmpl-list { display: flex; flex-direction: column; gap: 2px; max-height: 280px; overflow-y: auto; }
+	.tmpl-list { max-height: 280px; overflow-y: auto; }
+	/* Hairline rows inside the popover: .row-item supplies the rule and the hover. */
 	.tmpl-item {
-		display: flex; flex-direction: column; gap: 3px;
-		width: 100%; text-align: left; padding: 8px 10px; border: 1px solid transparent; border-radius: 7px;
+		display: flex; flex-direction: column; align-items: stretch; gap: 3px;
+		padding: 8px 10px; border-radius: var(--radius);
 		background: transparent; cursor: pointer; color: var(--text-base);
 	}
-	.tmpl-item:hover { background: var(--bg-hover); }
-	.tmpl-item.recommended { border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); background: var(--accent-dim); }
+	.tmpl-item.recommended { background: var(--accent-dim); }
 	.tmpl-item-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 	.tmpl-item-name { font-size: 13px; font-weight: 600; }
 	.tmpl-rec {
-		font-size: 9.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em;
-		color: #fff; background: var(--accent); padding: 2px 6px; border-radius: 5px; flex-shrink: 0;
+		font-size: 10px; font-weight: 650; text-transform: uppercase; letter-spacing: .1em;
+		color: var(--accent-contrast); background: var(--accent); padding: 2px 6px;
+		border-radius: var(--radius-sm); flex-shrink: 0;
 	}
 	.tmpl-item-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; }
 	.tmpl-seats { font-size: 11px; font-weight: 600; color: var(--text-muted); }
 	.tmpl-item-type {
-		font-size: 9.5px; font-weight: 700; color: var(--accent); text-transform: uppercase; letter-spacing: .04em;
-		background: var(--accent-dim); padding: 1px 5px; border-radius: 4px;
+		font-size: 10px; font-weight: 650; color: var(--accent-ink); text-transform: uppercase; letter-spacing: .1em;
+		background: var(--accent-dim); padding: 1px 5px; border-radius: var(--radius-sm);
 	}
 	.tmpl-empty { margin: 6px; font-size: 12.5px; color: var(--text-muted); text-align: center; }
 	.tmpl-note { margin: 2px 2px 0; font-size: 11px; color: var(--text-muted); }

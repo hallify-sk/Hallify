@@ -6,7 +6,12 @@ import type { PageServerLoad } from './$types';
 export const load: PageServerLoad = async ({ locals }) => {
   if (!locals.user) redirect(303, '/app/login');
   if (locals.user.account_type === 'client') redirect(303, '/app/client');
-  if (!locals.currentOrg) redirect(303, '/app/org/new');
+  // No organisation is now a normal, permanent state: most accounts belong to
+  // people looking for a venue, not running one. This page is an org dashboard,
+  // so they go to the directory instead — NOT to /app/org/new, which would make
+  // creating an organisation feel compulsory. Operators reach that form from the
+  // sign-in page's "list your venue" link, or straight at /app/org/new.
+  if (!locals.currentOrg) redirect(303, '/priestory');
 
   const orgId = locals.currentOrg.id;
 

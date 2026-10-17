@@ -9,12 +9,26 @@
 	const { form }: Props = $props();
 
 	const resetSuccess = $derived($page.url.searchParams.get('reset') === 'success');
+
+	// Carry a ?redirect= through to registration, so someone who came here from a
+	// venue page and turns out to have no account still lands back on it. Only a
+	// same-origin path is forwarded; the register action re-validates it anyway.
+	const nextParam = $derived.by(() => {
+		const raw = $page.url.searchParams.get('redirect') ?? '';
+		return raw.startsWith('/') && !raw.startsWith('//') && !raw.startsWith('/\\') ? raw : '';
+	});
+	const registerHref = $derived(nextParam ? `/app/register?redirect=${encodeURIComponent(nextParam)}` : '/app/register');
+	const operatorHref = $derived(
+		nextParam
+			? `/app/register?intent=operator&redirect=${encodeURIComponent(nextParam)}`
+			: '/app/register?intent=operator'
+	);
 </script>
 
 <svelte:head><title>{t.auth.signIn} – Hallify</title></svelte:head>
 
 <AuthShell>
-	<div class="auth-header">
+	<div class="section-head auth-header">
 		<h1>{t.auth.welcomeBack}</h1>
 		<p class="subtitle">{t.auth.signInSubtitle}</p>
 	</div>
@@ -41,29 +55,24 @@
 		<button type="submit" class="submit-btn">{t.auth.signIn}</button>
 	</form>
 
-	<p class="auth-switch">{t.auth.noAccount} <a href="/app/register">{t.auth.createAccount}</a></p>
+	<p class="auth-switch">{t.auth.noAccount} <a href={registerHref}>{t.auth.createAccount}</a></p>
+	<p class="auth-aside">{t.authPages.loginOperatorPrompt} <a href={operatorHref}>{t.authPages.loginOperatorLink}</a></p>
 </AuthShell>
 
 <style>
-	.auth-header { margin-bottom: 32px; }
-
+	/* Spacing and the subtitle's treatment come from the global .section-head. */
 	h1 {
-		font-size: 24px;
-		font-weight: 700;
+		font-size: 28px;
+		font-weight: 550;
 		color: var(--text-base);
-		letter-spacing: -0.02em;
-		margin-bottom: 6px;
-	}
-
-	.subtitle {
-		font-size: 14px;
-		color: var(--text-muted);
-		line-height: 1.5;
+		letter-spacing: -0.045em;
+		line-height: 1.12;
+		margin: 0;
 	}
 
 	.notice {
 		padding: 10px 14px;
-		border-radius: 8px;
+		border-radius: var(--radius-sm);
 		font-size: 13px;
 		font-weight: 500;
 		margin-bottom: 20px;
@@ -71,12 +80,10 @@
 	.notice-success {
 		background: var(--success-dim);
 		color: var(--success);
-		border: 1px solid color-mix(in srgb, var(--success) 25%, transparent);
 	}
 	.notice-error {
 		background: var(--danger-dim);
 		color: var(--danger);
-		border: 1px solid color-mix(in srgb, var(--danger) 25%, transparent);
 	}
 
 	.auth-form { display: flex; flex-direction: column; gap: 16px; }
@@ -98,34 +105,52 @@
 		color: var(--text-subtle);
 		text-decoration: none;
 	}
-	.label-link:hover { color: var(--accent); text-decoration: none; }
+	.label-link:hover { color: var(--accent-ink); text-decoration: none; }
 
 	.submit-btn {
 		width: 100%;
-		padding: 11px;
-		margin-top: 4px;
-		border-radius: 8px;
+		padding: 12px;
+		margin-top: 6px;
+		border-radius: var(--radius-sm);
 		background: var(--accent);
-		color: #fff;
+		color: var(--accent-contrast);
 		font-size: 14px;
-		font-weight: 600;
+		font-weight: 650;
 		border: none;
 		cursor: pointer;
 		font-family: inherit;
-		transition: background .15s;
+		transition: transform .2s, background .2s;
 	}
-	.submit-btn:hover { background: var(--accent-hover); }
+	.submit-btn:hover { background: var(--accent-hover); transform: translateY(-2px); }
+	.submit-btn:active { transform: translateY(0); }
 
 	.auth-switch {
 		text-align: center;
 		font-size: 13px;
 		color: var(--text-muted);
-		margin-top: 24px;
+		margin-top: 28px;
 	}
 	.auth-switch a {
-		color: var(--accent);
+		color: var(--accent-ink);
 		font-weight: 600;
 		text-decoration: none;
 	}
 	.auth-switch a:hover { text-decoration: underline; }
+
+	/* The second audience. Both sign in here, so the operator route stays visible
+	   without competing with the ordinary "create an account" line above it. */
+	.auth-aside {
+		text-align: center;
+		font-size: 12px;
+		color: var(--text-subtle);
+		margin: 10px 0 0;
+		padding-top: 12px;
+		border-top: 1px solid var(--border-subtle);
+	}
+	.auth-aside a { color: var(--accent-ink); font-weight: 600; text-decoration: none; }
+	.auth-aside a:hover { text-decoration: underline; }
+
+	@media (prefers-reduced-motion: reduce) {
+		.submit-btn:hover { transform: none; }
+	}
 </style>

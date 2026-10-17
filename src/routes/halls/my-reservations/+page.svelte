@@ -2,6 +2,7 @@
   import { page } from '$app/stores';
   import type { PageData } from './$types';
   import { statusLabel, statusClass, fmtDate } from '$lib/reservationStatus';
+  import { reveal } from '$lib/reveal';
   import { t } from '$lib/i18n.svelte';
 
   interface Props { data: PageData; }
@@ -41,9 +42,13 @@
 
 <svelte:head><title>{t.myRes.title}</title></svelte:head>
 
-<div class="page">
-  <div class="page-head">
-    <h1>{t.myRes.title}</h1>
+<!-- ── Lead: the page heading and its one action ── -->
+<section class="section section--lead" use:reveal>
+  <div class="section-head section-head--row">
+    <div>
+      <p class="eyebrow">{t.nav.reservations}</p>
+      <h1>{t.myRes.title}</h1>
+    </div>
     <a href="/halls" class="btn-primary">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
       {t.myRes.browseHalls}
@@ -56,42 +61,50 @@
       {t.myRes.requestSent} {data.domainOrg.name} {t.myRes.requestSentTail}
     </div>
   {/if}
+</section>
 
+<!-- ── The reservations themselves: hairline rows, not cards ── -->
+<section class="section" use:reveal>
   {#if data.reservations.length === 0}
-    <div class="empty">
-      <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-      <p class="empty-title">{t.myRes.emptyTitle}</p>
+    <div class="card--inset empty">
+      <span class="icon-tile" aria-hidden="true">
+        <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+      </span>
+      <h2 class="empty-title">{t.myRes.emptyTitle}</h2>
       <p class="empty-sub">{t.myRes.emptySub}</p>
       <a href="/halls" class="btn-primary">{t.myRes.browseHalls}</a>
     </div>
   {:else}
-    <div class="tabs">
-      {#each TABS as tab}
-        <button type="button" class="tab" class:active={filter === tab.id} onclick={() => filter = tab.id}>
-          {tab.label()}<span class="tab-count">{counts[tab.id]}</span>
-        </button>
-      {/each}
+    <div class="section-head section-head--row">
+      <h2>{(TABS.find(tab => tab.id === filter) ?? TABS[0]).label()}</h2>
+      <div class="tabs">
+        {#each TABS as tab}
+          <button type="button" class="tab" class:active={filter === tab.id} onclick={() => filter = tab.id}>
+            {tab.label()}<span class="tab-count">{counts[tab.id]}</span>
+          </button>
+        {/each}
+      </div>
     </div>
 
     {#if filtered.length === 0}
       <div class="empty-mini">{t.myRes.nothingHere}</div>
     {:else}
-      <div class="list">
+      <div class="row-list">
         {#each filtered as r}
-          <a class="card" href="/halls/my-reservations/{r.id}">
+          <a class="row-item res-row" href="/halls/my-reservations/{r.id}">
             <span class="accent" class:dim={r.status === 'cancelled'}></span>
-            <div class="card-body">
-              <div class="card-top">
-                <div class="card-titles">
-                  <div class="card-title">{r.title}</div>
-                  <div class="card-sub">{r.hall_name}</div>
+            <div class="res-body">
+              <div class="res-top">
+                <div class="res-titles">
+                  <div class="res-title">{r.title}</div>
+                  <div class="res-sub">{r.hall_name}</div>
                 </div>
-                <div class="card-badges">
+                <div class="res-badges">
                   <span class="badge {statusClass(r.status)}">{statusLabel(r.status)}</span>
                   {#if r.status !== 'cancelled' && isPast(r.event_date)}<span class="badge st-past">{t.event.past}</span>{/if}
                 </div>
               </div>
-              <div class="card-meta">
+              <div class="res-meta">
                 <span class="meta-item">
                   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
                   {fmtDate(r.event_date)}
@@ -110,26 +123,27 @@
                 {/if}
               </div>
             </div>
-            <svg class="card-chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+            <svg class="res-chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
           </a>
         {/each}
       </div>
     {/if}
   {/if}
-</div>
+</section>
 
 <style>
-  .page { display: flex; flex-direction: column; gap: 18px; }
+  /* The page title takes the density display scale, as every other page h1 does;
+     app.css gives h1 its tracking but no size. */
+  h1 { font-size: var(--display-size); margin: 0; }
 
-  .page-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-  h1 { font-size: 22px; font-weight: 800; color: var(--text-base); letter-spacing: -0.02em; margin: 0; }
-
+  /* Primary action, so it writes in --accent-contrast on the fill and takes the lift. */
   .btn-primary {
     display: inline-flex; align-items: center; gap: 7px; flex-shrink: 0;
-    padding: 8px 16px; border-radius: var(--radius); background: var(--accent); color: #fff;
-    font-size: 13px; font-weight: 600; border: none; cursor: pointer; text-decoration: none; transition: background .15s, opacity .12s;
+    padding: 10px 20px; border-radius: var(--radius-sm); background: var(--accent); color: var(--accent-contrast);
+    font-size: 13px; font-weight: 650; border: none; cursor: pointer; text-decoration: none; transition: transform .2s, background .2s;
   }
-  .btn-primary:hover { opacity: .9; text-decoration: none; }
+  .btn-primary:hover { background: var(--accent-hover); transform: translateY(-2px); text-decoration: none; }
+  .btn-primary:active { transform: translateY(0); }
 
   .toast {
     display: flex; align-items: center; gap: 9px; padding: 11px 15px; border-radius: var(--radius);
@@ -138,52 +152,52 @@
   }
   .toast svg { flex-shrink: 0; }
 
-  .tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); }
+  .tabs { display: flex; gap: 4px; }
   .tab {
-    display: inline-flex; align-items: center; gap: 7px; padding: 8px 13px; margin-bottom: -1px;
+    display: inline-flex; align-items: center; gap: 7px; padding: 8px 13px;
     background: none; border: none; border-bottom: 2px solid transparent; cursor: pointer;
     font-family: inherit; font-size: 13px; font-weight: 600; color: var(--text-muted); transition: color .12s, border-color .12s;
   }
   .tab:hover { color: var(--text-base); }
-  .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
-  .tab-count { font-size: 11px; font-weight: 700; padding: 0 6px; border-radius: 99px; line-height: 1.6; background: var(--bg-hover); color: var(--text-subtle); }
-  .tab.active .tab-count { background: var(--accent-dim); color: var(--accent); }
+  /* The 2px rule underneath stays the accent fill; the label itself writes in --accent-ink. */
+  .tab.active { color: var(--accent-ink); border-bottom-color: var(--accent); }
+  .tab-count { font-size: 11px; font-weight: 650; padding: 0 6px; border-radius: 3px; line-height: 1.6; background: var(--bg-hover); color: var(--text-subtle); }
+  .tab.active .tab-count { background: var(--accent-dim); color: var(--accent-ink); }
 
-  .list { display: flex; flex-direction: column; gap: 11px; }
-  .card {
-    display: flex; align-items: stretch; overflow: hidden;
-    border-radius: var(--radius-lg); background: var(--bg-panel); border: 1px solid var(--border);
-    text-decoration: none; color: inherit; transition: border-color .12s, box-shadow .12s;
-  }
-  .card:hover { border-color: color-mix(in srgb, var(--accent) 40%, var(--border)); box-shadow: var(--shadow-sm); text-decoration: none; }
-  .accent { width: 3px; background: var(--accent); flex-shrink: 0; }
+  /* ── Reservation rows ── */
+  .res-row { align-items: stretch; gap: 0; }
+  .accent { width: 3px; border-radius: 2px; background: var(--accent); flex-shrink: 0; }
   .accent.dim { background: var(--text-subtle); }
-  .card-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px; padding: 14px 16px; }
-  .card-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
-  .card-titles { min-width: 0; }
-  .card-title { font-size: 15px; font-weight: 600; color: var(--text-base); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .card-sub { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
-  .card-meta { display: flex; flex-wrap: wrap; gap: 14px; font-size: 12.5px; color: var(--text-muted); }
+  .res-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px; padding: 0 16px; }
+  .res-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+  .res-titles { min-width: 0; }
+  .res-title { font-size: 15px; font-weight: 600; color: var(--text-base); letter-spacing: -.03em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .res-sub { font-size: 12px; color: var(--text-muted); margin-top: 3px; }
+  .res-meta { display: flex; flex-wrap: wrap; gap: 14px; font-size: 12.5px; color: var(--text-muted); line-height: 1.5; }
   .meta-item { display: flex; align-items: center; gap: 5px; }
   .meta-item svg { color: var(--text-subtle); }
-  .card-chev { align-self: center; margin-right: 12px; color: var(--text-subtle); flex-shrink: 0; }
+  .res-chev { align-self: center; color: var(--text-subtle); flex-shrink: 0; }
 
-  .badge { padding: 3px 9px; border-radius: 99px; font-size: 11px; font-weight: 700; white-space: nowrap; flex-shrink: 0; }
+  .badge { padding: 3px 9px; border-radius: 3px; font-size: 11px; font-weight: 650; white-space: nowrap; flex-shrink: 0; }
   .st-warning { background: var(--warning-dim); color: var(--warning); }
   .st-success { background: var(--success-dim); color: var(--success); }
-  .st-info    { background: var(--accent-dim); color: var(--accent); }
+  /* Label on the accent tint, so --accent-ink rather than the fill colour. */
+  .st-info    { background: var(--accent-dim); color: var(--accent-ink); }
   .st-muted   { background: var(--bg-hover); color: var(--text-muted); }
   .st-danger  { background: var(--danger-dim); color: var(--danger); }
   .st-past    { background: var(--bg-hover); color: var(--text-muted); border: 1px solid var(--border); }
-  .card-badges { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+  .res-badges { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
 
+  /* ── Empty states ── */
   .empty {
-    display: flex; flex-direction: column; align-items: center; gap: 10px;
-    padding: 52px 20px; text-align: center;
-    background: var(--bg-panel); border: 1px dashed var(--border); border-radius: var(--radius-lg);
+    display: flex; flex-direction: column; align-items: center; gap: 12px;
+    text-align: center;
   }
-  .empty svg { color: var(--text-subtle); opacity: .6; }
-  .empty-title { font-size: 14px; font-weight: 700; color: var(--text-base); margin: 4px 0 0; }
-  .empty-sub { font-size: 13px; color: var(--text-muted); margin: 0 0 6px; max-width: 44ch; }
-  .empty-mini { padding: 32px; text-align: center; color: var(--text-subtle); font-size: 13px; }
+  .empty-title { font-size: 16px; font-weight: 600; color: var(--text-base); letter-spacing: -.03em; margin: 4px 0 0; }
+  .empty-sub { font-size: 13px; color: var(--text-muted); margin: 0 0 8px; max-width: 44ch; line-height: 1.75; }
+  .empty-mini { padding: 36px; text-align: center; color: var(--text-subtle); font-size: 13px; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .btn-primary:hover { transform: none; }
+  }
 </style>

@@ -45,22 +45,23 @@
 	.auth-header { margin-bottom: 32px; }
 
 	h1 {
-		font-size: 24px;
-		font-weight: 700;
+		font-size: 28px;
+		font-weight: 550;
 		color: var(--text-base);
-		letter-spacing: -0.02em;
-		margin-bottom: 6px;
+		letter-spacing: -0.045em;
+		line-height: 1.12;
+		margin-bottom: 8px;
 	}
 
 	.subtitle {
 		font-size: 14px;
 		color: var(--text-muted);
-		line-height: 1.5;
+		line-height: 1.75;
 	}
 
 	.notice {
 		padding: 10px 14px;
-		border-radius: 8px;
+		border-radius: var(--radius-sm);
 		font-size: 13px;
 		font-weight: 500;
 		margin-bottom: 20px;
@@ -88,24 +89,25 @@
 
 	.submit-btn {
 		width: 100%;
-		padding: 11px;
-		margin-top: 4px;
-		border-radius: 8px;
+		padding: 12px;
+		margin-top: 6px;
+		border-radius: var(--radius-sm);
 		background: var(--accent);
-		color: #fff;
+		color: var(--accent-contrast);
 		font-size: 14px;
-		font-weight: 600;
+		font-weight: 650;
 		border: none;
 		cursor: pointer;
 		font-family: inherit;
-		transition: background .15s;
+		transition: transform .2s, background .2s;
 	}
-	.submit-btn:hover { background: var(--accent-hover); }
+	.submit-btn:hover { background: var(--accent-hover); transform: translateY(-2px); }
+	.submit-btn:active { transform: translateY(0); }
 
 	.auth-switch {
 		text-align: center;
 		font-size: 13px;
-		margin-top: 24px;
+		margin-top: 28px;
 	}
 	.auth-switch a {
 		display: inline-flex;
@@ -114,5 +116,9 @@
 		color: var(--text-muted);
 		text-decoration: none;
 	}
-	.auth-switch a:hover { color: var(--accent); text-decoration: none; }
+	.auth-switch a:hover { color: var(--accent-ink); text-decoration: none; }
+
+	@media (prefers-reduced-motion: reduce) {
+		.submit-btn:hover { transform: none; }
+	}
 </style>

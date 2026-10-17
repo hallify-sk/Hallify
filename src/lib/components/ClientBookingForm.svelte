@@ -130,8 +130,8 @@
 
 <a href={backHref} class="back">← {hall.name}</a>
 
-<div class="bk-card">
-	<div class="bk-head">
+<section class="section section--lead section--flush bk-card">
+	<div class="section-head bk-head">
 		<span class="bk-dot" style="background:{hall.color}"></span>
 		<div>
 			<h1>{t.publicBooking.requestReservation}</h1>
@@ -140,7 +140,7 @@
 	</div>
 
 	{#if formError}<div class="bk-error">{formError}</div>{/if}
-	{#if hall.pre_reservation_text}<div class="bk-pre">{hall.pre_reservation_text}</div>{/if}
+	{#if hall.pre_reservation_text}<div class="bk-pre card--inset">{hall.pre_reservation_text}</div>{/if}
 
 	<form method="POST" use:enhance class="bk-form">
 		<input type="hidden" name="eventDate" value={selectedDate} />
@@ -205,19 +205,21 @@
 
 		{#if extras.length > 0}
 			<div class="bk-extras">
-				<span class="bk-extras-label">{t.publicBooking.extrasLabel}</span>
-				{#each extras as ex}
-					{@const on = selectedExtras.includes(ex.id)}
-					<label class="bk-extra" class:on>
-						<input type="checkbox" checked={on} onchange={() => toggleExtra(ex.id)} />
-						<span class="bk-extra-main">
-							<span class="bk-extra-name">{ex.name}</span>
-							{#if ex.description}<span class="bk-extra-desc">{ex.description}</span>{/if}
-						</span>
-						<span class="bk-extra-price">{eur(ex.price_cents)}{ex.pricing === 'per_guest' ? ` / ${t.publicBooking.perGuest}` : ''}</span>
-					</label>
-					{#if on}<input type="hidden" name="extras" value={ex.id} />{/if}
-				{/each}
+				<span class="eyebrow">{t.publicBooking.extrasLabel}</span>
+				<div class="row-list">
+					{#each extras as ex}
+						{@const on = selectedExtras.includes(ex.id)}
+						<label class="row-item bk-extra" class:on>
+							<input type="checkbox" checked={on} onchange={() => toggleExtra(ex.id)} />
+							<span class="bk-extra-main">
+								<span class="bk-extra-name">{ex.name}</span>
+								{#if ex.description}<span class="bk-extra-desc">{ex.description}</span>{/if}
+							</span>
+							<span class="bk-extra-price">{eur(ex.price_cents)}{ex.pricing === 'per_guest' ? ` / ${t.publicBooking.perGuest}` : ''}</span>
+						</label>
+						{#if on}<input type="hidden" name="extras" value={ex.id} />{/if}
+					{/each}
+				</div>
 				{#if extrasTotalCents > 0}
 					<div class="bk-extras-total">
 						<span>{t.publicBooking.extrasTotal}{guestsForExtras > 1 ? ` (${t.publicBooking.forGuestsPrefix} ${guestsForExtras} ${t.publicBooking.guestsWord})` : ''}</span>
@@ -236,48 +238,64 @@
 			<button type="submit" class="bk-submit" disabled={!canSubmit}>{t.publicBooking.sendRequest}</button>
 		</div>
 	</form>
-</div>
+</section>
 
 <style>
-	.back { font-size: 13px; color: var(--accent); text-decoration: none; font-weight: 600; }
-	.bk-card { background: var(--bg-panel, var(--surface)); border: 1px solid var(--border); border-radius: 14px; padding: 24px; display: flex; flex-direction: column; gap: 18px; margin-top: 14px; }
-	.bk-head { display: flex; align-items: center; gap: 14px; }
-	.bk-dot { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; }
-	.bk-head h1 { font-size: 18px; font-weight: 800; color: var(--text-base); margin-bottom: 2px; }
-	.bk-sub { font-size: 13px; color: var(--text-muted); }
-	.bk-error { padding: 10px 14px; border-radius: 8px; font-size: 13px; font-weight: 500; background: color-mix(in srgb, var(--danger) 10%, transparent); color: var(--danger); border: 1px solid color-mix(in srgb, var(--danger) 25%, transparent); }
-	.bk-pre { font-size: 13px; color: var(--text-muted); background: var(--bg-panel2, var(--bg-base)); border-radius: 8px; padding: 12px; border: 1px solid var(--border); line-height: 1.5; white-space: pre-wrap; }
+	.back { font-size: 13px; color: var(--accent-ink); text-decoration: none; font-weight: 600; }
+	/* No box: the form is a lead section on the page and supplies only the stack
+	   rhythm between its own parts. Padding and type scale come from the density. */
+	/* The form is the whole page here, so the section's trailing padding would
+	   stack on the route's own bottom gutter. The stack gap is the only rhythm. */
+	.bk-card { display: flex; flex-direction: column; gap: 18px; margin-top: 18px; padding-bottom: 0; }
+	/* The stack gap already separates the head from the form; .section-head's
+	   own --head-gap would add a second one on top of it. */
+	.bk-head { display: flex; align-items: flex-start; gap: 14px; margin-bottom: 0; }
+	/* The title rides the density scale, so the dot has to centre on whatever
+	   the first line turns out to be rather than on a fixed 18px one. */
+	.bk-dot { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; margin-top: calc(var(--h2-size) * .57 - 6px); }
+	/* .section-head sizes h2/h3; this screen's title is the page h1 and stays one. */
+	.section-head h1 { font-size: var(--h2-size); font-weight: 550; letter-spacing: -.045em; line-height: 1.14; margin: 0; color: var(--text-base); }
+	.bk-error { padding: 10px 14px; border-radius: var(--radius-sm); font-size: 13px; font-weight: 500; background: var(--danger-dim); color: var(--danger); border: 1px solid color-mix(in srgb, var(--danger) 25%, transparent); }
+	.bk-pre { font-size: var(--body-size); color: var(--text-muted); line-height: var(--body-leading); white-space: pre-wrap; }
 	.bk-form { display: flex; flex-direction: column; gap: 16px; }
 	.bk-field { display: flex; flex-direction: column; gap: 5px; }
 	.bk-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 	label { font-size: 12px; font-weight: 600; color: var(--text-muted); }
 	.req { color: var(--danger); }
-	input, textarea { font-family: inherit; font-size: 14px; padding: 9px 11px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-panel2, var(--bg-base)); color: var(--text-base); }
+	input, textarea { font-family: inherit; font-size: 14px; padding: 9px 11px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg-panel2); color: var(--text-base); }
 	input[type=checkbox] { padding: 0; }
 	textarea { resize: vertical; }
 	.bk-toggle { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 400; color: var(--text-muted); cursor: pointer; padding-top: 8px; }
 	.bk-toggle input { width: 16px; height: 16px; accent-color: var(--accent); }
-	.bk-hold { display: flex; align-items: center; gap: 8px; margin-top: 10px; padding: 9px 12px; border-radius: 9px; font-size: 13px; color: var(--text-muted); background: var(--bg-panel2, var(--bg-base)); border: 1px solid var(--border); }
+	.bk-hold { display: flex; align-items: center; gap: 8px; margin-top: 10px; padding: 9px 12px; border-radius: var(--radius); font-size: 13px; color: var(--text-muted); background: var(--bg-panel2); border: 1px solid var(--border); }
 	.bk-hold.ok { color: var(--text-base); background: var(--accent-dim); border-color: color-mix(in srgb, var(--accent) 35%, var(--border)); }
-	.bk-hold.err { color: var(--danger); background: color-mix(in srgb, var(--danger) 9%, transparent); border-color: color-mix(in srgb, var(--danger) 25%, transparent); }
-	.bk-timer { margin-left: auto; font-size: 11px; font-weight: 700; font-variant-numeric: tabular-nums; padding: 3px 9px; border-radius: 99px; background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent); }
+	.bk-hold.err { color: var(--danger); background: var(--danger-dim); border-color: color-mix(in srgb, var(--danger) 25%, transparent); }
+	.bk-timer { margin-left: auto; font-size: 11px; font-weight: 650; font-variant-numeric: tabular-nums; padding: 3px 9px; border-radius: 3px; background: var(--accent); color: var(--accent-contrast); }
 	.bk-note { font-size: 12px; color: var(--text-subtle); margin: 6px 0 0; }
 	.bk-hint { font-size: 11.5px; margin-top: 4px; }
 	.bk-hint.err { color: var(--danger); }
-	.bk-footer { display: flex; flex-direction: column; gap: 10px; margin-top: 4px; }
+	/* A hairline, not a panel, separates the commitment from the form. */
+	.bk-footer { display: flex; flex-direction: column; gap: 10px; margin-top: 4px; padding-top: 16px; border-top: 1px solid var(--border-subtle); }
 	.bk-status { font-size: 12px; color: var(--text-muted); font-style: italic; }
-	.bk-extras { display: flex; flex-direction: column; gap: 8px; margin-bottom: 6px; }
-	.bk-extras-label { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--text-subtle); }
-	.bk-extra { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border: 1px solid var(--border); border-radius: 10px; cursor: pointer; background: var(--bg-panel); }
-	.bk-extra.on { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 6%, var(--bg-panel)); }
-	.bk-extra input { width: 16px; height: 16px; flex-shrink: 0; margin: 0; }
+	.bk-extras { display: flex; flex-direction: column; gap: 10px; }
+	/* Extras are hairline rows now; accent ink, not a border, carries the state. */
+	.bk-extra { cursor: pointer; }
+	.bk-extra:hover { background: var(--bg-hover); }
+	.bk-extra.on .bk-extra-name, .bk-extra.on .bk-extra-price { color: var(--accent-ink); }
+	.bk-extra input { width: 16px; height: 16px; flex-shrink: 0; margin: 0; accent-color: var(--accent); }
 	.bk-extra-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
 	.bk-extra-name { font-size: 13px; font-weight: 600; color: var(--text-base); }
 	.bk-extra-desc { font-size: 11.5px; color: var(--text-muted); }
-	.bk-extra-price { font-size: 13px; font-weight: 700; color: var(--text-base); white-space: nowrap; }
-	.bk-extras-total { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border-radius: 9px; background: var(--bg-panel2, var(--bg-base)); font-size: 13px; }
-	.bk-extras-total b { font-size: 15px; }
-	.bk-submit { width: 100%; padding: 11px; border-radius: 8px; background: var(--accent); color: #fff; font-size: 14px; font-weight: 600; border: none; cursor: pointer; font-family: inherit; transition: opacity .15s; }
-	.bk-submit:hover:not(:disabled) { opacity: .9; }
+	.bk-extra-price { font-size: 13px; font-weight: 650; color: var(--text-base); white-space: nowrap; }
+	.bk-extras-total { display: flex; align-items: center; justify-content: space-between; padding-top: 12px; border-top: 1px solid var(--border); font-size: 13px; }
+	.bk-extras-total b { font-size: 15px; font-weight: 650; }
+	.bk-submit { width: 100%; padding: 11px; border-radius: var(--radius-sm); background: var(--accent); color: var(--accent-contrast); font-size: 14px; font-weight: 650; border: none; cursor: pointer; font-family: inherit; transition: transform .2s, background .2s, opacity .15s; }
+	/* The lift is the signature interaction of this language. */
+	.bk-submit:hover:not(:disabled) { background: var(--accent-hover); transform: translateY(-2px); }
+	.bk-submit:active:not(:disabled) { transform: translateY(0); }
 	.bk-submit:disabled { opacity: .5; cursor: not-allowed; }
+
+	@media (prefers-reduced-motion: reduce) {
+		.bk-submit:hover:not(:disabled) { transform: none; }
+	}
 </style>

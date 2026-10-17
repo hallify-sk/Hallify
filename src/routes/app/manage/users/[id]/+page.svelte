@@ -18,7 +18,7 @@
 
 <svelte:head><title>{user.first_name} {user.last_name} – {t.users.manageUsers} – Hallify</title></svelte:head>
 
-<div class="page">
+<div class="wrap page">
 	<div class="page-top">
 		<SectionHeader overline={t.users.manage} title="{user.first_name} {user.last_name}" />
 		<div class="header-actions">
@@ -28,8 +28,10 @@
 
 	<div class="detail-grid">
 		<!-- Left: Edit details -->
-		<div class="card detail-card">
-			<h2>{t.users.userDetail}</h2>
+		<section class="section section--lead">
+			<div class="section-head">
+				<h2>{t.users.userDetail}</h2>
+			</div>
 			<form method="POST" action="?/updateDetails" use:enhance={() => {
 				return async ({ update }) => { await update({ reset: false }); };
 			}}>
@@ -49,35 +51,41 @@
 				</div>
 				<button type="submit" class="btn-primary">{t.common.save}</button>
 			</form>
-		</div>
+		</section>
 
 		<!-- Right: Info + Actions -->
 		<div class="side-stack">
-			<div class="card info-card">
-				<h3>{t.profile.accountInfo}</h3>
-				<div class="info-row">
-					<span class="info-label">{t.users.role}</span>
-					<span class="role-badge" class:admin={user.role === 'admin'}>
-						{user.role === 'admin' ? t.users.admin : t.users.user}
-					</span>
+			<section class="section section--lead">
+				<div class="section-head">
+					<h2>{t.profile.accountInfo}</h2>
 				</div>
-				<div class="info-row">
-					<span class="info-label">{t.users.email}</span>
-					<a href="mailto:{user.email}" class="link">{user.email}</a>
+				<div class="row-list">
+					<div class="row-item info-row">
+						<span class="info-label">{t.users.role}</span>
+						<span class="role-badge" class:admin={user.role === 'admin'}>
+							{user.role === 'admin' ? t.users.admin : t.users.user}
+						</span>
+					</div>
+					<div class="row-item info-row">
+						<span class="info-label">{t.users.email}</span>
+						<a href="mailto:{user.email}" class="link">{user.email}</a>
+					</div>
+					<div class="row-item info-row">
+						<span class="info-label">{t.users.reservations}</span>
+						<span>{user.reservation_count}</span>
+					</div>
+					<div class="row-item info-row">
+						<span class="info-label">{t.users.registered}</span>
+						<span>{formatDate(user.created_at)}</span>
+					</div>
 				</div>
-				<div class="info-row">
-					<span class="info-label">{t.users.reservations}</span>
-					<span>{user.reservation_count}</span>
-				</div>
-				<div class="info-row">
-					<span class="info-label">{t.users.registered}</span>
-					<span>{formatDate(user.created_at)}</span>
-				</div>
-			</div>
+			</section>
 
 			<!-- Role management -->
-			<div class="card action-card">
-				<h3>{t.users.role}</h3>
+			<section class="section">
+				<div class="section-head">
+					<h2>{t.users.role}</h2>
+				</div>
 				<form method="POST" action="?/setRole" use:enhance={() => {
 					return async ({ update }) => { await update({ reset: false }); };
 				}}>
@@ -87,11 +95,13 @@
 						{user.role === 'admin' ? t.users.demote : t.users.promoteAdmin}
 					</button>
 				</form>
-			</div>
+			</section>
 
 			<!-- Reset password -->
-			<div class="card action-card">
-				<h3>{t.users.resetPassword}</h3>
+			<section class="section">
+				<div class="section-head">
+					<h2>{t.users.resetPassword}</h2>
+				</div>
 				<form method="POST" action="?/resetPassword" use:enhance={() => {
 					return async ({ update }) => { await update({ reset: false }); };
 				}}>
@@ -102,51 +112,53 @@
 					</div>
 					<button type="submit" class="btn-primary">{t.users.resetPassword}</button>
 				</form>
-			</div>
+			</section>
 
 			<!-- Delete user -->
-			<div class="card action-card danger-zone">
-				<h3>{t.common.delete}</h3>
+			<section class="section danger-zone">
+				<div class="section-head">
+					<h2>{t.common.delete}</h2>
+				</div>
 				<form method="POST" action="?/deleteUser" use:enhance>
 					<button type="submit" class="btn-danger"
 						onclick={(e) => { if (!confirm(t.users.confirmDeleteUser)) e.preventDefault(); }}>
 						{t.common.delete} {user.first_name} {user.last_name}
 					</button>
 				</form>
-			</div>
+			</section>
 		</div>
 	</div>
 
 	<!-- User's reservations -->
 	{#if data.reservations.length > 0}
-		<div class="card table-section">
-			<h3 class="section-title">{t.users.reservations} ({data.reservations.length})</h3>
-			<table>
-				<thead>
-					<tr>
-						<th>{t.adminReservations.event}</th>
-						<th>{t.adminReservations.hall}</th>
-						<th>{t.adminReservations.date}</th>
-						<th>{t.adminReservations.status}</th>
-					</tr>
-				</thead>
-				<tbody>
-					{#each data.reservations as res}
-						<tr class="clickable-row" onclick={() => window.location.href = `/admin/reservations/${res.id}`}>
-							<td><span class="link">{res.title}</span></td>
-							<td>{res.hall_name}</td>
-							<td>{formatDate(res.event_date)}</td>
-							<td><StatusBadge status={res.status as ReservationStatus} /></td>
-						</tr>
-					{/each}
-				</tbody>
-			</table>
-		</div>
+		<section class="section">
+			<div class="section-head section-head--row">
+				<h2>{t.users.reservations} ({data.reservations.length})</h2>
+			</div>
+
+			<div class="row-head">
+				<span>{t.adminReservations.event}</span>
+				<span>{t.adminReservations.hall}</span>
+				<span>{t.adminReservations.date}</span>
+				<span>{t.adminReservations.status}</span>
+			</div>
+
+			<div class="row-list">
+				{#each data.reservations as res}
+					<button type="button" class="row-item res-row clickable-row" onclick={() => window.location.href = `/admin/reservations/${res.id}`}>
+						<span class="link">{res.title}</span>
+						<span>{res.hall_name}</span>
+						<span>{formatDate(res.event_date)}</span>
+						<span><StatusBadge status={res.status as ReservationStatus} /></span>
+					</button>
+				{/each}
+			</div>
+		</section>
 	{/if}
 </div>
 
 <style>
-	.page { padding: 28px 32px; overflow-y: auto; height: 100%; }
+	.page { padding: 28px 0; overflow-y: auto; height: 100%; }
 
 	.page-top {
 		display: flex; justify-content: space-between;
@@ -157,120 +169,120 @@
 	.detail-grid {
 		display: grid;
 		grid-template-columns: 1fr 360px;
-		gap: 20px;
-	}
-
-	.detail-card h2, .info-card h3, .action-card h3 {
-		font-size: 16px; font-weight: 600; margin-bottom: 20px;
+		gap: 0 32px;
 	}
 
 	.form-group {
 		margin-bottom: 16px;
 	}
 	.form-group label {
-		display: block; font-size: 13px; font-weight: 500;
+		display: block; font-size: 13px; font-weight: 600;
 		color: var(--text-muted); margin-bottom: 4px;
 	}
 	.form-group input {
-		width: 100%; padding: 8px 12px; border-radius: 8px;
+		width: 100%; padding: 9px 13px; border-radius: var(--radius-sm);
 		border: 1px solid var(--border); font-size: 14px;
-		background: var(--bg-base); color: var(--text-base);
+		background: var(--bg-panel2); color: var(--text-base);
 		font-family: inherit;
+		transition: border-color .15s, box-shadow .15s;
 	}
 	.form-group input:focus {
 		border-color: var(--accent); outline: none;
+		box-shadow: 0 0 0 3px var(--accent-dim);
 	}
 
 	.form-row {
 		display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
 	}
 
-	.side-stack { display: flex; flex-direction: column; gap: 16px; }
+	.side-stack { display: flex; flex-direction: column; }
 
-	.info-card, .action-card { padding: 20px; }
-
-	.info-row {
-		display: flex; justify-content: space-between;
-		align-items: center; padding: 8px 0;
-		border-bottom: 1px solid var(--border);
-		font-size: 14px;
-	}
-	.info-row:last-of-type { border-bottom: none; }
+	/* .row-item carries the hairline; the row only has to place its two ends. */
+	.info-row { justify-content: space-between; font-size: 14px; }
 	.info-label { color: var(--text-muted); font-size: 13px; }
 
 	.role-badge {
-		padding: 3px 10px; border-radius: 20px;
+		padding: 3px 10px; border-radius: 3px;
 		font-size: 11px; font-weight: 600;
 		background: var(--bg-panel2); color: var(--text-muted);
 		text-transform: uppercase; letter-spacing: 0.04em;
 	}
 	.role-badge.admin {
-		background: var(--accent-dim); color: var(--accent);
+		background: var(--accent-dim); color: var(--accent-ink);
 	}
 
 	.btn-primary {
-		padding: 8px 20px; border-radius: 8px; font-size: 13px;
-		font-weight: 600; background: var(--accent); color: white;
+		padding: 10px 20px; border-radius: var(--radius-sm); font-size: 13px;
+		font-weight: 650; background: var(--accent); color: var(--accent-contrast);
 		border: none; cursor: pointer;
+		transition: transform .2s, background .2s;
 	}
-	.btn-primary:hover { opacity: 0.9; }
+	.btn-primary:hover { background: var(--accent-hover); transform: translateY(-2px); }
+	.btn-primary:active { transform: translateY(0); }
 
 	.btn-outline {
 		display: inline-flex; align-items: center; gap: 6px;
-		padding: 6px 14px; border-radius: 8px; font-size: 13px;
+		padding: 6px 14px; border-radius: var(--radius-sm); font-size: 13px;
 		font-weight: 500; border: 1px solid var(--border);
 		background: var(--bg-panel); color: var(--text-base);
 		text-decoration: none; cursor: pointer;
+		transition: background .15s, border-color .15s;
 	}
-	.btn-outline:hover { border-color: var(--accent); color: var(--accent); }
+	.btn-outline:hover { background: var(--bg-hover); border-color: var(--text-subtle); }
 
 	.btn-action-full {
-		width: 100%; padding: 8px 20px; border-radius: 8px;
+		width: 100%; padding: 8px 20px; border-radius: var(--radius-sm);
 		font-size: 13px; font-weight: 600;
 		background: var(--bg-panel2); color: var(--text-base);
 		border: 1px solid var(--border); cursor: pointer;
+		transition: border-color .15s, color .15s;
 	}
-	.btn-action-full:hover { border-color: var(--accent); color: var(--accent); }
+	.btn-action-full:hover { border-color: var(--accent); color: var(--accent-ink); }
 
-	.danger-zone {
-		border-color: #fecaca;
-	}
-	.danger-zone h3 { color: var(--danger); }
+	.danger-zone h2 { color: var(--danger); }
 
 	.btn-danger {
-		width: 100%; padding: 8px 20px; border-radius: 8px;
+		width: 100%; padding: 8px 20px; border-radius: var(--radius-sm);
 		font-size: 13px; font-weight: 600;
-		background: #fef2f2; color: var(--danger);
-		border: 1px solid #fecaca; cursor: pointer;
+		background: var(--danger-dim); color: var(--danger);
+		border: 1px solid color-mix(in srgb, var(--danger) 20%, transparent); cursor: pointer;
+		transition: background .15s;
 	}
-	.btn-danger:hover { background: #fee2e2; }
+	.btn-danger:hover { background: color-mix(in srgb, var(--danger) 15%, transparent); }
 
-	.link { color: var(--accent); text-decoration: none; }
+	.link { color: var(--accent-ink); text-decoration: none; }
 	.link:hover { text-decoration: underline; }
 
-	.section-title {
-		font-size: 16px; font-weight: 600; margin-bottom: 16px;
-		padding: 0 12px;
+	/* Reservation rows — the hairline table. */
+	.row-head,
+	.res-row {
+		display: grid;
+		grid-template-columns: minmax(160px, 2fr) minmax(120px, 1.4fr) 160px 120px;
+		align-items: center;
+		gap: 14px;
 	}
-
-	.table-section { margin-top: 20px; overflow-x: auto; }
-
-	table { width: 100%; border-collapse: collapse; }
-
-	th {
-		text-align: left; padding: 10px 12px;
+	.row-head {
+		padding: 0 0 8px;
+		border-bottom: 1px solid var(--border);
 		font-size: 11px; font-weight: 600;
-		text-transform: uppercase; letter-spacing: 0.04em;
-		color: var(--text-muted); background: var(--bg-panel2);
-		border-bottom: 1px solid var(--border);
+		text-transform: uppercase; letter-spacing: 0.12em;
+		color: var(--text-muted);
 	}
-
-	td {
-		padding: 12px; font-size: 14px;
-		border-bottom: 1px solid var(--border);
-		vertical-align: top;
-	}
+	.res-row { font-size: 14px; }
 
 	.clickable-row { cursor: pointer; }
-	.clickable-row:hover td { background: var(--bg-panel2); }
+	.clickable-row:hover { background: var(--bg-hover); }
+
+	@media (max-width: 960px) {
+		.detail-grid { grid-template-columns: 1fr; gap: 0; }
+	}
+
+	@media (max-width: 860px) {
+		.row-head { display: none; }
+		.res-row { grid-template-columns: 1fr auto; row-gap: 6px; }
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.btn-primary:hover { transform: none; }
+	}
 </style>

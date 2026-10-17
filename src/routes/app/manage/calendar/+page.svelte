@@ -13,8 +13,8 @@
 	// ── Status metadata ──
 	const STATUS_ORDER = ['pending', 'waiting_payment', 'approved', 'planned', 'completed'];
 	const STATUS_COLOR: Record<string, string> = {
-		pending: '#f59e0b', waiting_payment: '#f97316', approved: '#22c55e',
-		planned: '#3b82f6', completed: '#14b8a6', cancelled: '#ef4444',
+		pending: 'var(--warning)', waiting_payment: 'var(--status-violet)', approved: 'var(--success)',
+		planned: 'var(--status-blue)', completed: 'var(--text-muted)', cancelled: 'var(--danger)',
 	};
 	function statusLabel(s: string): string { return (t.status as Record<string, string>)[s] ?? s; }
 
@@ -34,7 +34,7 @@
 	function toggleHall(id: string) { const s = new Set(hiddenHalls); s.has(id) ? s.delete(id) : s.add(id); hiddenHalls = s; }
 	function toggleStatus(st: string) { const s = new Set(hiddenStatuses); s.has(st) ? s.delete(st) : s.add(st); hiddenStatuses = s; }
 
-	const hallColor = $derived(Object.fromEntries(data.halls.map(h => [h.id, h.color ?? '#3b82f6'])) as Record<string, string>);
+	const hallColor = $derived(Object.fromEntries(data.halls.map(h => [h.id, h.color ?? 'var(--status-blue)'])) as Record<string, string>);
 
 	const visibleEvents = $derived(data.events.filter(e => !hiddenHalls.has(e.hall_id) && !hiddenStatuses.has(e.status)));
 
@@ -205,7 +205,7 @@
 
 <svelte:head><title>{t.calendar.title} – Hallify</title></svelte:head>
 
-<div class="page">
+<div class="page wrap">
 	<!-- ── Header ── -->
 	<div class="head">
 		<SectionHeader overline={t.halls.manage} title={t.calendar.title} />
@@ -215,15 +215,16 @@
 					<button class="seg-btn" class:active={view === v.id} onclick={() => setView(v.id)}>{v.label}</button>
 				{/each}
 			</div>
-			<a href="/app/reservation/new" class="btn-primary">
+			<a href="/app/reservation/new" class="btn-action">
 				<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
 				{t.calendar.newEvent}
 			</a>
 		</div>
 	</div>
 
-	<!-- ── Nav + summary ── -->
-	<div class="bar">
+	<!-- ── The calendar itself: nav + summary read as this section's head ── -->
+	<section class="section section--lead cal-section">
+	<div class="section-head section-head--row bar">
 		<div class="nav">
 			<button class="nav-btn" onclick={() => shift(-1)} aria-label={t.adminPages.previous}>
 				<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
@@ -232,7 +233,7 @@
 			<button class="nav-btn" onclick={() => shift(1)} aria-label={t.adminPages.next}>
 				<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
 			</button>
-			<span class="period">{periodLabel}</span>
+			<h2 class="period">{periodLabel}</h2>
 		</div>
 
 		<div class="summary">
@@ -364,9 +365,11 @@
 			<!-- Agenda -->
 			<div class="agenda">
 				{#if agendaGroups.length === 0}
-					<div class="empty">
-						<svg width="38" height="38" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-						<p class="empty-t">{t.calendar.noEvents}</p>
+					<div class="card--inset empty">
+						<span class="icon-tile" aria-hidden="true">
+							<svg width="38" height="38" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+						</span>
+						<h3 class="empty-t">{t.calendar.noEvents}</h3>
 						<p class="empty-s">{t.calendar.noEventsHint}</p>
 					</div>
 				{:else}
@@ -378,9 +381,9 @@
 								<span class="ag-dmo">{t.monthNames[d.getMonth()].slice(0, 3)}</span>
 								<span class="ag-dow">{t.dayNames[mondayIndex(d.getDay())]}</span>
 							</div>
-							<div class="ag-evs">
+							<div class="ag-evs row-list">
 								{#each evs as ev}
-									<button class="ag-ev" class:past={ev.event_date.slice(0, 10) < todayISO} style="--hc:{hallColor[ev.hall_id]};--sc:{STATUS_COLOR[ev.status]}" onclick={() => active = ev}>
+									<button class="row-item ag-ev" class:past={ev.event_date.slice(0, 10) < todayISO} style="--hc:{hallColor[ev.hall_id]};--sc:{STATUS_COLOR[ev.status]}" onclick={() => active = ev}>
 										<span class="ag-bar"></span>
 										<span class="ag-time">{ev.start_time ? `${fmtTime(ev.start_time)}${ev.end_time ? '–' + fmtTime(ev.end_time) : ''}` : t.calendar.allDay}</span>
 										<span class="ag-title">{ev.title}</span>
@@ -395,12 +398,13 @@
 			</div>
 		{/if}
 	</div>
+	</section>
 </div>
 
 <!-- ── Event popover ── -->
 {#if active}
 	<button class="pop-backdrop" onclick={() => active = null} aria-label={t.adminPages.close}></button>
-	<div class="pop" style="--hc:{hallColor[active.hall_id]};--sc:{STATUS_COLOR[active.status]}" role="dialog">
+	<div class="card--raised pop" style="--hc:{hallColor[active.hall_id]};--sc:{STATUS_COLOR[active.status]}" role="dialog">
 		<div class="pop-bar"></div>
 		<div class="pop-body">
 			<div class="pop-status"><span class="pop-sdot"></span>{statusLabel(active.status)}</div>
@@ -421,7 +425,7 @@
 					</div>
 				{/if}
 			</div>
-			<a href="/app/reservation/{active.id}" class="pop-open">
+			<a href="/app/reservation/{active.id}" class="btn-action pop-open">
 				{t.calendar.openReservation}
 				<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
 			</a>
@@ -430,56 +434,61 @@
 {/if}
 
 <style>
-	.page { padding: 22px 28px; height: 100%; display: flex; flex-direction: column; overflow: hidden; box-sizing: border-box; }
+	/* warning / success / danger / text-muted carry four of the six states; "planned"
+	   and "waiting payment" take --status-blue / --status-violet from app.css, which
+	   keeps all six apart at dot size. */
+
+	.page { padding-block: 22px; height: 100%; display: flex; flex-direction: column; overflow: hidden; box-sizing: border-box; }
+
+	/* The calendar grid has to fill what is left of the viewport, so this one
+	   section overrides the stock block padding and becomes the flex child. */
+	.cal-section { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 10px 0 0; }
 
 	/* ── Header ── */
 	.head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
 	.head :global(.section-header) { margin-bottom: 8px; }
 	.head-actions { display: flex; align-items: center; gap: 10px; }
 
-	.seg { display: inline-flex; background: var(--bg-panel2, var(--bg-base)); border: 1px solid var(--border); border-radius: 9px; padding: 2px; }
-	.seg-btn { padding: 6px 13px; border: none; background: none; border-radius: 7px; font-size: 12.5px; font-weight: 600; color: var(--text-muted); cursor: pointer; font-family: inherit; transition: background .12s, color .12s; }
-	.seg-btn.active { background: var(--bg-panel); color: var(--text-base); box-shadow: var(--shadow-sm, 0 1px 2px rgba(0,0,0,.08)); }
+	.seg { display: inline-flex; background: var(--bg-panel2, var(--bg-base)); border: 1px solid var(--border); border-radius: var(--radius); padding: 2px; }
+	.seg-btn { padding: 6px 13px; border: none; background: none; border-radius: calc(var(--radius) - 2px); font-size: 12.5px; font-weight: 600; color: var(--text-muted); cursor: pointer; font-family: inherit; transition: background .15s, color .15s; }
+	.seg-btn.active { background: var(--bg-panel); color: var(--text-base); box-shadow: var(--shadow-xs); }
 	.seg-btn:hover:not(.active) { color: var(--text-base); }
 
-	.btn-primary { display: inline-flex; align-items: center; gap: 6px; padding: 8px 15px; border-radius: 8px; background: var(--accent); color: #fff; font-size: 13px; font-weight: 600; text-decoration: none; white-space: nowrap; transition: opacity .12s; }
-	.btn-primary:hover { opacity: .9; }
-
-	/* ── Bar (nav + summary) ── */
-	.bar { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin: 6px 0 14px; flex-wrap: wrap; }
+	/* ── Bar (nav + summary) — this section's head ── */
+	.bar { align-items: center; }
 	.nav { display: flex; align-items: center; gap: 8px; }
-	.nav-btn { width: 32px; height: 32px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-panel); display: flex; align-items: center; justify-content: center; cursor: pointer; color: var(--text-muted); }
-	.nav-btn:hover { background: var(--accent-dim); color: var(--accent); border-color: var(--accent); }
-	.today-btn { padding: 0 14px; height: 32px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-panel); font-size: 12.5px; font-weight: 600; color: var(--text-base); cursor: pointer; font-family: inherit; }
-	.today-btn:hover { border-color: var(--accent); color: var(--accent); }
-	.period { font-size: 16px; font-weight: 700; color: var(--text-base); margin-left: 8px; letter-spacing: -.01em; text-transform: capitalize; }
+	.nav-btn { width: 32px; height: 32px; border-radius: var(--radius-sm); border: 1px solid var(--border); background: var(--bg-panel); display: flex; align-items: center; justify-content: center; cursor: pointer; color: var(--text-muted); transition: background .15s, color .15s, border-color .15s; }
+	.nav-btn:hover { background: var(--accent-dim); color: var(--accent-ink); border-color: var(--accent); }
+	.today-btn { padding: 0 14px; height: 32px; border-radius: var(--radius-sm); border: 1px solid var(--border); background: var(--bg-panel); font-size: 12.5px; font-weight: 600; color: var(--text-base); cursor: pointer; font-family: inherit; transition: background .15s, color .15s, border-color .15s; }
+	.today-btn:hover { border-color: var(--accent); color: var(--accent-ink); }
+	.period { font-size: var(--h2-size); font-weight: 600; color: var(--text-base); margin-left: 8px; letter-spacing: -.03em; text-transform: capitalize; }
 
 	.summary { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
 	.sum-stat { display: flex; flex-direction: column; }
-	.sum-n { font-size: 18px; font-weight: 800; color: var(--text-base); line-height: 1; }
-	.sum-l { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; color: var(--text-subtle); margin-top: 3px; }
-	.sum-busiest { font-size: 13px; font-weight: 700; color: var(--text-base); }
+	.sum-n { font-size: 18px; font-weight: 650; color: var(--text-base); line-height: 1; letter-spacing: -.03em; }
+	.sum-l { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .12em; color: var(--text-muted); margin-top: 3px; }
+	.sum-busiest { font-size: 13px; font-weight: 600; color: var(--text-base); }
 	.busiest { text-align: right; }
 	.sum-pills { display: flex; gap: 6px; flex-wrap: wrap; }
-	.sum-pill { display: inline-flex; align-items: center; gap: 5px; padding: 4px 9px; border-radius: 99px; font-size: 11px; font-weight: 600; color: var(--text-muted); background: color-mix(in srgb, var(--c) 12%, transparent); }
+	.sum-pill { display: inline-flex; align-items: center; gap: 5px; padding: 4px 9px; border-radius: 3px; font-size: 11px; font-weight: 600; color: var(--text-muted); background: color-mix(in srgb, var(--c) 12%, transparent); }
 	.pill-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--c); }
 
 	/* ── Filters ── */
 	.filters { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
 	.filter-group { display: flex; gap: 6px; flex-wrap: wrap; }
 	.filter-divider { width: 1px; align-self: stretch; background: var(--border); }
-	.chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 11px; border-radius: 99px; border: 1px solid var(--border); background: var(--bg-panel); font-size: 12px; font-weight: 600; color: var(--text-base); cursor: pointer; font-family: inherit; transition: opacity .12s, background .12s; }
-	.chip:hover { background: var(--bg-hover, var(--bg-panel2)); }
+	/* Geometry and colours come from the global .chip; only the "hidden" state
+	   and the hall/status dot are specific to this screen. */
 	.chip.off { opacity: .4; text-decoration: line-through; }
-	.chip-dot { width: 9px; height: 9px; border-radius: 3px; flex-shrink: 0; }
+	.chip-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
 
-	/* ── View wrap ── */
-	.view-wrap { flex: 1; min-height: 0; display: flex; background: var(--bg-panel); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+	/* ── View wrap — the grid sits straight on the page, no panel around it ── */
+	.view-wrap { flex: 1; min-height: 0; display: flex; border-top: 1px solid var(--border); overflow: hidden; }
 
 	/* ── Month ── */
 	.month { flex: 1; display: flex; flex-direction: column; min-height: 0; }
-	.dow-row { display: grid; grid-template-columns: repeat(7, 1fr); background: var(--bg-panel2); border-bottom: 1px solid var(--border); }
-	.dow { padding: 9px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--text-muted); text-align: center; }
+	.dow-row { display: grid; grid-template-columns: repeat(7, 1fr); border-bottom: 1px solid var(--border); }
+	.dow { padding: 9px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .12em; color: var(--text-muted); text-align: center; }
 	.dow:last-child { color: var(--danger); }
 	.weeks { flex: 1; display: flex; flex-direction: column; overflow-y: auto; }
 	.week-row { display: grid; grid-template-columns: repeat(7, 1fr); flex: 1; min-height: 96px; }
@@ -490,23 +499,23 @@
 	.mcell.weekend:not(.out) { background: color-mix(in srgb, var(--bg-panel2) 50%, transparent); }
 	.mcell.blocked { background-image: repeating-linear-gradient(45deg, transparent, transparent 6px, color-mix(in srgb, var(--danger) 7%, transparent) 6px, color-mix(in srgb, var(--danger) 7%, transparent) 12px); }
 	.mcell.today { background: var(--accent-dim); }
-	.mcell.today .mday { background: var(--accent); color: #fff; }
+	.mcell.today .mday { background: var(--accent); color: var(--accent-contrast); }
 	.mcell-head { display: flex; align-items: center; justify-content: space-between; }
 	.mday { font-size: 12px; font-weight: 600; color: var(--text-muted); width: 22px; height: 22px; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; }
-	.add-day { opacity: 0; width: 20px; height: 20px; border-radius: 6px; border: none; background: var(--accent-dim); color: var(--accent); display: flex; align-items: center; justify-content: center; cursor: pointer; transition: opacity .12s; }
+	.add-day { opacity: 0; width: 20px; height: 20px; border-radius: var(--radius-sm); border: none; background: var(--accent-dim); color: var(--accent-ink); display: flex; align-items: center; justify-content: center; cursor: pointer; transition: opacity .15s; }
 	.mcell:hover .add-day { opacity: 1; }
 	.mcell-evs { display: flex; flex-direction: column; gap: 2px; overflow: hidden; }
-	.chip-ev { display: flex; align-items: center; gap: 5px; padding: 2px 6px; border-radius: 5px; font-size: 11px; font-weight: 500; border: none; cursor: pointer; font-family: inherit; text-align: left; width: 100%; background: color-mix(in srgb, var(--hc) 14%, transparent); color: color-mix(in srgb, var(--hc) 82%, var(--text-base)); }
+	.chip-ev { display: flex; align-items: center; gap: 5px; padding: 2px 6px; border-radius: var(--radius-sm); font-size: 11px; font-weight: 500; border: none; cursor: pointer; font-family: inherit; text-align: left; width: 100%; background: color-mix(in srgb, var(--hc) 14%, transparent); color: color-mix(in srgb, var(--hc) 82%, var(--text-base)); }
 	.chip-ev:hover { background: color-mix(in srgb, var(--hc) 24%, transparent); }
 	/* Past events read as muted across all calendar views. */
 	.chip-ev.past, .tev.past, .ag-ev.past { opacity: .5; }
 	.chip-ev.past:hover, .tev.past:hover, .ag-ev.past:hover { opacity: .85; }
 	.chip-ev.past .ev-title, .tev.past .tev-title, .ag-ev.past .ag-title { text-decoration: line-through; text-decoration-thickness: 1px; }
 	.ev-sdot { width: 6px; height: 6px; border-radius: 50%; background: var(--sc); flex-shrink: 0; }
-	.ev-time { font-weight: 700; font-variant-numeric: tabular-nums; flex-shrink: 0; }
+	.ev-time { font-weight: 600; font-variant-numeric: tabular-nums; flex-shrink: 0; }
 	.ev-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-	.more { border: none; background: none; font-size: 10.5px; font-weight: 700; color: var(--text-muted); cursor: pointer; text-align: left; padding: 1px 6px; font-family: inherit; }
-	.more:hover { color: var(--accent); }
+	.more { border: none; background: none; font-size: 10.5px; font-weight: 600; color: var(--text-muted); cursor: pointer; text-align: left; padding: 1px 6px; font-family: inherit; }
+	.more:hover { color: var(--accent-ink); }
 
 	/* ── Time grid (week/day) ── */
 	.tgrid { flex: 1; display: flex; flex-direction: column; min-height: 0; --gutter: 56px; }
@@ -514,13 +523,13 @@
 	.tg-gutter { width: var(--gutter); }
 	.tg-dayhead { display: flex; flex-direction: column; align-items: center; gap: 1px; padding: 8px 4px; border-left: 1px solid var(--border-subtle, var(--border)); background: none; cursor: pointer; font-family: inherit; }
 	.tg-dayhead:hover { background: var(--bg-panel2); }
-	.tg-dow { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--text-muted); }
-	.tg-dnum { font-size: 16px; font-weight: 700; color: var(--text-base); width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; border-radius: 50%; }
-	.tg-dayhead.today .tg-dnum { background: var(--accent); color: #fff; }
+	.tg-dow { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .12em; color: var(--text-muted); }
+	.tg-dnum { font-size: 16px; font-weight: 600; color: var(--text-base); width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; border-radius: 50%; letter-spacing: -.03em; }
+	.tg-dayhead.today .tg-dnum { background: var(--accent); color: var(--accent-contrast); }
 	.tg-dayhead.weekend .tg-dow { color: var(--danger); }
 
 	.tgrid-allday { display: grid; grid-template-columns: var(--gutter) repeat(var(--cols), 1fr); border-bottom: 1px solid var(--border); max-height: 88px; overflow-y: auto; }
-	.allday-label { font-size: 9.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--text-subtle); display: flex; align-items: center; justify-content: flex-end; padding: 4px 8px; }
+	.allday-label { font-size: 9.5px; font-weight: 600; text-transform: uppercase; letter-spacing: .12em; color: var(--text-muted); display: flex; align-items: center; justify-content: flex-end; padding: 4px 8px; }
 	.allday-col { border-left: 1px solid var(--border-subtle, var(--border)); padding: 4px; display: flex; flex-direction: column; gap: 3px; min-height: 26px; }
 	.allday-col.blocked { background-image: repeating-linear-gradient(45deg, transparent, transparent 6px, color-mix(in srgb, var(--danger) 7%, transparent) 6px, color-mix(in srgb, var(--danger) 7%, transparent) 12px); }
 	.allday-chip { width: 100%; }
@@ -528,14 +537,14 @@
 	.tgrid-body { flex: 1; display: grid; grid-template-columns: var(--gutter) repeat(var(--cols), 1fr); overflow-y: auto; position: relative; }
 	.hours-col { display: flex; flex-direction: column; }
 	.hour-label { display: flex; align-items: flex-start; justify-content: flex-end; padding: 2px 8px 0 0; position: relative; }
-	.hour-label span { font-size: 10px; color: var(--text-subtle); font-variant-numeric: tabular-nums; transform: translateY(-6px); }
+	.hour-label span { font-size: 10px; color: var(--text-muted); font-variant-numeric: tabular-nums; transform: translateY(-6px); }
 	.day-col { position: relative; border-left: 1px solid var(--border-subtle, var(--border)); }
 	.day-col.today { background: color-mix(in srgb, var(--accent-dim) 50%, transparent); }
 	.day-col.blocked { background-image: repeating-linear-gradient(45deg, transparent, transparent 7px, color-mix(in srgb, var(--danger) 6%, transparent) 7px, color-mix(in srgb, var(--danger) 6%, transparent) 14px); }
 	.hour-line { border-bottom: 1px solid var(--border-subtle, var(--border)); box-sizing: border-box; }
-	.tev { position: absolute; border-radius: 6px; padding: 3px 7px; border: none; border-left: 3px solid var(--sc); cursor: pointer; font-family: inherit; text-align: left; overflow: hidden; display: flex; flex-direction: column; gap: 1px; background: color-mix(in srgb, var(--hc) 18%, var(--bg-panel)); color: color-mix(in srgb, var(--hc) 80%, var(--text-base)); box-shadow: var(--shadow-sm, 0 1px 2px rgba(0,0,0,.08)); }
+	.tev { position: absolute; border-radius: var(--radius-sm); padding: 3px 7px; border: none; border-left: 3px solid var(--sc); cursor: pointer; font-family: inherit; text-align: left; overflow: hidden; display: flex; flex-direction: column; gap: 1px; background: color-mix(in srgb, var(--hc) 18%, var(--bg-panel)); color: color-mix(in srgb, var(--hc) 80%, var(--text-base)); box-shadow: var(--shadow-xs); }
 	.tev:hover { background: color-mix(in srgb, var(--hc) 28%, var(--bg-panel)); z-index: 5; }
-	.tev-title { font-size: 11.5px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+	.tev-title { font-size: 11.5px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 	.tev-meta { font-size: 10px; opacity: .8; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 	/* ── Agenda ── */
@@ -543,41 +552,38 @@
 	.ag-row { display: flex; gap: 16px; padding: 12px 20px; border-bottom: 1px solid var(--border-subtle, var(--border)); }
 	.ag-row:last-child { border-bottom: none; }
 	.ag-date { display: flex; flex-direction: column; align-items: center; width: 52px; flex-shrink: 0; padding-top: 4px; }
-	.ag-dnum { font-size: 22px; font-weight: 800; color: var(--text-base); line-height: 1; }
-	.ag-dmo { font-size: 11px; font-weight: 700; text-transform: uppercase; color: var(--text-muted); margin-top: 2px; }
-	.ag-dow { font-size: 10px; color: var(--text-subtle); margin-top: 1px; }
-	.ag-date.today .ag-dnum { color: var(--accent); }
-	.ag-evs { flex: 1; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
-	.ag-ev { display: flex; align-items: center; gap: 12px; padding: 9px 12px; border-radius: 9px; border: 1px solid var(--border); background: var(--bg-panel); cursor: pointer; font-family: inherit; text-align: left; transition: border-color .12s, background .12s; }
-	.ag-ev:hover { border-color: var(--accent); background: var(--bg-panel2); }
-	.ag-bar { width: 4px; align-self: stretch; border-radius: 99px; background: var(--hc); flex-shrink: 0; }
-	.ag-time { font-size: 12px; font-weight: 700; color: var(--text-muted); font-variant-numeric: tabular-nums; width: 92px; flex-shrink: 0; }
-	.ag-title { font-size: 13.5px; font-weight: 700; color: var(--text-base); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+	.ag-dnum { font-size: 22px; font-weight: 650; color: var(--text-base); line-height: 1; letter-spacing: -.03em; }
+	.ag-dmo { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .12em; color: var(--text-muted); margin-top: 2px; }
+	.ag-dow { font-size: 10px; color: var(--text-muted); margin-top: 1px; }
+	.ag-date.today .ag-dnum { color: var(--accent-ink); }
+	.ag-evs { flex: 1; min-width: 0; }
+	.ag-ev { gap: 12px; border: none; background: none; cursor: pointer; font-family: inherit; transition: background .15s; }
+	.ag-bar { width: 4px; align-self: stretch; border-radius: 3px; background: var(--hc); flex-shrink: 0; }
+	.ag-time { font-size: 12px; font-weight: 600; color: var(--text-muted); font-variant-numeric: tabular-nums; width: 92px; flex-shrink: 0; }
+	.ag-title { font-size: 13.5px; font-weight: 600; color: var(--text-base); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 	.ag-hall { font-size: 12px; color: var(--text-muted); flex-shrink: 0; }
-	.ag-status { font-size: 10.5px; font-weight: 700; padding: 3px 9px; border-radius: 99px; flex-shrink: 0; color: var(--sc); background: color-mix(in srgb, var(--sc) 13%, transparent); }
+	.ag-status { font-size: 10.5px; font-weight: 600; padding: 3px 9px; border-radius: 3px; flex-shrink: 0; color: var(--sc); background: color-mix(in srgb, var(--sc) 13%, transparent); }
 
-	.empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 60px; text-align: center; color: var(--text-subtle); width: 100%; }
-	.empty-t { font-size: 15px; font-weight: 700; color: var(--text-muted); margin: 4px 0 0; }
-	.empty-s { font-size: 13px; color: var(--text-subtle); margin: 0; }
+	.empty { display: flex; flex-direction: column; align-items: flex-start; gap: 12px; margin: 20px; }
+	.empty-t { font-size: var(--h3-size); font-weight: 600; letter-spacing: -.02em; color: var(--text-base); margin: 0; }
+	.empty-s { font-size: var(--body-size); color: var(--text-muted); margin: 0; }
 
 	/* ── Popover ── */
 	.pop-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.32); border: none; cursor: default; z-index: 90; animation: fade .12s ease; }
 	@keyframes fade { from { opacity: 0; } to { opacity: 1; } }
-	.pop { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); width: min(420px, calc(100vw - 40px)); background: var(--bg-panel); border: 1px solid var(--border); border-radius: 14px; box-shadow: 0 24px 60px rgba(0,0,0,.28); z-index: 91; overflow: hidden; animation: popIn .16s cubic-bezier(.22,1,.36,1); }
+	/* A genuine floating surface, so it opts back into .card--raised; only the
+	   placement and the full-bleed hall bar are local. */
+	.pop { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); width: min(420px, calc(100vw - 40px)); padding: 0; z-index: 91; overflow: hidden; animation: popIn .16s cubic-bezier(.22,1,.36,1); }
 	@keyframes popIn { from { opacity: 0; transform: translate(-50%, -46%) scale(.97); } to { opacity: 1; transform: translate(-50%, -50%) scale(1); } }
 	.pop-bar { height: 5px; background: var(--hc); }
 	.pop-body { padding: 18px 20px 20px; }
-	.pop-status { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 700; color: var(--sc); text-transform: uppercase; letter-spacing: .04em; }
+	.pop-status { display: inline-flex; align-items: center; gap: 6px; font-size: 10px; font-weight: 650; color: var(--sc); text-transform: uppercase; letter-spacing: .13em; }
 	.pop-sdot { width: 7px; height: 7px; border-radius: 50%; background: var(--sc); }
-	.pop-title { font-size: 18px; font-weight: 800; color: var(--text-base); margin: 8px 0 14px; letter-spacing: -.01em; }
+	.pop-title { font-size: 18px; font-weight: 600; color: var(--text-base); margin: 8px 0 14px; letter-spacing: -.03em; }
 	.pop-meta { display: flex; flex-direction: column; gap: 9px; margin-bottom: 18px; }
 	.pop-line { display: flex; align-items: center; gap: 9px; font-size: 13px; color: var(--text-muted); }
 	.pop-line svg { color: var(--text-subtle); flex-shrink: 0; }
-	.pop-open { display: inline-flex; align-items: center; gap: 7px; padding: 9px 16px; border-radius: 8px; background: var(--accent); color: #fff; font-size: 13px; font-weight: 600; text-decoration: none; transition: opacity .12s; }
-	.pop-open:hover { opacity: .9; }
-
 	@media (max-width: 720px) {
-		.page { padding: 16px; }
 		.bar { gap: 10px; }
 		.summary { display: none; }
 	}

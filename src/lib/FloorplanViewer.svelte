@@ -439,17 +439,17 @@
 			<defs>
 				<pattern id="vgrid" width={zoom} height={zoom} patternUnits="userSpaceOnUse"
 					x={patternX} y={patternY}>
-					<path d="M {zoom} 0 L 0 0 0 {zoom}" fill="none" stroke="#cdd2e0" stroke-width="0.5"/>
+					<path d="M {zoom} 0 L 0 0 0 {zoom}" fill="none" stroke="var(--editor-grid)" stroke-width="0.5"/>
 				</pattern>
 				<pattern id="vgrid5" width={zoom*5} height={zoom*5} patternUnits="userSpaceOnUse"
 					x={patternX} y={patternY}>
 					<rect width={zoom*5} height={zoom*5} fill="url(#vgrid)"/>
-					<path d="M {zoom*5} 0 L 0 0 0 {zoom*5}" fill="none" stroke="#b4bacb" stroke-width="1"/>
+					<path d="M {zoom*5} 0 L 0 0 0 {zoom*5}" fill="none" stroke="var(--editor-grid-strong)" stroke-width="1"/>
 				</pattern>
 			</defs>
 
 			<!-- Floor -->
-			<rect width="100%" height="100%" fill="#f8f9fc"/>
+			<rect width="100%" height="100%" fill="var(--editor-canvas)"/>
 			<rect width="100%" height="100%" fill="url(#vgrid5)"/>
 
 			<!-- Ghost outline of floor below -->
@@ -458,7 +458,8 @@
 				{#if below.bounds}
 					<rect x={wx(below.bounds.x)} y={wy(below.bounds.y)}
 						width={ws(below.bounds.w)} height={ws(below.bounds.h)}
-						fill="none" stroke="rgba(43,52,98,0.15)" stroke-width="1.5" stroke-dasharray="6,4"
+						fill="none" stroke="color-mix(in srgb, var(--editor-wall) 30%, transparent)"
+						stroke-width="1.5" stroke-dasharray="6,4"
 						pointer-events="none"/>
 				{/if}
 				{#each below.zones as zone}
@@ -468,7 +469,8 @@
 				{/each}
 				{#each below.walls as wall}
 					<polygon points={wall.points.map(p => `${wx(p.x)},${wy(p.y)}`).join(' ')}
-						fill="rgba(43,52,98,0.06)" stroke="rgba(43,52,98,0.15)"
+						fill="color-mix(in srgb, var(--editor-wall) 12%, transparent)"
+						stroke="color-mix(in srgb, var(--editor-wall) 30%, transparent)"
 						stroke-width="1" stroke-dasharray="4,3" pointer-events="none"/>
 				{/each}
 			{/if}
@@ -488,7 +490,7 @@
 			<!-- Walls -->
 			{#each walls as w}
 				<polygon points={w.points.map(p => `${wx(p.x)},${wy(p.y)}`).join(' ')}
-					fill="#2b3462" stroke="none" stroke-width="0"/>
+					fill="var(--editor-wall)" stroke="none" stroke-width="0"/>
 			{/each}
 
 			<!-- Tables -->
@@ -501,14 +503,14 @@
 					{#if t.shape === 'rect'}
 						<rect x={-ws(t.width/2)} y={-ws(t.height/2)}
 							width={ws(t.width)} height={ws(t.height)}
-							rx="4" fill="#92400e" stroke="#78350f" stroke-width="1.5"/>
+							rx="8" fill="var(--warning)" stroke="color-mix(in srgb, var(--warning) 60%, var(--text-base))" stroke-width="1.5"/>
 					{:else}
-						<circle r={ws(t.radius)} fill="#92400e" stroke="#78350f" stroke-width="1.5"/>
+						<circle r={ws(t.radius)} fill="var(--warning)" stroke="color-mix(in srgb, var(--warning) 60%, var(--text-base))" stroke-width="1.5"/>
 					{/if}
 					<!-- Label -->
 					{#if t.label}
 						<text text-anchor="middle" dominant-baseline="middle"
-							font-size={Math.max(8, ws(0.25))} fill="#fef3c7" font-weight="600"
+							font-size={Math.max(8, ws(0.25))} fill="var(--warning-dim)" font-weight="600"
 							pointer-events="none">{t.label}</text>
 					{/if}
 					<!-- Chairs -->
@@ -517,12 +519,12 @@
 						{@const guest = guestOf(ci)}
 						<g transform="translate({ws(ch.x)},{ws(ch.y)}) rotate({ch.rot})">
 							<rect x={-ws(0.21)} y={-ws(0.21)} width={ws(0.42)} height={ws(0.42)} rx={ws(0.07)}
-								fill={assigned ? '#16a34a' : '#a16207'}
-								stroke={assigned ? '#15803d' : '#92400e'}
+								fill={assigned ? 'var(--success)' : 'var(--warning-dim)'}
+								stroke={assigned ? 'color-mix(in srgb, var(--success) 60%, var(--text-base))' : 'var(--warning)'}
 								stroke-width="1" cursor="pointer"/>
 							{#if guest && zoom >= 55}
 								<text text-anchor="middle" dominant-baseline="middle"
-									font-size={ws(0.18)} fill="white" font-weight="700"
+									font-size={ws(0.18)} fill="var(--on-success)" font-weight="650"
 									pointer-events="none">
 									{guest.firstName[0]}{guest.lastName[0]}
 								</text>
@@ -683,7 +685,7 @@
 
 	.floor-tab {
 		padding: 4px 12px;
-		border-radius: 5px;
+		border-radius: var(--radius-sm);
 		font-size: 11px;
 		font-weight: 500;
 		color: var(--text-muted);
@@ -691,7 +693,7 @@
 		border: 1px solid transparent;
 		cursor: pointer;
 		transition: all 0.12s;
-		font: inherit;
+		font-family: inherit;
 		font-size: 11px;
 		font-weight: 500;
 	}
@@ -699,7 +701,7 @@
 	.floor-tab:hover { background: var(--bg-panel2); color: var(--text-base); }
 	.floor-tab.active {
 		background: var(--accent-dim);
-		color: var(--accent);
+		color: var(--accent-ink);
 		font-weight: 600;
 		border-color: var(--accent);
 	}
@@ -750,13 +752,13 @@
 		transform: translateX(-50%);
 		background: var(--bg-panel);
 		border: 1px solid var(--border);
-		border-radius: 8px;
+		border-radius: var(--radius);
 		padding: 10px 14px;
 		font-size: 12px;
 		color: var(--text-base);
 		line-height: 1.5;
 		white-space: nowrap;
-		box-shadow: 0 4px 16px rgba(0,0,0,0.1);
+		box-shadow: var(--shadow);
 		z-index: 41;
 	}
 
@@ -766,18 +768,20 @@
 		right: 12px;
 		z-index: 40;
 		padding: 5px 12px;
-		border-radius: 6px;
+		border-radius: var(--radius-sm);
 		background: var(--bg-panel);
 		border: 1px solid var(--border);
 		font-size: 11px;
 		color: var(--text-muted);
 		cursor: pointer;
-		font: inherit;
+		font-family: inherit;
+		box-shadow: var(--shadow-xs);
+		transition: background .15s, color .15s, border-color .15s;
 	}
 
 	.tutorial-dismiss:hover {
 		background: var(--accent-dim);
-		color: var(--accent);
+		color: var(--accent-ink);
 		border-color: var(--accent);
 	}
 
@@ -793,8 +797,8 @@
 		z-index: 21;
 		background: var(--bg-panel);
 		border: 1px solid var(--border);
-		border-radius: 10px;
-		box-shadow: 0 4px 20px rgba(0,0,0,0.12);
+		border-radius: var(--radius-lg);
+		box-shadow: var(--shadow);
 		width: 220px;
 		overflow: hidden;
 	}
@@ -808,6 +812,7 @@
 		border-bottom: 1px solid var(--border);
 		font-size: 12px;
 		font-weight: 600;
+		letter-spacing: -.03em;
 	}
 
 	.pop-close {
@@ -833,8 +838,8 @@
 		width: 22px; height: 22px;
 		border-radius: 50%;
 		background: var(--accent-dim);
-		color: var(--accent);
-		font-size: 9px; font-weight: 700;
+		color: var(--accent-ink);
+		font-size: 9px; font-weight: 650;
 		display: flex; align-items: center; justify-content: center;
 		flex-shrink: 0;
 	}
@@ -846,7 +851,7 @@
 		background: none;
 		border: none;
 		cursor: pointer;
-		font: inherit;
+		font-family: inherit;
 	}
 
 	.pop-search {
@@ -860,7 +865,7 @@
 		color: var(--text-base);
 		outline: none;
 		box-sizing: border-box;
-		font: inherit;
+		font-family: inherit;
 	}
 
 	.pop-list {
@@ -880,17 +885,17 @@
 		border: none;
 		cursor: pointer;
 		color: var(--text-base);
-		font: inherit;
+		font-family: inherit;
 	}
 
-	.pop-guest:hover { background: var(--accent-dim); color: var(--accent); }
-	.pop-guest.current { background: #dcfce7; color: #16a34a; }
+	.pop-guest:hover { background: var(--accent-dim); color: var(--accent-ink); }
+	.pop-guest.current { background: var(--success-dim); color: var(--success); }
 
 	.pg-avatar {
 		width: 20px; height: 20px;
 		border-radius: 50%;
 		background: var(--bg-panel2);
-		font-size: 9px; font-weight: 700;
+		font-size: 9px; font-weight: 650;
 		display: flex; align-items: center; justify-content: center;
 		flex-shrink: 0;
 	}
@@ -903,11 +908,11 @@
 		bottom: 12px;
 		left: 50%;
 		transform: translateX(-50%);
-		background: rgba(0,0,0,0.55);
-		color: #fff;
+		background: color-mix(in srgb, var(--text-base) 82%, transparent);
+		color: var(--bg-panel);
 		font-size: 11px;
 		padding: 4px 10px;
-		border-radius: 20px;
+		border-radius: 3px;
 		pointer-events: none;
 		opacity: 0.7;
 	}
@@ -927,6 +932,7 @@
 		padding: 12px 14px;
 		font-size: 13px;
 		font-weight: 600;
+		letter-spacing: -.03em;
 		border-bottom: 1px solid var(--border);
 		display: flex;
 		align-items: center;
@@ -935,11 +941,11 @@
 
 	.panel-count {
 		background: var(--accent-dim);
-		color: var(--accent);
+		color: var(--accent-ink);
 		font-size: 11px;
-		font-weight: 700;
+		font-weight: 650;
 		padding: 1px 6px;
-		border-radius: 10px;
+		border-radius: 3px;
 	}
 
 	.rsvp-section, .add-section, .guest-list-section {
@@ -953,11 +959,12 @@
 		border-bottom: none;
 	}
 
+	/* Eyebrow: the uppercase overline motif of the language. */
 	.section-label {
 		font-size: 10px;
-		font-weight: 700;
+		font-weight: 650;
 		text-transform: uppercase;
-		letter-spacing: 0.06em;
+		letter-spacing: .13em;
 		color: var(--text-muted);
 		margin-bottom: 6px;
 	}
@@ -976,13 +983,16 @@
 		font-size: 11px;
 		font-weight: 600;
 		padding: 2px 7px;
-		border-radius: 5px;
+		border-radius: var(--radius-sm);
 		background: var(--accent-dim);
-		color: var(--accent);
+		color: var(--accent-ink);
 		border: none;
 		cursor: pointer;
-		font: inherit;
+		font-family: inherit;
+		transition: background .15s;
 	}
+
+	.import-btn:hover { background: color-mix(in srgb, var(--accent) 22%, transparent); }
 
 	.added-badge {
 		font-size: 11px;
@@ -999,15 +1009,20 @@
 		width: 100%;
 		margin-top: 6px;
 		padding: 6px;
-		border-radius: 6px;
+		border-radius: var(--radius-sm);
 		background: var(--accent);
-		color: #fff;
+		color: var(--accent-contrast);
 		font-size: 12px;
-		font-weight: 600;
+		font-weight: 650;
 		border: none;
 		cursor: pointer;
-		font: inherit;
+		font-family: inherit;
+		transition: transform .2s, background .2s;
 	}
+
+	/* The lift on hover is the signature interaction of this language. */
+	.add-btn:hover:not(:disabled) { background: var(--accent-hover); transform: translateY(-2px); }
+	.add-btn:active:not(:disabled) { transform: translateY(0); }
 
 	.add-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
@@ -1024,16 +1039,16 @@
 		border-radius: 50%;
 		background: var(--bg-panel2);
 		border: 1px solid var(--border);
-		font-size: 9px; font-weight: 700;
+		font-size: 9px; font-weight: 650;
 		display: flex; align-items: center; justify-content: center;
 		flex-shrink: 0;
 		color: var(--text-muted);
 	}
 
 	.gi-avatar.assigned {
-		background: #dcfce7;
-		border-color: #bbf7d0;
-		color: #15803d;
+		background: var(--success-dim);
+		border-color: color-mix(in srgb, var(--success) 30%, transparent);
+		color: var(--success);
 	}
 
 	.gi-name { flex: 1; font-weight: 500; color: var(--text-base); }
@@ -1041,9 +1056,9 @@
 	.seat-tag {
 		font-size: 10px;
 		background: var(--accent-dim);
-		color: var(--accent);
+		color: var(--accent-ink);
 		padding: 1px 5px;
-		border-radius: 4px;
+		border-radius: var(--radius-sm);
 		font-weight: 600;
 	}
 
@@ -1059,18 +1074,21 @@
 	.save-btn {
 		margin: 10px 12px;
 		padding: 9px;
-		border-radius: 8px;
+		border-radius: var(--radius-sm);
 		background: var(--accent);
-		color: #fff;
+		color: var(--accent-contrast);
 		font-size: 13px;
-		font-weight: 600;
+		font-weight: 650;
 		border: none;
 		cursor: pointer;
-		font: inherit;
+		font-family: inherit;
 		flex-shrink: 0;
+		transition: transform .2s, background .2s;
 	}
 
-	.save-btn:hover { opacity: 0.9; }
+	/* The lift on hover is the signature interaction of this language. */
+	.save-btn:hover { background: var(--accent-hover); transform: translateY(-2px); }
+	.save-btn:active { transform: translateY(0); }
 
 	.section-label-row {
 		display: flex;
@@ -1082,18 +1100,21 @@
 	.import-all-btn {
 		font-size: 11px;
 		padding: 2px 8px;
-		border-radius: 4px;
+		border-radius: var(--radius-sm);
 		background: var(--accent);
-		color: #fff;
+		color: var(--accent-contrast);
 		border: none;
 		cursor: pointer;
 		font-weight: 600;
-		font: inherit;
+		font-family: inherit;
 		font-size: 11px;
 		font-weight: 600;
+		transition: transform .2s, background .2s;
 	}
 
-	.import-all-btn:hover { opacity: 0.85; }
+	/* The lift on hover is the signature interaction of this language. */
+	.import-all-btn:hover { background: var(--accent-hover); transform: translateY(-2px); }
+	.import-all-btn:active { transform: translateY(0); }
 
 	.family-group {
 		margin-bottom: 4px;
@@ -1105,10 +1126,16 @@
 
 	.family-label {
 		font-size: 11px;
-		font-weight: 700;
+		font-weight: 650;
 		color: var(--text-muted);
 		text-transform: uppercase;
-		letter-spacing: 0.03em;
+		letter-spacing: 0.08em;
 		padding: 4px 0 2px;
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.add-btn:hover:not(:disabled),
+		.import-all-btn:hover,
+		.save-btn:hover { transform: none; }
 	}
 </style>

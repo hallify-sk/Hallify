@@ -13,10 +13,11 @@
   const path = $derived($page.url.pathname);
   const initials = $derived(user ? `${user.first_name?.[0] ?? ''}${user.last_name?.[0] ?? ''}`.toUpperCase() : '');
 
+  // Each swatch is now that theme's paper colour, not an old-palette hue.
   const THEMES = [
-    { id: 'slate', label: 'Slate', dot: '#4f6ef7' },
-    { id: 'dark',  label: 'Dark',  dot: '#818cf8' },
-    { id: 'warm',  label: 'Warm',  dot: '#7c3aed' },
+    { id: 'slate', label: 'Slate', dot: '#f9f9f7' },
+    { id: 'dark',  label: 'Dark',  dot: '#181c1a' },
+    { id: 'warm',  label: 'Warm',  dot: '#faf7f3' },
   ] as const;
 
   function setTheme(id: string) {
@@ -113,45 +114,58 @@
     display: flex; flex-direction: column; position: sticky; top: 0; height: 100vh;
   }
   .b-brand { display: flex; align-items: center; gap: 10px; padding: 18px 16px 14px; text-decoration: none; }
-  .b-logo { width: 30px; height: 30px; border-radius: 7px; object-fit: contain; }
-  .b-logo-ph { width: 30px; height: 30px; border-radius: 7px; display: flex; align-items: center; justify-content: center; color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); border: 1px solid color-mix(in srgb, var(--accent) 22%, transparent); }
-  .b-name { font-size: 15px; font-weight: 800; color: var(--text-base); letter-spacing: -.02em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .b-brand:hover { text-decoration: none; }
+  .b-logo { width: 30px; height: 30px; border-radius: var(--radius); object-fit: contain; }
+  /* Icon over a light tint, so it writes in --accent-ink, not the fill colour. */
+  .b-logo-ph { width: 30px; height: 30px; border-radius: var(--radius); display: flex; align-items: center; justify-content: center; color: var(--accent-ink); background: color-mix(in srgb, var(--accent) 12%, transparent); border: 1px solid color-mix(in srgb, var(--accent) 22%, transparent); }
+  .b-name { font-size: 15px; font-weight: 650; color: var(--text-base); letter-spacing: -.03em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
   .b-nav { flex: 1; display: flex; flex-direction: column; gap: 2px; padding: 6px 10px; overflow-y: auto; }
-  .b-item { display: flex; align-items: center; gap: 9px; padding: 8px 10px; border-radius: 7px; font-size: 13px; font-weight: 500; color: var(--text-muted); text-decoration: none; transition: background .1s, color .1s; }
-  .b-item:hover { background: var(--bg-hover); color: var(--text-base); }
-  .b-item.active { background: var(--accent-dim); color: var(--accent); font-weight: 600; }
+  .b-item { display: flex; align-items: center; gap: 9px; padding: 8px 10px; border-radius: var(--radius); font-size: 13px; font-weight: 500; color: var(--text-muted); text-decoration: none; transition: background .15s, color .15s; }
+  .b-item:hover { background: var(--bg-hover); color: var(--text-base); text-decoration: none; }
+  /* Text on the accent tint, so --accent-ink rather than the fill colour. */
+  .b-item.active { background: var(--accent-dim); color: var(--accent-ink); font-weight: 600; }
   .b-item svg { flex-shrink: 0; }
-  .b-badge { margin-left: auto; background: var(--danger); color: #fff; font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 10px; min-width: 16px; text-align: center; }
+  /* Text on a solid --danger fill: --on-danger, never a literal #fff. The dark
+     theme inverts --danger to a pale coral, where white drops to 2.5:1. */
+  .b-badge { margin-left: auto; background: var(--danger); color: var(--on-danger); font-size: 10px; font-weight: 650; padding: 1px 6px; border-radius: 3px; min-width: 16px; text-align: center; }
 
   .b-foot { flex-shrink: 0; }
   .b-langs { display: flex; gap: 4px; padding: 8px 12px 0; }
-  .b-lang { flex: 1; padding: 5px 4px; border-radius: 6px; border: 1px solid transparent; background: none; cursor: pointer; font-family: inherit; font-size: 11px; font-weight: 500; color: var(--text-subtle); transition: all .1s; }
+  .b-lang { flex: 1; padding: 5px 4px; border-radius: var(--radius-sm); border: 1px solid transparent; background: none; cursor: pointer; font-family: inherit; font-size: 11px; font-weight: 500; color: var(--text-subtle); transition: background .15s, color .15s, border-color .15s; }
   .b-lang:hover { background: var(--bg-hover); color: var(--text-muted); }
   .b-lang.active { background: var(--bg-hover); border-color: var(--border); color: var(--text-base); font-weight: 600; }
   .b-themes { display: flex; gap: 4px; padding: 8px 12px; border-top: 1px solid var(--border-subtle); }
-  .b-theme { flex: 1; display: flex; align-items: center; justify-content: center; gap: 5px; padding: 5px 4px; border-radius: 6px; border: 1px solid transparent; background: none; cursor: pointer; font-family: inherit; font-size: 11px; font-weight: 500; color: var(--text-subtle); transition: all .1s; }
+  .b-theme { flex: 1; display: flex; align-items: center; justify-content: center; gap: 5px; padding: 5px 4px; border-radius: var(--radius-sm); border: 1px solid transparent; background: none; cursor: pointer; font-family: inherit; font-size: 11px; font-weight: 500; color: var(--text-subtle); transition: background .15s, color .15s, border-color .15s; }
   .b-theme:hover { background: var(--bg-hover); color: var(--text-muted); }
   .b-theme.active { background: var(--bg-hover); border-color: var(--border); color: var(--text-base); font-weight: 600; }
-  .b-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+  /* Each swatch shows that theme's paper; a hairline ring keeps the pale ones visible. */
+  .b-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; border: 1px solid var(--border); }
   .b-theme-label { line-height: 1; }
 
   .b-account { display: flex; align-items: center; gap: 9px; padding: 11px 12px; border-top: 1px solid var(--border); }
-  .b-avatar { width: 30px; height: 30px; border-radius: 50%; background: var(--accent); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; flex-shrink: 0; }
+  .b-avatar { width: 30px; height: 30px; border-radius: 50%; background: var(--accent); color: var(--accent-contrast); display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 650; flex-shrink: 0; }
   .b-acct-info { flex: 1; min-width: 0; display: flex; flex-direction: column; }
   .b-acct-name { font-size: 12.5px; font-weight: 600; color: var(--text-base); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .b-acct-sub { font-size: 10.5px; color: var(--text-subtle); }
-  .b-signout { width: 30px; height: 30px; border-radius: 7px; display: flex; align-items: center; justify-content: center; color: var(--text-muted); flex-shrink: 0; transition: background .1s, color .1s; }
-  .b-signout:hover { background: var(--danger-dim); color: var(--danger); }
-  .b-signin { display: block; margin: 11px 12px; padding: 9px; text-align: center; border-radius: 8px; background: var(--accent); color: #fff; font-size: 13px; font-weight: 600; text-decoration: none; }
+  .b-signout { width: 30px; height: 30px; border-radius: var(--radius); display: flex; align-items: center; justify-content: center; color: var(--text-muted); flex-shrink: 0; transition: background .15s, color .15s; }
+  .b-signout:hover { background: var(--danger-dim); color: var(--danger); text-decoration: none; }
+  /* Signing in is the primary action in this rail, so it takes the hover lift. */
+  .b-signin { display: block; margin: 11px 12px; padding: 10px; text-align: center; border-radius: var(--radius-sm); background: var(--accent); color: var(--accent-contrast); font-size: 13px; font-weight: 650; text-decoration: none; transition: transform .2s, background .2s; }
+  .b-signin:hover { background: var(--accent-hover); transform: translateY(-2px); text-decoration: none; }
+  .b-signin:active { transform: translateY(0); }
 
   .b-main-wrap { flex: 1; min-width: 0; display: flex; flex-direction: column; }
   .b-main { flex: 1; max-width: 1080px; width: 100%; margin: 0 auto; padding: 30px 28px 48px; }
   .b-pwr { text-align: center; padding: 16px; font-size: 11px; color: var(--text-subtle); border-top: 1px solid var(--border); }
   .b-pwr strong { color: var(--text-muted); }
-  .b-pwr-link { color: inherit; text-decoration: none; }
-  .b-pwr-link:hover strong { color: var(--accent); }
-  .b-pwr-link:hover { color: var(--accent); }
+  .b-pwr-link { color: inherit; text-decoration: none; transition: color .15s; }
+  .b-pwr-link:hover strong { color: var(--accent-ink); }
+  .b-pwr-link:hover { color: var(--accent-ink); text-decoration: none; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .b-signin:hover { transform: none; }
+  }
 
   @media (max-width: 760px) {
     .b-shell { flex-direction: column; }

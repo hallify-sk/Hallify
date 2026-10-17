@@ -18,17 +18,23 @@
 
 	.overline {
 		display: block;
-		font-size: 11px;
-		font-weight: 700;
-		letter-spacing: 0.08em;
+		font-size: 10px;
+		font-weight: 650;
+		letter-spacing: 0.13em;
+		line-height: 1.7;
 		text-transform: uppercase;
-		color: var(--text-muted);
-		margin-bottom: 4px;
+		color: var(--accent-ink);
+		margin-bottom: 10px;
 	}
 
 	h1 {
-		font-size: 22px;
-		font-weight: 700;
+		/* --display-size, not a fixed clamp: this component is used on both density
+		   tiers, and a hardcoded marketing-scale title rendered ~40px on operator
+		   screens that ask for ~30px. */
+		font-size: var(--display-size, clamp(28px, 3.2vw, 40px));
+		font-weight: 550;
+		letter-spacing: -0.055em;
+		line-height: 1.08;
 		color: var(--text-base);
 	}
 </style>

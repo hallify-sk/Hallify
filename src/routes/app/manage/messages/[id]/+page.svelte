@@ -160,7 +160,12 @@
 				</div>
 			{/if}
 		{:else}
-			<div class="empty">{t.messaging.noMessages}</div>
+			<div class="card card--inset empty">
+				<div class="icon-tile">
+					<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+				</div>
+				<p>{t.messaging.noMessages}</p>
+			</div>
 		{/each}
 		<div bind:this={chatEnd}></div>
 	</div>
@@ -220,7 +225,6 @@
 		gap: 16px;
 		padding: 16px 24px;
 		border-bottom: 1px solid var(--border);
-		background: var(--bg-panel);
 		flex-shrink: 0;
 	}
 
@@ -229,21 +233,21 @@
 		font-size: 13px; color: var(--text-muted);
 		text-decoration: none; white-space: nowrap;
 	}
-	.back-link:hover { color: var(--accent); }
+	.back-link:hover { color: var(--accent-ink); }
 
 	.chat-title { flex: 1; }
-	.chat-title h2 { font-size: 16px; font-weight: 600; margin: 0; }
+	.chat-title h2 { font-size: 16px; font-weight: 550; letter-spacing: -.045em; margin: 0; }
 	.chat-meta { display: flex; gap: 10px; align-items: center; font-size: 12px; color: var(--text-muted); margin-top: 2px; }
 	.email { color: var(--text-muted); }
 
 	.chat-actions { flex-shrink: 0; }
 	.btn-outline {
-		padding: 5px 14px; border-radius: 6px; font-size: 12px;
-		font-weight: 500; border: 1px solid var(--border);
+		padding: 6px 14px; border-radius: var(--radius-sm); font-size: 12px;
+		font-weight: 600; border: 1px solid var(--border);
 		background: var(--bg-panel); color: var(--text-base);
-		cursor: pointer;
+		cursor: pointer; transition: background .15s, border-color .15s, color .15s;
 	}
-	.btn-outline:hover { border-color: var(--accent); color: var(--accent); }
+	.btn-outline:hover { background: var(--bg-hover); border-color: var(--accent); color: var(--accent-ink); }
 
 	.chat-body {
 		flex: 1;
@@ -254,18 +258,11 @@
 		gap: 12px;
 	}
 
+	/* A transcript, not a stack of cards: messages sit on the page and are
+	   separated by rhythm. The sender line carries who said what. */
 	.msg {
-		max-width: 70%;
-		padding: 10px 14px;
-		border-radius: 12px;
-		background: var(--bg-panel);
-		border: 1px solid var(--border);
+		max-width: 70ch;
 		align-self: flex-start;
-	}
-	.msg.admin {
-		align-self: flex-end;
-		background: var(--accent-dim);
-		border-color: rgba(59,130,246,0.2);
 	}
 
 	.msg-sender {
@@ -277,12 +274,16 @@
 		align-items: center;
 		gap: 6px;
 	}
+	/* The operator's own line is marked by its sender row, not by a fill. */
+	.msg.admin .msg-sender { color: var(--accent-ink); }
 	.admin-badge {
 		background: var(--accent);
-		color: white;
+		color: var(--accent-contrast);
 		padding: 1px 6px;
-		border-radius: 4px;
+		border-radius: var(--radius-sm);
 		font-size: 9px;
+		font-weight: 650;
+		letter-spacing: .08em;
 		text-transform: uppercase;
 	}
 	.msg-time { margin-left: auto; font-weight: 400; font-size: 10px; }
@@ -299,32 +300,34 @@
 		gap: 8px;
 		padding: 12px 24px;
 		border-top: 1px solid var(--border);
-		background: var(--bg-panel);
 		flex-shrink: 0;
 	}
 
 	.chat-input input {
 		flex: 1;
 		padding: 10px 14px;
-		border-radius: 8px;
+		border-radius: var(--radius-sm);
 		border: 1px solid var(--border);
 		font-size: 14px;
-		background: var(--bg-base);
+		background: var(--bg-panel2);
+		transition: border-color .15s, box-shadow .15s;
 	}
-	.chat-input input:focus { border-color: var(--accent); outline: none; }
+	.chat-input input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-dim); outline: none; }
 
 	.btn-send {
 		width: 40px; height: 40px;
-		border-radius: 8px;
+		border-radius: var(--radius-sm);
 		background: var(--accent);
-		color: white;
+		color: var(--accent-contrast);
 		border: none;
 		cursor: pointer;
 		display: flex;
 		align-items: center;
 		justify-content: center;
+		transition: transform .2s, background .2s;
 	}
-	.btn-send:hover { opacity: 0.9; }
+	.btn-send:hover:not(:disabled) { background: var(--accent-hover); transform: translateY(-2px); }
+	.btn-send:active { transform: translateY(0); }
 	.btn-send:disabled { opacity: 0.4; cursor: default; }
 
 	.chat-closed {
@@ -333,10 +336,14 @@
 		font-size: 13px;
 		color: var(--text-muted);
 		border-top: 1px solid var(--border);
-		background: var(--bg-panel2);
 	}
 
-	.empty { text-align: center; padding: 40px; color: var(--text-muted); font-size: 14px; }
+	.empty {
+		display: flex; flex-direction: column; align-items: center; gap: 12px;
+		align-self: center; max-width: 44ch; margin: 24px 0;
+		text-align: center; color: var(--text-muted); font-size: 14px;
+	}
+	.empty p { margin: 0; }
 
 	.system-msg {
 		display: flex; align-items: center; gap: 10px;
@@ -350,11 +357,11 @@
 	.system-time { font-size: 10px; color: var(--text-muted); opacity: 0.6; white-space: nowrap; }
 
 	.msg-attachment { margin-top: 6px; }
-	.att-img { max-width: 240px; max-height: 180px; border-radius: 6px; cursor: pointer; display: block; }
+	.att-img { max-width: 240px; max-height: 180px; border-radius: var(--radius-sm); cursor: pointer; display: block; }
 	.att-file {
 		display: inline-flex; align-items: center; gap: 6px;
-		padding: 6px 10px; border-radius: 6px; background: var(--bg-panel2);
-		border: 1px solid var(--border); font-size: 12px; color: var(--accent);
+		padding: 6px 10px; border-radius: var(--radius-sm); background: var(--bg-panel2);
+		border: 1px solid var(--border); font-size: 12px; color: var(--accent-ink);
 		text-decoration: none; font-weight: 500;
 	}
 	.att-file:hover { background: var(--accent-dim); text-decoration: none; }
@@ -362,21 +369,22 @@
 	.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); border: 0; }
 
 	.btn-attach {
-		width: 40px; height: 40px; border-radius: 8px; background: var(--bg-panel2);
+		width: 40px; height: 40px; border-radius: var(--radius-sm); background: var(--bg-panel2);
 		color: var(--text-muted); border: 1px solid var(--border);
 		cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+		transition: color .15s, border-color .15s;
 	}
-	.btn-attach:hover { color: var(--accent); border-color: var(--accent); }
+	.btn-attach:hover { color: var(--accent-ink); border-color: var(--accent); }
 
 	.pending-file {
 		display: flex; align-items: center; gap: 8px;
-		padding: 8px 24px; border-top: 1px solid var(--border); background: var(--bg-panel2);
+		padding: 8px 24px; border-top: 1px solid var(--border);
 	}
-	.pending-thumb { height: 48px; border-radius: 4px; }
+	.pending-thumb { height: 48px; border-radius: var(--radius-sm); }
 	.pending-name { font-size: 12px; color: var(--text-base); }
 	.pending-remove {
 		margin-left: auto; width: 24px; height: 24px; border-radius: 50%;
-		background: var(--danger); color: white; border: none; cursor: pointer;
+		background: var(--danger); color: var(--on-danger); border: none; cursor: pointer;
 		display: flex; align-items: center; justify-content: center; font-size: 14px;
 	}
 
@@ -391,22 +399,27 @@
 		background: none; border: none; font-size: 11px; font-weight: 500;
 		color: var(--text-muted); cursor: pointer; padding: 0;
 	}
-	.msg-action-btn:hover { color: var(--accent); }
+	.msg-action-btn:hover { color: var(--accent-ink); }
 	.msg-action-btn.danger:hover { color: var(--danger); }
 	.inline-form { display: inline; }
 
 	.edit-input {
-		width: 100%; padding: 6px 10px; border-radius: 6px;
+		width: 100%; padding: 6px 10px; border-radius: var(--radius-sm);
 		border: 1px solid var(--accent); font-size: 14px;
-		background: var(--bg-base); margin-top: 4px;
+		background: var(--bg-panel2); margin-top: 4px;
+		transition: box-shadow .15s;
 	}
+	.edit-input:focus { box-shadow: 0 0 0 3px var(--accent-dim); outline: none; }
 	.edit-actions { display: flex; gap: 6px; margin-top: 4px; }
 	.btn-edit-save {
-		padding: 3px 10px; border-radius: 4px; font-size: 11px; font-weight: 600;
-		background: var(--accent); color: white; border: none; cursor: pointer;
+		padding: 4px 12px; border-radius: var(--radius-sm); font-size: 11px; font-weight: 650;
+		background: var(--accent); color: var(--accent-contrast); border: none; cursor: pointer;
+		transition: transform .2s, background .2s;
 	}
+	.btn-edit-save:hover { background: var(--accent-hover); transform: translateY(-2px); }
+	.btn-edit-save:active { transform: translateY(0); }
 	.btn-edit-cancel {
-		padding: 3px 10px; border-radius: 4px; font-size: 11px; font-weight: 500;
+		padding: 4px 12px; border-radius: var(--radius-sm); font-size: 11px; font-weight: 500;
 		background: var(--bg-panel2); color: var(--text-muted); border: 1px solid var(--border); cursor: pointer;
 	}
 </style>

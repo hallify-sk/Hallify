@@ -25,5 +25,6 @@
 </div>
 
 <style>
-	.page { max-width: 600px; margin: 0 auto; padding: 28px 20px; }
+	/* Customer-facing, so the booking form gets the landing page's roomier gutters. */
+	.page { max-width: 640px; margin: 0 auto; padding: 40px 24px 72px; }
 </style>

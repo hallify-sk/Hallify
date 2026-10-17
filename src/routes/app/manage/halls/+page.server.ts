@@ -1,4 +1,4 @@
-import { fail } from '@sveltejs/kit';
+import { fail, redirect } from '@sveltejs/kit';
 import { dbAll, dbRun } from '$lib/db/index';
 import type { HallRow } from '$lib/db/index';
 import { getPlan } from '$lib/plans';
@@ -6,6 +6,13 @@ import { canAddHall, activeHallCount } from '$lib/limits';
 import { st } from '$lib/i18n-server';
 import type { Actions, PageServerLoad } from './$types';
 import { requireOrgStaff } from '$lib/guards';
+
+/** Brand accent. The markup default on the hall detail form and this fallback must
+ *  agree, or a hall created here changes colour the first time it is saved. */
+const DEFAULT_HALL_COLOR = '#f05ca1';
+const DEFAULT_MAX_PEOPLE = 100;
+/** A name can only arrive here from a POST, so it is bounded server-side. */
+const MAX_NAME_LENGTH = 120;
 
 export const load: PageServerLoad = async ({ locals }) => {
   const orgId = locals.currentOrg!.id;
@@ -23,30 +30,38 @@ export const load: PageServerLoad = async ({ locals }) => {
 };
 
 export const actions: Actions = {
+  /** Create and go. The operator no longer fills a name here and then hunts for the
+   *  new hall in the list: the row is created with sensible defaults and the request
+   *  is redirected to the detail page, which is where every field (the name included)
+   *  actually lives. A `name` may still be posted — by an older client, or by hand —
+   *  so it is accepted, trimmed and bounded rather than trusted or ignored. */
   create: async ({ request, locals }) => {
-    requireOrgStaff(locals);
-    const orgId = locals.currentOrg!.id;
+    const org = requireOrgStaff(locals);
     const data = await request.formData();
-    const name = String(data.get('name') ?? '').trim();
-    const description = String(data.get('description') ?? '').trim();
-    const maxPeople = Number(data.get('maxPeople') ?? 100);
-    const color = String(data.get('color') ?? '#3b82f6').trim();
-
-    if (!name) return fail(400, { error: st(locals.locale).serverErrors.hallNameRequired });
+    const typedName = String(data.get('name') ?? '').trim().slice(0, MAX_NAME_LENGTH);
+    const name = typedName || st(locals.locale).halls.untitledHall;
 
     // Enforce the plan's active-hall limit.
-    if (!(await canAddHall(locals.db, orgId, locals.currentOrg!.subscription.plan))) {
-      const limit = getPlan(locals.currentOrg!.subscription.plan).limits.maxHalls;
-      return fail(403, { error: `Your plan allows ${limit} hall${limit === 1 ? '' : 's'}. Upgrade or reactivate to add more.` });
+    if (!(await canAddHall(locals.db, org.id, org.subscription.plan))) {
+      const limit = getPlan(org.subscription.plan).limits.maxHalls;
+      return fail(403, {
+        error: st(locals.locale).serverErrors.hallLimitReached.replace('{limit}', String(limit)),
+      });
     }
 
     const id = crypto.randomUUID();
+    // allow_reservations and is_public are written EXPLICITLY, against the stored
+    // column defaults (1 and 0): a new venue is listed in discovery straight away —
+    // this is a discovery product — but takes no bookings until the operator has it
+    // ready and opts in. The column defaults are deliberately left alone so existing
+    // halls keep exactly what their operator chose (see migration 0006).
     await dbRun(
       locals.db,
-      'INSERT INTO halls (id, org_id, name, description, max_people, color) VALUES (?, ?, ?, ?, ?, ?)',
-      id, orgId, name, description || null, maxPeople, color
+      `INSERT INTO halls (id, org_id, name, max_people, color, allow_reservations, is_public)
+       VALUES (?, ?, ?, ?, ?, 0, 1)`,
+      id, org.id, name, DEFAULT_MAX_PEOPLE, DEFAULT_HALL_COLOR
     );
-    return { success: true };
+    redirect(303, `/app/manage/halls/${id}`);
   },
 
   delete: async ({ request, locals }) => {

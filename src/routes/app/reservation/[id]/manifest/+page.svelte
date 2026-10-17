@@ -153,72 +153,92 @@
 
 <style>
 	/* The manifest is a printable document: always light, theme-independent,
-	   so it reads the same in dark mode and prints in light to save ink. */
-	.manifest-page { background: #fff; min-height: 100vh; color-scheme: light; }
-	.manifest { max-width: 960px; margin: 0 auto; padding: 16px 20px 60px; color: #0f172a; }
+	   so it reads the same in dark mode and prints in light to save ink.
+	   The paper palette is therefore restated here as document-local constants:
+	   the theme tokens would flip to dark and make the sheet unreadable. The one
+	   safe exception is --accent / --accent-contrast, which hold the same value
+	   in every theme and still follow a white-label org's brand colour. */
+	.manifest-page {
+		--doc-paper:       #fefefd;
+		--doc-ink:         #202322;
+		--doc-muted:       #686d68;
+		--doc-line:        #dfe2dd;
+		--doc-line-strong: #c9cdc6;
+		--doc-tint:        #f3f4f0;
+		--doc-hover:       #eef0eb;
+		--doc-warning:     #955f10;
+
+		background: var(--doc-paper); min-height: 100vh; color-scheme: light;
+	}
+	.manifest { max-width: 960px; margin: 0 auto; padding: 16px 20px 60px; color: var(--doc-ink); }
 
 	.toolbar {
 		display: flex; align-items: center; gap: 12px; margin-bottom: 18px;
-		padding-bottom: 12px; border-bottom: 1px solid #e2e8f0;
+		padding-bottom: 12px; border-bottom: 1px solid var(--doc-line);
 	}
-	.toolbar-title { font-size: 14px; font-weight: 600; flex: 1; color: #0f172a; }
+	.toolbar-title { font-size: 14px; font-weight: 600; flex: 1; color: var(--doc-ink); }
 	.toolbar-actions { display: flex; gap: 8px; }
 	/* Force readable controls even when the global theme is dark. */
-	.toolbar :global(.btn-outline) { color: #334155; border: 1px solid #cbd5e1; background: #fff; }
-	.toolbar :global(.btn-outline:hover) { background: #f1f5f9; }
-	.toolbar :global(.btn-action) { color: #fff; background: #1e293b; border: 1px solid #1e293b; }
-	.toolbar :global(.btn-action:hover) { background: #0f172a; }
+	.toolbar :global(.btn-outline) { color: var(--doc-ink); border: 1px solid var(--doc-line); background: var(--doc-paper); }
+	.toolbar :global(.btn-outline:hover) { background: var(--doc-hover); border-color: var(--doc-line-strong); }
+	.toolbar :global(.btn-action) { color: var(--accent-contrast); background: var(--accent); border: 1px solid var(--accent); }
+	.toolbar :global(.btn-action:hover) { background: var(--accent-hover); }
 
 	.doc-head { margin-bottom: 8px; }
-	.doc-head h1 { font-size: 22px; font-weight: 700; margin: 0 0 4px; }
-	.doc-meta { font-size: 13px; color: #64748b; display: flex; gap: 6px; flex-wrap: wrap; }
+	.doc-head h1 { font-size: 22px; font-weight: 650; letter-spacing: -.055em; margin: 0 0 4px; }
+	.doc-meta { font-size: 13px; color: var(--doc-muted); display: flex; gap: 6px; flex-wrap: wrap; }
 
 	.floor { margin-top: 26px; }
-	.floor-head { display: flex; align-items: baseline; justify-content: space-between; border-bottom: 2px solid #0f172a; padding-bottom: 4px; margin-bottom: 12px; }
-	.floor-head h2 { font-size: 17px; font-weight: 700; margin: 0; }
-	.floor-stat { font-size: 12px; font-weight: 600; color: #64748b; }
+	.floor-head { display: flex; align-items: baseline; justify-content: space-between; border-bottom: 2px solid var(--doc-ink); padding-bottom: 4px; margin-bottom: 12px; }
+	.floor-head h2 { font-size: 17px; font-weight: 650; letter-spacing: -.045em; margin: 0; }
+	.floor-stat { font-size: 12px; font-weight: 600; color: var(--doc-muted); }
 
 	.floor-map {
-		border: 1px solid #e2e8f0; border-radius: 8px; padding: 8px;
-		background: #fff; margin-bottom: 14px;
+		border: 1px solid var(--doc-line); border-radius: var(--radius); padding: 8px;
+		background: var(--doc-paper); margin-bottom: 14px;
 	}
 
-	.legend-key { display: flex; gap: 16px; font-size: 11px; color: #64748b; margin-bottom: 12px; }
+	.legend-key { display: flex; gap: 16px; font-size: 11px; color: var(--doc-muted); margin-bottom: 12px; }
 	.key-item { display: inline-flex; align-items: center; gap: 5px; }
-	.dot { width: 11px; height: 11px; border-radius: 50%; border: 1.5px solid #1e293b; display: inline-block; }
-	.dot-filled { background: #1e293b; }
-	.dot-empty { background: #fff; }
+	.dot { width: 11px; height: 11px; border-radius: 50%; border: 1.5px solid var(--doc-ink); display: inline-block; }
+	.dot-filled { background: var(--doc-ink); }
+	.dot-empty { background: var(--doc-paper); }
 
 	/* ── Check-in roster table ── */
-	.roster-title { font-size: 15px; font-weight: 700; margin: 0 0 12px; }
-	.roster-empty { font-size: 13px; color: #64748b; font-style: italic; }
-	.roster { width: 100%; border-collapse: collapse; font-size: 12.5px; color: #0f172a; }
+	.roster-title { font-size: 15px; font-weight: 650; letter-spacing: -.03em; margin: 0 0 12px; }
+	.roster-empty { font-size: 13px; color: var(--doc-muted); font-style: italic; }
+	.roster { width: 100%; border-collapse: collapse; font-size: 12.5px; color: var(--doc-ink); }
+	/* Column headers take the eyebrow treatment, in document ink rather than the
+	   accent — this sheet has to survive a greyscale printer. */
 	.roster th {
-		text-align: left; font-size: 10.5px; font-weight: 700; text-transform: uppercase;
-		letter-spacing: 0.03em; color: #64748b; padding: 6px 8px;
-		border-bottom: 2px solid #0f172a;
+		text-align: left; font-size: 10px; font-weight: 650; text-transform: uppercase;
+		letter-spacing: .13em; color: var(--doc-muted); padding: 6px 8px;
+		border-bottom: 2px solid var(--doc-ink);
 	}
-	.roster td { padding: 7px 8px; border-bottom: 1px solid #e2e8f0; vertical-align: top; }
+	.roster td { padding: 7px 8px; border-bottom: 1px solid var(--doc-line); vertical-align: top; }
 	.roster tr.grp td {
-		background: #f1f5f9; font-weight: 700; font-size: 12px;
-		border-bottom: 1px solid #cbd5e1; padding: 5px 8px;
+		background: var(--doc-tint); font-weight: 650; font-size: 12px;
+		border-bottom: 1px solid var(--doc-line-strong); padding: 5px 8px;
 	}
 	.c-chk { width: 30px; text-align: center; }
-	.c-seat { width: 62px; font-weight: 700; white-space: nowrap; }
+	.c-seat { width: 62px; font-weight: 650; white-space: nowrap; }
 	.grp-tag {
 		display: inline-block; min-width: 22px; text-align: center;
-		padding: 0 5px; margin-right: 5px; border-radius: 4px;
-		border: 1.5px solid #1e293b; color: #0f172a; font-size: 11px; font-weight: 800;
+		padding: 0 5px; margin-right: 5px; border-radius: var(--radius-sm);
+		border: 1.5px solid var(--doc-ink); color: var(--doc-ink); font-size: 11px; font-weight: 650;
 	}
 	.c-name { font-weight: 600; }
-	.c-grp { color: #64748b; }
-	.c-note { color: #b45309; }
+	.c-grp { color: var(--doc-muted); }
+	.c-note { color: var(--doc-warning); }
 	.chk {
 		display: inline-block; width: 15px; height: 15px;
-		border: 1.5px solid #475569; border-radius: 3px;
+		/* The radius stays small on purpose: doubled on a 15px box it would round
+		   the tick box into a radio button. */
+		border: 1.5px solid var(--doc-muted); border-radius: 3px;
 	}
 
 	@media print {
+		/* Pure white for the printed sheet, not the warm paper tint. */
 		:global(html), :global(body) { background: #fff !important; }
 		.manifest-page { min-height: 0; }
 		.no-print { display: none !important; }
@@ -228,7 +248,7 @@
 		.floor-map { border: none; padding: 0; }
 		/* Map fills page one; the roster begins on the next page. */
 		.roster-wrap { break-before: page; }
-		.roster tr.grp td { background: #f1f5f9 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+		.roster tr.grp td { background: var(--doc-tint) !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 		.roster tr, .roster tr.grp { break-inside: avoid; }
 	}
 </style>

@@ -2583,3 +2583,131 @@
 .marketing .map-venue-close{position:absolute;right:7px;top:50%;transform:translateY(-50%);display:grid;place-items:center;width:30px;height:30px;padding:0;border:0;border-radius:3px;background:transparent;color:var(--muted);cursor:pointer}
 .marketing .map-venue-close:hover{background:var(--subtle);color:var(--ink)}
 @media(max-width:600px){.marketing .map-venue-detail{left:12px;bottom:30px;width:calc(100% - 72px)}.marketing .map-venue-copy strong{font-size:14px}}
+
+/* Price bands ───────────────────────────────────────────────────────────────
+   A band is a position on a three-step scale, so it is drawn as one: the stated
+   level in ink with the unreached remainder dimmed behind it. Without the dimmed
+   remainder every venue reads as the same three euro signs and the band carries
+   no information at all. The glyphs are aria-hidden; the wording next to them in
+   .sr-only is what a screen reader announces. */
+.marketing .price-band{display:inline-flex;align-items:baseline;color:var(--ink);letter-spacing:.03em;white-space:nowrap}
+.marketing .price-band-rest{color:var(--muted);opacity:.4;font-weight:400}
+.marketing .price-unstated,.marketing .price-note{font-size:9px;font-weight:400;line-height:1.5;color:var(--muted)}
+.marketing .venue-price{display:block;min-width:0}
+.marketing .venue-price .price-unstated{display:block}
+.marketing .explorer-price{display:inline-flex;align-items:baseline;gap:7px;min-width:0}
+.marketing .explorer-price .price-band{font-size:11px;font-weight:600}
+.marketing .explorer-price .price-note{min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+
+/* The € chips reuse whichever chip pattern they sit inside (.occasion-filter on the
+   landing page, .explorer-chips in the explorer), so only the leading label, the
+   glyph sizing and the clear control need rules of their own. */
+.marketing .price-filter{align-items:center}
+.marketing .price-filter .filter-label{align-self:center;margin-right:3px;font-size:9px;font-weight:550;text-transform:uppercase;letter-spacing:.09em;color:var(--muted)}
+.marketing .price-filter>button{min-width:40px;text-align:center;letter-spacing:.05em}
+.marketing .price-filter>button.filter-clear{min-width:0;letter-spacing:0;color:var(--muted)}
+.marketing .price-filter-note{margin:9px 0 0;font-size:9px;line-height:1.6;color:var(--muted)}
+
+/* The card the map currently has selected. Featured marks the photo border, so the
+   selection marks the card itself and the two stay readable together. */
+.marketing .venue-card.venue-active .venue-photo{outline:2px solid var(--accent);outline-offset:-2px}
+
+/* ═══════════════════════════════════════════════════════════════════
+   Hover and focus states.
+
+   The page had almost none: seven rules in total, and the header nav even
+   carried an ::after underline that was permanently transparent — the
+   indicator was built and the state that reveals it was never written.
+
+   The vocabulary matches the rest of the language: a 2px lift on things you
+   press, an ink shift on things you read, a revealed hairline on things you
+   navigate with, and a nudge on arrows. Everything is cheap to paint
+   (transform / opacity / colour) and all of it collapses under
+   prefers-reduced-motion.
+   ═══════════════════════════════════════════════════════════════════ */
+
+@media (hover: hover) {
+  /* Header navigation — reveal the underline that was already in the markup. */
+  .marketing .site-header nav a::after { transition: background .18s; }
+  .marketing .site-header nav a:hover::after { background: var(--ink); }
+  .marketing .site-header nav a[aria-current="page"]::after { background: var(--accent); }
+  .marketing .site-header nav a:hover { color: var(--ink); }
+
+  .marketing .header-cta { transition: color .15s, gap .18s; display: inline-flex; align-items: center; gap: 6px; }
+  .marketing .header-cta:hover { color: var(--accent-ink); gap: 9px; }
+
+  .marketing .locale-toggle,
+  .marketing .theme-toggle { transition: color .15s, transform .18s; }
+  .marketing .locale-toggle:hover,
+  .marketing .theme-toggle:hover { color: var(--accent-ink); transform: scale(1.08); }
+
+  /* Filter chips: preview the selected (inverted) state without committing. */
+  .marketing .occasion-filter button,
+  .marketing .explorer-chips button { transition: border-color .15s, color .15s, background .15s; }
+  .marketing .occasion-filter button:hover:not([aria-pressed="true"]),
+  .marketing .explorer-chips button:hover:not([aria-pressed="true"]) {
+    border-color: var(--ink);
+    color: var(--ink);
+  }
+
+  /* Venue cards: the photo already scales; lift the whole card with it so the
+     title and the arrow feel part of the same target. */
+  .marketing .venue-card { transition: transform .22s; }
+  .marketing .venue-card:hover { transform: translateY(-3px); }
+  .marketing .venue-card h3 a { transition: color .15s; }
+
+  /* The circular "view venue" affordance. */
+  .marketing .venue-bottom button,
+  .marketing .venue-bottom > a { transition: background .18s, border-color .18s, color .18s, transform .18s; }
+  .marketing .venue-card:hover .venue-bottom > a,
+  .marketing .venue-bottom button:hover,
+  .marketing .venue-bottom > a:hover {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #27131c;
+    transform: translateX(2px);
+  }
+
+  /* Text links that carry an arrow — nudge rather than underline. */
+  .marketing .bridge > a,
+  .marketing .plan-link,
+  .marketing .explorer-back { transition: color .15s, gap .18s; display: inline-flex; align-items: center; gap: 7px; }
+  .marketing .bridge > a:hover,
+  .marketing .plan-link:hover,
+  .marketing .explorer-back:hover { color: var(--accent-ink); gap: 11px; }
+
+  .marketing .show-on-map { transition: color .15s, opacity .15s; }
+  .marketing .show-on-map:hover { opacity: .72; }
+
+  .marketing .footer-links a,
+  .marketing .footer-links button { transition: color .15s; }
+  .marketing .footer-links a:hover,
+  .marketing .footer-links button:hover { color: var(--ink); }
+
+  /* Feature rows: warm the icon tile when its row is hovered. */
+  .marketing .clarity-list article > span { transition: background .2s, color .2s, transform .2s; }
+  .marketing .clarity-list article:hover > span { background: var(--accent); color: #27131c; transform: scale(1.05); }
+
+  /* Accordions and result rows. */
+  .marketing summary { transition: color .15s; }
+  .marketing summary:hover { color: var(--accent-ink); }
+  .marketing .explorer-result { transition: background .2s, border-color .2s; }
+  .marketing .explorer-result:hover:not(.is-selected) { background: var(--subtle); }
+
+  /* A plan the pointer is on reads as the one under consideration. */
+  .marketing .plan { transition: background .2s; }
+  .marketing .plan:hover:not(.featured) { background: var(--subtle); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .marketing .venue-card:hover,
+  .marketing .venue-bottom button:hover,
+  .marketing .venue-bottom > a:hover,
+  .marketing .clarity-list article:hover > span,
+  .marketing .locale-toggle:hover,
+  .marketing .theme-toggle:hover { transform: none; }
+  .marketing .header-cta:hover,
+  .marketing .bridge > a:hover,
+  .marketing .plan-link:hover,
+  .marketing .explorer-back:hover { gap: inherit; }
+}

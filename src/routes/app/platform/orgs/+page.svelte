@@ -14,109 +14,132 @@
   });
 </script>
 
-<div class="page-wrap">
-  <div class="page-header">
-    <h1>{t.platformOrgs.organizations}</h1>
-    <span class="count">{data.orgs.length} {t.platformOrgs.total}</span>
-    {#if data.orgs.length > SEARCH_THRESHOLD}
-      <div class="search-wrap">
-        <svg class="search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-        <input class="search-input" type="text" placeholder={t.platformOrgs.searchPlaceholder} bind:value={search} autocomplete="off" spellcheck="false" />
-        {#if search}
-          <button class="search-clear" type="button" onclick={() => search = ''} aria-label={t.platformOrgs.clearSearch}>
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-          </button>
+<div class="wrap page">
+  <section class="section section--lead">
+    <div class="section-head section-head--row">
+      <div class="head-text">
+        <p class="eyebrow">{t.platformOrgs.platformAdmin}</p>
+        <h1>{t.platformOrgs.organizations}</h1>
+      </div>
+      <div class="head-aside">
+        <span class="count">{data.orgs.length} {t.platformOrgs.total}</span>
+        {#if data.orgs.length > SEARCH_THRESHOLD}
+          <div class="search-wrap">
+            <svg class="search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            <input class="search-input" type="text" placeholder={t.platformOrgs.searchPlaceholder} bind:value={search} autocomplete="off" spellcheck="false" />
+            {#if search}
+              <button class="search-clear" type="button" onclick={() => search = ''} aria-label={t.platformOrgs.clearSearch}>
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              </button>
+            {/if}
+          </div>
         {/if}
       </div>
-    {/if}
-  </div>
+    </div>
 
-  <div class="card">
-    <table class="table">
-      <thead>
-        <tr>
-          <th>{t.platformOrgs.colName}</th><th>{t.platformOrgs.colSlug}</th><th>{t.platformOrgs.colPlan}</th><th>{t.platformOrgs.colMembers}</th>
-          <th>{t.platformOrgs.colCreated}</th><th>{t.platformOrgs.colStatus}</th><th></th>
-        </tr>
-      </thead>
-      <tbody>
-        {#each filtered as org}
-          <tr class:suspended={!!org.suspended_at}>
-            <td><a class="org-link" href="/app/platform/orgs/{org.id}"><strong>{org.name}</strong></a></td>
-            <td class="muted">{org.slug}</td>
-            <td><span class="badge badge-{org.plan ?? 'free'}">{org.plan ?? 'free'}</span></td>
-            <td class="muted">{org.member_count}</td>
-            <td class="muted">{new Date(org.created_at).toLocaleDateString()}</td>
-            <td>
-              {#if org.suspended_at}
-                <span class="badge badge-suspended">{t.platformOrgs.suspended}</span>
-              {:else}
-                <span class="badge badge-active">{t.platformOrgs.active}</span>
-              {/if}
-            </td>
-            <td class="actions">
-              <a href="/app/platform/orgs/{org.id}" class="btn-outline btn-sm">{t.platformOrgs.manage}</a>
-              {#if org.suspended_at}
-                <form method="POST" action="?/unsuspend" style="display:inline">
-                  <input type="hidden" name="id" value={org.id} />
-                  <button type="submit" class="btn-outline btn-sm">{t.platformOrgs.unsuspend}</button>
-                </form>
-              {:else}
-                <form method="POST" action="/app/org/switch" style="display:inline">
-                  <input type="hidden" name="org_id" value={org.id} />
-                  <input type="hidden" name="return_to" value="/app/manage" />
-                  <button type="submit" class="btn-viewas btn-sm" title={t.platformOrgs.viewAsTooltip}>
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-                    {t.platformOrgs.viewAs}
-                  </button>
-                </form>
-                <form method="POST" action="?/suspend" style="display:inline">
-                  <input type="hidden" name="id" value={org.id} />
-                  <button type="submit" class="btn-danger btn-sm"
-                    onclick={(e) => { if (!confirm(t.platformOrgs.confirmSuspend)) e.preventDefault(); }}>{t.platformOrgs.suspend}</button>
-                </form>
-              {/if}
-            </td>
-          </tr>
-        {/each}
-        {#if filtered.length === 0}
-          <tr><td colspan="7" class="empty">{t.platformOrgs.noMatchPrefix} “{search}”.</td></tr>
-        {/if}
-      </tbody>
-    </table>
-  </div>
+    <div class="row-list org-rows" role="table">
+      <div role="row" class="row-item row-head">
+        <span role="columnheader">{t.platformOrgs.colName}</span><span role="columnheader">{t.platformOrgs.colSlug}</span><span role="columnheader">{t.platformOrgs.colPlan}</span><span role="columnheader">{t.platformOrgs.colMembers}</span>
+        <span role="columnheader">{t.platformOrgs.colCreated}</span><span role="columnheader">{t.platformOrgs.colStatus}</span><span role="columnheader"></span>
+      </div>
+
+      {#each filtered as org}
+        <div role="row" class="row-item" class:suspended={!!org.suspended_at}>
+          <span role="cell" class="cell-name"><a class="org-link" href="/app/platform/orgs/{org.id}"><strong>{org.name}</strong></a></span>
+          <span role="cell" class="muted">{org.slug}</span>
+          <span role="cell"><span class="badge badge-{org.plan ?? 'free'}">{org.plan ?? 'free'}</span></span>
+          <span role="cell" class="muted">{org.member_count}</span>
+          <span role="cell" class="muted">{new Date(org.created_at).toLocaleDateString()}</span>
+          <span role="cell">
+            {#if org.suspended_at}
+              <span class="badge badge-suspended">{t.platformOrgs.suspended}</span>
+            {:else}
+              <span class="badge badge-active">{t.platformOrgs.active}</span>
+            {/if}
+          </span>
+          <span role="cell" class="actions">
+            <a href="/app/platform/orgs/{org.id}" class="btn-outline btn-sm">{t.platformOrgs.manage}</a>
+            {#if org.suspended_at}
+              <form method="POST" action="?/unsuspend" style="display:inline">
+                <input type="hidden" name="id" value={org.id} />
+                <button type="submit" class="btn-outline btn-sm">{t.platformOrgs.unsuspend}</button>
+              </form>
+            {:else}
+              <form method="POST" action="/app/org/switch" style="display:inline">
+                <input type="hidden" name="org_id" value={org.id} />
+                <input type="hidden" name="return_to" value="/app/manage" />
+                <button type="submit" class="btn-viewas btn-sm" title={t.platformOrgs.viewAsTooltip}>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                  {t.platformOrgs.viewAs}
+                </button>
+              </form>
+              <form method="POST" action="?/suspend" style="display:inline">
+                <input type="hidden" name="id" value={org.id} />
+                <button type="submit" class="btn-danger btn-sm"
+                  onclick={(e) => { if (!confirm(t.platformOrgs.confirmSuspend)) e.preventDefault(); }}>{t.platformOrgs.suspend}</button>
+              </form>
+            {/if}
+          </span>
+        </div>
+      {/each}
+    </div>
+
+    {#if filtered.length === 0}
+      <div class="card--inset empty-state">
+        <div class="icon-tile">
+          <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        </div>
+        <p class="empty">{t.platformOrgs.noMatchPrefix} “{search}”.</p>
+      </div>
+    {/if}
+  </section>
 </div>
 
 <style>
-  .page-wrap { padding: 2rem; }
-  .page-header { display: flex; align-items: center; gap: 1rem; margin-bottom: 1.5rem; }
-  h1 { font-size: 1.4rem; margin: 0; }
+  .page { padding-block: 24px; }
+  h1 { font-size: var(--display-size); font-weight: 550; letter-spacing: -.055em; line-height: 1.08; margin: 0; }
+  .head-text .eyebrow { display: block; margin-bottom: 12px; }
+  .head-aside { display: flex; align-items: center; gap: 1rem; flex: 1; justify-content: flex-end; }
   .count { font-size: .875rem; color: var(--text-muted); }
 
-  .search-wrap { position: relative; display: flex; align-items: center; margin-left: auto; min-width: 240px; max-width: 360px; flex: 1; }
+  .search-wrap { position: relative; display: flex; align-items: center; min-width: 240px; max-width: 360px; flex: 1; }
   .search-icon { position: absolute; left: 11px; color: var(--text-subtle); pointer-events: none; }
-  .search-input { width: 100%; padding: 8px 32px 8px 32px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-panel); color: var(--text-base); font-size: 13px; font-family: inherit; outline: none; transition: border-color .12s, box-shadow .12s; }
-  .search-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 12%, transparent); }
+  .search-input { width: 100%; padding: 8px 32px 8px 32px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg-panel2); color: var(--text-base); font-size: 13px; font-family: inherit; outline: none; transition: border-color .15s, box-shadow .15s; }
+  .search-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-dim); }
   .search-clear { position: absolute; right: 9px; width: 17px; height: 17px; border-radius: 50%; background: var(--text-subtle); border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; color: var(--bg-panel); }
   .search-clear:hover { background: var(--text-muted); }
 
-  .table { width: 100%; border-collapse: collapse; font-size: .875rem; }
-  .table th { text-align: left; padding: .6rem 1rem; font-size: .75rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: .04em; border-bottom: 1px solid var(--border); }
-  .table td { padding: .75rem 1rem; border-bottom: 1px solid var(--border); }
-  .table tr:last-child td { border-bottom: none; }
-  .table tr.suspended td { opacity: .5; }
+  /* ── Hairline rows ── */
+  .org-rows .row-item { display: grid; grid-template-columns: 1.6fr 1.1fr .8fr .7fr .9fr .9fr auto; gap: 12px; align-items: center; font-size: 13px; }
+  .row-head { font-size: 10px; font-weight: 650; color: var(--text-muted); text-transform: uppercase; letter-spacing: .13em; border-bottom-color: var(--border); padding-bottom: 9px; }
+  .org-rows .row-item.suspended { opacity: .5; }
   .muted { color: var(--text-muted); }
   .org-link { color: var(--text-base); text-decoration: none; }
-  .org-link:hover { color: var(--accent); }
-  .actions { display: flex; gap: 6px; align-items: center; }
-  .empty { text-align: center; color: var(--text-subtle); padding: 2rem; }
-  .badge { display: inline-block; padding: 2px 8px; border-radius: 20px; font-size: .7rem; font-weight: 700; text-transform: uppercase; }
+  .org-link:hover { color: var(--accent-ink); }
+  .actions { display: flex; gap: 6px; align-items: center; justify-content: flex-end; }
+  .actions .btn-outline { text-decoration: none; }
+
+  .empty-state { display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center; margin-top: 14px; }
+  .empty { font-size: 13px; color: var(--text-subtle); margin: 0; }
+
+  .badge { display: inline-block; padding: 2px 9px; border-radius: 3px; font-size: .7rem; font-weight: 650; text-transform: uppercase; letter-spacing: .03em; }
   .badge-free { background: var(--bg-panel2); color: var(--text-muted); }
-  .badge-starter { background: var(--accent-dim); color: var(--accent); }
-  .badge-professional { background: #fef3c7; color: #92400e; }
-  .badge-enterprise { background: var(--accent-action-dim); color: var(--accent-action); }
-  .badge-active { background: #dcfce7; color: #166534; }
-  .badge-suspended { background: #fee2e2; color: #991b1b; }
-  .btn-viewas { display: inline-flex; align-items: center; gap: 5px; padding: 5px 11px; border-radius: var(--radius-sm); font-size: 12px; font-weight: 600; background: var(--accent); color: #fff; border: none; cursor: pointer; font-family: inherit; }
-  .btn-viewas:hover { background: var(--accent-hover); }
+  .badge-starter { background: var(--accent-dim); color: var(--accent-ink); }
+  .badge-professional { background: var(--warning-dim); color: var(--warning); }
+  .badge-enterprise { background: var(--accent-action-dim); color: var(--accent-ink); }
+  .badge-active { background: var(--success-dim); color: var(--success); }
+  .badge-suspended { background: var(--danger-dim); color: var(--danger); }
+  .btn-viewas { display: inline-flex; align-items: center; gap: 5px; padding: 5px 11px; border-radius: var(--radius-sm); font-size: 12px; font-weight: 600; background: var(--accent); color: var(--accent-contrast); border: none; cursor: pointer; font-family: inherit; transition: transform .2s, background .2s; }
+  .btn-viewas:hover { background: var(--accent-hover); transform: translateY(-2px); }
+  .btn-viewas:active { transform: translateY(0); }
+
+  @media (max-width: 980px) {
+    .org-rows .row-item { grid-template-columns: 1fr 1fr; row-gap: 8px; align-items: start; }
+    .row-head { display: none; }
+    .actions { grid-column: 1 / -1; justify-content: flex-start; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .btn-viewas:hover { transform: none; }
+  }
 </style>

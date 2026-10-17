@@ -1,333 +1,273 @@
 <script lang="ts">
   import { enhance } from '$app/forms';
-  import { t } from '$lib/i18n.svelte';
-  import type { PageData, ActionData } from './$types';
+  import StatusBadge from '$lib/components/StatusBadge.svelte';
+  import { t, getLocale } from '$lib/i18n.svelte';
+  import type { PageData, ActionData, SubmitFunction } from './$types';
 
   interface Props { data: PageData; form: ActionData; }
   const { data, form }: Props = $props();
 
-  let showCreate = $state(false);
+  // One action, no inline form: the server creates the hall and redirects to its
+  // detail page, where the name and every other field are filled in. The button
+  // only has to stay honest about being in flight.
+  let creating = $state(false);
+  const createHall: SubmitFunction = () => {
+    creating = true;
+    return async ({ update }) => {
+      await update();
+      creating = false;
+    };
+  };
 
-  function fmtDate(d: Date | string) {
-    return new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
-  }
+  /** A hall colour reaches the DOM as a CSS value. Anything that is not a plain
+   *  6-digit hex falls back to the brand accent instead of being passed through. */
+  const BRAND_ACCENT = '#f05ca1';
+  const hallColor = (c: string | null | undefined) =>
+    typeof c === 'string' && /^#[0-9a-fA-F]{6}$/.test(c) ? c : BRAND_ACCENT;
+
+  const dateLocale = $derived(getLocale() === 'en' ? 'en-GB' : 'sk-SK');
+  const fmtDate = (d: Date | string, locale: string) =>
+    new Date(d).toLocaleDateString(locale, { day: 'numeric', month: 'short', year: 'numeric' });
 
   const maxRes = $derived(Math.max(...data.halls.map(h => Number(h.reservation_count)), 1));
+  const limitNote = $derived(
+    data.hallLimit === -1
+      ? ''
+      : t.hallAdmin.planLimitNote
+          .replace('{used}', String(data.activeHalls))
+          .replace('{limit}', String(data.hallLimit))
+  );
 </script>
 
 <svelte:head><title>{t.halls.manageHalls} – Hallify</title></svelte:head>
 
-<div class="page">
+<div class="wrap page">
 
   <!-- ─── Header ────────────────────────────────────────────────────────────── -->
-  <div class="page-header">
-    <div>
-      <p class="page-overline">{t.nav.halls}</p>
+  <div class="page-head">
+    <div class="page-head-text">
+      <p class="eyebrow">{t.nav.halls}</p>
       <h1 class="page-title">{t.halls.manageHalls}</h1>
+      <p class="page-sub">{t.hallAdmin.createOpensProfile}</p>
     </div>
-    <button class="btn-primary" type="button" onclick={() => showCreate = !showCreate}>
-      {#if showCreate}{t.common.cancel}{:else}+ {t.halls.addHall}{/if}
-    </button>
+    <form method="POST" action="?/create" use:enhance={createHall}>
+      <button class="btn-primary" type="submit" disabled={creating}>
+        {creating ? t.hallAdmin.creatingHall : t.halls.createHall}
+      </button>
+    </form>
   </div>
 
-  <!-- ─── Create form ───────────────────────────────────────────────────────── -->
-  {#if showCreate}
-    <div class="card create-card">
-      <div class="card-header">
-        <h2 class="card-title">{t.hallAdmin.newHall}</h2>
-      </div>
-      {#if form?.error}
-        <p class="form-error">{form.error}</p>
-      {/if}
-      <form method="POST" action="?/create" class="create-form"
-        use:enhance={() => async ({ result, update }) => { await update(); if (result.type === 'success') showCreate = false; }}>
-        <div class="field-row">
-          <div class="field field-grow">
-            <label class="field-label" for="name">{t.halls.hallName} *</label>
-            <input class="field-input" id="name" name="name" type="text" placeholder={t.halls.hallNamePlaceholder} required />
-          </div>
-          <div class="field" style="width:130px">
-            <label class="field-label" for="maxPeople">{t.halls.maxGuests}</label>
-            <input class="field-input" id="maxPeople" name="maxPeople" type="number" min="1" max="2000" value="100" />
-          </div>
-          <div class="field color-field">
-            <label class="field-label" for="color">{t.halls.hallColor}</label>
-            <input class="color-input" id="color" name="color" type="color" value="#4f6ef7" />
-          </div>
-        </div>
-        <div class="field">
-          <label class="field-label" for="description">{t.common.description}</label>
-          <textarea class="field-input field-textarea" id="description" name="description" rows="2" placeholder={t.hallAdmin.optional}></textarea>
-        </div>
-        <div class="create-actions">
-          <button type="button" class="btn-ghost" onclick={() => showCreate = false}>{t.common.cancel}</button>
-          <button type="submit" class="btn-primary">{t.halls.createHall}</button>
-        </div>
-      </form>
-    </div>
+  {#if form?.error}
+    <p class="form-error" role="alert">{form.error}</p>
   {/if}
 
   <!-- ─── Empty state ───────────────────────────────────────────────────────── -->
   {#if data.halls.length === 0}
-    <div class="empty-state">
-      <div class="empty-icon">
-        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-          <rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/>
-        </svg>
+    <section class="section section--lead">
+      <div class="card--inset empty-state">
+        <span class="icon-tile">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/>
+          </svg>
+        </span>
+        <h2 class="empty-title">{t.hallAdmin.noHallsYet}</h2>
+        <p class="empty-sub">{t.hallAdmin.noHallsSub}</p>
+        <form method="POST" action="?/create" use:enhance={createHall}>
+          <button class="btn-primary" type="submit" disabled={creating}>
+            {creating ? t.hallAdmin.creatingHall : t.halls.createHall}
+          </button>
+        </form>
       </div>
-      <p class="empty-title">{t.hallAdmin.noHallsYet}</p>
-      <p class="empty-sub">{t.hallAdmin.noHallsSub}</p>
-      <button class="btn-primary" type="button" onclick={() => showCreate = true}>+ {t.halls.addHall}</button>
-    </div>
+    </section>
 
-  <!-- ─── Halls table ───────────────────────────────────────────────────────── -->
+  <!-- ─── Halls ─────────────────────────────────────────────────────────────── -->
   {:else}
-    <div class="card halls-card">
-      <div class="halls-thead">
-        <span>{t.dashboard.hall}</span>
-        <span>{t.common.capacity}</span>
-        <span>{t.hallAdmin.allTimeBookings}</span>
-        <span>{t.common.created}</span>
-        <span></span>
+    <section class="section section--lead">
+      <div class="section-head section-head--row">
+        <h2>{t.halls.hallOverview}</h2>
+        <p class="footer-note">
+          {data.halls.length}
+          {data.halls.length === 1 ? t.hallAdmin.hallConfiguredSingular : t.hallAdmin.hallsConfiguredPlural}{#if limitNote} · {limitNote}{/if}
+        </p>
       </div>
-      {#each data.halls as h}
-        <div class="halls-row">
-          <a href="/app/manage/halls/{h.id}" class="halls-name-cell">
-            <span class="halls-strip" style="background:{h.color}"></span>
-            <div class="halls-info">
-              <span class="halls-name">{h.name}</span>
-              {#if h.description}<span class="halls-desc">{h.description}</span>{/if}
+
+      <div class="media-grid">
+        {#each data.halls as h (h.id)}
+          <article class="media-card hall-card">
+            <a href="/app/manage/halls/{h.id}" class="media-photo" aria-label={h.name}>
+              {#if h.cover_image_url}
+                <img src={h.cover_image_url} alt="" loading="lazy" />
+              {:else}
+                <span class="photo-blank" style:--hall={hallColor(h.color)}>
+                  <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                    <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/>
+                  </svg>
+                  <span class="photo-blank-label">{t.hallAdmin.noCoverImage}</span>
+                </span>
+              {/if}
+            </a>
+
+            <div class="media-topline">
+              <span class="halls-cap" aria-label="{t.common.capacity} {h.max_people}">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                {h.max_people}
+              </span>
+              <span class="halls-created">{t.common.created} {fmtDate(h.created_at, dateLocale)}</span>
             </div>
-          </a>
 
-          <span class="halls-cap">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-            {h.max_people}
-          </span>
+            <h3><a href="/app/manage/halls/{h.id}">{h.name}</a></h3>
+            {#if h.description}<p class="media-meta">{h.description}</p>{/if}
 
-          <div class="halls-bar-cell">
-            <span class="halls-bar-count">{h.reservation_count}</span>
-            <div class="halls-bar-track">
-              <div class="halls-bar-fill" style="width:{Math.round(Number(h.reservation_count) / maxRes * 100)}%;background:{h.color}"></div>
+            {#if h.plan_locked || !h.is_public || !h.allow_reservations}
+              <div class="hall-flags">
+                {#if h.plan_locked}
+                  <StatusBadge status="cancelled" label={t.hallAdmin.suspendedBadge} />
+                {:else if !h.is_public}
+                  <StatusBadge status="unset" label={t.hallAdmin.notListed} />
+                {/if}
+                {#if !h.allow_reservations}
+                  <StatusBadge status="closed" label={t.hallAdmin.bookingsClosed} />
+                {/if}
+              </div>
+            {/if}
+
+            <div class="halls-bar-cell">
+              <span class="halls-bar-label">{t.hallAdmin.allTimeBookings}</span>
+              <span class="halls-bar-count">{h.reservation_count}</span>
+              <div class="halls-bar-track">
+                <div class="halls-bar-fill"
+                  style:width="{Math.round(Number(h.reservation_count) / maxRes * 100)}%"
+                  style:background={hallColor(h.color)}></div>
+              </div>
             </div>
-          </div>
 
-          <span class="halls-created">{fmtDate(h.created_at)}</span>
-
-          <div class="halls-actions">
-            <a href="/app/manage/halls/{h.id}" class="btn-manage">{t.hallAdmin.manageAction}</a>
-            <form method="POST" action="?/delete" use:enhance style="display:contents">
-              <input type="hidden" name="id" value={h.id} />
-              <button type="submit" class="btn-delete"
-                onclick={(e) => { if (!confirm(`${t.hallAdmin.confirmDeleteHall} "${h.name}"? ${t.hallAdmin.cannotBeUndone}`)) e.preventDefault(); }}>
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
-              </button>
-            </form>
-          </div>
-        </div>
-      {/each}
-    </div>
-
-    <p class="footer-note">{data.halls.length} {data.halls.length === 1 ? t.hallAdmin.hallConfiguredSingular : t.hallAdmin.hallsConfiguredPlural}</p>
+            <div class="media-bottom">
+              <a href="/app/manage/halls/{h.id}" class="btn-manage">{t.hallAdmin.manageAction}</a>
+              <form method="POST" action="?/delete" use:enhance style="display:contents">
+                <input type="hidden" name="id" value={h.id} />
+                <button type="submit" class="btn-delete" aria-label="{t.common.delete} {h.name}"
+                  onclick={(e) => { if (!confirm(`${t.hallAdmin.confirmDeleteHall} "${h.name}"? ${t.hallAdmin.cannotBeUndone}`)) e.preventDefault(); }}>
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+                </button>
+              </form>
+            </div>
+          </article>
+        {/each}
+      </div>
+    </section>
   {/if}
 
 </div>
 
 <style>
-  @keyframes pageFadeIn {
-    from { opacity: 0; }
-    to   { opacity: 1; }
-  }
-  @keyframes fadeSlideUp {
-    from { opacity: 0; transform: translateY(14px); }
-    to   { opacity: 1; transform: translateY(0); }
-  }
-
-  .page {
-    padding: 24px 28px;
-    animation: pageFadeIn 0.15s ease both;
-  }
+  .page { padding-block: 24px; }
 
   /* ── Header ── */
-  .page-header {
+  .page-head {
     display: flex; align-items: flex-end; justify-content: space-between;
-    margin-bottom: 22px;
-    animation: fadeSlideUp 0.35s ease both; animation-delay: 0ms;
+    gap: 16px; flex-wrap: wrap;
   }
-  .page-overline {
-    font-size: 10px; font-weight: 700; text-transform: uppercase;
-    letter-spacing: .08em; color: var(--text-subtle); margin-bottom: 3px;
-  }
+  .page-head-text { min-width: 0; }
   .page-title {
-    font-size: 22px; font-weight: 800; color: var(--text-base); letter-spacing: -.02em;
+    font-size: var(--display-size); font-weight: 550; color: var(--text-base);
+    letter-spacing: -.055em; line-height: 1.08; margin: 0;
+  }
+  .page-sub {
+    font-size: var(--body-size); color: var(--text-muted);
+    line-height: var(--body-leading); margin: 8px 0 0; max-width: 46ch;
   }
 
   /* ── Buttons ── */
   .btn-primary {
-    padding: 8px 18px; border-radius: 8px; font-size: 13px; font-weight: 600;
-    background: var(--accent); color: #fff; border: none; cursor: pointer;
-    font-family: inherit; transition: opacity .12s; white-space: nowrap;
+    padding: 10px 20px; border-radius: var(--radius-sm); font-size: 13px; font-weight: 650;
+    background: var(--accent); color: var(--accent-contrast); border: none; cursor: pointer;
+    font-family: inherit; transition: transform .2s, background .2s; white-space: nowrap;
     text-decoration: none; display: inline-flex; align-items: center;
   }
-  .btn-primary:hover { opacity: .88; }
-  .btn-ghost {
-    padding: 8px 16px; border-radius: 8px; font-size: 13px; font-weight: 500;
-    background: none; border: 1px solid var(--border); color: var(--text-muted);
-    cursor: pointer; font-family: inherit; transition: border-color .1s, color .1s;
+  .btn-primary:hover { background: var(--accent-hover); transform: translateY(-2px); }
+  .btn-primary:active { transform: translateY(0); }
+  .btn-primary:disabled {
+    opacity: .55; cursor: default; transform: none; background: var(--accent);
   }
-  .btn-ghost:hover { border-color: var(--accent); color: var(--text-base); }
 
-  /* ── Card shell ── */
-  .card {
-    background: var(--bg-panel); border: 1px solid var(--border); border-radius: 12px;
-    overflow: hidden;
-  }
-  .card-header {
-    display: flex; align-items: center; justify-content: space-between;
-    padding: 16px 18px 12px;
-  }
-  .card-title { font-size: 13px; font-weight: 700; color: var(--text-base); }
-
-  /* ── Create form ── */
-  .create-card {
-    margin-bottom: 16px;
-    animation: fadeSlideUp 0.3s ease both; animation-delay: 40ms;
-  }
-  .create-form { padding: 0 18px 18px; }
-  .field-row { display: flex; gap: 12px; align-items: flex-end; }
-  .field { display: flex; flex-direction: column; gap: 5px; }
-  .field-grow { flex: 1; min-width: 0; }
-  .field-label {
-    font-size: 11px; font-weight: 600; text-transform: uppercase;
-    letter-spacing: .05em; color: var(--text-subtle);
-  }
-  .field-input {
-    padding: 8px 10px; border: 1px solid var(--border); border-radius: 7px;
-    background: var(--bg-panel2, var(--bg-base)); font-size: 13px;
-    color: var(--text-base); font-family: inherit; outline: none;
-    transition: border-color .12s;
-  }
-  .field-input:focus { border-color: var(--accent); }
-  .field-textarea { resize: vertical; margin-top: 10px; width: 100%; box-sizing: border-box; }
-  .color-field { width: 72px; }
-  .color-input {
-    width: 48px; height: 36px; border: 1px solid var(--border); border-radius: 7px;
-    padding: 2px; background: var(--bg-panel2, var(--bg-base)); cursor: pointer;
-  }
   .form-error {
-    margin: 0 18px 12px; padding: 8px 12px; background: color-mix(in srgb, var(--danger, #ef4444) 10%, transparent);
-    border: 1px solid color-mix(in srgb, var(--danger, #ef4444) 25%, transparent);
-    border-radius: 7px; font-size: 12px; color: var(--danger, #ef4444);
-  }
-  .create-actions {
-    display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px;
+    margin: 18px 0 0; padding: 10px 14px; background: var(--danger-dim);
+    border: 1px solid color-mix(in srgb, var(--danger) 25%, transparent);
+    border-radius: var(--radius-sm); font-size: 13px; color: var(--danger);
   }
 
-  /* ── Halls table ── */
-  .halls-card {
-    animation: fadeSlideUp 0.35s ease both; animation-delay: 60ms;
-  }
-  .halls-thead {
-    display: grid;
-    grid-template-columns: 1fr 110px 1fr 110px 120px;
-    gap: 12px;
-    padding: 8px 18px;
-    font-size: 10px; font-weight: 700; text-transform: uppercase;
-    letter-spacing: .06em; color: var(--text-subtle);
-    background: var(--bg-panel2, var(--bg-base));
-    border-bottom: 1px solid var(--border);
-  }
-  .halls-row {
-    display: grid;
-    grid-template-columns: 1fr 110px 1fr 110px 120px;
-    gap: 12px;
-    align-items: center;
-    border-bottom: 1px solid var(--border-subtle, var(--border));
-    transition: background .1s;
-  }
-  .halls-row:last-child { border-bottom: none; }
-  .halls-row:hover { background: var(--bg-hover); }
-
-  .halls-name-cell {
-    display: flex; align-items: center; gap: 0;
-    text-decoration: none; color: var(--text-base);
-    padding: 12px 0 12px 18px; min-width: 0;
-  }
-  .halls-strip {
-    width: 4px; height: 34px; border-radius: 2px; flex-shrink: 0; margin-right: 12px;
-  }
-  .halls-info { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
-  .halls-name {
-    font-size: 13px; font-weight: 600; color: var(--text-base);
-    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  }
-  .halls-name-cell:hover .halls-name { color: var(--accent); }
-  .halls-desc {
-    font-size: 11px; color: var(--text-subtle);
-    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  /* ── Hall cards ── */
+  .hall-card h3 a { color: inherit; text-decoration: none; }
+  .hall-card h3 a:hover { color: var(--accent-ink); }
+  .hall-card .media-meta {
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-bottom: 10px;
   }
 
-  .halls-cap {
-    display: flex; align-items: center; gap: 5px;
-    font-size: 12px; color: var(--text-muted);
+  /* A venue with no cover says so — a blank tile reads as a failed image. */
+  .hall-card .photo-blank {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 8px; width: 100%; height: 100%; text-align: center; padding: 10px;
+    background: color-mix(in srgb, var(--hall) 12%, var(--bg-hover));
+    color: var(--text-muted);
   }
-  .halls-cap svg { color: var(--text-subtle); flex-shrink: 0; }
+  .hall-card .photo-blank svg { opacity: .6; }
+  .photo-blank-label {
+    font-size: var(--meta-size); text-transform: uppercase; letter-spacing: .12em;
+  }
+
+  .hall-flags { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 12px; }
+
+  .halls-cap { display: inline-flex; align-items: center; gap: 5px; }
+  .halls-cap svg { flex-shrink: 0; }
+  .halls-created { white-space: nowrap; }
 
   .halls-bar-cell {
-    display: flex; align-items: center; gap: 10px;
+    display: flex; align-items: center; gap: 8px; margin-bottom: 14px;
+  }
+  .halls-bar-label {
+    font-size: var(--meta-size); color: var(--text-muted);
+    text-transform: uppercase; letter-spacing: .12em; white-space: nowrap;
   }
   .halls-bar-count {
-    font-size: 13px; font-weight: 700; color: var(--text-base);
+    font-size: 13px; font-weight: 650; color: var(--text-base);
     min-width: 20px; text-align: right; flex-shrink: 0;
   }
   .halls-bar-track {
-    flex: 1; height: 6px; background: var(--border); border-radius: 3px; overflow: hidden;
+    flex: 1; height: 6px; background: var(--border); border-radius: 99px; overflow: hidden;
   }
-  .halls-bar-fill { height: 6px; border-radius: 3px; transition: width .4s ease; }
+  .halls-bar-fill { height: 6px; border-radius: 99px; transition: width .4s ease; }
 
-  .halls-created { font-size: 11px; color: var(--text-subtle); }
-
-  .halls-actions {
-    display: flex; align-items: center; gap: 6px;
-    padding-right: 18px; justify-content: flex-end;
-  }
   .btn-manage {
-    padding: 5px 12px; border-radius: 6px; font-size: 12px; font-weight: 500;
+    padding: 5px 12px; border-radius: var(--radius-sm); font-size: 12px; font-weight: 500;
     border: 1px solid var(--border); background: var(--bg-panel);
     color: var(--text-muted); text-decoration: none; white-space: nowrap;
-    transition: color .1s, border-color .1s;
+    transition: color .15s, border-color .15s;
   }
-  .btn-manage:hover { color: var(--accent); border-color: var(--accent); }
+  .btn-manage:hover { color: var(--accent-ink); border-color: var(--accent); }
   .btn-delete {
-    width: 30px; height: 30px; border-radius: 6px; border: 1px solid var(--border);
-    background: var(--bg-panel); color: var(--text-subtle); cursor: pointer;
+    width: 30px; height: 30px; border-radius: var(--radius-sm); border: 1px solid var(--border);
+    background: var(--bg-panel); color: var(--text-muted); cursor: pointer;
     display: flex; align-items: center; justify-content: center;
-    transition: color .1s, border-color .1s, background .1s;
+    transition: color .15s, border-color .15s, background .15s;
   }
   .btn-delete:hover {
-    color: var(--danger, #ef4444);
-    border-color: color-mix(in srgb, var(--danger, #ef4444) 40%, transparent);
-    background: color-mix(in srgb, var(--danger, #ef4444) 6%, transparent);
+    color: var(--danger);
+    border-color: color-mix(in srgb, var(--danger) 40%, transparent);
+    background: var(--danger-dim);
   }
 
   /* ── Empty state ── */
   .empty-state {
     display: flex; flex-direction: column; align-items: center; gap: 10px;
-    padding: 72px 40px; text-align: center;
-    animation: fadeSlideUp 0.35s ease both; animation-delay: 60ms;
+    padding: 48px 40px; text-align: center;
   }
-  .empty-icon {
-    width: 56px; height: 56px; border-radius: 14px;
-    background: var(--bg-panel); border: 1px solid var(--border);
-    display: flex; align-items: center; justify-content: center;
-    color: var(--text-subtle); margin-bottom: 4px;
-  }
-  .empty-title { font-size: 15px; font-weight: 700; color: var(--text-base); margin: 0; }
+  .empty-title { font-size: 15px; font-weight: 600; letter-spacing: -.03em; color: var(--text-base); margin: 4px 0 0; }
   .empty-sub { font-size: 13px; color: var(--text-muted); margin: 0 0 6px; max-width: 280px; line-height: 1.5; }
 
   /* ── Footer ── */
-  .footer-note {
-    margin-top: 10px; font-size: 11px; color: var(--text-subtle); padding: 0 2px;
-    animation: fadeSlideUp 0.35s ease both; animation-delay: 120ms;
+  .footer-note { font-size: 11px; color: var(--text-muted); margin: 0; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .btn-primary:hover { transform: none; }
   }
 </style>

@@ -1,8 +1,10 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
 	import { t } from '$lib/i18n.svelte';
+	import { reveal } from '$lib/reveal';
 	import type { PageData, ActionData } from './$types';
 	import type { RsvpConfig } from '$lib/db/index';
+	import { readableInkOn } from '$lib/contrast';
 
 	interface Props { data: PageData; form: ActionData; }
 	const { data, form }: Props = $props();
@@ -10,6 +12,9 @@
 	const config = (data.reservation.rsvp_config ?? {}) as RsvpConfig;
 	const rsvpEnabled = config.enabled !== false;
 	const btnColor = config.primaryColor ?? 'var(--accent-action)';
+	// The organiser picks this colour freely, so the label on top of it cannot be a
+	// fixed token — --accent-contrast is near-black and disappears on a dark pick.
+	const btnInk = readableInkOn(config.primaryColor);
 	const pageBg = config.bgColor ?? 'var(--bg-base)';
 	const bgImage = config.bgImage ?? '';
 	const customDesc = config.description ?? '';
@@ -34,8 +39,13 @@
 <svelte:head><title>RSVP – {data.reservation.title}</title></svelte:head>
 
 <div class="rsvp-wrap rsvp-style-{styleName}" style={bgStyle()}>
-	<div class="rsvp-card">
+	<!-- The invitation is the one surface here that is NOT the app's own language:
+	     the organiser picks a decorative theme (.rsvp-style-*) that owns its radius,
+	     border, shadow and face, so this card keeps its local chrome rather than
+	     .card--raised, which every variant would override anyway. -->
+	<div class="rsvp-card" use:reveal>
 		<div class="event-info">
+			<p class="eyebrow">{t.rsvp.title}</p>
 			<h1>{data.reservation.title}</h1>
 			{#if customDesc}
 				<p class="event-desc">{customDesc}</p>
@@ -76,18 +86,20 @@
 		</div>
 
 		{#if data.reservation.status === 'cancelled'}
-			<div class="cancelled-box">
+			<div class="card--inset cancelled-box">
 				<p>{t.rsvp.cancelled}</p>
 			</div>
 		{:else if !rsvpEnabled}
-			<div class="cancelled-box">
+			<div class="card--inset cancelled-box">
 				<p>{t.rsvp.closed}</p>
 			</div>
 		{:else if form?.success}
-			<div class="success-box">
-				<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--success)" stroke-width="2">
-					<circle cx="12" cy="12" r="10"/><polyline points="9 12 12 15 16 9"/>
-				</svg>
+			<div class="card--inset success-box">
+				<span class="icon-tile">
+					<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--success)" stroke-width="2">
+						<circle cx="12" cy="12" r="10"/><polyline points="9 12 12 15 16 9"/>
+					</svg>
+				</span>
 				<h2>{t.rsvp.successTitle}</h2>
 				<p>{t.rsvp.successMsg}</p>
 			</div>
@@ -164,7 +176,7 @@
 							</select>
 						</div>
 					{/if}
-					<button type="submit" class="btn-submit" style="background:{btnColor}">
+					<button type="submit" class="btn-submit" style="background:{btnColor}; color:{btnInk}">
 						{t.rsvp.submit}
 					</button>
 				</form>
@@ -179,85 +191,88 @@
 		align-items: center;
 		justify-content: center;
 		min-height: 100%;
-		padding: 40px 16px;
+		padding: 64px 16px;
 	}
 
 	.rsvp-card {
 		background: var(--bg-panel);
 		border: 1px solid var(--border);
-		border-radius: 16px;
-		padding: 36px 32px;
+		border-radius: var(--radius-lg);
+		padding: 44px 40px;
 		width: 100%;
-		max-width: 440px;
-		box-shadow: 0 4px 24px rgba(0,0,0,0.06);
+		max-width: 480px;
+		box-shadow: var(--shadow);
 	}
 
 
 	.event-info {
 		border-bottom: 1px solid var(--border);
-		padding-bottom: 20px;
-		margin-bottom: 24px;
+		padding-bottom: 26px;
+		margin-bottom: 30px;
 	}
+
+	.event-info .eyebrow { display: block; margin-bottom: 10px; }
 
 	h1 {
-		font-size: 20px;
-		font-weight: 700;
-		margin-bottom: 8px;
-	}
-
-	.event-desc {
-		font-size: 13px;
-		color: var(--text-muted);
-		line-height: 1.5;
+		font-size: clamp(24px, 4.4vw, 30px);
+		font-weight: 550;
+		letter-spacing: -0.055em;
+		line-height: 1.08;
 		margin-bottom: 12px;
 	}
 
-	.event-details { display: flex; flex-direction: column; gap: 7px; }
+	.event-desc {
+		font-size: 14px;
+		color: var(--text-muted);
+		line-height: 1.75;
+		margin-bottom: 18px;
+	}
+
+	.event-details { display: flex; flex-direction: column; gap: 10px; }
 
 	.detail {
 		display: flex;
 		align-items: center;
-		gap: 7px;
+		gap: 9px;
 		font-size: 13px;
+		line-height: 1.5;
 		color: var(--text-muted);
 	}
 
+	.detail svg { color: var(--accent-ink); flex-shrink: 0; }
+
+	/* Both of these sit on .card--inset for the fill and the padding; only the
+	   voice is local. */
 	.cancelled-box {
 		text-align: center;
-		padding: 20px;
 		color: var(--danger);
 		font-size: 14px;
+		line-height: 1.75;
 	}
 
 	.success-box {
 		display: flex;
 		flex-direction: column;
 		align-items: center;
-		gap: 10px;
+		gap: 12px;
 		text-align: center;
-		padding: 20px 0;
 	}
 
-	.success-box h2 { font-size: 18px; font-weight: 700; }
-	.success-box p { font-size: 13px; color: var(--text-muted); }
+	.success-box h2 { font-size: 20px; font-weight: 550; letter-spacing: -0.045em; }
+	.success-box p { font-size: 14px; line-height: 1.75; color: var(--text-muted); }
 
-	.form-section h2 { font-size: 16px; font-weight: 600; margin-bottom: 16px; }
-
-	.alert-error {
-		background: #fef2f2;
-		border: 1px solid #fecaca;
-		color: var(--danger);
-		border-radius: 8px;
-		padding: 10px 14px;
-		font-size: 13px;
-		margin-bottom: 14px;
+	.form-section h2 {
+		font-size: 17px;
+		font-weight: 600;
+		letter-spacing: -0.03em;
+		margin-bottom: 20px;
 	}
 
 	.field {
 		display: flex;
 		flex-direction: column;
-		gap: 5px;
-		margin-bottom: 14px;
+		gap: 6px;
+		margin-bottom: 18px;
 	}
 
 	.required { color: var(--danger); }
@@ -267,23 +282,36 @@
 		align-items: center;
 		gap: 8px;
 		font-size: 13px;
+		line-height: 1.5;
 		cursor: pointer;
 	}
 
 	.btn-submit {
 		width: 100%;
-		padding: 12px;
-		border-radius: 8px;
-		color: #fff;
+		padding: 13px 20px;
+		border-radius: var(--radius-sm);
+		/* Overridden inline with a value derived from the organiser's own colour; this
+		   is only the fallback for when no colour has been chosen. */
+		color: var(--accent-contrast);
 		font-size: 14px;
-		font-weight: 600;
+		font-weight: 650;
 		border: none;
 		cursor: pointer;
-		margin-top: 4px;
-		font: inherit;
+		margin-top: 8px;
+		/* font-family, not the `font` shorthand: the shorthand resets size and weight
+		   back to the inherited values, which silently killed the two declarations
+		   above. The family still inherits, so each style variant keeps its own face. */
+		font-family: inherit;
+		transition: transform .2s, filter .2s;
 	}
 
-	.btn-submit:hover { opacity: 0.9; }
+	/* The lift on hover is the signature interaction of this language. */
+	.btn-submit:hover { transform: translateY(-2px); filter: brightness(0.96); }
+	.btn-submit:active { transform: translateY(0); }
+
+	@media (prefers-reduced-motion: reduce) {
+		.btn-submit:hover { transform: none; }
+	}
 
 	.allergies-checklist {
 		display: flex;
@@ -297,6 +325,7 @@
 		align-items: center;
 		gap: 7px;
 		font-size: 13px;
+		line-height: 1.5;
 		cursor: pointer;
 	}
 
@@ -317,9 +346,9 @@
 
 	.allergy-other-input {
 		width: 100%;
-		padding: 8px 12px;
+		padding: 9px 13px;
 		border: 1px solid var(--border);
-		border-radius: 6px;
+		border-radius: var(--radius-sm);
 		font-size: 13px;
 		background: var(--bg-panel2);
 	}
@@ -331,11 +360,16 @@
 	/* Elegant — serif fonts, large radius, soft shadows */
 	:global(.rsvp-style-elegant) .rsvp-card {
 		font-family: 'Georgia', 'Times New Roman', serif;
+		/* Decorative template radii are exempt from the 3/4/6px scale (see
+		   APP-DESIGN-SYSTEM.md §4) — flattening them collapses the six themes
+		   into one look. */
 		border-radius: 24px;
-		box-shadow: 0 8px 40px rgba(0,0,0,0.08);
+		box-shadow: var(--shadow);
 		border: none;
 	}
-	:global(.rsvp-style-elegant) h1 { font-family: 'Georgia', serif; font-style: italic; font-weight: 400; font-size: 24px; }
+	/* The -.055em signature belongs to Inter. On the serif and script faces the
+	   variants switch to, it crowds the letterforms, so each one relaxes it. */
+	:global(.rsvp-style-elegant) h1 { font-family: 'Georgia', serif; font-style: italic; font-weight: 400; font-size: 24px; letter-spacing: -0.01em; line-height: 1.2; }
 	:global(.rsvp-style-elegant) .btn-submit { border-radius: 24px; }
 	:global(.rsvp-style-elegant) input, :global(.rsvp-style-elegant) select { border-radius: 12px; }
 
@@ -344,22 +378,22 @@
 		font-family: 'Inter', 'Helvetica Neue', sans-serif;
 		border-radius: 0;
 		box-shadow: none;
-		border: 2px solid #111;
+		border: 2px solid var(--text-base);
 	}
-	:global(.rsvp-style-modern) h1 { font-family: 'Inter', sans-serif; font-weight: 900; text-transform: uppercase; letter-spacing: 0.05em; font-size: 18px; }
+	:global(.rsvp-style-modern) h1 { font-family: 'Inter', sans-serif; font-weight: 650; text-transform: uppercase; letter-spacing: 0.05em; font-size: 18px; }
 	:global(.rsvp-style-modern) .btn-submit { border-radius: 0; text-transform: uppercase; letter-spacing: 0.08em; }
-	:global(.rsvp-style-modern) input, :global(.rsvp-style-modern) select { border-radius: 0; border: 2px solid #ccc; }
-	:global(.rsvp-style-modern) .event-info { border-bottom: 2px solid #111; }
+	:global(.rsvp-style-modern) input, :global(.rsvp-style-modern) select { border-radius: 0; border: 2px solid var(--border); }
+	:global(.rsvp-style-modern) .event-info { border-bottom: 2px solid var(--text-base); }
 
 	/* Romantic — cursive headers, pastel-ready, large rounded */
 	:global(.rsvp-style-romantic) .rsvp-card {
 		font-family: 'Georgia', serif;
 		border-radius: 28px;
-		box-shadow: 0 6px 32px rgba(0,0,0,0.06);
-		border: 1px solid rgba(0,0,0,0.06);
+		box-shadow: var(--shadow);
+		border: 1px solid var(--border-subtle);
 	}
-	:global(.rsvp-style-romantic) h1 { font-family: 'Brush Script MT', 'Segoe Script', cursive; font-weight: 400; font-size: 28px; }
-	:global(.rsvp-style-romantic) .form-section h2 { font-family: 'Brush Script MT', 'Segoe Script', cursive; font-weight: 400; font-size: 20px; }
+	:global(.rsvp-style-romantic) h1 { font-family: 'Brush Script MT', 'Segoe Script', cursive; font-weight: 400; font-size: 28px; letter-spacing: normal; line-height: 1.3; }
+	:global(.rsvp-style-romantic) .form-section h2 { font-family: 'Brush Script MT', 'Segoe Script', cursive; font-weight: 400; font-size: 20px; letter-spacing: normal; }
 	:global(.rsvp-style-romantic) .btn-submit { border-radius: 28px; }
 	:global(.rsvp-style-romantic) input, :global(.rsvp-style-romantic) select { border-radius: 14px; }
 
@@ -368,33 +402,43 @@
 		font-family: 'Helvetica Neue', 'Arial', sans-serif;
 		border-radius: 8px;
 		box-shadow: none;
-		border: 1px solid #e5e5e5;
+		border: 1px solid var(--border);
 		padding: 48px 40px;
 	}
 	:global(.rsvp-style-minimal) h1 { font-weight: 300; font-size: 22px; letter-spacing: 0.02em; }
-	:global(.rsvp-style-minimal) .event-info { border-bottom: 1px solid #f0f0f0; padding-bottom: 24px; margin-bottom: 28px; }
+	:global(.rsvp-style-minimal) .event-info { border-bottom: 1px solid var(--border-subtle); padding-bottom: 24px; margin-bottom: 28px; }
 	:global(.rsvp-style-minimal) .btn-submit { border-radius: 4px; font-weight: 400; }
-	:global(.rsvp-style-minimal) input, :global(.rsvp-style-minimal) select { border-radius: 4px; background: #fafafa; }
+	:global(.rsvp-style-minimal) input, :global(.rsvp-style-minimal) select { border-radius: 4px; background: var(--bg-panel2); }
 
 	/* Festive — vibrant, rounded, playful */
 	:global(.rsvp-style-festive) .rsvp-card {
 		font-family: 'Verdana', 'Trebuchet MS', sans-serif;
 		border-radius: 20px;
-		box-shadow: 0 6px 30px rgba(0,0,0,0.1);
+		box-shadow: var(--shadow);
 		border: 2px dashed currentColor;
 	}
-	:global(.rsvp-style-festive) h1 { font-weight: 800; font-size: 22px; }
-	:global(.rsvp-style-festive) .btn-submit { border-radius: 50px; font-weight: 800; padding: 14px; }
+	:global(.rsvp-style-festive) h1 { font-weight: 650; font-size: 22px; letter-spacing: -0.02em; line-height: 1.2; }
+	:global(.rsvp-style-festive) .btn-submit { border-radius: 50px; font-weight: 650; padding: 14px; }
 	:global(.rsvp-style-festive) input, :global(.rsvp-style-festive) select { border-radius: 10px; }
 
 	/* Classic — traditional, medium radius, subtle */
 	:global(.rsvp-style-classic) .rsvp-card {
 		font-family: 'Palatino Linotype', 'Book Antiqua', Palatino, serif;
 		border-radius: 12px;
-		box-shadow: 0 2px 16px rgba(0,0,0,0.05);
-		border: 1px solid #d4d0c8;
+		box-shadow: var(--shadow-sm);
+		border: 1px solid var(--border);
 	}
-	:global(.rsvp-style-classic) h1 { font-weight: 600; font-size: 22px; font-family: 'Palatino Linotype', serif; }
+	:global(.rsvp-style-classic) h1 { font-weight: 550; font-size: 22px; font-family: 'Palatino Linotype', serif; letter-spacing: -0.015em; line-height: 1.2; }
 	:global(.rsvp-style-classic) .btn-submit { border-radius: 8px; }
-	:global(.rsvp-style-classic) input, :global(.rsvp-style-classic) select { border-radius: 6px; border: 1px solid #d4d0c8; }
+	:global(.rsvp-style-classic) input, :global(.rsvp-style-classic) select { border-radius: 6px; border: 1px solid var(--border); }
+
+	/* The generous padding above would leave too little room on a phone. This sits
+	   after the variants on purpose: a variant selector carries one class more than
+	   the bare .rsvp-card, so the one variant that sets its own padding needs its
+	   own entry here or it would out-specify the guard. */
+	@media (max-width: 520px) {
+		.rsvp-wrap { padding: 32px 16px; }
+		.rsvp-card { padding: 30px 22px; }
+		:global(.rsvp-style-minimal) .rsvp-card { padding: 34px 24px; }
+	}
 </style>

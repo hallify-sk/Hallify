@@ -15,7 +15,7 @@
     playSound('order');
     const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     if (reduce) return;
-    const colors = ['#4f6ef7', '#22c55e', '#f59e0b', '#e11d48', '#0ea5e9', '#8b5cf6'];
+    const colors = ['#f05ca1', '#a6225e', '#f58cba', '#6cc292', '#e0a850', '#202322'];
     confetti = Array.from({ length: 40 }, (_, i) => ({
       left: Math.random() * 100,
       delay: Math.random() * 0.5,
@@ -30,7 +30,7 @@
 
 <svelte:head><title>{t.accountExtra.paymentSuccessTitle} – Hallify</title></svelte:head>
 
-<div class="wrap">
+<div class="success-page">
   <div class="confetti" aria-hidden="true">
     {#each confetti as p}
       <span
@@ -41,51 +41,51 @@
     {/each}
   </div>
 
-  <div class="card">
-    <div class="check-wrap">
-      <span class="ring"></span>
-      <span class="ring ring-2"></span>
-      <div class="check">
-        <svg viewBox="0 0 52 52" width="48" height="48" fill="none" stroke="#fff" stroke-width="5" stroke-linecap="round" stroke-linejoin="round">
-          <path class="check-path" d="M14 27l8 8 16-18" />
-        </svg>
+  <div class="wrap">
+    <section class="section section--lead success-panel">
+      <div class="check-wrap">
+        <span class="ring"></span>
+        <span class="ring ring-2"></span>
+        <div class="check">
+          <svg viewBox="0 0 52 52" width="48" height="48" fill="none" stroke="currentColor" stroke-width="5" stroke-linecap="round" stroke-linejoin="round">
+            <path class="check-path" d="M14 27l8 8 16-18" />
+          </svg>
+        </div>
       </div>
-    </div>
 
-    <h1>{t.accountExtra.paymentSuccessTitle}</h1>
-    <p class="sub">
-      {#if data.planName}
-        {data.orgName ?? t.accountExtra.yourOrganization} {t.accountExtra.nowOnPlanPrefix} <strong>{data.planName}</strong> {t.accountExtra.nowOnPlanSuffix}
-      {:else}
-        {t.accountExtra.subscriptionActive}
-      {/if}
-    </p>
+      <h1>{t.accountExtra.paymentSuccessTitle}</h1>
+      <p class="sub">
+        {#if data.planName}
+          {data.orgName ?? t.accountExtra.yourOrganization} {t.accountExtra.nowOnPlanPrefix} <strong>{data.planName}</strong> {t.accountExtra.nowOnPlanSuffix}
+        {:else}
+          {t.accountExtra.subscriptionActive}
+        {/if}
+      </p>
 
-    <div class="actions">
-      <a href="/app/manage" class="btn-primary">{t.accountExtra.goToDashboard}</a>
-      <a href="/app/billing" class="btn-ghost">{t.accountExtra.viewBilling}</a>
-    </div>
+      <div class="actions">
+        <a href="/app/manage" class="btn-primary">{t.accountExtra.goToDashboard}</a>
+        <a href="/app/billing" class="btn-ghost">{t.accountExtra.viewBilling}</a>
+      </div>
+    </section>
   </div>
 </div>
 
 <style>
-  .wrap {
+  .success-page {
     position: relative;
     min-height: 100%;
     display: flex; align-items: center; justify-content: center;
-    padding: 48px 24px;
+    padding: 48px 0;
     overflow: hidden;
     background:
       radial-gradient(60% 50% at 50% 0%, color-mix(in srgb, var(--accent) 14%, transparent), transparent 70%),
       var(--bg-base);
   }
 
-  .card {
+  /* No box: the mark, the heading and the actions sit on the page. */
+  .success-panel {
     position: relative; z-index: 2;
-    width: 100%; max-width: 440px; text-align: center;
-    background: var(--bg-panel); border: 1px solid var(--border);
-    border-radius: 20px; padding: 44px 32px;
-    box-shadow: 0 24px 60px rgba(0,0,0,.14);
+    max-width: 440px; margin-inline: auto; text-align: center;
     animation: cardIn .6s cubic-bezier(.16,1,.3,1) both;
   }
 
@@ -93,9 +93,9 @@
 
   .check {
     width: 84px; height: 84px; border-radius: 50%;
-    background: linear-gradient(135deg, var(--accent), color-mix(in srgb, var(--accent) 70%, #22c55e));
+    background: var(--accent);
+    color: var(--accent-contrast);
     display: flex; align-items: center; justify-content: center;
-    box-shadow: 0 12px 30px color-mix(in srgb, var(--accent) 40%, transparent);
     animation: pop .55s cubic-bezier(.18,1.4,.4,1) .12s both;
   }
 
@@ -108,23 +108,24 @@
   }
   .ring-2 { animation-delay: .55s; }
 
-  h1 { font-size: 24px; font-weight: 800; letter-spacing: -.02em; color: var(--text-base); margin: 0 0 10px; animation: riseIn .5s ease-out .3s both; }
-  .sub { font-size: 14px; line-height: 1.6; color: var(--text-muted); margin: 0 0 26px; animation: riseIn .5s ease-out .42s both; }
-  .sub strong { color: var(--text-base); }
+  h1 { font-size: var(--display-size); font-weight: 550; letter-spacing: -.055em; line-height: 1.08; color: var(--text-base); margin: 0 0 14px; animation: riseIn .5s ease-out .3s both; }
+  .sub { font-size: var(--body-size); line-height: var(--body-leading); color: var(--text-muted); margin: 0 0 28px; animation: riseIn .5s ease-out .42s both; }
+  .sub strong { color: var(--text-base); font-weight: 600; }
 
   .actions { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; animation: riseIn .5s ease-out .54s both; }
   .btn-primary {
-    display: inline-flex; align-items: center; padding: 11px 22px; border-radius: 10px;
-    background: var(--accent); color: #fff; font-size: 14px; font-weight: 700; text-decoration: none;
-    box-shadow: 0 6px 18px color-mix(in srgb, var(--accent) 32%, transparent); transition: opacity .12s, transform .12s;
+    display: inline-flex; align-items: center; padding: 11px 22px; border-radius: var(--radius-sm);
+    background: var(--accent); color: var(--accent-contrast); font-size: 13px; font-weight: 650; text-decoration: none;
+    transition: transform .2s, background .2s;
   }
-  .btn-primary:hover { opacity: .92; transform: translateY(-1px); }
+  .btn-primary:hover { background: var(--accent-hover); transform: translateY(-2px); }
+  .btn-primary:active { transform: translateY(0); }
   .btn-ghost {
-    display: inline-flex; align-items: center; padding: 11px 22px; border-radius: 10px;
+    display: inline-flex; align-items: center; padding: 11px 22px; border-radius: var(--radius-sm);
     background: transparent; color: var(--text-base); border: 1px solid var(--border);
-    font-size: 14px; font-weight: 600; text-decoration: none; transition: border-color .12s, color .12s;
+    font-size: 13px; font-weight: 600; text-decoration: none; transition: border-color .15s, background .15s;
   }
-  .btn-ghost:hover { border-color: var(--accent); color: var(--accent); }
+  .btn-ghost:hover { border-color: var(--text-subtle); background: var(--bg-hover); }
 
   /* Confetti */
   .confetti { position: absolute; inset: 0; z-index: 1; pointer-events: none; }
@@ -142,8 +143,9 @@
   @keyframes riseIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
 
   @media (prefers-reduced-motion: reduce) {
-    .card, .check, .check-path, .ring, h1, .sub, .actions { animation: none !important; }
+    .success-panel, .check, .check-path, .ring, h1, .sub, .actions { animation: none !important; }
     .check-path { stroke-dashoffset: 0; }
     .ring { display: none; }
+    .btn-primary:hover { transform: none; }
   }
 </style>

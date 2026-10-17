@@ -45,3 +45,71 @@ export function serializeEventTypes(keys: Iterable<string>): string | null {
   }
   return out.length ? JSON.stringify(out) : null;
 }
+
+// ─── Reservation event type ──────────────────────────────────────────────────
+// `floorplan_templates.event_type` (above) holds a SET of keys, because one layout
+// can suit several occasions. `reservations.event_type` is a different thing: a
+// single occasion, which may be one the canonical list does not name. Picking
+// "Other" on the booking form reveals a text field, and that typed-in label is
+// stored alongside the key as `other:<label>` so the value stays self-describing
+// — a reader can still tell it is the "other" bucket, and the label survives.
+//
+// These helpers are deliberately separate from parseEventTypes/normalizeEventType:
+// template matching must keep folding unknown values to nothing, and a prefixed
+// custom label is not a template key.
+
+/** Longest typed-in "Other" label we accept. Enforced server-side; the input
+ *  carries the same cap as a maxlength so the UI agrees with the validator. */
+export const CUSTOM_EVENT_TYPE_MAX = 60;
+
+const CUSTOM_PREFIX = 'other:';
+
+export interface ReservationEventType {
+	/** Canonical key, or null when the stored value is unset/unrecognized. */
+	key: EventTypeKey | null;
+	/** The operator's own label, present only for a typed-in "Other". */
+	custom: string | null;
+}
+
+/** Normalize a typed-in label: no control characters (it is rendered as a label),
+ *  whitespace collapsed, trimmed. Does NOT truncate — length is validated, not
+ *  silently cut, so an over-long value is reported rather than mangled. */
+export function cleanCustomEventType(value: string | null | undefined): string {
+	if (!value) return '';
+	return value.replace(/\p{Cc}/gu, ' ').replace(/\s+/g, ' ').trim();
+}
+
+/** Serialize a form's event-type pair for `reservations.event_type`.
+ *  An unrecognized key stores nothing; "Other" with no label stores plain `other`. */
+export function serializeReservationEventType(
+	value: string | null | undefined,
+	custom?: string | null
+): string | null {
+	const key = normalizeEventType(value);
+	if (!key) return null;
+	if (key !== 'other') return key;
+	const label = cleanCustomEventType(custom);
+	return label ? `${CUSTOM_PREFIX}${label}` : 'other';
+}
+
+/** Decode a stored `reservations.event_type` value. */
+export function parseReservationEventType(raw: string | null | undefined): ReservationEventType {
+	if (!raw) return { key: null, custom: null };
+	const trimmed = raw.trim();
+	if (trimmed.toLowerCase().startsWith(CUSTOM_PREFIX)) {
+		const custom = cleanCustomEventType(trimmed.slice(CUSTOM_PREFIX.length));
+		return { key: 'other', custom: custom || null };
+	}
+	return { key: normalizeEventType(trimmed), custom: null };
+}
+
+/** Human label for a stored reservation event type. `labels` is the caller's
+ *  `t.eventTypes` dictionary, so this stays usable from both client and server. */
+export function eventTypeLabel(
+	raw: string | null | undefined,
+	labels: Record<string, string>
+): string | null {
+	const { key, custom } = parseReservationEventType(raw);
+	if (custom) return custom;
+	return key ? (labels[key] ?? null) : null;
+}

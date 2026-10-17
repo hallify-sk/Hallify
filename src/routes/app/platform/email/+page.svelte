@@ -26,27 +26,33 @@
 
 <svelte:head><title>Email – Platform – Hallify</title></svelte:head>
 
-<div class="page">
-	<div class="page-header">
-		<h1 class="page-title">{t.platformMisc.emailTitle}</h1>
-	</div>
-	<p class="intro">{t.platformMisc.emailIntro}</p>
+<div class="wrap page">
+	<section class="section section--lead">
+		<div class="section-head">
+			<p class="eyebrow">{t.platformOrgs.platformAdmin}</p>
+			<h1>{t.platformMisc.emailTitle}</h1>
+			<p>{t.platformMisc.emailIntro}</p>
+		</div>
 
-	{#if form?.success && form?.section === 'templates'}
-		<div class="alert-success">{t.platformMisc.templatesSaved}</div>
-	{/if}
+		{#if form?.success && form?.section === 'templates'}
+			<div class="alert-success">{t.platformMisc.templatesSaved}</div>
+		{/if}
+	</section>
 
-	<!-- Config + test -->
-	<div class="two-col">
-		<div class="card">
-			<h3>{t.platformMisc.provider}</h3>
-			<div class="kv">
+	<!-- Config -->
+	<section class="section">
+		<div class="section-head">
+			<p class="eyebrow">{t.platformMisc.emailTitle}</p>
+			<h2>{t.platformMisc.provider}</h2>
+		</div>
+		<div class="row-list">
+			<div class="row-item kv">
 				<span class="k">{t.platformMisc.service}</span><span class="v">{data.config.provider} (HTTP API)</span>
 			</div>
-			<div class="kv">
+			<div class="row-item kv">
 				<span class="k">{t.platformMisc.sender}</span><span class="v">{data.config.fromName} &lt;{data.config.fromEmail}&gt;</span>
 			</div>
-			<div class="kv">
+			<div class="row-item kv">
 				<span class="k">{t.platformMisc.apiKey}</span>
 				<span class="v">
 					{#if data.config.configured}
@@ -56,7 +62,7 @@
 					{/if}
 				</span>
 			</div>
-			<div class="kv">
+			<div class="row-item kv">
 				<span class="k">{t.platformMisc.recent}</span>
 				<span class="v">
 					<span class="stat-ok">{data.stats.sent} {t.platformMisc.sentCount}</span>
@@ -65,40 +71,47 @@
 				</span>
 			</div>
 		</div>
+	</section>
 
-		<div class="card">
-			<h3>{t.platformMisc.sendTestEmail}</h3>
-			<form method="POST" action="?/testEmail" class="test-form" use:enhance={() => {
-				testStatus = { type: 'loading' };
-				return async ({ result, update }) => {
-					if (result.type === 'success') {
-						testStatus = { type: 'success', message: t.platformMisc.testEmailSent };
-					} else if (result.type === 'failure') {
-						const err = (result.data as Record<string, string> | undefined)?.error ?? t.platformMisc.unknownError;
-						testStatus = { type: 'error', message: err };
-					} else {
-						testStatus = { type: 'error', message: t.platformMisc.failedToSend };
-					}
-					await update({ reset: false });
-				};
-			}}>
-				<input name="testEmail" type="email" placeholder="you@example.com" required />
-				<button type="submit" class="btn-action" disabled={testStatus.type === 'loading'}>
-					{testStatus.type === 'loading' ? t.platformMisc.sending : t.platformMisc.sendTest}
-				</button>
-			</form>
-			{#if testStatus.type === 'success'}<div class="test-result test-ok">{testStatus.message}</div>{/if}
-			{#if testStatus.type === 'error'}<div class="test-result test-err">{testStatus.message}</div>{/if}
-			{#if !data.config.configured}
-				<p class="test-hint">{t.platformMisc.brevoHintPre}<code>BREVO_API_KEY</code>{t.platformMisc.brevoHintPost}</p>
-			{/if}
+	<!-- Test -->
+	<section class="section">
+		<div class="section-head">
+			<p class="eyebrow">{t.platformMisc.emailTitle}</p>
+			<h2>{t.platformMisc.sendTestEmail}</h2>
 		</div>
-	</div>
+		<form method="POST" action="?/testEmail" class="test-form" use:enhance={() => {
+			testStatus = { type: 'loading' };
+			return async ({ result, update }) => {
+				if (result.type === 'success') {
+					testStatus = { type: 'success', message: t.platformMisc.testEmailSent };
+				} else if (result.type === 'failure') {
+					const err = (result.data as Record<string, string> | undefined)?.error ?? t.platformMisc.unknownError;
+					testStatus = { type: 'error', message: err };
+				} else {
+					testStatus = { type: 'error', message: t.platformMisc.failedToSend };
+				}
+				await update({ reset: false });
+			};
+		}}>
+			<input name="testEmail" type="email" placeholder="you@example.com" required />
+			<button type="submit" class="btn-action" disabled={testStatus.type === 'loading'}>
+				{testStatus.type === 'loading' ? t.platformMisc.sending : t.platformMisc.sendTest}
+			</button>
+		</form>
+		{#if testStatus.type === 'success'}<div class="test-result test-ok">{testStatus.message}</div>{/if}
+		{#if testStatus.type === 'error'}<div class="test-result test-err">{testStatus.message}</div>{/if}
+		{#if !data.config.configured}
+			<p class="test-hint">{t.platformMisc.brevoHintPre}<code>BREVO_API_KEY</code>{t.platformMisc.brevoHintPost}</p>
+		{/if}
+	</section>
 
 	<!-- Templates -->
-	<div class="card">
-		<h3>{t.platformMisc.emailTemplates}</h3>
-		<p class="card-hint">{t.platformMisc.templatesHintPre}<code>{'{{variable}}'}</code>{t.platformMisc.templatesHintPost}</p>
+	<section class="section">
+		<div class="section-head">
+			<p class="eyebrow">{t.platformMisc.emailTitle}</p>
+			<h2>{t.platformMisc.emailTemplates}</h2>
+			<p>{t.platformMisc.templatesHintPre}<code>{'{{variable}}'}</code>{t.platformMisc.templatesHintPost}</p>
+		</div>
 		<form method="POST" action="?/saveTemplates" use:enhance={() => async ({ update }) => { await update({ reset: false }); }}>
 			{#each templateMeta as tpl}
 				<div class="tpl-field">
@@ -109,136 +122,134 @@
 			{/each}
 			<div class="actions"><button type="submit" class="btn-action">{t.platformMisc.saveTemplates}</button></div>
 		</form>
-	</div>
+	</section>
 
 	<!-- Log -->
-	<div class="card">
-		<h3>{t.platformMisc.mailLog} <span class="count">{data.emailLog.length}</span></h3>
+	<section class="section">
+		<div class="section-head">
+			<p class="eyebrow">{t.platformMisc.emailTitle}</p>
+			<h2>{t.platformMisc.mailLog} <span class="count">{data.emailLog.length}</span></h2>
+		</div>
 		{#if data.emailLog.length === 0}
-			<p class="empty">{t.platformMisc.noEmailsSent}</p>
+			<div class="card--inset empty-state">
+				<div class="icon-tile">
+					<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="2" y="4" width="20" height="16" rx="2"/><polyline points="22,6 12,13 2,6"/></svg>
+				</div>
+				<p class="empty">{t.platformMisc.noEmailsSent}</p>
+			</div>
 		{:else}
 			<div class="log-wrap">
-				<table class="log">
-					<thead>
-						<tr><th>{t.platformMisc.colRecipient}</th><th>{t.platformMisc.colSubject}</th><th>{t.platformMisc.colTemplate}</th><th>{t.platformMisc.colStatus}</th><th>{t.platformMisc.colWhen}</th></tr>
-					</thead>
-					<tbody>
-						{#each data.emailLog as e (e.id)}
-							<tr>
-								<td class="td-email" title={e.recipient}>{e.recipient}</td>
-								<td>{e.subject}</td>
-								<td><span class="tpl-badge">{e.template ?? '-'}</span></td>
-								<td>
-									<span class="dot" class:dot-ok={e.status === 'sent'} class:dot-bad={e.status === 'failed'}></span>
-									<span class="status-txt" title={e.error ?? ''}>{e.status}</span>
-								</td>
-								<td class="td-date">{fmtDate(e.created_at)}</td>
-							</tr>
-						{/each}
-					</tbody>
-				</table>
+				<div class="row-list log" role="table">
+					<div role="row" class="row-item row-head">
+						<span role="columnheader">{t.platformMisc.colRecipient}</span><span role="columnheader">{t.platformMisc.colSubject}</span><span role="columnheader">{t.platformMisc.colTemplate}</span><span role="columnheader">{t.platformMisc.colStatus}</span><span role="columnheader">{t.platformMisc.colWhen}</span>
+					</div>
+					{#each data.emailLog as e (e.id)}
+						<div role="row" class="row-item">
+							<span role="cell" class="td-email" title={e.recipient}>{e.recipient}</span>
+							<span role="cell">{e.subject}</span>
+							<span role="cell"><span class="tpl-badge">{e.template ?? '-'}</span></span>
+							<span role="cell">
+								<span class="dot" class:dot-ok={e.status === 'sent'} class:dot-bad={e.status === 'failed'}></span>
+								<span class="status-txt" title={e.error ?? ''}>{e.status}</span>
+							</span>
+							<span role="cell" class="td-date">{fmtDate(e.created_at)}</span>
+						</div>
+					{/each}
+				</div>
 			</div>
 		{/if}
-	</div>
+	</section>
 </div>
 
 <style>
-	.page { padding: 24px 28px; }
-	.page-header { margin-bottom: 4px; }
-	.page-title { font-size: 18px; font-weight: 800; color: var(--text-base); letter-spacing: -.025em; margin: 0; }
-	.intro { font-size: 13px; color: var(--text-muted); margin: 0 0 20px; }
-
-	.two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start; margin-bottom: 16px; }
-
-	.card {
-		background: var(--bg-panel); border: 1px solid var(--border);
-		border-radius: 12px; padding: 20px; margin-bottom: 16px;
-	}
-	.card h3 {
-		font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em;
-		color: var(--text-muted); margin: 0 0 14px;
-		display: flex; align-items: center; gap: 8px;
-	}
+	.page { padding-block: 24px; }
+	h1 { font-size: var(--display-size); font-weight: 550; color: var(--text-base); letter-spacing: -.055em; line-height: 1.08; margin: 0; }
 	.count {
-		font-size: 11px; font-weight: 700; color: var(--text-muted);
-		background: var(--bg-panel2, var(--bg-base)); border: 1px solid var(--border);
-		border-radius: 99px; padding: 0 7px; text-transform: none; letter-spacing: 0;
+		font-size: 11px; font-weight: 650; color: var(--text-muted);
+		background: var(--bg-panel2); border: 1px solid var(--border);
+		border-radius: 3px; padding: 0 7px; text-transform: none; letter-spacing: 0;
 	}
 
-	/* Provider key/values */
-	.kv { display: flex; align-items: center; gap: 12px; padding: 7px 0; border-bottom: 1px solid var(--border-subtle, var(--border)); font-size: 13px; }
-	.kv:last-child { border-bottom: none; }
-	.k { width: 78px; flex-shrink: 0; color: var(--text-subtle); font-weight: 600; font-size: 12px; }
+	/* Provider key/values on hairline rows */
+	.kv { gap: 12px; padding: 8px 0; font-size: 13px; }
+	.k { width: 78px; flex-shrink: 0; color: var(--text-muted); font-weight: 600; font-size: 12px; }
 	.v { color: var(--text-base); min-width: 0; word-break: break-word; }
 	.badge { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; }
-	.badge-ok { color: var(--success, #16a34a); }
-	.badge-bad { color: var(--danger, #dc2626); }
-	.stat-ok { color: var(--success, #16a34a); font-weight: 600; }
+	.badge-ok { color: var(--success); }
+	.badge-bad { color: var(--danger); }
+	.stat-ok { color: var(--success); font-weight: 600; }
 	.stat-bad { color: var(--text-muted); }
 	.stat-sep { color: var(--text-subtle); margin: 0 6px; }
 
 	.dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--text-subtle); }
-	.dot-ok { background: var(--success, #22c55e); }
-	.dot-bad { background: var(--danger, #ef4444); }
+	.dot-ok { background: var(--success); }
+	.dot-bad { background: var(--danger); }
 
 	/* Test form */
-	.test-form { display: flex; gap: 8px; }
+	.test-form { display: flex; gap: 8px; max-width: 520px; }
 	.test-form input {
-		flex: 1; min-width: 0; height: 38px; box-sizing: border-box; padding: 0 11px;
-		border: 1px solid var(--border); border-radius: 8px; background: var(--bg-panel2, var(--bg-base));
+		flex: 1; min-width: 0; height: 38px; box-sizing: border-box; padding: 0 13px;
+		border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg-panel2);
 		font-size: 13px; color: var(--text-base); font-family: inherit; outline: none;
+		transition: border-color .15s, box-shadow .15s;
 	}
-	.test-form input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 12%, transparent); }
-	.test-result { margin-top: 10px; padding: 8px 12px; border-radius: 8px; font-size: 12.5px; font-weight: 500; }
-	.test-ok { color: var(--success, #16a34a); background: color-mix(in srgb, var(--success, #22c55e) 12%, transparent); }
-	.test-err { color: var(--danger, #dc2626); background: color-mix(in srgb, var(--danger, #ef4444) 10%, transparent); }
-	.test-hint { font-size: 12px; color: var(--text-muted); margin: 12px 0 0; line-height: 1.5; }
-	code { font-family: ui-monospace, monospace; font-size: 11.5px; background: var(--bg-panel2, var(--bg-base)); padding: 1px 5px; border-radius: 4px; }
+	.test-form input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-dim); }
+	.test-result { margin-top: 10px; padding: 8px 12px; border-radius: var(--radius-sm); font-size: 12.5px; font-weight: 500; }
+	.test-ok { color: var(--success); background: var(--success-dim); }
+	.test-err { color: var(--danger); background: var(--danger-dim); }
+	.test-hint { font-size: 12px; color: var(--text-muted); margin: 12px 0 0; line-height: 1.75; }
+	code { font-family: ui-monospace, monospace; font-size: 11.5px; background: var(--bg-panel2); padding: 1px 5px; border-radius: var(--radius-sm); }
 
 	/* Templates */
-	.card-hint { font-size: 12px; color: var(--text-muted); margin: -8px 0 14px; }
 	.tpl-field { margin-bottom: 14px; }
 	.tpl-field label { display: block; font-size: 12.5px; font-weight: 600; color: var(--text-base); margin-bottom: 4px; }
 	.tpl-vars { display: block; font-size: 10.5px; color: var(--text-subtle); margin-bottom: 5px; font-family: ui-monospace, monospace; }
 	.tpl-field textarea {
 		width: 100%; box-sizing: border-box; font-family: ui-monospace, monospace; font-size: 12px;
-		padding: 9px 11px; border: 1px solid var(--border); border-radius: 8px;
-		background: var(--bg-panel2, var(--bg-base)); color: var(--text-base); resize: vertical; line-height: 1.55;
+		padding: 9px 13px; border: 1px solid var(--border); border-radius: var(--radius-sm);
+		background: var(--bg-panel2); color: var(--text-base); resize: vertical; line-height: 1.55;
+		transition: border-color .15s, box-shadow .15s;
 	}
-	.tpl-field textarea:focus { outline: none; border-color: var(--accent); }
+	.tpl-field textarea:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-dim); }
 
 	.actions { margin-top: 4px; }
 	.btn-action {
-		padding: 9px 20px; border-radius: 8px; font-size: 13px; font-weight: 600;
-		background: var(--accent); color: #fff; border: none; cursor: pointer; font-family: inherit;
+		padding: 10px 20px; border-radius: var(--radius-sm); font-size: 13px; font-weight: 650;
+		background: var(--accent); color: var(--accent-contrast); border: none; cursor: pointer; font-family: inherit;
+		transition: transform .2s, background .2s;
 	}
-	.btn-action:hover { opacity: .9; }
-	.btn-action:disabled { opacity: .5; cursor: default; }
+	.btn-action:hover { background: var(--accent-hover); transform: translateY(-2px); }
+	.btn-action:active { transform: translateY(0); }
+	.btn-action:disabled { opacity: .5; cursor: default; transform: none; }
 
 	/* Log */
-	.empty { font-size: 13px; color: var(--text-muted); text-align: center; padding: 24px 0; }
+	.empty-state { display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center; }
+	.empty { font-size: 13px; color: var(--text-muted); margin: 0; }
 	.log-wrap { overflow-x: auto; }
-	.log { width: 100%; border-collapse: collapse; font-size: 12px; }
-	.log th {
-		text-align: left; padding: 8px 10px; font-size: 11px; font-weight: 700;
-		color: var(--text-subtle); text-transform: uppercase; letter-spacing: .03em;
-		border-bottom: 1px solid var(--border); white-space: nowrap;
+	.log .row-item { display: grid; grid-template-columns: 1.3fr 1.6fr .9fr .8fr .9fr; gap: 12px; align-items: center; font-size: 12px; padding: 9px 0; }
+	.row-head {
+		font-size: 10px; font-weight: 650; color: var(--text-muted);
+		text-transform: uppercase; letter-spacing: .13em; white-space: nowrap;
+		border-bottom-color: var(--border);
 	}
-	.log td { padding: 7px 10px; border-bottom: 1px solid var(--border-subtle, var(--border)); color: var(--text-base); }
-	.log tbody tr:hover { background: var(--bg-panel2, var(--bg-base)); }
 	.td-email { max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
 	.td-date { white-space: nowrap; color: var(--text-muted); font-variant-numeric: tabular-nums; }
 	.status-txt { text-transform: capitalize; }
-	.tpl-badge { font-size: 10.5px; padding: 2px 6px; border-radius: 5px; background: var(--bg-panel2, var(--bg-base)); color: var(--text-muted); font-family: ui-monospace, monospace; }
+	.tpl-badge { font-size: 10.5px; padding: 2px 6px; border-radius: var(--radius-sm); background: var(--bg-panel2); color: var(--text-muted); font-family: ui-monospace, monospace; }
 
 	.alert-success {
-		padding: 10px 14px; border-radius: 9px; font-size: 13px; font-weight: 500; margin-bottom: 16px;
-		color: var(--success, #16a34a);
-		background: color-mix(in srgb, var(--success, #22c55e) 12%, transparent);
-		border: 1px solid color-mix(in srgb, var(--success, #22c55e) 28%, transparent);
+		padding: 10px 14px; border-radius: var(--radius-sm); font-size: 13px; font-weight: 500; margin-top: 16px;
+		color: var(--success);
+		background: var(--success-dim);
+		border: 1px solid color-mix(in srgb, var(--success) 25%, transparent);
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.btn-action:hover { transform: none; }
 	}
 
 	@media (max-width: 860px) {
-		.two-col { grid-template-columns: 1fr; }
+		.log .row-item { grid-template-columns: 1fr 1fr; row-gap: 6px; }
+		.row-head { display: none; }
 	}
 </style>

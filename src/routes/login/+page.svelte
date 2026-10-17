@@ -15,7 +15,7 @@
 <svelte:head><title>{t.publicBooking.signInTitle} – {org.name}</title></svelte:head>
 
 <div class="auth-root">
-  <div class="auth-card">
+  <section class="section section--lead auth-card">
 
     <!-- Org branding -->
     <div class="auth-brand">
@@ -72,6 +72,7 @@
 
     <!-- ── Register form ── -->
     {#if tab === 'register'}
+      <p class="register-hint">{t.publicBooking.registerHint}</p>
       <form method="POST" action="?/register" use:enhance class="form">
         <input type="hidden" name="redirect" value={data.redirectTo} />
         <div class="field-row">
@@ -104,19 +105,20 @@
       </p>
     {/if}
 
-  </div>
+  </section>
 </div>
 
 <style>
   .auth-root {
     min-height: 100vh; display: flex; align-items: center; justify-content: center;
-    background: var(--bg-base); padding: 24px;
+    background: var(--bg-base); padding: 40px 24px;
   }
 
+  /* No box: the form sits on the page, as on the landing. The flex centring
+     above supplies the room a .section's own padding would. */
   .auth-card {
     width: 100%; max-width: 400px;
-    background: var(--bg-panel); border: 1px solid var(--border); border-radius: 16px;
-    padding: 32px; box-shadow: 0 16px 48px rgba(0,0,0,.2);
+    padding-block: 0;
     animation: fadeUp .2s ease both;
   }
   @keyframes fadeUp { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
@@ -124,16 +126,15 @@
   /* Branding */
   .auth-brand {
     display: flex; align-items: center; gap: 10px;
-    margin-bottom: 24px;
+    margin-bottom: 28px;
   }
-  .brand-logo { width: 36px; height: 36px; border-radius: 8px; object-fit: contain; }
+  .brand-logo { width: 36px; height: 36px; border-radius: var(--radius-sm); object-fit: contain; }
   .brand-icon {
-    width: 36px; height: 36px; border-radius: 8px;
-    background: color-mix(in srgb, var(--accent) 12%, transparent);
-    border: 1px solid color-mix(in srgb, var(--accent) 25%, transparent);
-    display: flex; align-items: center; justify-content: center; color: var(--accent);
+    width: 36px; height: 36px; border-radius: var(--radius-sm);
+    background: var(--accent-dim);
+    display: flex; align-items: center; justify-content: center; color: var(--accent-ink);
   }
-  .brand-name { font-size: 17px; font-weight: 800; color: var(--text-base); letter-spacing: -.02em; }
+  .brand-name { font-size: 17px; font-weight: 650; color: var(--text-base); letter-spacing: -.03em; }
 
   /* Tabs */
   .tabs {
@@ -146,15 +147,25 @@
     border-bottom: 2px solid transparent; margin-bottom: -1px;
     transition: color .1s, border-color .1s;
   }
-  .tab-active { color: var(--accent); border-bottom-color: var(--accent); }
+  .tab-active { color: var(--accent-ink); border-bottom-color: var(--accent); }
   .tab:hover:not(.tab-active) { color: var(--text-muted); }
 
-  /* Alert */
+  /* Notices */
+  .notice {
+    padding: 9px 12px; border-radius: var(--radius-sm); font-size: 12px; margin-bottom: 16px;
+  }
+  .notice-success { background: var(--success-dim); color: var(--success); }
   .alert-error {
-    padding: 9px 12px; border-radius: 8px; font-size: 12px; margin-bottom: 16px;
-    background: color-mix(in srgb, #ef4444 10%, transparent);
-    border: 1px solid color-mix(in srgb, #ef4444 22%, transparent);
-    color: #ef4444;
+    padding: 9px 12px; border-radius: var(--radius-sm); font-size: 12px; margin-bottom: 16px;
+    background: var(--danger-dim);
+    color: var(--danger);
+  }
+
+  /* Says plainly what this account is for: booking at THIS venue. A Hallify
+     account from the apex is a different thing, and the owner hint covers it. */
+  .register-hint {
+    font-size: 11.5px; line-height: 1.45; color: var(--text-muted);
+    margin: 0 0 14px;
   }
 
   /* Form */
@@ -163,38 +174,43 @@
   .field-row { display: flex; gap: 10px; }
   .field-grow { flex: 1; min-width: 0; }
   .field-label {
-    font-size: 10px; font-weight: 700; text-transform: uppercase;
-    letter-spacing: .06em; color: var(--text-subtle);
+    font-size: 10px; font-weight: 650; text-transform: uppercase;
+    letter-spacing: .13em; color: var(--text-muted);
   }
   .opt { font-weight: 400; text-transform: none; letter-spacing: 0; font-size: 10px; }
   .field-input {
-    padding: 9px 11px; border: 1px solid var(--border); border-radius: 8px;
-    background: var(--bg-panel2, var(--bg-base)); font-size: 13px;
-    color: var(--text-base); font-family: inherit; outline: none; transition: border-color .12s, box-shadow .12s;
+    padding: 9px 13px; border: 1px solid var(--border); border-radius: var(--radius-sm);
+    background: var(--bg-panel); font-size: 13px;
+    color: var(--text-base); font-family: inherit; outline: none; transition: border-color .15s, box-shadow .15s;
   }
   .field-input:focus {
     border-color: var(--accent);
-    box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 12%, transparent);
+    box-shadow: 0 0 0 3px var(--accent-dim);
   }
 
   .btn-submit {
-    width: 100%; padding: 11px; border-radius: 9px; font-size: 14px; font-weight: 700;
-    background: var(--accent); color: #fff; border: none; cursor: pointer;
-    font-family: inherit; transition: opacity .12s; margin-top: 4px;
+    width: 100%; padding: 12px; border-radius: var(--radius-sm); font-size: 14px; font-weight: 650;
+    background: var(--accent); color: var(--accent-contrast); border: none; cursor: pointer;
+    font-family: inherit; transition: transform .2s, background .2s; margin-top: 6px;
   }
-  .btn-submit:hover { opacity: .88; }
+  .btn-submit:hover { background: var(--accent-hover); transform: translateY(-2px); }
+  .btn-submit:active { transform: translateY(0); }
 
   /* Switch */
   .switch-hint {
-    text-align: center; font-size: 12px; color: var(--text-subtle); margin-top: 16px; margin-bottom: 0;
+    text-align: center; font-size: 12px; color: var(--text-muted); margin-top: 16px; margin-bottom: 0;
   }
   .switch-link {
-    background: none; border: none; color: var(--accent); font-size: 12px; font-weight: 600;
+    background: none; border: none; color: var(--accent-ink); font-size: 12px; font-weight: 600;
     cursor: pointer; padding: 0; font-family: inherit; text-decoration: underline;
   }
 
   .owner-hint {
     text-align: center; font-size: 11px; color: var(--text-subtle);
-    margin: 10px 0 0; padding-top: 10px; border-top: 1px solid var(--border-subtle, var(--border));
+    margin: 10px 0 0; padding-top: 12px; border-top: 1px solid var(--border-subtle);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .btn-submit:hover { transform: none; }
   }
 </style>

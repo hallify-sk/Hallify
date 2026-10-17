@@ -1,12 +1,10 @@
 import { fail, redirect } from '@sveltejs/kit';
-import { dbAll, dbFirst, dbRun, fromJson, fromJsonArr } from '$lib/db/index';
+import { dbAll, fromJson, fromJsonArr } from '$lib/db/index';
 import type { HallRow, HallBlockRow, TemplateRow } from '$lib/db/index';
 import type { Actions, PageServerLoad } from './$types';
-import { notifyNewReservation } from '$lib/email';
-import { postSystemMessage } from '$lib/tickets';
-import { assertCanBook, getTakenDates, getHeldDatesByOthers, releaseHold, earliestBookableISO, HOLD_MINUTES } from '$lib/availability';
+import { getTakenDates, getHeldDatesByOthers, earliestBookableISO, HOLD_MINUTES } from '$lib/availability';
 import { st } from '$lib/i18n-server';
-import { dispatchWebhooks } from '$lib/notifications';
+import { createReservation } from '$lib/server/reservations';
 
 const RANGE_DAYS = 540; // how far ahead to compute taken/held for the picker
 
@@ -72,62 +70,28 @@ export const actions: Actions = {
 
 		const data = await request.formData();
 		const hallId = String(data.get('hallId') ?? '');
-		const title = String(data.get('title') ?? '').trim();
-		const description = String(data.get('description') ?? '').trim();
 		const eventDate = String(data.get('eventDate') ?? '');
-		const templateId = String(data.get('templateId') ?? '');
-		const startTime = String(data.get('startTime') ?? '').trim() || null;
-		const endTime = String(data.get('endTime') ?? '').trim() || null;
-		const numGuests = parseInt(String(data.get('numGuests') ?? ''), 10) || null;
 
-		if (!hallId || !title || !eventDate) {
-			return fail(400, { error: st(locals.locale).serverErrors.fillAllRequiredFields, values: { hallId, eventDate } });
+		// Validation, availability and the insert all live in createReservation —
+		// the manual-entry screen goes through the very same path.
+		const created = await createReservation(locals, {
+			orgId,
+			hallId,
+			title: String(data.get('title') ?? ''),
+			description: String(data.get('description') ?? ''),
+			eventDate,
+			templateId: String(data.get('templateId') ?? ''),
+			startTime: String(data.get('startTime') ?? ''),
+			endTime: String(data.get('endTime') ?? ''),
+			numGuests: parseInt(String(data.get('numGuests') ?? ''), 10) || null,
+			eventType: String(data.get('eventType') ?? ''),
+			eventTypeOther: String(data.get('eventTypeOther') ?? ''),
+		});
+
+		if (!created.ok) {
+			return fail(created.status, { error: created.error, values: { hallId, eventDate } });
 		}
 
-		const hall = await dbFirst<HallRow>(locals.db, 'SELECT * FROM halls WHERE id = ? AND org_id = ?', hallId, orgId);
-		if (!hall) return fail(400, { error: st(locals.locale).serverErrors.hallNotFound });
-
-		if (hall.force_layouts && !templateId) {
-			return fail(400, { error: st(locals.locale).serverErrors.layoutMustBeSelected, values: { hallId, eventDate } });
-		}
-
-		// All availability rules in one place (past/min-advance/blocked/taken/held/capacity).
-		const check = await assertCanBook(locals.db, hall, eventDate, locals.user.id, numGuests, locals.locale);
-		if (!check.ok) return fail(400, { error: check.reason, values: { hallId, eventDate } });
-
-		let layoutJson: string | null = null;
-		if (templateId) {
-			const tmpl = await dbFirst<TemplateRow>(locals.db,
-				'SELECT layout_json FROM floorplan_templates WHERE id = ? AND hall_id = ?', templateId, hallId);
-			if (tmpl) layoutJson = tmpl.layout_json as string | null;
-		}
-
-		const initialStatus = hall.auto_approve ? 'approved' : 'pending';
-		const newId = crypto.randomUUID();
-		const inviteCode = crypto.randomUUID().replace(/-/g, '').slice(0, 8).toUpperCase();
-
-		try {
-			await dbRun(locals.db,
-				`INSERT INTO reservations (id, org_id, hall_id, user_id, title, description, event_date, start_time, end_time, layout_json, status, invite_code, num_guests)
-				 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-				newId, orgId, hallId, locals.user.id, title, description || null, eventDate, startTime, endTime, layoutJson, initialStatus, inviteCode, numGuests
-			);
-		} catch {
-			// Lost the one-per-hall-day unique index race.
-			return fail(409, { error: st(locals.locale).serverErrors.dateJustTaken, values: { hallId } });
-		}
-
-		await releaseHold(locals.db, hallId, eventDate, locals.user.id);
-
-		const userName = `${locals.user.first_name} ${locals.user.last_name}`;
-		await postSystemMessage(locals.db, locals.user.id, title, `reservation_created:${initialStatus}:${userName}`, locals.user.id);
-		notifyNewReservation(locals.db, orgId, title, userName, hall.name, eventDate).catch(() => {});
-		// `reservation.new` is declared in WebhookEvent and offered in the webhook
-		// settings UI, but nothing ever dispatched it — subscribing was a no-op.
-		dispatchWebhooks(locals.db, orgId, 'reservation.new', {
-			reservation_id: newId, title, hall_id: hallId, event_date: eventDate,
-		}).catch(() => {});
-
-		redirect(303, `/app/reservation/${newId}`);
+		redirect(303, `/app/reservation/${created.id}`);
 	}
 };

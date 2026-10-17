@@ -21,15 +21,15 @@
 
       <ul class="brand-features">
         <li class="brand-anim" style="animation-delay: 200ms">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+          <span class="icon-tile"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg></span>
           Manage every hall, seat, and layout
         </li>
         <li class="brand-anim" style="animation-delay: 280ms">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+          <span class="icon-tile"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg></span>
           Streamline bookings and seating
         </li>
         <li class="brand-anim" style="animation-delay: 360ms">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+          <span class="icon-tile"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg></span>
           Collaborate across your organization
         </li>
       </ul>
@@ -59,7 +59,10 @@
   .brand-panel {
     width: 420px;
     flex-shrink: 0;
-    background: #0d1117;
+    /* The dark paper of the language (= the dark theme's --bg-base). Hardcoded on
+       purpose: this panel stays dark in all three themes, so it cannot follow the
+       theme tokens. */
+    background: #181c1a;
     display: flex;
     flex-direction: column;
     padding: 44px 48px;
@@ -88,7 +91,7 @@
     left: -80px;
     width: 360px;
     height: 360px;
-    background: radial-gradient(circle, rgba(79,110,247,.22) 0%, transparent 70%);
+    background: radial-gradient(circle, rgba(240,92,161,.22) 0%, transparent 70%);
     pointer-events: none;
   }
 
@@ -113,7 +116,7 @@
     font-style: italic;
     font-size: 17px;
     color: rgba(255,255,255,.9);
-    letter-spacing: -0.01em;
+    letter-spacing: -0.05em;
   }
 
   .brand-body {
@@ -127,38 +130,48 @@
 
   .brand-headline {
     font-size: 32px;
-    font-weight: 700;
-    line-height: 1.2;
+    font-weight: 550;
+    line-height: 1.14;
     color: #ffffff;
-    letter-spacing: -0.02em;
+    letter-spacing: -0.045em;
     margin-bottom: 32px;
   }
 
+  /* The landing's icon-tile + copy idiom, at the brand panel's scale. */
   .brand-features {
     list-style: none;
     display: flex;
     flex-direction: column;
-    gap: 14px;
+    gap: 16px;
   }
 
   .brand-features li {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 14px;
     font-size: 13px;
-    color: rgba(255,255,255,.55);
+    color: rgba(255,255,255,.62);
     font-weight: 400;
-    line-height: 1.4;
+    line-height: 1.5;
   }
 
-  .brand-features li svg {
-    flex-shrink: 0;
-    color: rgba(255,255,255,.35);
+  /* The brand accent (#f05ca1) literal, not var(--accent): this panel is dark in
+     every theme, so it must not follow a theme token. */
+  .brand-features .icon-tile {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    background: rgba(240,92,161,.14);
+    color: rgba(240,92,161,.9);
+  }
+  .brand-features .icon-tile svg {
+    width: 14px;
+    height: 14px;
   }
 
   .brand-footer {
     font-size: 11px;
-    color: rgba(255,255,255,.2);
+    color: rgba(255,255,255,.52);
     position: relative;
     z-index: 1;
   }
@@ -176,9 +189,10 @@
 
   /* ── Form panel ──────────────────────────────── */
 
+  /* Paper, not a panel fill — the jump from the landing page should be small. */
   .form-panel {
     flex: 1;
-    background: var(--bg-panel);
+    background: var(--bg-base);
     display: flex;
     align-items: center;
     justify-content: center;

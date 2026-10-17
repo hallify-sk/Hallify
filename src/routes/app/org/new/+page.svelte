@@ -9,9 +9,11 @@
 </script>
 
 <div class="auth-shell">
-  <div class="card auth-card">
-    <h1>{t.accountExtra.createOrgTitle}</h1>
-    <p class="subtitle">{t.accountExtra.createOrgSubtitle}</p>
+  <section class="section section--lead auth-card">
+    <div class="section-head">
+      <h1>{t.accountExtra.createOrgTitle}</h1>
+      <p class="subtitle">{t.accountExtra.createOrgSubtitle}</p>
+    </div>
 
     {#if form?.error}
       <div class="alert-error">{form.error}</div>
@@ -27,7 +29,7 @@
         {t.accountExtra.createOrgTitle}
       </button>
     </form>
-  </div>
+  </section>
 </div>
 
 <style>
@@ -38,11 +40,12 @@
     min-height: 80vh;
     padding: 2rem;
   }
+  /* No box: the form sits on the page. The flex centring supplies the room a
+     .section's own padding would. */
   .auth-card {
     width: 100%;
     max-width: 420px;
-    padding: 2rem;
+    padding-block: 0;
   }
-  h1 { font-size: 1.5rem; margin: 0 0 .5rem; }
-  .subtitle { color: var(--text-muted); font-size: .9rem; margin: 0 0 1.5rem; }
+  h1 { font-size: 1.75rem; font-weight: 550; letter-spacing: -.055em; line-height: 1.08; margin: 0; }
 </style>

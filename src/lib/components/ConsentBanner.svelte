@@ -105,38 +105,48 @@
   .consent-body {
     pointer-events: auto;
     max-width: 720px; width: 100%;
-    padding: 16px 18px;
-    border-radius: 12px;
-    background: var(--bg-panel, #111726);
-    border: 1px solid var(--border, rgba(255, 255, 255, 0.12));
-    box-shadow: 0 10px 34px rgba(0, 0, 0, 0.35);
+    padding: 18px 20px;
+    border-radius: var(--radius-lg);
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow);
     font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
   }
-  .consent-head h2 { font-size: 0.95rem; font-weight: 620; margin: 0 0 4px; color: var(--text-primary, rgba(255,255,255,.92)); }
-  .consent-head p { margin: 0; font-size: 0.85rem; line-height: 1.55; color: var(--text-secondary, rgba(255,255,255,.66)); }
-  .consent-head a { color: var(--accent, #4f6ef7); }
+  .consent-head h2 { font-size: 0.95rem; font-weight: 550; letter-spacing: -.03em; margin: 0 0 5px; color: var(--text-base); }
+  .consent-head p { margin: 0; font-size: 0.85rem; line-height: 1.6; color: var(--text-muted); }
+  .consent-head a { color: var(--accent-ink); }
 
   .cats { display: flex; flex-direction: column; gap: 8px; margin: 14px 0 4px; }
   .cat { display: flex; gap: 10px; align-items: flex-start; font-size: 0.82rem; cursor: pointer; }
-  .cat input { margin-top: 3px; flex-shrink: 0; }
-  .cat strong { display: block; font-weight: 580; color: var(--text-primary, rgba(255,255,255,.9)); }
-  .cat em { font-style: normal; color: var(--text-secondary, rgba(255,255,255,.55)); line-height: 1.5; }
+  .cat input { margin-top: 3px; flex-shrink: 0; accent-color: var(--accent); }
+  .cat strong { display: block; font-weight: 600; color: var(--text-base); }
+  .cat em { font-style: normal; color: var(--text-muted); line-height: 1.5; }
   .cat-locked { opacity: 0.65; cursor: default; }
 
   .consent-actions { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; margin-top: 14px; }
   .btn {
-    padding: 8px 16px; border-radius: 8px;
-    font-size: 0.85rem; font-weight: 560;
+    padding: 9px 18px; border-radius: var(--radius-sm);
+    font-size: 0.85rem; font-weight: 600;
     cursor: pointer; font-family: inherit;
     border: 1px solid transparent; white-space: nowrap;
+    transition: transform .2s, background .2s, border-color .15s, color .15s;
   }
-  .btn-accept { background: var(--accent, #4f6ef7); color: #fff; }
+  /* Accepting is the primary action, so it takes the signature hover lift. */
+  .btn-accept { background: var(--accent); color: var(--accent-contrast); font-weight: 650; }
+  .btn-accept:hover { background: var(--accent-hover); transform: translateY(-2px); }
+  .btn-accept:active { transform: translateY(0); }
   .btn-ghost {
     background: transparent;
-    color: var(--text-secondary, rgba(255,255,255,.7));
-    border-color: var(--border, rgba(255,255,255,.16));
+    color: var(--text-base);
+    border-color: var(--border);
   }
-  .btn-link { background: none; color: var(--text-secondary, rgba(255,255,255,.6)); text-decoration: underline; margin-right: auto; padding-left: 0; }
+  .btn-ghost:hover { background: var(--bg-hover); border-color: var(--text-subtle); }
+  .btn-link { background: none; color: var(--text-muted); text-decoration: underline; margin-right: auto; padding-left: 0; }
+  .btn-link:hover { color: var(--text-base); }
+
+  @media (prefers-reduced-motion: reduce) {
+    .btn-accept:hover { transform: none; }
+  }
 
   @media (max-width: 560px) {
     .consent-actions { justify-content: stretch; }

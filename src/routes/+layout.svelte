@@ -8,6 +8,7 @@
 	import { playSound } from '$lib/sounds';
 	import ConsentBanner from '$lib/components/ConsentBanner.svelte';
 	import { setUserContext } from '$lib/analytics';
+	import { readableInkOn, inkOnLight, inkOnDark } from '$lib/contrast';
 
 	const { children, data } = $props();
 
@@ -66,21 +67,29 @@
 
 	const branding = $derived(data.branding);
 
-	function hexToRgb(hex: string): string {
+	function rgbOf(hex: string): [number, number, number] {
 		const h = hex.replace('#', '');
-		const r = parseInt(h.substring(0, 2), 16);
-		const g = parseInt(h.substring(2, 4), 16);
-		const b = parseInt(h.substring(4, 6), 16);
-		return `${r}, ${g}, ${b}`;
+		return [
+			parseInt(h.substring(0, 2), 16),
+			parseInt(h.substring(2, 4), 16),
+			parseInt(h.substring(4, 6), 16)
+		];
 	}
 
 	function dimColor(hex: string, opacity: number): string {
-		return `rgba(${hexToRgb(hex)}, ${opacity})`;
+		return `rgba(${rgbOf(hex).join(', ')}, ${opacity})`;
 	}
 
 	const brandStyle = $derived(
 		branding?.primaryColor
-			? `--accent: ${branding.primaryColor}; --accent-dim: ${dimColor(branding.primaryColor, 0.1)}; --accent-hover: ${branding.primaryColor}cc; --accent-action: ${branding.primaryColor}; --accent-action-dim: ${dimColor(branding.primaryColor, 0.1)};`
+			? `--accent: ${branding.primaryColor};` +
+			  ` --brand-ink-light: ${inkOnLight(branding.primaryColor)};` +
+			  ` --brand-ink-dark: ${inkOnDark(branding.primaryColor)};` +
+			  ` --accent-contrast: ${readableInkOn(branding.primaryColor)};` +
+			  ` --accent-dim: ${dimColor(branding.primaryColor, 0.1)};` +
+			  ` --accent-hover: ${branding.primaryColor}cc;` +
+			  ` --accent-action: ${branding.primaryColor};` +
+			  ` --accent-action-dim: ${dimColor(branding.primaryColor, 0.1)};`
 			: ''
 	);
 
@@ -94,6 +103,21 @@
 	const isDocPage = $derived($page.url.pathname.endsWith('/manifest'));
 	// Legal documents render standalone, like the landing page.
 	const isLegalPage = $derived(['/terms', '/privacy', '/dpa'].includes($page.url.pathname));
+
+	// Density by surface. Anything a customer sees breathes like the landing page;
+	// the operator tools (manage, platform, reservations, messages, the editor) use
+	// the same parts at working density, because a booking table at marketing
+	// spacing is hostile to someone living in it all day.
+	const OPERATOR_PREFIXES = [
+		'/app/manage', '/app/platform', '/app/reservation',
+		'/app/messages', '/app/announcements', '/app/profile'
+	];
+	const isOperatorSurface = $derived(
+		$page.url.pathname === '/app' ||
+		$page.url.pathname === '/app/' ||
+		OPERATOR_PREFIXES.some((prefix) => $page.url.pathname.startsWith(prefix))
+	);
+	const density = $derived(isOperatorSurface ? 'compact' : 'comfortable');
 
 	function osTheme(): string {
 		return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'slate';
@@ -119,11 +143,11 @@
 <ConsentBanner containerId={data.gtmId ?? null} />
 
 {#if isLandingPage || isPublicHallsPage || isDocPage || isLegalPage}
-	<div style={brandStyle}>
+	<div style={brandStyle} data-density={isDocPage ? 'compact' : 'comfortable'}>
 		{@render children()}
 	</div>
 {:else}
-	<div class="app-shell" style={brandStyle}>
+	<div class="app-shell" style={brandStyle} data-density={density}>
 		{#if !isAuthPage}
 			<Sidebar
 				user={data.user}
@@ -183,24 +207,28 @@
 		padding: 9px 18px;
 		font-size: 13px;
 		font-weight: 600;
-		/* Self-contained colors (theme-independent) for a readable, high-contrast alert. */
-		color: #422006;
-		background: #fcd34d;
-		border-bottom: 1px solid #d97706;
+		/* Self-contained colors (theme-independent) for a readable, high-contrast alert:
+		   an admin must notice they are impersonating no matter which theme is active, so
+		   this one bar deliberately opts out of the token system. The amber is warmed to
+		   sit with the paper palette, but it stays loud on purpose. */
+		color: #3a2408;
+		background: #f5c75b;
+		border-bottom: 1px solid #c2881b;
 	}
-	.imp-banner svg { color: #92400e; flex-shrink: 0; }
-	.imp-banner strong { font-weight: 800; color: #422006; }
+	.imp-banner svg { color: #6b4410; flex-shrink: 0; }
+	.imp-banner strong { font-weight: 650; color: #3a2408; }
 	.imp-exit-form { margin-left: auto; }
 	.imp-exit {
-		padding: 4px 14px;
-		border-radius: 7px;
+		padding: 5px 14px;
+		border-radius: var(--radius-sm);
 		font-size: 12px;
-		font-weight: 700;
-		background: #422006;
-		color: #fcd34d;
+		font-weight: 650;
+		background: #3a2408;
+		color: #f5c75b;
 		border: none;
 		cursor: pointer;
 		font-family: inherit;
+		transition: background .15s;
 	}
-	.imp-exit:hover { background: #5c2e0a; }
+	.imp-exit:hover { background: #54350c; }
 </style>
