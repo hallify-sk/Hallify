@@ -567,7 +567,7 @@
     display: flex;
     align-items: center;
     gap: 4px;
-    padding: 8px 12px;
+    padding: 6px 10px 10px;
     border-top: 1px solid var(--border-subtle);
   }
 
@@ -619,7 +619,7 @@
     display: flex;
     align-items: center;
     gap: 4px;
-    padding: 8px 12px 0;
+    padding: 10px 10px 0;
   }
   .lang-btn {
     flex: 1;

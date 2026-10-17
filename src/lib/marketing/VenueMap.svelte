@@ -6,6 +6,7 @@
   import 'leaflet/dist/leaflet.css';
   import type { MapCenter } from './discovery';
   import { userLocation, locateUser } from './user-location.svelte';
+  import { createPointerKindDetector } from '$lib/pointer-kind';
   import { mapPreferences, loadMapPreferences } from './map-preferences.svelte';
 
   export interface MapPoint { id: string; name: string; latitude: number; longitude: number; label?: string; demo?: boolean }
@@ -63,11 +64,23 @@
     loadMapPreferences();
     let disposed = false, resize: ResizeObserver | undefined;
     let frame = 0, dx = 0, dy = 0;
+    const pointerKind = createPointerKindDetector();
     const wheel = (event: WheelEvent) => {
       // Let Leaflet debounce and animate pinch zoom, retaining the current tiles.
       // This listener is registered first so ordinary scrolling can pan the map
       // or continue through the page without also triggering Leaflet wheel zoom.
       if (event.ctrlKey || event.metaKey) return;
+
+      // A trackpad has two gestures: two-finger scroll pans, pinch zooms. A mouse
+      // has only the wheel, so panning with it left no way to zoom at all. Hand the
+      // wheel back to Leaflet's own scrollWheelZoom, which zooms.
+      //
+      // It obeys the same activation gate as the pan: until the map has been clicked
+      // (or it is the full-screen explorer), scrollWheelZoom stays disabled and the
+      // event passes through, so scrolling PAST the map on the landing page scrolls
+      // the page instead of silently zooming a map nobody was using.
+      if (pointerKind.classify(event, event.timeStamp) === 'mouse') return;
+
       event.stopImmediatePropagation();
       if (!map || map.getZoom() === undefined || !trackpadEnabled) return;
       event.preventDefault();
@@ -79,15 +92,15 @@
         dx = 0; dy = 0;
       });
     };
-    const activate = () => { trackpadEnabled = true; };
-    const deactivate = () => { if (!fullScreen) trackpadEnabled = false; };
+    const activate = () => { trackpadEnabled = true; map?.scrollWheelZoom.enable(); };
+    const deactivate = () => { if (!fullScreen) { trackpadEnabled = false; map?.scrollWheelZoom.disable(); } };
     container.addEventListener('wheel',wheel,{passive:false});
     container.addEventListener('pointerdown',activate);
     container.addEventListener('pointerleave',deactivate);
     import('leaflet').then(L => {
       if (disposed) return;
       library = L;
-      const instance = L.map(container, { scrollWheelZoom:true, wheelDebounceTime:16, wheelPxPerZoomLevel:12, zoomAnimation:!reduced(), fadeAnimation:!reduced(), zoomControl:false, minZoom:3, maxZoom:19, zoomSnap:0, zoomDelta:1, touchZoom:true });
+      const instance = L.map(container, { scrollWheelZoom:untrack(() => fullScreen), wheelDebounceTime:16, wheelPxPerZoomLevel:12, zoomAnimation:!reduced(), fadeAnimation:!reduced(), zoomControl:false, minZoom:3, maxZoom:19, zoomSnap:0, zoomDelta:1, touchZoom:true });
       instance.attributionControl.setPrefix(false);
       L.control.scale({ imperial: false, position: 'bottomleft' }).addTo(instance);
       const tiles = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -211,6 +224,27 @@
   :global(.venue-map-pin.is-selected .venue-map-pin-inner){background:#f05ca1;color:#28111c;border-color:#f05ca1}
   :global(.venue-map-pin.is-selected .venue-map-pin-inner::after){border-color:#f05ca1}
   :global(.venue-map-pin:focus-visible){outline:3px solid var(--map-accent);outline-offset:4px;border-radius:3px}
+
+  /* Hover. The pins had a selected state and a focus ring but nothing for the
+     pointer, so nothing on the map reacted to the mouse at all. Transform and
+     colour only, so it stays cheap while Leaflet is panning. */
+  :global(.venue-map-pin-inner){transition:background .15s,border-color .15s,color .15s,transform .15s,box-shadow .15s}
+  :global(.venue-map-pin:hover){z-index:600}
+  :global(.venue-map-pin:hover .venue-map-pin-inner){
+    border-color:#f05ca1;
+    transform:translateY(-2px);
+    box-shadow:0 9px 20px #11151133;
+  }
+  :global(.venue-map-pin:hover .venue-map-pin-inner::after){border-color:#f05ca1}
+  /* Already selected: deepen rather than restate the accent. */
+  :global(.venue-map-pin.is-selected:hover .venue-map-pin-inner){background:#e54a93;border-color:#e54a93}
+  :global(.venue-map-pin.is-selected:hover .venue-map-pin-inner::after){border-color:#e54a93}
+  :global(.venue-map-pin:active .venue-map-pin-inner){transform:translateY(0)}
+
+  @media (prefers-reduced-motion: reduce){
+    :global(.venue-map-pin-inner){transition:none}
+    :global(.venue-map-pin:hover .venue-map-pin-inner){transform:none}
+  }
   @media(max-width:600px){.venue-map-container:has(:global(.layers-panel)){z-index:1100}}
   :global(.venue-map-surface .leaflet-zoom-anim .leaflet-zoom-animated){transition-duration:100ms}
   @media(prefers-reduced-motion:reduce){:global(.venue-map-surface .leaflet-zoom-anim .leaflet-zoom-animated){transition:none}}
