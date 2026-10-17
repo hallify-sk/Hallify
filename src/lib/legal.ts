@@ -18,11 +18,14 @@ import type { Locale } from './i18n';
 
 /** ⚠️ FILL THESE IN — they appear verbatim in both documents, in both languages. */
 export const OPERATOR = {
-  legalName: '[[ LEGAL ENTITY NAME s.r.o. ]]',
-  address: '[[ STREET, POSTCODE CITY, Slovakia ]]',
-  companyId: '[[ IČO ]]',
-  vatId: '[[ DIČ / IČ DPH ]]',
-  registerEntry: '[[ Commercial Register entry, e.g. OR OS Bratislava I, oddiel Sro, vložka č. XXXXX/B ]]',
+  legalName: 'Richard Marcinčák',
+  address: 'Teplička 124, 052 01 Spišská Nová Ves, Slovensko',
+  companyId: '57644420',
+  vatId: '[[ DIČ ]]',
+  /** Sole trader, so this is the TRADE register (živnostenský), not the commercial
+   *  register. Phrased as a noun ("Zápis: …") rather than a participle so the
+   *  sentence does not have to agree in gender with the operator's name. */
+  registerEntry: '[[ Živnostenský register Okresného úradu …, č. … ]]',
   contactEmail: '[[ contact@hallify.sk ]]',
   privacyEmail: '[[ privacy@hallify.sk ]]',
 } as const;
@@ -56,7 +59,7 @@ const termsSk: LegalDoc = {
     {
       heading: '1. Prevádzkovateľ',
       blocks: [
-        { p: `Službu Hallify („služba“) prevádzkuje ${OPERATOR.legalName}, so sídlom ${OPERATOR.address}, IČO ${OPERATOR.companyId}, DIČ ${OPERATOR.vatId}, zapísaná: ${OPERATOR.registerEntry} („prevádzkovateľ“, „my“).` },
+        { p: `Službu Hallify („služba“) prevádzkuje ${OPERATOR.legalName}, miesto podnikania ${OPERATOR.address}, IČO ${OPERATOR.companyId}, DIČ ${OPERATOR.vatId}. Zápis: ${OPERATOR.registerEntry} („prevádzkovateľ“, „my“).` },
         { p: `Kontakt: ${OPERATOR.contactEmail}.` },
       ],
     },
@@ -175,7 +178,7 @@ const termsEn: LegalDoc = {
     {
       heading: '1. Who we are',
       blocks: [
-        { p: `Hallify (the "Service") is operated by ${OPERATOR.legalName}, registered office ${OPERATOR.address}, company ID ${OPERATOR.companyId}, VAT ID ${OPERATOR.vatId}, registered: ${OPERATOR.registerEntry} ("we", "us").` },
+        { p: `Hallify (the "Service") is operated by ${OPERATOR.legalName}, a sole trader with place of business at ${OPERATOR.address}, business ID (IČO) ${OPERATOR.companyId}, tax ID (DIČ) ${OPERATOR.vatId}. Registration: ${OPERATOR.registerEntry} ("we", "us").` },
         { p: `Contact: ${OPERATOR.contactEmail}.` },
       ],
     },
@@ -824,5 +827,9 @@ export const LEGAL_PATHS: Record<LegalKind, string> = {
   dpa: '/dpa',
 };
 
-/** True while OPERATOR still holds unfilled placeholders. Drives the draft banner. */
-export const LEGAL_IS_DRAFT = OPERATOR.legalName.includes('[[');
+/** True while OPERATOR still holds unfilled placeholders. Drives the draft banner.
+ *
+ *  Checks EVERY field, not just the name: filling the name alone used to switch the
+ *  banner off while `[[ DIČ ]]` was still rendering verbatim in the published
+ *  documents — the one state in which the warning matters most. */
+export const LEGAL_IS_DRAFT = Object.values(OPERATOR).some((v) => v.includes('[['));
