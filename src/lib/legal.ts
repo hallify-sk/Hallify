@@ -43,8 +43,20 @@ export const OPERATOR = {
  *  is either included or about to be added. */
 export const OPERATOR_VAT_REGISTERED = false;
 
+/** Service level. One definition for both locales so the number cannot drift — the
+ *  only difference is the decimal separator, which is a comma in Slovak.
+ *
+ *  99.9% is ~43m50s of permitted downtime a month. Deliberately not 99.99% (4m23s):
+ *  that is tighter than the infrastructure underneath contractually offers us, so
+ *  promising it would mean absorbing a provider's outage with no recourse — and a
+ *  single bad deploy would exhaust the month's budget. */
+export const SLA = {
+  uptimeTarget: '99,9 %',
+  uptimeTargetEn: '99.9%',
+} as const;
+
 /** Last substantive revision. Bump when the text changes. */
-export const LEGAL_UPDATED = '2026-08-01';
+export const LEGAL_UPDATED = '2026-10-17';
 
 export interface LegalBlock {
   /** A paragraph, or a bulleted list. */
@@ -151,9 +163,23 @@ const termsSk: LegalDoc = {
       ],
     },
     {
-      heading: '9. Dostupnosť služby',
+      heading: '9. Dostupnosť služby a SLA',
       blocks: [
-        { p: 'Usilujeme sa o vysokú dostupnosť, negarantujeme však neprerušovanú prevádzku. Službu môžeme dočasne obmedziť pre údržbu alebo z bezpečnostných dôvodov. Ak nie je dohodnuté inak (Enterprise), služba sa poskytuje bez zmluvne garantovanej úrovne dostupnosti (SLA).' },
+        { p: `Garantujeme mesačnú dostupnosť služby na úrovni ${SLA.uptimeTarget} pre všetky programy vrátane bezplatného. Dostupnosť sa počíta za kalendárny mesiac ako podiel času, počas ktorého je služba dosiahnuteľná, na celkovom čase mesiaca po odpočítaní vylúčených období podľa odseku nižšie.` },
+        { p: 'Do výpadku sa nezapočítava:' },
+        { list: [
+          'Plánovaná údržba oznámená aspoň 48 hodín vopred, v rozsahu najviac 4 hodiny mesačne.',
+          'Výpadky spôsobené vyššou mocou alebo konaním tretej strany mimo našej kontroly, vrátane výpadkov poskytovateľov infraštruktúry.',
+          'Výpadky spôsobené vaším konaním, vaším pripojením alebo používaním služby v rozpore s týmito podmienkami.',
+          'Dočasné obmedzenie z bezpečnostných dôvodov pri bezprostrednom ohrození služby alebo údajov.',
+        ] },
+        { p: `Ak dostupnosť v danom mesiaci klesne pod ${SLA.uptimeTarget}, máte nárok na kredit, ktorý započítame na najbližšiu faktúru:` },
+        { list: [
+          `Pod ${SLA.uptimeTarget} a aspoň 99,0 % — kredit 10 % mesačného poplatku.`,
+          'Pod 99,0 % a aspoň 95,0 % — kredit 25 % mesačného poplatku.',
+          'Pod 95,0 % — kredit 50 % mesačného poplatku.',
+        ] },
+        { p: `Kredit si uplatníte e-mailom na ${OPERATOR.contactEmail} do 30 dní od konca dotknutého mesiaca. Kredit je jediným nárokom z nedodržania garantovanej dostupnosti a nepresiahne poplatok zaplatený za daný mesiac. V bezplatnom programe sa za službu neplatí, preto k nemu nevzniká kredit; garantovaná úroveň dostupnosti však platí rovnako.` },
       ],
     },
     {
@@ -271,9 +297,23 @@ const termsEn: LegalDoc = {
       ],
     },
     {
-      heading: '9. Availability',
+      heading: '9. Availability and SLA',
       blocks: [
-        { p: 'We aim for high availability but do not guarantee uninterrupted service. We may limit the Service temporarily for maintenance or security. Unless separately agreed (Enterprise), the Service is provided without a contractual service level agreement.' },
+        { p: `We guarantee ${SLA.uptimeTargetEn} monthly availability on every plan, including the free one. Availability is measured per calendar month as the share of time the Service is reachable, over the total time in the month less any excluded periods below.` },
+        { p: 'The following does not count as downtime:' },
+        { list: [
+          'Scheduled maintenance announced at least 48 hours in advance, up to 4 hours per month.',
+          'Outages caused by force majeure or by a third party outside our control, including failures at our infrastructure providers.',
+          'Outages caused by your actions, your connection, or use of the Service contrary to these terms.',
+          'Temporary restriction for security reasons where the Service or data is under immediate threat.',
+        ] },
+        { p: `If availability in a given month falls below ${SLA.uptimeTargetEn}, you are entitled to a credit applied to your next invoice:` },
+        { list: [
+          `Below ${SLA.uptimeTargetEn} and at least 99.0% — a credit of 10% of the monthly fee.`,
+          'Below 99.0% and at least 95.0% — a credit of 25% of the monthly fee.',
+          'Below 95.0% — a credit of 50% of the monthly fee.',
+        ] },
+        { p: `Claim a credit by email to ${OPERATOR.contactEmail} within 30 days of the end of the affected month. The credit is your sole remedy for a missed availability target and will not exceed the fee paid for that month. The free plan carries no fee and therefore no credit, but the availability target applies to it equally.` },
       ],
     },
     {
