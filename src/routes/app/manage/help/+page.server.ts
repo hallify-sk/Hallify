@@ -40,7 +40,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 		{ key: 'tables', label: C.tables.label, desc: C.tables.desc, done: tableTypes > 0, href: hallHref, cta: C.tables.cta },
 		{ key: 'public', label: C.public.label, desc: C.public.desc, done: publicHalls > 0, href: hallHref, cta: C.public.cta },
 		{ key: 'extras', label: C.extras.label, desc: C.extras.desc, done: extras > 0, href: hallHref, cta: C.extras.cta },
-		{ key: 'team', label: C.team.label, desc: C.team.desc, done: members > 1, href: '/app/manage/members', cta: C.team.cta },
+		{ key: 'team', label: C.team.label, desc: C.team.desc, done: members > 1, href: '/app/manage/members/invites', cta: C.team.cta },
 	];
 
 	// `auto` is kept separate from `done` so the UI can tell the two apart: a step the

@@ -1,6 +1,5 @@
 <script lang="ts">
   import { page } from '$app/stores';
-  import { themeStore } from '$lib/stores/theme.svelte';
   import { getLocale, chooseLocale, type Locale, t } from '$lib/i18n.svelte';
   import type { LayoutData } from './$types';
 
@@ -14,16 +13,7 @@
   const initials = $derived(user ? `${user.first_name?.[0] ?? ''}${user.last_name?.[0] ?? ''}`.toUpperCase() : '');
 
   // Each swatch is now that theme's paper colour, not an old-palette hue.
-  const THEMES = [
-    { id: 'slate', label: 'Slate', dot: '#f9f9f7' },
-    { id: 'dark',  label: 'Dark',  dot: '#181c1a' },
-    { id: 'warm',  label: 'Warm',  dot: '#faf7f3' },
-  ] as const;
 
-  function setTheme(id: string) {
-    themeStore.set(id);
-    localStorage.setItem('hallify-theme', id);
-  }
 
   const LANGS: { id: Locale; label: string }[] = [
     { id: 'sk', label: 'SK' },
@@ -31,7 +21,7 @@
   ];
 </script>
 
-<div class="b-shell">
+<div class="b-shell" style={data.site.templateStyle} data-template={data.site.template}>
   <aside class="b-sidebar">
     <a href="/halls" class="b-brand">
       {#if org.logoUrl}
@@ -68,14 +58,6 @@
           <button type="button" class="b-lang" class:active={getLocale() === l.id} onclick={() => chooseLocale(l.id)}>{l.label}</button>
         {/each}
       </div>
-      <div class="b-themes">
-        {#each THEMES as th}
-          <button type="button" class="b-theme" class:active={themeStore.current === th.id} onclick={() => setTheme(th.id)} title={th.label}>
-            <span class="b-dot" style="background:{th.dot}"></span>
-            <span class="b-theme-label">{th.label}</span>
-          </button>
-        {/each}
-      </div>
 
       {#if user}
         <div class="b-account">
@@ -107,6 +89,18 @@
 </div>
 
 <style>
+  /* Headings follow the template. Body text stays Inter everywhere: the templates
+     differ by palette, shape and weight, and only borrow a SYSTEM serif for
+     headings — self-hosting eight families would cost megabytes and the CSP
+     blocks third-party font CDNs. */
+  .b-shell :global(h1),
+  .b-shell :global(h2),
+  .b-shell :global(h3) {
+    font-family: var(--heading-font, inherit);
+    font-weight: var(--heading-weight, 550);
+    letter-spacing: var(--heading-tracking, -.03em);
+  }
+
   .b-shell { display: flex; min-height: 100vh; background: var(--bg-base); }
 
   .b-sidebar {
@@ -135,13 +129,7 @@
   .b-lang { flex: 1; padding: 5px 4px; border-radius: var(--radius-sm); border: 1px solid transparent; background: none; cursor: pointer; font-family: inherit; font-size: 11px; font-weight: 500; color: var(--text-subtle); transition: background .15s, color .15s, border-color .15s; }
   .b-lang:hover { background: var(--bg-hover); color: var(--text-muted); }
   .b-lang.active { background: var(--bg-hover); border-color: var(--border); color: var(--text-base); font-weight: 600; }
-  .b-themes { display: flex; gap: 4px; padding: 8px 12px; border-top: 1px solid var(--border-subtle); }
-  .b-theme { flex: 1; display: flex; align-items: center; justify-content: center; gap: 5px; padding: 5px 4px; border-radius: var(--radius-sm); border: 1px solid transparent; background: none; cursor: pointer; font-family: inherit; font-size: 11px; font-weight: 500; color: var(--text-subtle); transition: background .15s, color .15s, border-color .15s; }
-  .b-theme:hover { background: var(--bg-hover); color: var(--text-muted); }
-  .b-theme.active { background: var(--bg-hover); border-color: var(--border); color: var(--text-base); font-weight: 600; }
   /* Each swatch shows that theme's paper; a hairline ring keeps the pale ones visible. */
-  .b-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; border: 1px solid var(--border); }
-  .b-theme-label { line-height: 1; }
 
   .b-account { display: flex; align-items: center; gap: 9px; padding: 11px 12px; border-top: 1px solid var(--border); }
   .b-avatar { width: 30px; height: 30px; border-radius: 50%; background: var(--accent); color: var(--accent-contrast); display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 650; flex-shrink: 0; }
@@ -176,9 +164,6 @@
     .b-item { white-space: nowrap; padding: 7px 9px; }
     .b-foot { display: flex; align-items: center; gap: 4px; }
     .b-langs { padding: 4px; }
-    .b-themes { border-top: none; padding: 4px; }
-    .b-theme-label { display: none; }
-    .b-theme { padding: 6px; }
     .b-account { border-top: none; padding: 6px 8px; }
     .b-acct-info { display: none; }
     .b-signin { margin: 6px 8px; padding: 8px 14px; }

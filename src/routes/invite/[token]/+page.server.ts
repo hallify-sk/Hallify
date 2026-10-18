@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs';
 import { dbFirst, dbRun } from '$lib/db/index';
 import { createSession } from '$lib/auth';
 import { st } from '$lib/i18n-server';
+import { rateLimit, rateLimitKey, tooManyAttemptsMessage, RATE_LIMITS } from '$lib/rateLimit';
 import type { Actions, PageServerLoad } from './$types';
 import type { D1Database } from '@cloudflare/workers-types';
 
@@ -70,9 +71,23 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 export const actions: Actions = {
 	// New visitor sets a password → a client account is created and the reservation
 	// is handed to them. Name + email come from the invite, not the form.
-	register: async ({ params, request, cookies, locals }) => {
+	register: async ({ params, request, cookies, locals, getClientAddress }) => {
 		const invite = await loadInvite(locals.db, params.token);
 		if (!stillValid(invite) || invite.res_status === 'cancelled') return fail(410, { error: st(locals.locale).serverErrors.inviteNotFoundOrExpired });
+
+		// Same account-creation bucket as every other sign-up surface: this one
+		// creates a real account too, so it must not be the unmetered way in.
+		const rl = await rateLimit(
+			locals.db,
+			// Null behind `wrangler dev`, where Cloudflare's cf-connecting-ip is absent.
+			rateLimitKey('register', getClientAddress() ?? 'unknown'),
+			RATE_LIMITS.register
+		);
+		if (!rl.ok) {
+			return fail(429, {
+				error: tooManyAttemptsMessage(st(locals.locale).serverErrors.tooManyAttempts, rl.retryAfterMinutes)
+			});
+		}
 
 		// A different account is already signed in — refuse rather than silently
 		// overwrite their session with a freshly created one.

@@ -7,8 +7,21 @@ import { st } from '$lib/i18n-server';
 import { rateLimit, rateLimitKey, tooManyAttemptsMessage, RATE_LIMITS } from '$lib/rateLimit';
 import type { Actions, PageServerLoad } from './$types';
 
-export const load: PageServerLoad = ({ locals }) => {
-	if (locals.user) redirect(303, '/app/');
+/** Only same-origin absolute paths may be followed after sign-in. A value starting
+ *  `//` or `/\` is a protocol-relative URL the browser would treat as another host,
+ *  so those are rejected along with anything not rooted at `/`. Same rule as
+ *  /app/register — an open redirect on a login form is a phishing primitive. */
+function safeNext(raw: unknown): string | null {
+	const v = typeof raw === 'string' ? raw.trim() : '';
+	if (!v.startsWith('/')) return null;
+	if (v.startsWith('//') || v.startsWith('/\\')) return null;
+	return v;
+}
+
+export const load: PageServerLoad = ({ locals, url }) => {
+	// Already signed in: honour the ?redirect= too, so following an invite link
+	// while signed in on another tab still lands on the invitation.
+	if (locals.user) redirect(303, safeNext(url.searchParams.get('redirect')) ?? '/app/');
 	return {};
 };
 
@@ -17,6 +30,7 @@ export const actions: Actions = {
 		const data = await request.formData();
 		const email = String(data.get('email') ?? '').toLowerCase().trim();
 		const password = String(data.get('password') ?? '');
+		const next = safeNext(data.get('redirect'));
 
 		if (!email || !password) {
 			return fail(400, { error: st(locals.locale).serverErrors.emailAndPasswordRequired });
@@ -44,6 +58,8 @@ export const actions: Actions = {
 		}
 
 		await createSession(user.id, cookies, locals.db);
-		redirect(303, '/app/');
+		// Back to whatever sent them here (an invitation link, a venue page), or
+		// the dashboard when nothing did.
+		redirect(303, next ?? '/app/');
 	}
 };

@@ -41,6 +41,10 @@
 	{/if}
 
 	<form method="POST" use:enhance class="auth-form">
+		<!-- Carried into the POST as well as the register links: the action re-validates
+		     it, and without it signing in from an invitation link would drop the
+		     invitation and land on the dashboard. -->
+		{#if nextParam}<input type="hidden" name="redirect" value={nextParam} />{/if}
 		<div class="field">
 			<label for="email">{t.auth.email}</label>
 			<input id="email" name="email" type="email" placeholder="you@example.com" required autocomplete="email" />

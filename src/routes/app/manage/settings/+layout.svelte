@@ -10,6 +10,7 @@
 	const tabs = $derived([
 		{ href: '/app/manage/settings/domains',   label: t.settingsPages.domains },
 		{ href: '/app/manage/settings/customize', label: t.settingsPages.customizeTitle },
+		{ href: '/app/manage/settings/site',      label: t.settingsPages.siteTab },
 		{ href: '/app/manage/settings/analytics', label: t.settingsPages.analyticsTitle },
 		{ href: '/app/manage/settings/advanced',  label: t.settingsPages.tabAdvanced },
 	]);

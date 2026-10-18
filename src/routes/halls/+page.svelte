@@ -42,11 +42,21 @@
 <svelte:head><title>{t.hallDir.browseHalls} – {data.domainOrg.name}</title></svelte:head>
 
 <!-- ── Lead: the page heading, then its filters ── -->
-<section class="section section--lead" use:reveal>
+<section class="section section--lead venue-hero" use:reveal>
   <div class="section-head">
+    <!-- Lead with the BUSINESS, not with boilerplate. This is their own site on
+         their own domain; a generic "Browse halls" headline is the main reason it
+         read as a template rather than as theirs. Their own tagline and intro take
+         precedence over our copy whenever they have written one. -->
+    {#if data.domainOrg.logoUrl}
+      <img class="venue-hero-logo" src={data.domainOrg.logoUrl} alt="" width="64" height="64" />
+    {/if}
     <p class="eyebrow">{t.hallDir.browseHalls}</p>
-    <h1>{t.hallDir.heroTitle}</h1>
-    <p>{t.hallDir.heroSub}</p>
+    <h1>{data.domainOrg.name}</h1>
+    <p class="venue-hero-lead">{data.site?.tagline || t.hallDir.heroSub}</p>
+    {#if data.site?.intro}
+      <p class="venue-hero-intro">{data.site.intro}</p>
+    {/if}
   </div>
 
   <div class="filters">
@@ -65,8 +75,9 @@
 <!-- ── The venues: photo-forward cards, no container ── -->
 <section class="section" use:reveal>
   <div class="section-head">
-    <p class="eyebrow">{t.common.search}</p>
-    <h2>{t.nav.halls}</h2>
+    <p class="eyebrow">{t.nav.halls}</p>
+    <h2>{t.hallDir.heroTitle}</h2>
+    <p>{filtered.length} / {data.halls.length}</p>
   </div>
 
   {#if filtered.length === 0}
@@ -122,6 +133,16 @@
 </section>
 
 <style>
+  .venue-hero-logo {
+    display: block; width: 64px; height: 64px; object-fit: contain;
+    border-radius: var(--radius-sm); margin-bottom: 18px;
+  }
+  .venue-hero-lead { font-size: 15px; line-height: 1.75; max-width: 520px; }
+  .venue-hero-intro {
+    font-size: var(--body-size, 13px); line-height: 1.9; color: var(--text-muted);
+    max-width: 560px; margin-top: 12px; white-space: pre-line;
+  }
+
   /* The page title takes the density display scale, as every other page h1 does;
      app.css gives h1 its tracking but no size. */
   h1 { font-size: var(--display-size); margin: 0; }
