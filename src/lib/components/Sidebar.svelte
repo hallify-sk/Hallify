@@ -246,6 +246,12 @@
             </svg>
             {t.settings.tabEmail}
           </a>
+          <a href="/app/platform/floorplan-requests" class="nav-item" class:active={$page.url.pathname.startsWith('/app/platform/floorplan-requests')}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/>
+            </svg>
+            {t.floorplanService.queueTitle}
+          </a>
           <a href="/app/platform/closed-orgs" class="nav-item" class:active={$page.url.pathname.startsWith('/app/platform/closed-orgs')}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <rect x="3" y="4" width="18" height="4" rx="1"/><path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8"/><line x1="10" y1="12" x2="14" y2="12"/>
