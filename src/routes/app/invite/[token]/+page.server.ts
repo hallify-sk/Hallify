@@ -259,7 +259,13 @@ const formShape = { firstName: '', lastName: '' };
 export const actions: Actions = {
 	// Already signed in as the invited address → join.
 	accept: async ({ params, locals, cookies }) => {
-		if (!locals.user) redirect(303, `/app/login?redirect=/app/invite/${params.token}`);
+		// Encoded because this runs BEFORE the token has been looked up, so it is
+		// still arbitrary path input rather than a known 24-hex invite token: raw,
+		// a token carrying `&`, `#` or a decoded newline would be pasted straight
+		// into a query value and a response header.
+		if (!locals.user) {
+			redirect(303, `/app/login?redirect=${encodeURIComponent(`/app/invite/${params.token}`)}`);
+		}
 
 		const invite = await loadInvite(locals.db, params.token);
 		if (!stillValid(invite)) {

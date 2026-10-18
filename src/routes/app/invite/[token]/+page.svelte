@@ -16,6 +16,13 @@
     [legacyRole, ...data.invite.roleNames].filter((v, i, all) => v && all.indexOf(v) === i).join(', ')
   );
 
+  // Encoded as one query value: the login action re-validates it (same-origin
+  // path only), and encoding stops a token with `&` or `#` in it from being read
+  // as a second parameter instead of part of the path.
+  const loginHref = $derived(
+    `/app/login?redirect=${encodeURIComponent(`/app/invite/${data.token}`)}`
+  );
+
   // The name fields are prefilled from the invite and editable; a failed submit
   // hands back whatever was typed rather than resetting to the invite's version.
   const firstName = $derived(form?.firstName || data.invite.firstName);
@@ -54,7 +61,9 @@
 
     <section class="section" use:reveal>
       {#if form?.error}
-        <div class="alert-error">{form.error}</div>
+        <!-- role="alert": use:enhance replaces this in place without a navigation,
+             so without it a screen reader never hears why the submit failed. -->
+        <div class="alert-error" role="alert">{form.error}</div>
       {/if}
 
       {#if data.signedInMatches}
@@ -80,10 +89,7 @@
           <h2>{t.authPages.inviteHasAccountTitle}</h2>
           <p>{t.authPages.inviteHasAccountHint}</p>
         </div>
-        <a
-          href="/app/login?redirect=/app/invite/{data.token}"
-          class="btn-action inv-wide"
-        >{t.authPages.inviteLoginToAccept}</a>
+        <a href={loginHref} class="btn-action inv-wide">{t.authPages.inviteLoginToAccept}</a>
       {:else}
         <!-- No account anywhere → set a password and join in one step. -->
         <div class="section-head">
