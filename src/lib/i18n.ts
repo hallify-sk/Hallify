@@ -50,6 +50,11 @@ export const sk = {
 		people: 'ľudí',
 		of: 'z',
 	},
+	gallery: {
+		previous: 'Predchádzajúca fotka',
+		next: 'Ďalšia fotka',
+		close: 'Zavrieť',
+	},
 	status: {
 		pending: 'Čakajúci',
 		waiting_payment: 'Čaká na platbu',
@@ -2311,6 +2316,11 @@ export const en: typeof sk = {
 		capacity: 'Capacity',
 		people: 'people',
 		of: 'of',
+	},
+	gallery: {
+		previous: 'Previous photo',
+		next: 'Next photo',
+		close: 'Close',
 	},
 	status: {
 		pending: 'Pending',

@@ -2,6 +2,7 @@
 	import { DOW_KEYS } from '$lib/availability';
 	import { t } from '$lib/i18n.svelte';
 	import { reveal } from '$lib/reveal';
+	import Lightbox from '$lib/components/Lightbox.svelte';
 	import type { PageData } from './$types';
 
 	interface Props { data: PageData; }
@@ -19,17 +20,21 @@
 		t.appHalls.daySaturday,
 	]);
 
-	let activeImg = $state<string | null>(null);
+	// The open photo is tracked by index, not by url, so the viewer knows where it
+	// is in the gallery and can move to the next one.
+	const galleryImages = $derived((hall.gallery_images as string[] | undefined) ?? []);
+	let activeIndex = $state<number | null>(null);
 </script>
 
 <svelte:head><title>{hall.name} – Hallify</title></svelte:head>
 
-<!-- Lightbox -->
-{#if activeImg}
-	<div class="lightbox" role="button" tabindex="-1" onclick={() => (activeImg = null)} onkeydown={e => e.key === 'Escape' && (activeImg = null)}>
-		<img src={activeImg} alt={t.appHalls.gallery} />
-	</div>
-{/if}
+<Lightbox
+	images={galleryImages}
+	index={activeIndex}
+	alt={hall.name}
+	onclose={() => (activeIndex = null)}
+	onindex={(i) => (activeIndex = i)}
+/>
 
 <div class="wrap page">
 
@@ -73,12 +78,12 @@
 			{/if}
 
 			<!-- Gallery -->
-			{#if hall.gallery_images?.length}
+			{#if galleryImages.length}
 				<section class="section" use:reveal>
 					<div class="section-head"><h2>{t.appHalls.gallery}</h2></div>
 					<div class="gallery-grid">
-						{#each hall.gallery_images as img}
-							<button class="gallery-thumb" onclick={() => (activeImg = img)} type="button">
+						{#each galleryImages as img, i (img)}
+							<button class="gallery-thumb" onclick={() => (activeIndex = i)} type="button">
 								<img src={img} alt={t.appHalls.hallImageAlt} />
 							</button>
 						{/each}
@@ -283,20 +288,6 @@
 	.cta-btn:active { transform: translateY(0); }
 
 	.cta-link { font-size: 12px; color: var(--accent-ink); text-align: center; text-decoration: none; }
-
-	/* Lightbox */
-	.lightbox {
-		position: fixed;
-		inset: 0;
-		background: rgba(16,24,16,.85);
-		backdrop-filter: blur(5px);
-		z-index: 1000;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		cursor: zoom-out;
-	}
-	.lightbox img { max-width: 90vw; max-height: 90vh; border-radius: var(--radius-lg); }
 
 	@media (prefers-reduced-motion: reduce) {
 		.cta-btn:hover { transform: none; }

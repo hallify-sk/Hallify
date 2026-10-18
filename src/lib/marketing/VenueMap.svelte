@@ -149,13 +149,41 @@
     const key = `${fitKey}:${areaCenter?.latitude}:${areaCenter?.longitude}:${radiusKm}:${onpick ? '' : userLocation.revision}:${points.map(p => p.id).join(',')}`;
     if (key !== previousFit) { previousFit = key; fit(); }
   });
+  /**
+   * Bring the chosen venue to the middle of the map.
+   *
+   * This used to be `panInside`, which moves the map by the SMALLEST amount that
+   * brings a point inside the padded view — so a pin already on screen never
+   * moved at all. Picking a venue from the list then did nothing visible except
+   * recolour a pin that might be in a corner, or underneath another one.
+   *
+   * Centred, not merely visible, and never further out than FOCUS_ZOOM: two pins
+   * that overlap at country zoom separate at street zoom, and somebody who has
+   * panned to the other side of the world gets taken back. A deliberate close-up
+   * is left alone — the zoom only ever increases.
+   */
+  const FOCUS_ZOOM = 13;
+  /** The detail card covers the bottom, so the visual centre sits above the
+   *  geometric one. Same insets the fit uses, applied as an offset. */
+  const FOCUS_PAD = { top: 80, bottom: 115, left: 30, right: 65 };
+
   $effect(() => {
     const point = points.find(p => p.id === selected);
     const selection = `${selected}:${selectionRevision}`;
-    if (map && map.getZoom() !== undefined && point && !onpick && selection !== previousSelection) {
-      map.panInside([point.latitude,point.longitude], { paddingTopLeft:[30,80], paddingBottomRight:[65,115], animate:!reduced() });
-      previousSelection = selection;
-    }
+    const instance = map, L = library;
+    if (!instance || !L || !point || onpick || instance.getZoom() === undefined) return;
+    if (selection === previousSelection) return;
+    previousSelection = selection;
+
+    const targetZoom = Math.max(instance.getZoom(), FOCUS_ZOOM);
+    const pin = instance.project([point.latitude, point.longitude], targetZoom);
+    const offset = L.point((FOCUS_PAD.right - FOCUS_PAD.left) / 2, (FOCUS_PAD.bottom - FOCUS_PAD.top) / 2);
+    const centre = instance.unproject(pin.add(offset), targetZoom);
+
+    // flyTo arcs out and back in, which reads as a journey when the jump is a long
+    // one and stays short when it is not. Reduced motion gets the destination.
+    if (reduced()) instance.setView(centre, targetZoom, { animate: false });
+    else instance.flyTo(centre, targetZoom, { duration: 0.9 });
   });
   $effect(() => {
     const center = userLocation.center, area = areaCenter, L = library, instance = map;

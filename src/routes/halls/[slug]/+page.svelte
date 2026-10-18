@@ -7,6 +7,7 @@
   import { migrateToMultiFloor } from '$lib/floorplan-types';
   import type { FloorData } from '$lib/floorplan-types';
   import { t } from '$lib/i18n.svelte';
+  import Lightbox from '$lib/components/Lightbox.svelte';
 
   interface Props { data: PageData; }
   const { data }: Props = $props();
@@ -19,6 +20,9 @@
   const amenities = (hall.amenities as string[]) ?? [];
   const openingHours = (hall.opening_hours as Record<string, HallDayHours>) ?? {};
   const galleryImages = (hall.gallery_images as string[]) ?? [];
+  // Visitors could not open a gallery photo here at all — the grid was the whole
+  // feature. Now it opens full size and pages through like the signed-in page.
+  let activeIndex = $state<number | null>(null);
 
   const bookHref = $derived(
     user
@@ -72,6 +76,14 @@
   <title>{hall.name} – {data.domainOrg.name}</title>
   <meta name="description" content={hall.description ?? `${t.hallProfile.metaBookPrefix} ${hall.name} ${t.hallProfile.metaBookSuffix}`} />
 </svelte:head>
+
+<Lightbox
+  images={galleryImages}
+  index={activeIndex}
+  alt={hall.name}
+  onclose={() => (activeIndex = null)}
+  onindex={(i) => (activeIndex = i)}
+/>
 
 <div class="pub-root">
 
@@ -188,10 +200,10 @@
           <h2>{t.hallProfile.gallery}</h2>
         </div>
         <div class="gallery-grid">
-          {#each galleryImages as url}
-            <div class="gallery-item">
+          {#each galleryImages as url, i (url)}
+            <button type="button" class="gallery-item" onclick={() => (activeIndex = i)} aria-label={hall.name}>
               <img src={url} alt="" />
-            </div>
+            </button>
           {/each}
         </div>
       </section>
@@ -405,7 +417,11 @@
 
   /* Gallery */
   .gallery-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; }
-  .gallery-item { aspect-ratio: 4/3; border-radius: var(--radius); overflow: hidden; }
+  .gallery-item {
+    aspect-ratio: 4/3; border-radius: var(--radius); overflow: hidden;
+    padding: 0; border: 0; background: var(--bg-hover); cursor: zoom-in; display: block;
+  }
+  .gallery-item:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   .gallery-item img { width: 100%; height: 100%; object-fit: cover; transition: transform .5s; }
   .gallery-item:hover img { transform: scale(1.04); }
 
