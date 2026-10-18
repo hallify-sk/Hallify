@@ -22,9 +22,15 @@
   // The step shown. Server state is the floor; moving forward is local so a
   // step does not need a round trip just to be read.
   let viewing = $state<OnboardingStep>(data.state.step);
+  // Follow the server only when its step CHANGES — i.e. an action advanced it.
+  // Comparing against `viewing` instead would snap the view forward again the
+  // moment someone stepped back, making the Back button do nothing.
+  let serverStep = data.state.step;
   $effect(() => {
-    // A successful action advances the server's step; follow it.
-    if (stepIndex(data.state.step) > stepIndex(viewing)) viewing = data.state.step;
+    if (data.state.step !== serverStep) {
+      serverStep = data.state.step;
+      viewing = data.state.step;
+    }
   });
 
   const index = $derived(stepIndex(viewing));
@@ -40,10 +46,17 @@
 
   const PAID = ['starter', 'professional'] as const;
 
-  // ── Address → map ──────────────────────────────────────────────────────
-  // Typing an address and seeing the pin land on it is the whole point of
-  // asking for one, and it is also the only check an operator gets that we
-  // read it the way they meant it.
+  // ── Address ⇄ map ──────────────────────────────────────────────────────
+  //
+  // Both directions. Typing an address drops the pin on it; moving the pin
+  // writes the address back. Either one alone leaves the operator guessing
+  // whether we understood the other.
+  //
+  // The two have to be kept from chasing each other: every write to one side
+  // changes the other, and without a guard the echo comes straight back and
+  // overwrites what was just typed. So whichever side we wrote last is
+  // recorded, and a change matching that record is recognised as our own echo
+  // and ignored.
   let address = $state(data.hall?.address ?? '');
   let latitude = $state<number | null>(data.hall?.latitude ?? null);
   let longitude = $state<number | null>(data.hall?.longitude ?? null);
@@ -51,18 +64,26 @@
     data.hall?.latitude != null ? 'found' : 'idle'
   );
 
-  /** Debounced: a lookup per keystroke would hammer a rate-limited proxy. */
+  const coordKey = (lat: number | null, lng: number | null) =>
+    lat === null || lng === null ? null : `${lat},${lng}`;
+
+  // Plain variables, not $state: these are bookkeeping, and making them
+  // reactive would feed the effect below its own writes.
+  let writtenCoords: string | null = coordKey(latitude, longitude);
+  let lastQuery = '';
   let geoTimer: ReturnType<typeof setTimeout> | undefined;
-  let lastLookup = '';
+
+  /** Address → pin. Debounced; a lookup per keystroke would hammer a
+   *  rate-limited proxy. */
   function scheduleLookup() {
     clearTimeout(geoTimer);
     const query = address.trim();
-    if (query.length < 4 || query === lastLookup) return;
+    if (query.length < 4 || query === lastQuery) return;
     geoTimer = setTimeout(() => void lookup(query), 700);
   }
 
   async function lookup(query: string) {
-    lastLookup = query;
+    lastQuery = query;
     geoState = 'searching';
     try {
       const res = await fetch(`/api/geocode?q=${encodeURIComponent(query)}`);
@@ -70,6 +91,8 @@
       if (body?.result) {
         latitude = body.result.latitude;
         longitude = body.result.longitude;
+        // Ours — so the effect below leaves the typed address alone.
+        writtenCoords = coordKey(latitude, longitude);
         geoState = 'found';
       } else {
         geoState = 'notfound';
@@ -78,6 +101,34 @@
       geoState = 'notfound';
     }
   }
+
+  /** Pin → address, for a click or a drag on the map. */
+  async function reverseLookup(lat: number, lng: number) {
+    geoState = 'searching';
+    try {
+      const res = await fetch(`/api/geocode?lat=${lat}&lon=${lng}`);
+      const body = res.ok ? await res.json() : null;
+      if (body?.label) {
+        address = body.label;
+        // Stops the next keystroke re-geocoding an address we just derived.
+        lastQuery = body.label.trim();
+        geoState = 'found';
+      } else {
+        geoState = 'notfound';
+      }
+    } catch {
+      geoState = 'notfound';
+    }
+  }
+
+  $effect(() => {
+    const key = coordKey(latitude, longitude);
+    // Clearing the pin is not a reason to wipe an address they typed.
+    if (key === null) { writtenCoords = null; return; }
+    if (key === writtenCoords) return;
+    writtenCoords = key;
+    void reverseLookup(latitude!, longitude!);
+  });
 </script>
 
 <svelte:head><title>{t.onboarding.title} – Hallify</title></svelte:head>
@@ -149,8 +200,18 @@
           <input type="hidden" name="hallId" value={data.hall.id} />
           <div class="field">
             <label class="field-label" for="ob-addr">{t.onboarding.venueAddress}</label>
+            <!-- Enter looks up the address instead of submitting. In a form
+                 this short it otherwise advances the whole step mid-sentence,
+                 which is how you lose your place in a wizard. -->
             <input id="ob-addr" name="address" type="text" maxlength="200"
               bind:value={address} oninput={scheduleLookup}
+              onkeydown={(e) => {
+                if (e.key !== 'Enter') return;
+                e.preventDefault();
+                clearTimeout(geoTimer);
+                const q = address.trim();
+                if (q.length >= 4) void lookup(q);
+              }}
               placeholder={t.onboarding.venueAddressPlaceholder} />
             <p class="ob-hint" aria-live="polite">
               {#if geoState === 'searching'}{t.onboarding.geoSearching}
@@ -168,13 +229,18 @@
             <VenueLocationPicker bind:latitude bind:longitude english={locale === 'en'} />
           </div>
 
-          <label class="ob-toggle">
-            <input type="checkbox" name="allowReservations" />
-            <span>
+          <!-- The app has one switch (.ui-switch in app.css); a bare checkbox
+               here was simply an oversight. -->
+          <div class="ob-toggle">
+            <label class="ui-switch">
+              <input id="ob-allow" type="checkbox" name="allowReservations" />
+              <span class="ui-switch-track" aria-hidden="true"></span>
+            </label>
+            <label class="ob-toggle-copy" for="ob-allow">
               <strong>{t.onboarding.allowReservations}</strong>
               <span>{t.onboarding.allowReservationsHint}</span>
-            </span>
-          </label>
+            </label>
+          </div>
 
           <div class="ob-actions">
             <button type="submit" class="btn-action">{t.onboarding.saveAndNext}</button>
@@ -185,7 +251,6 @@
         <p class="ob-lead">{t.onboarding.detailsNoVenue}</p>
         <div class="ob-actions">
           <button class="btn-action" onclick={() => (viewing = 'plan')}>{t.onboarding.next}</button>
-          <button type="button" class="ob-link" onclick={() => (viewing = 'venue')}>{t.onboarding.backStep}</button>
         </div>
       {/if}
 
@@ -289,6 +354,15 @@
         <button type="submit" class="btn-action">{t.onboarding.openConsole}</button>
       </form>
     {/if}
+
+    <!-- Every step is reversible. Progress already reached is kept, so
+         stepping back and forward never costs anything. -->
+    {#if index > 0}
+      <button type="button" class="ob-back" onclick={() => (viewing = ONBOARDING_STEPS[index - 1])}>
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="15 18 9 12 15 6"/></svg>
+        {t.onboarding.backStep}
+      </button>
+    {/if}
   </main>
 </div>
 
@@ -357,11 +431,11 @@
   .ob-created strong { display: block; font-size: 14px; font-weight: 650; }
   .ob-created span { font-size: var(--meta-size); color: var(--text-muted); line-height: 1.6; }
 
-  .ob-toggle { display: flex; align-items: flex-start; gap: 11px; cursor: pointer; }
-  .ob-toggle input { margin-top: 3px; flex-shrink: 0; }
-  .ob-toggle > span { display: flex; flex-direction: column; gap: 3px; }
-  .ob-toggle strong { font-size: 13.5px; font-weight: 600; }
-  .ob-toggle span span { font-size: var(--meta-size); color: var(--text-muted); line-height: 1.6; }
+  .ob-toggle { display: flex; align-items: flex-start; gap: 12px; }
+  .ob-toggle .ui-switch { margin-top: 1px; }
+  .ob-toggle-copy { display: flex; flex-direction: column; gap: 3px; cursor: pointer; }
+  .ob-toggle-copy strong { font-size: 13.5px; font-weight: 600; }
+  .ob-toggle-copy span { font-size: var(--meta-size); color: var(--text-muted); line-height: 1.6; }
 
   /* ── Plan step ── */
   .ob-plan-now { padding: 16px 18px; margin-bottom: 16px; }
@@ -411,4 +485,13 @@
     .ob-tick-label { display: none; }
     .ob-body { padding: 26px 18px 48px; }
   }
+  .ob-back {
+    display: inline-flex; align-items: center; gap: 5px;
+    margin-top: 32px; padding: 7px 11px 7px 7px;
+    border: 0; border-radius: var(--radius-sm);
+    background: none; color: var(--text-subtle);
+    font-family: inherit; font-size: 12.5px; cursor: pointer;
+    transition: color .15s, background .15s;
+  }
+  .ob-back:hover { color: var(--text-base); background: var(--bg-hover); }
 </style>

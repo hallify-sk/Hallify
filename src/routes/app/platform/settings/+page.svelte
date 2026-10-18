@@ -49,13 +49,17 @@
         </p>
       {/if}
 
-      <label class="toggle-row">
-        <input type="checkbox" name="includeBubbles" bind:checked={includeBubbles} />
-        <span class="toggle-copy">
+      <!-- The app's one switch (.ui-switch in app.css), not a bare checkbox. -->
+      <div class="toggle-row">
+        <label class="ui-switch">
+          <input id="pf-bubbles" type="checkbox" name="includeBubbles" bind:checked={includeBubbles} />
+          <span class="ui-switch-track" aria-hidden="true"></span>
+        </label>
+        <label class="toggle-copy" for="pf-bubbles">
           <strong>{t.platformSettings.includeBubbles}</strong>
           <span>{t.platformSettings.includeBubblesHint}</span>
-        </span>
-      </label>
+        </label>
+      </div>
 
       <p class="legal-note">{t.platformSettings.dpaNote}</p>
 
@@ -84,12 +88,11 @@
   .toggle-row {
     display: flex;
     align-items: flex-start;
-    gap: 11px;
+    gap: 12px;
     margin: 20px 0 0;
-    cursor: pointer;
   }
-  .toggle-row input { margin-top: 2px; flex-shrink: 0; }
-  .toggle-copy { display: flex; flex-direction: column; gap: 3px; }
+  .toggle-row .ui-switch { margin-top: 1px; }
+  .toggle-copy { display: flex; flex-direction: column; gap: 3px; cursor: pointer; }
   .toggle-copy strong { font-size: 13px; font-weight: 600; }
   .toggle-copy span { font-size: var(--meta-size); color: var(--text-muted); line-height: 1.6; }
 
