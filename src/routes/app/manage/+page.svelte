@@ -108,6 +108,20 @@
     </div>
   </div>
 
+  <!-- Picking up an abandoned first run. One line, dismissible by finishing it,
+       and gone for good once the org is a month old. -->
+  {#if data.resumeOnboarding}
+    <a class="resume-ob" href="/app/welcome">
+      <span class="icon-tile">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+      </span>
+      <span class="resume-copy">
+        <strong>{t.onboarding.resumeTitle}</strong>
+        <span>{t.onboarding.resumeBody}</span>
+      </span>
+    </a>
+  {/if}
+
   <!-- ─── KPI row ───────────────────────────────────────────────────────── -->
   <!-- Four even columns of one component, so the tiles, the numbers and the
        labels each sit on one line across the strip. -->
@@ -656,4 +670,18 @@
     .halls-upcoming-cell { grid-column: 3; grid-row: 2; }
     .halls-arrow { display: none; }
   }
+  /* ── Resume first run ──────────────────────── */
+  .resume-ob {
+    display: flex; align-items: center; gap: 13px;
+    padding: 13px 16px; margin-bottom: 18px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--bg-panel);
+    text-decoration: none; color: inherit;
+    transition: border-color .15s, background .15s;
+  }
+  .resume-ob:hover { border-color: var(--accent); background: var(--accent-dim); text-decoration: none; }
+  .resume-copy { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+  .resume-copy strong { font-size: 13.5px; font-weight: 600; }
+  .resume-copy span { font-size: var(--meta-size); color: var(--text-muted); line-height: 1.6; }
 </style>

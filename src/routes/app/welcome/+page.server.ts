@@ -1,0 +1,186 @@
+import { fail, redirect } from '@sveltejs/kit';
+import { dbFirst, dbRun, fromJson, toJson } from '$lib/db/index';
+import { requireOrg } from '$lib/guards';
+import { st } from '$lib/i18n-server';
+import { PLANS, getPlan } from '$lib/plans';
+import { canAddHall } from '$lib/limits';
+import {
+  DEFAULT_ONBOARDING,
+  furthest,
+  nextStep,
+  resolveOnboarding,
+  type OnboardingStep
+} from '$lib/onboarding';
+import { SETUP_SERVICE_PRICE_CENTS } from '$lib/setup-service';
+import type { PageServerLoad, Actions } from './$types';
+
+/**
+ * First run, for a brand-new organisation.
+ *
+ * Owner-only in practice because only the owner exists yet, but guarded on the
+ * org rather than on a permission: this writes a venue and reads the plan, and
+ * an invited member who somehow lands here should see it, not a 403.
+ */
+
+const MAX_NAME = 80;
+
+async function loadState(db: App.Locals['db'], orgId: string) {
+  const row = await dbFirst<{ value: string | null }>(
+    db,
+    `SELECT value FROM org_settings WHERE org_id = ? AND key = 'onboarding'`,
+    orgId
+  );
+  return resolveOnboarding(fromJson(row?.value ?? null));
+}
+
+async function saveState(db: App.Locals['db'], orgId: string, state: typeof DEFAULT_ONBOARDING) {
+  await dbRun(
+    db,
+    `INSERT OR REPLACE INTO org_settings (org_id, key, value, updated_at)
+     VALUES (?, 'onboarding', ?, datetime('now'))`,
+    orgId,
+    toJson(state)
+  );
+}
+
+export const load: PageServerLoad = async ({ locals, url }) => {
+  const org = requireOrg(locals);
+  const state = await loadState(locals.db, org.id);
+
+  // Finished is finished. Coming back to the URL later lands on the console
+  // rather than restarting a flow they have already been through.
+  if (state.completed && url.searchParams.get('again') !== '1') {
+    redirect(303, '/app/manage');
+  }
+
+  const hallCount = (await dbFirst<{ n: number }>(
+    locals.db,
+    'SELECT COUNT(*) AS n FROM halls WHERE org_id = ?',
+    org.id
+  ))?.n ?? 0;
+
+  // The venue made during the flow, so its screen can show what was created
+  // rather than an empty form the operator has already filled in.
+  const hall = state.hallId
+    ? await dbFirst<{ id: string; name: string; max_people: number; address: string | null; is_public: number }>(
+        locals.db,
+        'SELECT id, name, max_people, address, is_public FROM halls WHERE id = ? AND org_id = ?',
+        state.hallId,
+        org.id
+      )
+    : null;
+
+  let setupRequested = false;
+  try {
+    setupRequested = !!(await dbFirst<{ id: string }>(
+      locals.db,
+      `SELECT id FROM setup_requests WHERE org_id = ? AND status != 'cancelled' LIMIT 1`,
+      org.id
+    ));
+  } catch {
+    // Table arrives with migration 0010.
+  }
+
+  return {
+    state,
+    hall,
+    hallCount,
+    setupRequested,
+    setupPriceCents: SETUP_SERVICE_PRICE_CENTS,
+    plan: org.subscription.plan,
+    plans: PLANS,
+    orgName: org.name
+  };
+};
+
+export const actions: Actions = {
+  /** Step 1. The single thing that makes the product do anything for them. */
+  createVenue: async ({ request, locals }) => {
+    const org = requireOrg(locals);
+    const data = await request.formData();
+    const name = String(data.get('name') ?? '').trim().slice(0, MAX_NAME);
+    const capacity = Number(data.get('capacity') ?? 0);
+
+    if (!name) return fail(400, { error: st(locals.locale).serverErrors.nameRequired });
+
+    if (!(await canAddHall(locals.db, org.id, org.subscription.plan))) {
+      const limit = getPlan(org.subscription.plan).limits.maxHalls;
+      return fail(403, {
+        error: st(locals.locale).serverErrors.hallLimitReached.replace('{limit}', String(limit))
+      });
+    }
+
+    const id = crypto.randomUUID();
+    // Same deliberate choice the console's own create makes: listed in discovery
+    // straight away, taking no bookings until the operator opts in.
+    await dbRun(
+      locals.db,
+      `INSERT INTO halls (id, org_id, name, max_people, color, allow_reservations, is_public)
+       VALUES (?, ?, ?, ?, '#a6225e', 0, 1)`,
+      id,
+      org.id,
+      name,
+      Number.isFinite(capacity) && capacity > 0 ? Math.min(capacity, 100_000) : 50
+    );
+
+    const state = await loadState(locals.db, org.id);
+    await saveState(locals.db, org.id, {
+      ...state,
+      hallId: id,
+      step: furthest(state.step, 'details')
+    });
+
+    return { created: true };
+  },
+
+  /** Step 2. Address and whether it takes bookings yet — the two that decide
+   *  whether the public listing is any use. */
+  saveDetails: async ({ request, locals }) => {
+    const org = requireOrg(locals);
+    const data = await request.formData();
+    const hallId = String(data.get('hallId') ?? '');
+    const address = String(data.get('address') ?? '').trim().slice(0, 200);
+    const allowReservations = data.get('allowReservations') === 'on' ? 1 : 0;
+
+    // Scope by org: an id alone must never reach another tenant's venue.
+    const hall = await dbFirst<{ id: string }>(
+      locals.db,
+      'SELECT id FROM halls WHERE id = ? AND org_id = ?',
+      hallId,
+      org.id
+    );
+    if (!hall) return fail(404, { error: st(locals.locale).serverErrors.hallNotFound });
+
+    await dbRun(
+      locals.db,
+      'UPDATE halls SET address = ?, allow_reservations = ? WHERE id = ? AND org_id = ?',
+      address || null,
+      allowReservations,
+      hallId,
+      org.id
+    );
+
+    const state = await loadState(locals.db, org.id);
+    await saveState(locals.db, org.id, { ...state, step: furthest(state.step, 'plan') });
+    return { saved: true };
+  },
+
+  /** Move on without doing the current step. Skipping is a first-class outcome. */
+  advance: async ({ request, locals }) => {
+    const org = requireOrg(locals);
+    const data = await request.formData();
+    const from = String(data.get('from') ?? '') as OnboardingStep;
+
+    const state = await loadState(locals.db, org.id);
+    await saveState(locals.db, org.id, { ...state, step: furthest(state.step, nextStep(from)) });
+    return { advanced: true };
+  },
+
+  /** Done, or abandoned on purpose. Either way it stops asking. */
+  finish: async ({ locals }) => {
+    const org = requireOrg(locals);
+    const state = await loadState(locals.db, org.id);
+    await saveState(locals.db, org.id, { ...state, completed: true });
+    redirect(303, '/app/manage');
+  }
+};

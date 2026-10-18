@@ -1,4 +1,5 @@
-import { dbFirst, dbAll } from '$lib/db/index';
+import { dbFirst, dbAll, fromJson } from '$lib/db/index';
+import { ONBOARDING_PROMPT_DAYS, resolveOnboarding } from '$lib/onboarding';
 import type { PageServerLoad } from './$types';
 import { requireOrgConsole } from '$lib/server/access';
 
@@ -133,7 +134,26 @@ export const load: PageServerLoad = async ({ locals }) => {
       AND last_seen_at > datetime('now', '-2 minutes')
   `, orgId);
 
+  // An abandoned first run is worth one quiet offer to pick it back up — and
+  // only for a while. After ONBOARDING_PROMPT_DAYS an operator who never
+  // finished it has made their choice, and a prompt that never leaves stops
+  // being help and becomes furniture.
+  const onboardingRow = await dbFirst<{ value: string | null }>(
+    locals.db,
+    `SELECT value FROM org_settings WHERE org_id = ? AND key = 'onboarding'`,
+    orgId
+  );
+  const onboarding = resolveOnboarding(fromJson(onboardingRow?.value ?? null));
+  const orgAge = await dbFirst<{ days: number }>(
+    locals.db,
+    `SELECT CAST(julianday('now') - julianday(created_at) AS INTEGER) AS days
+       FROM organizations WHERE id = ?`,
+    orgId
+  );
+
   return {
+    resumeOnboarding:
+      !onboarding.completed && (orgAge?.days ?? 999) <= ONBOARDING_PROMPT_DAYS,
     stats: safeStats,
     monthly,
     byStatus,

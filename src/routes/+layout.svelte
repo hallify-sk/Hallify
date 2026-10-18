@@ -106,6 +106,9 @@
 	// The site builder's preview is a public site inside an iframe: it must render
 	// with no app chrome around it, or the operator is previewing our sidebar.
 	const isSitePreview = $derived($page.url.pathname === '/app/manage/settings/site/preview');
+	// First run is a full-page flow: the console's sidebar around it would make
+	// the wizard read as one optional panel among many.
+	const isOnboarding = $derived($page.url.pathname === '/app/welcome');
 
 	// Density by surface. Anything a customer sees breathes like the landing page;
 	// the operator tools (manage, platform, reservations, messages, the editor) use
@@ -148,7 +151,7 @@
      has no analytics to consent to anyway. -->
 <ConsentBanner containerId={isSitePreview ? null : (data.gtmId ?? null)} />
 
-{#if isLandingPage || isPublicHallsPage || isDocPage || isLegalPage || isSitePreview}
+{#if isLandingPage || isPublicHallsPage || isDocPage || isLegalPage || isSitePreview || isOnboarding}
 	<div style={brandStyle} data-density={isDocPage ? 'compact' : 'comfortable'}>
 		{@render children()}
 	</div>

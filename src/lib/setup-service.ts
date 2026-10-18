@@ -56,3 +56,19 @@ export const SETUP_SERVICE_EXCLUDES: { sk: string; en: string } = {
 	sk: 'Nezahŕňa zameranie a nakreslenie pôdorysu — to je samostatná služba, ktorú oceňujeme až po obhliadke.',
 	en: 'It does not include measuring and drawing your floor plan — that is a separate service, priced after a site visit.'
 };
+
+/** How long the included revisions run for, from delivery. */
+export const SETUP_REVISION_MONTHS = 2;
+
+/**
+ * The promise that makes the price safe to say yes to.
+ *
+ * Set out separately from the inclusions because it is not a deliverable — it
+ * is what happens after delivery, and it is the part that answers "what if they
+ * get it wrong". Stated in both the offer and the prompt a new organisation
+ * sees, from here, so the two cannot promise different things.
+ */
+export const SETUP_SERVICE_GUARANTEE: { sk: string; en: string } = {
+	sk: `Neobmedzené úpravy zadarmo počas ${SETUP_REVISION_MONTHS} mesiacov od odovzdania.`,
+	en: `Free unlimited revisions for ${SETUP_REVISION_MONTHS} months after delivery.`
+};

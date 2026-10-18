@@ -11,7 +11,7 @@
   import { enhance } from '$app/forms';
   import { t, getLocale } from '$lib/i18n.svelte';
   import { eur } from '$lib/extras';
-  import { SETUP_SERVICE_INCLUDES, SETUP_SERVICE_EXCLUDES } from '$lib/setup-service';
+  import { SETUP_SERVICE_INCLUDES, SETUP_SERVICE_EXCLUDES, SETUP_SERVICE_GUARANTEE } from '$lib/setup-service';
 
   interface Props {
     priceCents: number;
@@ -47,6 +47,10 @@
           </li>
         {/each}
       </ul>
+      <p class="su-guarantee">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M12 2l7 4v6c0 4.4-3 8.3-7 10-4-1.7-7-5.6-7-10V6z"/></svg>
+        {SETUP_SERVICE_GUARANTEE[locale]}
+      </p>
       <p class="su-excludes">{SETUP_SERVICE_EXCLUDES[locale]}</p>
     </div>
 
@@ -70,6 +74,19 @@
   .su-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 9px; }
   .su-list li { display: flex; align-items: flex-start; gap: 9px; font-size: 13px; line-height: 1.6; color: var(--text-muted); }
   .su-list svg { flex-shrink: 0; margin-top: 3px; color: var(--success); }
+
+  /* The promise, not a deliverable: it is what happens AFTER delivery, and it
+     is the part that answers "what if they get it wrong". Given its own weight
+     because it is what makes the price safe to say yes to. */
+  .su-guarantee {
+    display: flex; align-items: flex-start; gap: 8px;
+    margin: 16px 0 0; padding: 10px 13px;
+    border-radius: var(--radius-sm);
+    background: var(--success-dim);
+    color: color-mix(in srgb, var(--success) 72%, var(--text-base));
+    font-size: 12.5px; font-weight: 600; line-height: 1.6;
+  }
+  .su-guarantee svg { flex-shrink: 0; margin-top: 2px; }
 
   /* Said in the same breath as what IS included: the floorplan is the thing
      people will assume they are buying. */

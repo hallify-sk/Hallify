@@ -120,6 +120,9 @@ export const actions: Actions = {
       );
     }
 
-    redirect(303, '/app/');
+    // Into first run, not onto an empty dashboard. A new operator has no venue,
+    // no public site and nothing to look at, which is the point most of them
+    // left; the wizard is skippable from its first screen.
+    redirect(303, '/app/welcome');
   },
 };
