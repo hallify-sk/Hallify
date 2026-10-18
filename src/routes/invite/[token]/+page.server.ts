@@ -91,7 +91,20 @@ export const actions: Actions = {
 
 		// A different account is already signed in — refuse rather than silently
 		// overwrite their session with a freshly created one.
-		if (locals.user && locals.user.email.toLowerCase() !== invite.email.toLowerCase()) {
+		//
+		// The same triple check as `claim`, not the address alone. An ORGANISATION
+		// account signed in on its own bubble can hold the invited address too
+		// (users_email_org_unique scopes client addresses per org, so both rows can
+		// exist), and the address-only check let it through: it then created a
+		// SECOND, client account for that person and replaced their session with
+		// it. Whoever is already signed in must be the invited client of this org,
+		// and that case is answered by the "already registered" branch below.
+		if (
+			locals.user
+			&& (locals.user.account_type !== 'client'
+				|| locals.user.org_id !== invite.org_id
+				|| locals.user.email.toLowerCase() !== invite.email.toLowerCase())
+		) {
 			return fail(403, { error: st(locals.locale).serverErrors.inviteEmailMismatch });
 		}
 
