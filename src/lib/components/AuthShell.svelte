@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
+  import { t } from '$lib/i18n.svelte';
   interface Props { children: Snippet; }
   const { children }: Props = $props();
 </script>
@@ -40,6 +41,13 @@
 
   <!-- Right: form area -->
   <div class="form-panel">
+    <!-- The way out. Every auth page was a dead end: the brand panel's logo is
+         decorative, so somebody who landed on sign-in by accident had nothing to
+         click but the browser's own back button. -->
+    <a class="auth-back" href="/">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="15 18 9 12 15 6"/></svg>
+      {t.auth.backToSite}
+    </a>
     <div class="form-content">
       {@render children()}
     </div>
@@ -191,6 +199,7 @@
 
   /* Paper, not a panel fill — the jump from the landing page should be small. */
   .form-panel {
+    position: relative;
     flex: 1;
     background: var(--bg-base);
     display: flex;
@@ -200,6 +209,26 @@
     overflow-y: auto;
     min-height: 100vh;
   }
+
+  /* Taken out of the flow on purpose: this panel centres its form, and a link
+     added as a sibling would shove that form off centre. */
+  .auth-back {
+    position: absolute;
+    top: 26px;
+    left: 32px;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 6px 10px 6px 6px;
+    border-radius: var(--radius-sm);
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-subtle);
+    text-decoration: none;
+    transition: color .15s, background .15s;
+  }
+  .auth-back:hover { color: var(--text-base); background: var(--bg-hover); text-decoration: none; }
+  .auth-back:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
   .form-content {
     width: 100%;
@@ -211,6 +240,9 @@
 
   @media (max-width: 720px) {
     .brand-panel { display: none; }
-    .form-panel { padding: 40px 24px; min-height: 100vh; }
+    .form-panel { padding: 64px 24px 40px; min-height: 100vh; }
+    /* Room made for it above: with the brand panel gone this is the only
+       chrome on the screen, and it must not sit on top of the form. */
+    .auth-back { top: 18px; left: 16px; }
   }
 </style>

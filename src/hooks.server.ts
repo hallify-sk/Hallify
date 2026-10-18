@@ -327,12 +327,35 @@ const appHandle: Handle = async ({ event, resolve }) => {
  *  CSP itself is configured in svelte.config.js (`kit.csp`), which hashes SvelteKit's
  *  own inline bootstrap for us; hand-rolling it here would break hydration.
  */
+/** The only route this app frames itself: the public-site builder's live preview. */
+const SELF_EMBEDDABLE = '/app/manage/settings/site/preview';
+
 const securityHeaders: Handle = async ({ event, resolve }) => {
   const response = await resolve(event);
 
   // Clickjacking. frame-ancestors in the CSP is the modern control; X-Frame-Options
   // is kept for older browsers that ignore it.
-  response.headers.set('X-Frame-Options', 'DENY');
+  //
+  // The site builder's preview is the one page we frame ourselves, so a blanket
+  // DENY made it refuse to render — in production as well as locally, the browser
+  // simply reports that it will not embed the page. It is opened to SAME-ORIGIN
+  // only, and only for that exact path: every other route, including the public
+  // site it is previewing, stays un-embeddable.
+  if (event.url.pathname === SELF_EMBEDDABLE) {
+    response.headers.set('X-Frame-Options', 'SAMEORIGIN');
+    // svelte.config.js sets `frame-ancestors: none` for the whole app. It has to
+    // be relaxed on the response itself; a second CSP header would be intersected
+    // with the first, and the stricter value would still win.
+    const csp = response.headers.get('content-security-policy');
+    if (csp) {
+      response.headers.set(
+        'content-security-policy',
+        csp.replace(/frame-ancestors[^;]*/i, "frame-ancestors 'self'")
+      );
+    }
+  } else {
+    response.headers.set('X-Frame-Options', 'DENY');
+  }
   // Stop MIME sniffing — matters for the R2-backed /uploads/ path, where the stored
   // content-type is whatever the uploader claimed.
   response.headers.set('X-Content-Type-Options', 'nosniff');

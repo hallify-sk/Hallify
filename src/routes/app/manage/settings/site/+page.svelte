@@ -91,11 +91,37 @@
   }
 
   // ─── Unsaved state ───
-  const initial = JSON.stringify({
+  // The baseline has to MOVE when a save lands. Captured once at mount it went
+  // stale the moment anything was written: the bar kept saying "unsaved", the
+  // button stayed live, and the only sign the save had worked was a banner at
+  // the very top of a page the operator had scrolled well past.
+  let baseline = $state(JSON.stringify({
     template: data.selected, tagline: data.tagline, intro: data.intro, sections: data.sections
-  });
+  }));
   const current = $derived(JSON.stringify({ template, tagline, intro, sections }));
-  const dirty = $derived(current !== initial);
+  const dirty = $derived(current !== baseline);
+
+  let saving = $state(false);
+  /** Cleared as soon as the draft is edited again, so it never contradicts the bar. */
+  let justSaved = $state(false);
+  $effect(() => {
+    if (dirty) justSaved = false;
+  });
+
+  function onSave() {
+    // Snapshot BEFORE the request: it is this draft that is being sent, and the
+    // operator can keep typing while it is in flight.
+    const sent = current;
+    saving = true;
+    return async ({ update, result }: { update: (o?: { reset?: boolean }) => Promise<void>; result: { type: string } }) => {
+      await update({ reset: false });
+      saving = false;
+      if (result.type === 'success') {
+        baseline = sent;
+        justSaved = true;
+      }
+    };
+  }
 
   // ─── Live preview ───
   let frame = $state<HTMLIFrameElement | null>(null);
@@ -129,9 +155,8 @@
 
 <svelte:head><title>{t.settings.title} – Hallify</title></svelte:head>
 
-{#if form?.saved}
-  <div class="alert-success">{t.settingsPages.changesSaved}</div>
-{/if}
+<!-- Success is reported in the save bar, beside the button that was pressed.
+     A second banner up here would only be read by someone who had scrolled back. -->
 {#if form?.error}
   <div class="alert-error">{form.error}</div>
 {/if}
@@ -141,7 +166,7 @@
     class="builder-pane"
     method="POST"
     action="?/save"
-    use:enhance={() => async ({ update }) => { await update({ reset: false }); }}
+    use:enhance={onSave}
   >
     <!-- Submitted as one field: the arrangement is an ordered list, which ordinary
          form encoding has no faithful way to carry. -->
@@ -295,10 +320,23 @@
     </section>
 
     <!-- Stays in view while the operator works further down the page: a builder
-         whose Save button is somewhere above the fold loses work. -->
-    <div class="sb-save" class:is-dirty={dirty}>
-      <span class="sb-save-note">{dirty ? t.settingsPages.siteUnsaved : t.settingsPages.siteUpToDate}</span>
-      <button type="submit" class="btn-action" disabled={!dirty}>{t.common.save}</button>
+         whose Save button is somewhere above the fold loses work. The outcome is
+         reported here too, next to the button that was pressed — a confirmation
+         at the top of the page is a confirmation nobody scrolled back up to see. -->
+    <div class="sb-save" class:is-dirty={dirty} class:is-saved={justSaved}>
+      <span class="sb-save-note" aria-live="polite">
+        {#if saving}
+          {t.common.loading}
+        {:else if justSaved}
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+          {t.settingsPages.changesSaved}
+        {:else if dirty}
+          {t.settingsPages.siteUnsaved}
+        {:else}
+          {t.settingsPages.siteUpToDate}
+        {/if}
+      </span>
+      <button type="submit" class="btn-action" disabled={!dirty || saving}>{t.common.save}</button>
     </div>
   </form>
 
@@ -401,8 +439,9 @@
     margin-top: 10px; padding: 13px 0;
     background: linear-gradient(to top, var(--bg-base) 72%, transparent);
   }
-  .sb-save-note { font-size: var(--meta-size); color: var(--text-subtle); }
+  .sb-save-note { display: flex; align-items: center; gap: 6px; font-size: var(--meta-size); color: var(--text-subtle); }
   .sb-save.is-dirty .sb-save-note { color: var(--warning); font-weight: 600; }
+  .sb-save.is-saved .sb-save-note { color: var(--success); font-weight: 600; }
 
   /* ─── Preview ─── */
   .preview-pane { position: sticky; top: 18px; min-width: 0; }

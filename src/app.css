@@ -458,6 +458,19 @@ label {
 	margin-bottom: 16px;
 }
 
+/* Never existed, despite 32 uses across 13 pages: every "saved" confirmation in
+   the app has been rendering as a bare line of body text. Built to match its two
+   siblings rather than invented. */
+.alert-success {
+	background: var(--success-dim);
+	border: 1px solid color-mix(in srgb, var(--success) 28%, transparent);
+	color: color-mix(in srgb, var(--success) 72%, var(--text-base));
+	border-radius: var(--radius-sm);
+	padding: 10px 14px;
+	font-size: 13px;
+	margin-bottom: 16px;
+}
+
 .alert-warning {
 	background: var(--warning-dim);
 	border: 1px solid color-mix(in srgb, var(--warning) 35%, transparent);

@@ -360,6 +360,7 @@ export const sk = {
 		arrivalTimeHint: 'Kedy by mali hostia začať prichádzať',
 	},
 	auth: {
+		backToSite: 'Späť na Hallify',
 		welcomeBack: 'Vitajte späť',
 		signInSubtitle: 'Prihláste sa do svojho účtu',
 		email: 'Email',
@@ -2623,6 +2624,7 @@ export const en: typeof sk = {
 		arrivalTimeHint: 'When guests should start arriving',
 	},
 	auth: {
+		backToSite: 'Back to Hallify',
 		welcomeBack: 'Welcome back',
 		signInSubtitle: 'Sign in to your account',
 		email: 'Email',

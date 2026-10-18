@@ -569,11 +569,14 @@
 
   /* ── Theme switcher ──────────────────────────── */
 
+  /* The divider needs air on both sides of it. The language row used to end
+     flush against this border and the theme row started 6px under it, so the
+     two switchers read as one crowded block. */
   .theme-switcher {
     display: flex;
     align-items: center;
     gap: 4px;
-    padding: 6px 10px 10px;
+    padding: 10px 10px 12px;
     border-top: 1px solid var(--border-subtle);
   }
 
@@ -625,7 +628,7 @@
     display: flex;
     align-items: center;
     gap: 4px;
-    padding: 10px 10px 0;
+    padding: 10px 10px 11px;
   }
   .lang-btn {
     flex: 1;

@@ -143,6 +143,14 @@
     display: flex;
     min-height: 100vh;
     background: var(--bg-base);
+    /* `color` is as necessary as `background` here, and for a subtler reason.
+       app.css sets `html, body { color: var(--text-base) }`, which resolves
+       against the APP's tokens — near-white under the dark theme. The template's
+       own --text-base lands on this element, but nothing inside re-applies
+       `color`, so headings (which set no colour of their own) just inherited
+       white straight through a pale template and became unreadable. Re-stating
+       it here makes the whole subtree derive from the template again. */
+    color: var(--text-base);
     container: b-shell / inline-size;
   }
 

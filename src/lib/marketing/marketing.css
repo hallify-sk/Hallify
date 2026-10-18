@@ -1146,8 +1146,9 @@
 .marketing[data-audience=business] {
   --radius: 3px;
 }
-.marketing[data-audience=business] .site-header {
-  border-bottom: 1px solid var(--line);
+/* Same line, same reason — see the note on `.marketing main`. */
+.marketing[data-audience=business] main {
+  border-top: 1px solid var(--line);
 }
 .marketing[data-audience=business] .primary {
   border-radius: 3px;
@@ -1445,8 +1446,12 @@
 .marketing .primary,.marketing .search-form,.marketing .map-panel,.marketing .bridge,.marketing .venue-photo,.marketing .empty-state {
   border-radius: 3px;
 }
-.marketing .site-header {
-  border-bottom: 1px solid var(--line);
+/* The rule that draws the line under the header lives on `main`, not on the
+   header: the header is `width: min(1440px, 100%)` and centred, so a border on
+   it stopped with the content and left the line visibly cut off on a wide
+   screen. `main` is a full-width block, so the line now runs edge to edge. */
+.marketing main {
+  border-top: 1px solid var(--line);
 }
 .marketing .hero-copy h1 {
   font-weight: 450;
@@ -1526,10 +1531,17 @@
   display: grid;
   grid-template-columns: 390px minmax(0,1fr);
 }
+/* The rail scrolls as one. The filters used to be pinned with flex-shrink:0
+   while only the results moved, so on a short window the list was squeezed into
+   a sliver and filters you had finished with never scrolled away. */
 .marketing .explorer-sidebar {
   min-height: 0;
   display: flex;
   flex-direction: column;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--line) transparent;
   border-right: 1px solid var(--line);
   background: var(--bg);
 }
@@ -1693,13 +1705,10 @@
   display: none;
 }
 .marketing .explorer-results {
-  flex: 1;
+  /* Sized by its content now; the rail above it is the scroller. */
+  flex: 0 0 auto;
   min-height: 0;
-  overflow-y: auto;
-  overscroll-behavior: contain;
   padding: 18px 16px 28px;
-  scrollbar-width: thin;
-  scrollbar-color: var(--line) transparent;
 }
 .marketing .explorer-result-count {
   font-size: 9px;
@@ -2407,8 +2416,6 @@
   }
   .marketing .explorer-search {
     padding: 12px 18px;
-    max-height: 70%;
-    overflow-y: auto;
   }
   .marketing .explorer-title {
     margin-bottom: 10px;
