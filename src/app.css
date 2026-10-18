@@ -908,12 +908,13 @@ a.row-item--bleed, button.row-item--bleed {
 a.row-item:hover, button.row-item:hover { background: var(--bg-hover); text-decoration: none; }
 a.row-item:hover { color: inherit; }
 
-/* Column labels above a .row-list. Shares the row's inset so the headings sit
-   directly over the values they name. */
+/* Column labels above a .row-list: typography and inset only, deliberately NO
+   layout. Most headers are written `class="row-item row-head"` so they inherit
+   their page's column grid, and a display here fought that grid and left labels
+   over the wrong columns. Every standalone .row-head already sets its own
+   display, and `:not(.row-item)` is no safer — :not() carries its argument's
+   specificity, so it would outrank a page's own single-class header rule. */
 .row-head {
-	display: flex;
-	align-items: center;
-	gap: 14px;
 	padding: 0 var(--row-inset, 10px) 8px;
 	margin-inline: calc(var(--row-inset, 10px) * -1);
 	border-bottom: 1px solid var(--border);
