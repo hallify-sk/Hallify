@@ -81,15 +81,6 @@ export const load: PageServerLoad = async ({ locals }) => {
     else recipients[key] = stored.filter((id) => staffIds.has(id));
   }
 
-  // ── Analytics (the org's own GTM container; available on every plan) ──
-  const gtmRow = await dbFirst<{ value: string | null }>(locals.db,
-    `SELECT value FROM org_settings WHERE org_id = ? AND key = 'gtm'`, org.id);
-  let gtmContainerId = '';
-  try {
-    const parsed = gtmRow?.value ? (typeof gtmRow.value === 'string' ? JSON.parse(gtmRow.value) : gtmRow.value) : null;
-    gtmContainerId = (parsed as { containerId?: string })?.containerId ?? '';
-  } catch { /* malformed — treat as unset */ }
-
   // ── Webhooks (paid) ──────────────────────────────────────────────────
   const locked = !planHasWebhooks(org.subscription.plan);
 
@@ -124,7 +115,6 @@ export const load: PageServerLoad = async ({ locals }) => {
 
   return {
     notifications, recipients, staff,
-    gtmContainerId,
     locked, plan: org.subscription.plan, webhooks, recentDeliveries,
     orgName: org.name,
     isOwner: org.role === 'owner',
@@ -179,30 +169,6 @@ export const actions: Actions = {
       orgId, toJson(config)
     );
     return { success: true };
-  },
-
-  /** The venue's OWN GTM container, used only on their bubble.
-   *  Hallify's container never runs on a customer domain — on a bubble the venue is
-   *  the controller for its visitors' data under the DPA, so the tracking there must
-   *  be theirs. Empty value clears it. */
-  saveGtm: async ({ request, locals }) => {
-    requireOrgStaff(locals);
-    const orgId = locals.currentOrg!.id;
-    const data = await request.formData();
-    const raw = String(data.get('gtmContainerId') ?? '').trim().toUpperCase();
-    if (raw && !/^GTM-[A-Z0-9]{4,}$/.test(raw)) {
-      return fail(400, { error: st(locals.locale).serverErrors.invalidGtmId });
-    }
-    if (!raw) {
-      await dbRun(locals.db, `DELETE FROM org_settings WHERE org_id = ? AND key = 'gtm'`, orgId);
-    } else {
-      await dbRun(locals.db,
-        `INSERT OR REPLACE INTO org_settings (org_id, key, value, updated_at)
-        VALUES (?, 'gtm', ?, datetime('now'))`,
-        orgId, toJson({ containerId: raw })
-      );
-    }
-    return { gtmSuccess: true };
   },
 
   create: async ({ request, locals }) => {

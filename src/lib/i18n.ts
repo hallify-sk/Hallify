@@ -888,9 +888,9 @@ export const sk = {
 	},
 	sidebar: {
 		settings: "Nastavenia",
-		sectionAdmin: "Admin",
+		sectionAdmin: "Prevádzka",
 		sectionOrganization: "Organizácia",
-		sectionPlatform: "Platforma",
+		sectionPlatform: "Platforma Hallify",
 		announcements: "Oznamy",
 		members: "Členovia",
 		billingPlan: "Fakturácia a plán",
@@ -2875,9 +2875,9 @@ export const en: typeof sk = {
 	},
 	sidebar: {
 		settings: "Settings",
-		sectionAdmin: "Admin",
+		sectionAdmin: "Operations",
 		sectionOrganization: "Organization",
-		sectionPlatform: "Platform",
+		sectionPlatform: "Hallify platform",
 		announcements: "Announcements",
 		members: "Members",
 		billingPlan: "Billing & Plan",
