@@ -7,7 +7,7 @@ import { st } from '$lib/i18n-server';
 import { env } from '$env/dynamic/private';
 import type { Actions, PageServerLoad } from './$types';
 import { requireOrgStaff } from '$lib/guards';
-import { can, canManageRole } from '$lib/permissions';
+import { can, canManageRole, grantablePermissions } from '$lib/permissions';
 import { actorContext, buildAccess, loadOrgRoles, loadOverrides, loadRoleAssignments } from '$lib/server/people';
 
 /**
@@ -136,6 +136,7 @@ export const actions: Actions = {
 		// below the inviter's own rank — otherwise an invite would be a way to mint
 		// somebody more senior than yourself.
 		const orgRoles = await loadOrgRoles(locals.db, orgId);
+		const grantable = grantablePermissions(actor);
 		const roleIds: string[] = [];
 		for (const raw of data.getAll('role_ids')) {
 			const id = String(raw);
@@ -143,6 +144,14 @@ export const actions: Actions = {
 			if (!found) return fail(400, { error: T.peopleArea.errors.unknownRole });
 			if (!canManageRole(actor, found.position)) {
 				return fail(403, { error: T.peopleArea.errors.roleOutranksYou });
+			}
+			// Rank alone is not enough: a role ranked below the actor can still carry
+			// a permission above them. Pre-assigning it on an invitation is the
+			// cleanest version of the escalation — invite an address you control,
+			// and the account arrives holding something you could never grant
+			// yourself.
+			if (found.permissions.some((perm) => !grantable.has(perm))) {
+				return fail(403, { error: T.peopleArea.errors.roleGrantsBeyondYou });
 			}
 			if (!roleIds.includes(id)) roleIds.push(id);
 		}

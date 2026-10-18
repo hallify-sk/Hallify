@@ -161,3 +161,36 @@ describe('granting', () => {
 		expect(grantablePermissions(OWNER).size).toBe(PERMISSIONS.length);
 	});
 });
+
+describe('the sock-puppet escalation', () => {
+	// Found by the adversarial pass. Rank alone gates role ASSIGNMENT, but a role
+	// ranked below the actor can still carry a permission above them. Alice holds
+	// Administrator (rank 10) without billing.manage; a "Finance" role at rank 3
+	// carries it. She cannot act on herself, but she can invite an address she
+	// controls and assign Finance to it — ending up in control of an account with
+	// a permission she could never grant herself.
+	const alice = member([role('Administrator', 10, ['members.manage', 'invites.manage', 'roles.manage'])]);
+	const finance = role('Finance', 3, ['billing.manage']);
+
+	it('passes the rank check, which is why rank alone is not enough', () => {
+		expect(canManageRole(alice, finance.position)).toBe(true);
+	});
+
+	it('is caught by comparing the role against what the actor may grant', () => {
+		const grantable = grantablePermissions(alice);
+		const beyond = finance.permissions.filter((p) => !grantable.has(p));
+		expect(beyond).toEqual(['billing.manage']);
+	});
+
+	it('allows a role whose permissions the actor does hold', () => {
+		// Only permissions on Alice's own role: that is the whole point of the check.
+		const deputy = role('Deputy', 3, ['members.manage', 'invites.manage']);
+		const grantable = grantablePermissions(alice);
+		expect(deputy.permissions.filter((p) => !grantable.has(p))).toEqual([]);
+	});
+
+	it('lets the owner assign anything', () => {
+		const grantable = grantablePermissions(OWNER);
+		expect(finance.permissions.filter((p) => !grantable.has(p))).toEqual([]);
+	});
+});

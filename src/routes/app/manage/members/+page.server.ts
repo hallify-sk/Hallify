@@ -161,6 +161,7 @@ export const actions: Actions = {
 			)
 		).map((r) => r.role_id);
 
+		const grantable = grantablePermissions(actor);
 		const submitted = data.getAll('role_ids').map((v) => String(v));
 		for (const id of submitted) {
 			const role = byId.get(id);
@@ -169,6 +170,18 @@ export const actions: Actions = {
 			// (i.e. nothing changes); granting one is an escalation.
 			if (!canManageRole(actor, role.position) && !existing.includes(id)) {
 				return fail(403, { error: T.peopleArea.errors.roleOutranksYou });
+			}
+			// Rank alone is not enough. A role BELOW the actor can still carry a
+			// permission ABOVE them, and assigning it hands that permission to an
+			// account of their choosing — their own sock puppet, invited a moment
+			// earlier. Without this, holding members.manage is a two-step route to
+			// every permission in the organisation, which is exactly what
+			// grantablePermissions exists to prevent on the role editor.
+			if (!existing.includes(id)) {
+				const beyond = role.permissions.filter((p) => !grantable.has(p));
+				if (beyond.length > 0) {
+					return fail(403, { error: T.peopleArea.errors.roleGrantsBeyondYou });
+				}
 			}
 		}
 
