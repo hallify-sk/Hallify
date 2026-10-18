@@ -3,6 +3,7 @@ import { dbAll, dbFirst } from '$lib/db/index';
 import { env } from '$env/dynamic/private';
 import { unreadMessageCount } from '$lib/unread';
 import { unreadAnnouncementCount } from '$lib/announcements';
+import { loadPlatformAnalytics } from '$lib/server/platform-settings';
 
 /** Which GTM container applies to THIS surface.
  *
@@ -12,20 +13,34 @@ import { unreadAnnouncementCount } from '$lib/announcements';
  *  either may be absent (analytics is entirely opt-in). */
 async function resolveGtmId(locals: App.Locals): Promise<string | null> {
   if (locals.domainOrg) {
+    // A venue's own container always wins on its own domain. Hallify's runs here
+    // only when a platform admin has turned on platform-wide measurement, and
+    // even then it yields to the venue's: two containers on one page double-count
+    // every event, and the venue's is the one its DPA accounts for.
+    const platformFallback = async () => {
+      const platform = await loadPlatformAnalytics(locals.db);
+      return platform.includeBubbles && platform.containerId ? platform.containerId : null;
+    };
     try {
       const row = await dbFirst<{ value: string }>(
         locals.db,
         "SELECT value FROM org_settings WHERE org_id = ? AND key = 'gtm'",
         locals.domainOrg.id
       );
-      if (!row?.value) return null;
+      if (!row?.value) return platformFallback();
       const parsed = typeof row.value === 'string' ? JSON.parse(row.value) : row.value;
       const id = (parsed as { containerId?: unknown })?.containerId;
-      return typeof id === 'string' && /^GTM-[A-Z0-9]+$/i.test(id) ? id : null;
+      if (typeof id === 'string' && /^GTM-[A-Z0-9]+$/i.test(id)) return id;
+      return platformFallback();
     } catch {
       return null;
     }
   }
+  // The platform container is a setting now, so it can be changed without a
+  // redeploy. GTM_CONTAINER_ID remains the fallback for an environment that was
+  // configured before the settings page existed.
+  const platform = await loadPlatformAnalytics(locals.db);
+  if (platform.containerId) return platform.containerId;
   const id = env.GTM_CONTAINER_ID ?? '';
   return /^GTM-[A-Z0-9]+$/i.test(id) ? id : null;
 }

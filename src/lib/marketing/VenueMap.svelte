@@ -185,6 +185,45 @@
     if (reduced()) instance.setView(centre, targetZoom, { animate: false });
     else instance.flyTo(centre, targetZoom, { duration: 0.9 });
   });
+  /**
+   * The notice over the map.
+   *
+   * `transient` separates a report from a problem. "Your location is
+   * unavailable" is finished business the moment it has been read — it used to
+   * sit there for the rest of the session because it was derived straight from a
+   * status that never changes back. A tile failure is not transient: it has a
+   * Retry button and stays until the retry is taken.
+   */
+  const mapMessage = $derived.by((): { text: string; transient: boolean; retry?: boolean } | null => {
+    if (!onpick && userLocation.status === 'loading') {
+      return { text: english ? 'Finding your approximate location…' : 'Hľadám vašu približnú polohu…', transient: false };
+    }
+    if (!onpick && userLocation.status === 'denied') {
+      return { text: english ? 'Location access was declined. You can still search by city.' : 'Prístup k polohe nebol povolený. Stále môžete hľadať podľa mesta.', transient: true };
+    }
+    if (!onpick && userLocation.status === 'unavailable') {
+      return { text: english ? 'Your location is unavailable. Try searching by city.' : 'Polohu sa nepodarilo zistiť. Skúste vyhľadávanie podľa mesta.', transient: true };
+    }
+    if (status === 'loading') {
+      return { text: english ? 'Loading the map…' : 'Načítavam mapu…', transient: false };
+    }
+    if (status !== 'ready') {
+      return { text: english ? 'Some map tiles could not load.' : 'Niektoré mapové podklady sa nenačítali.', transient: false, retry: true };
+    }
+    return null;
+  });
+
+  let messageDismissed = $state(false);
+  $effect(() => {
+    const current = mapMessage;
+    // A new message is a new message: whatever was dismissed before does not
+    // suppress it.
+    messageDismissed = false;
+    if (!current?.transient) return;
+    const timer = setTimeout(() => (messageDismissed = true), 6000);
+    return () => clearTimeout(timer);
+  });
+
   $effect(() => {
     const center = userLocation.center, area = areaCenter, L = library, instance = map;
     if (!instance || !L || onpick) return;
@@ -210,13 +249,20 @@
     <div class="zoom-controls"><button type="button" onclick={() => map?.zoomIn()} disabled={!map || zoom >= 19} aria-label={english ? 'Zoom in' : 'Priblížiť'}><Icon name="plus" /></button><button type="button" onclick={() => map?.zoomOut()} disabled={!map || zoom <= 3} aria-label={english ? 'Zoom out' : 'Oddialiť'}><Icon name="minus" /></button></div>
   </div>
 
-  {#if status !== 'ready' || (!onpick && ['loading','denied','unavailable'].includes(userLocation.status))}
-    <div class="map-message" role="status">
-      {#if !onpick && userLocation.status === 'loading'}{english ? 'Finding your approximate location…' : 'Hľadám vašu približnú polohu…'}
-      {:else if !onpick && userLocation.status === 'denied'}{english ? 'Location access was declined. You can still search by city.' : 'Prístup k polohe nebol povolený. Stále môžete hľadať podľa mesta.'}
-      {:else if !onpick && userLocation.status === 'unavailable'}{english ? 'Your location is unavailable. Try searching by city.' : 'Polohu sa nepodarilo zistiť. Skúste vyhľadávanie podľa mesta.'}
-      {:else if status === 'loading'}{english ? 'Loading the map…' : 'Načítavam mapu…'}
-      {:else}{english ? 'Some map tiles could not load.' : 'Niektoré mapové podklady sa nenačítali.'} <button type="button" onclick={retry}>{english ? 'Retry' : 'Skúsiť znova'}</button>{/if}
+  {#if mapMessage && !messageDismissed}
+    <div class="map-message" class:is-transient={mapMessage.transient} role="status">
+      <span>{mapMessage.text}</span>
+      {#if mapMessage.retry}
+        <button type="button" onclick={retry}>{english ? 'Retry' : 'Skúsiť znova'}</button>
+      {:else if mapMessage.transient}
+        <button
+          type="button" class="map-message-close"
+          onclick={() => (messageDismissed = true)}
+          aria-label={english ? 'Dismiss' : 'Zavrieť'}
+        >
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      {/if}
     </div>
   {/if}
 </div>
@@ -235,7 +281,7 @@
   .map-actions button:disabled{opacity:.4;cursor:default}
   .map-actions button.location-active{color:var(--map-accent)}
   .zoom-controls{border-top:1px solid var(--map-border)}
-  .map-message{position:absolute;top:62px;left:20px;right:70px;z-index:1000;padding:10px 13px;border:1px solid var(--map-border);background:var(--map-panel);color:var(--map-muted);border-radius:3px;font-size:10px;line-height:1.7}.map-message button{background:none;border:0;color:var(--map-accent);font-size:10px;font-weight:600;cursor:pointer;margin-left:8px}
+  /* A notice, not a banner. `right:70px` stretched it the full width of the map, which made a one-line status read as a page-level alert. */.map-message{position:absolute;top:62px;left:20px;right:auto;max-width:min(430px,calc(100% - 100px));display:flex;align-items:center;gap:10px;z-index:1000;padding:10px 13px;border:1px solid var(--map-border);background:var(--map-panel);color:var(--map-muted);border-radius:3px;font-size:10px;line-height:1.7}.map-message-close{display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-left:auto;padding:2px;background:none;border:0;color:var(--map-muted);cursor:pointer;opacity:.65}.map-message-close:hover{opacity:1}.map-message button{background:none;border:0;color:var(--map-accent);font-size:10px;font-weight:600;cursor:pointer;margin-left:8px}
   .picker .map-message{top:15px}.picker .map-actions{bottom:35px}
   button:focus-visible,a:focus-visible{outline:3px solid var(--map-accent);outline-offset:3px}
   .with-expand .map-message{top:62px}
@@ -276,5 +322,5 @@
   @media(max-width:600px){.venue-map-container:has(:global(.layers-panel)){z-index:1100}}
   :global(.venue-map-surface .leaflet-zoom-anim .leaflet-zoom-animated){transition-duration:100ms}
   @media(prefers-reduced-motion:reduce){:global(.venue-map-surface .leaflet-zoom-anim .leaflet-zoom-animated){transition:none}}
-  @media(max-width:600px){.map-actions{right:12px;bottom:30px}.map-expand{top:12px;right:12px;font-size:10px}.map-area-label{left:12px;top:12px}.map-message{left:12px;right:60px;top:62px}.with-expand .map-message{top:62px}}
+  @media(max-width:600px){.map-actions{right:12px;bottom:30px}.map-expand{top:12px;right:12px;font-size:10px}.map-area-label{left:12px;top:12px}.map-message{left:12px;right:auto;max-width:calc(100% - 72px);top:62px}.with-expand .map-message{top:62px}}
 </style>

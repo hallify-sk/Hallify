@@ -31,6 +31,7 @@
 	const { hall, blocks, takenDates, heldDates, earliestDate, holdMinutes, backHref, formError = null, showAutoApproveNote = true, extras = [] }: Props = $props();
 
 	let selectedExtras = $state<string[]>([]);
+	let eventTitle = $state('');
 	function toggleExtra(id: string) {
 		selectedExtras = selectedExtras.includes(id) ? selectedExtras.filter((x) => x !== id) : [...selectedExtras, id];
 	}
@@ -65,6 +66,33 @@
 	$effect(() => {
 		if (numGuests && !overCapacity && !firedGuests) { firedGuests = true; booking.bookingStep(hallSlug, 'guests_entered'); }
 	});
+	// The last two steps and the outcome were defined but never sent, which left
+	// the funnel with no conversion event at all: every venue's analytics could
+	// show people arriving and starting a booking, and nothing about whether any
+	// of them finished one.
+	let firedExtras = false, firedDetails = false;
+	$effect(() => {
+		if (selectedExtras.length > 0 && !firedExtras) { firedExtras = true; booking.bookingStep(hallSlug, 'extras_selected'); }
+	});
+	$effect(() => {
+		// The booker is already signed in, so "details" is the one thing they have
+		// to write themselves: what the event is.
+		if (eventTitle.trim() && !firedDetails) {
+			firedDetails = true;
+			booking.bookingStep(hallSlug, 'details_entered');
+		}
+	});
+
+	/** The outcome. A refusal is as worth measuring as a success — it is the only
+	 *  signal that tells a venue its own rules are costing it bookings. */
+	function trackOutcome(result: { type: string; data?: Record<string, unknown> }) {
+		if (result.type === 'redirect' || (result.type === 'success' && !result.data?.error)) {
+			booking.bookingSubmitted(hallSlug, String(result.data?.status ?? 'submitted'), Number(numGuests) || null);
+		} else if (result.type === 'failure') {
+			booking.bookingRejected(hallSlug, String(result.data?.error ?? 'rejected'));
+		}
+	}
+
 	const canSubmit = $derived(!!selectedDate && holdActive && !overCapacity);
 
 	const guestsForExtras = $derived(Math.max(1, Number(numGuests) || 1));
@@ -142,7 +170,7 @@
 	{#if formError}<div class="bk-error">{formError}</div>{/if}
 	{#if hall.pre_reservation_text}<div class="bk-pre card--inset">{hall.pre_reservation_text}</div>{/if}
 
-	<form method="POST" use:enhance class="bk-form">
+	<form method="POST" use:enhance={() => async ({ update, result }) => { trackOutcome(result); await update(); }} class="bk-form">
 		<input type="hidden" name="eventDate" value={selectedDate} />
 		<input type="hidden" name="startTime" value={specifyTime ? startTime : ''} />
 		<input type="hidden" name="endTime" value={specifyTime ? endTime : ''} />
@@ -150,7 +178,7 @@
 
 		<div class="bk-field">
 			<label for="title">{t.createEvent.eventName} <span class="req">*</span></label>
-			<input id="title" name="title" type="text" placeholder={t.publicBooking.eventNamePlaceholder} required />
+			<input id="title" name="title" type="text" bind:value={eventTitle} placeholder={t.publicBooking.eventNamePlaceholder} required />
 		</div>
 
 		<div class="bk-field">

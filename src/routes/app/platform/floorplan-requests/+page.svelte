@@ -1,6 +1,7 @@
 <script lang="ts">
   import { enhance } from '$app/forms';
   import { t } from '$lib/i18n.svelte';
+  import { eur } from '$lib/extras';
   import type { PageData, ActionData } from './$types';
 
   let { data, form }: { data: PageData; form: ActionData } = $props();
@@ -17,6 +18,17 @@
   });
 
   const fmt = (d: string | null) => (d ? new Date(d).toLocaleDateString() : '—');
+
+  let openSetupId = $state<string | null>(null);
+  const toggleSetup = (id: string) => (openSetupId = openSetupId === id ? null : id);
+
+  const SETUP_STATUS_LABEL: Record<string, string> = $derived({
+    requested: t.floorplanService.statusRequested,
+    contacted: t.floorplanService.statusContacted,
+    in_progress: t.setupService.statusInProgress,
+    delivered: t.floorplanService.statusDelivered,
+    cancelled: t.floorplanService.statusCancelled
+  });
 
   /** Days since the request came in — the number that decides what to work on. */
   function waiting(created: string): number {
@@ -118,6 +130,84 @@
       </div>
     {/if}
   </section>
+  <!-- The fixed-price setup service. A separate queue because it is a separate
+       product: this one has a price on it and excludes the floorplan. -->
+  <section class="section">
+    <div class="section-head section-head--row">
+      <div class="head-text">
+        <h2>{t.setupService.queueTitle}</h2>
+        <p>{t.setupService.queueLead}</p>
+      </div>
+      <span class="count">{data.setupOpenCount} {t.floorplanService.openCount}</span>
+    </div>
+
+    {#if data.setupRequests.length === 0}
+      <div class="card--inset empty-state">
+        <div class="icon-tile">
+          <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><polyline points="20 6 9 17 4 12"/></svg>
+        </div>
+        <p class="empty">{t.floorplanService.noRequests}</p>
+      </div>
+    {:else}
+      <div class="row-list su-rows" role="table">
+        <div class="row-item row-head" role="row">
+          <span role="columnheader">{t.floorplanService.colOrg}</span>
+          <span role="columnheader">{t.floorplanService.colPlan}</span>
+          <span role="columnheader">{t.setupService.colPrice}</span>
+          <span role="columnheader">{t.floorplanService.colWaiting}</span>
+          <span role="columnheader">{t.floorplanService.colStatus}</span>
+          <span role="columnheader"></span>
+        </div>
+
+        {#each data.setupRequests as r (r.id)}
+          <div class="row-item" class:is-done={r.status === 'delivered' || r.status === 'cancelled'} role="row">
+            <span role="cell">
+              <strong>{r.org_name}</strong>
+              <span class="muted"> · {r.hall_count} {t.floorplanService.colVenue.toLowerCase()}</span>
+            </span>
+            <span role="cell"><span class="badge">{r.plan ?? 'free'}</span></span>
+            <span role="cell" class="muted">{eur(r.price_cents)}</span>
+            <span role="cell" class="muted">{waiting(r.created_at)} {t.floorplanService.days}</span>
+            <span role="cell"><span class="badge badge--{r.status}">{SETUP_STATUS_LABEL[r.status] ?? r.status}</span></span>
+            <span role="cell" class="row-actions">
+              <button class="btn-outline btn-sm" aria-expanded={openSetupId === r.id} onclick={() => toggleSetup(r.id)}>
+                {openSetupId === r.id ? t.platformMisc.hide : t.floorplanService.open}
+              </button>
+            </span>
+          </div>
+
+          {#if openSetupId === r.id}
+            <div class="detail" role="row">
+              <div class="detail-body" role="cell">
+                <div class="detail-meta">
+                  <span><b>{t.floorplanService.requestedBy}</b> {r.requester_first_name} {r.requester_last_name} · {r.requester_email ?? '—'}</span>
+                  <span><b>{t.floorplanService.requestedOn}</b> {fmt(r.created_at)}</span>
+                  <span><b>{t.floorplanService.lastUpdate}</b> {fmt(r.updated_at)}</span>
+                </div>
+
+                {#if r.note}
+                  <h3 class="detail-heading">{t.floorplanService.theirNote}</h3>
+                  <p class="note">{r.note}</p>
+                {/if}
+
+                <h3 class="detail-heading">{t.floorplanService.moveTo}</h3>
+                <form method="POST" action="?/setSetupStatus" class="status-form" use:enhance>
+                  <input type="hidden" name="id" value={r.id} />
+                  {#each data.setupStatuses as st2}
+                    <button
+                      type="submit" name="status" value={st2}
+                      class="btn-outline btn-sm" class:is-current={r.status === st2}
+                      disabled={r.status === st2}
+                    >{SETUP_STATUS_LABEL[st2] ?? st2}</button>
+                  {/each}
+                </form>
+              </div>
+            </div>
+          {/if}
+        {/each}
+      </div>
+    {/if}
+  </section>
 </div>
 
 <style>
@@ -156,5 +246,17 @@
   @media (max-width: 900px) {
     .fp-rows > .row-item { grid-template-columns: 1fr 1fr; row-gap: 8px; align-items: start; }
     .fp-rows > .row-head { display: none; }
+  }
+  .su-rows > .row-item {
+    display: grid;
+    grid-template-columns: minmax(0,1.6fr) minmax(0,.6fr) minmax(0,.6fr) minmax(0,.7fr) minmax(0,.9fr) 110px;
+    gap: 12px; align-items: center; font-size: 13px;
+  }
+  .su-rows > .row-item.is-done { opacity: .55; }
+  .badge--in_progress { background: var(--accent-dim); color: var(--accent-ink); }
+
+  @media (max-width: 900px) {
+    .su-rows > .row-item { grid-template-columns: 1fr 1fr; row-gap: 8px; align-items: start; }
+    .su-rows > .row-head { display: none; }
   }
 </style>

@@ -898,7 +898,10 @@ label {
 	padding: 13px var(--row-inset, 10px);
 	margin-inline: calc(var(--row-inset, 10px) * -1);
 	border-bottom: 1px solid var(--border-subtle);
-	border-radius: var(--radius-sm);
+	/* Square. A row is a line in a table, not a card: the 3px that used to be here
+	   curled the ends of every divider and every hover fill, which at this size
+	   does not read as "rounded" so much as "not quite straight". */
+	border-radius: 0;
 	min-width: 0;
 }
 .row-item:last-child { border-bottom: none; }
