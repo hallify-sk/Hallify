@@ -62,9 +62,9 @@ export const load: PageServerLoad = async ({ locals, url }) => {
   // The venue made during the flow, so its screen can show what was created
   // rather than an empty form the operator has already filled in.
   const hall = state.hallId
-    ? await dbFirst<{ id: string; name: string; max_people: number; address: string | null; is_public: number }>(
+    ? await dbFirst<{ id: string; name: string; max_people: number; address: string | null; is_public: number; latitude: number | null; longitude: number | null }>(
         locals.db,
-        'SELECT id, name, max_people, address, is_public FROM halls WHERE id = ? AND org_id = ?',
+        'SELECT id, name, max_people, address, is_public, latitude, longitude FROM halls WHERE id = ? AND org_id = ?',
         state.hallId,
         org.id
       )
@@ -142,6 +142,15 @@ export const actions: Actions = {
     const address = String(data.get('address') ?? '').trim().slice(0, 200);
     const allowReservations = data.get('allowReservations') === 'on' ? 1 : 0;
 
+    // Whatever the map ended up pointing at — geocoded, or dragged afterwards.
+    // Validated rather than trusted: these arrive from a form like anything else.
+    const num = (v: FormDataEntryValue | null, max: number) => {
+      const n = Number(String(v ?? ''));
+      return String(v ?? '') !== '' && Number.isFinite(n) && Math.abs(n) <= max ? n : null;
+    };
+    const latitude = num(data.get('latitude'), 90);
+    const longitude = num(data.get('longitude'), 180);
+
     // Scope by org: an id alone must never reach another tenant's venue.
     const hall = await dbFirst<{ id: string }>(
       locals.db,
@@ -151,11 +160,16 @@ export const actions: Actions = {
     );
     if (!hall) return fail(404, { error: st(locals.locale).serverErrors.hallNotFound });
 
+    // Both coordinates or neither: half a position is not a position.
+    const hasPosition = latitude !== null && longitude !== null;
     await dbRun(
       locals.db,
-      'UPDATE halls SET address = ?, allow_reservations = ? WHERE id = ? AND org_id = ?',
+      `UPDATE halls SET address = ?, allow_reservations = ?, latitude = ?, longitude = ?
+        WHERE id = ? AND org_id = ?`,
       address || null,
       allowReservations,
+      hasPosition ? latitude : null,
+      hasPosition ? longitude : null,
       hallId,
       org.id
     );
@@ -176,7 +190,20 @@ export const actions: Actions = {
     return { advanced: true };
   },
 
-  /** Done, or abandoned on purpose. Either way it stops asking. */
+  /**
+   * Leave without finishing.
+   *
+   * Explicitly does NOT mark the flow complete. Skipping used to, which meant
+   * the dashboard prompt vanished and the only route back was an undocumented
+   * query parameter — "skip" quietly became "never show me this again", which
+   * is not what the word means. Progress is kept, so coming back resumes.
+   */
+  leave: async ({ locals }) => {
+    requireOrg(locals);
+    redirect(303, '/app/manage');
+  },
+
+  /** Reached the end. This is the only thing that marks it done. */
   finish: async ({ locals }) => {
     const org = requireOrg(locals);
     const state = await loadState(locals.db, org.id);

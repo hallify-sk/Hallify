@@ -26,6 +26,19 @@
     <p class="page-sub">{t.membersAdmin.helpSub}</p>
   </div>
 
+  <!-- The permanent door back into the walkthrough. The dashboard prompt only
+       appears while it is unfinished and only for a month; this is here for
+       good, so skipping it is never a one-way decision. -->
+  <a class="rerun" href="/app/welcome?again=1">
+    <span class="icon-tile">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+    </span>
+    <span class="rerun-copy">
+      <strong>{t.onboarding.rerunTitle}</strong>
+      <span>{t.onboarding.rerunBody}</span>
+    </span>
+  </a>
+
   <!-- Onboarding checklist -->
   <section class="section section--lead">
     <div class="section-head section-head--row">
@@ -174,4 +187,16 @@
   .kb-card-summary { font-size: 12px; color: var(--text-muted); line-height: 1.45; }
   .kb-card-arrow { flex-shrink: 0; display: flex; color: var(--text-muted); }
   .kb-item:hover .kb-card-arrow { color: var(--accent-ink); }
+  /* ── Re-run the walkthrough ────────────────── */
+  .rerun {
+    display: flex; align-items: center; gap: 13px;
+    padding: 13px 16px; margin-bottom: 20px;
+    border: 1px solid var(--border); border-radius: var(--radius);
+    background: var(--bg-panel); text-decoration: none; color: inherit;
+    transition: border-color .15s, background .15s;
+  }
+  .rerun:hover { border-color: var(--accent); background: var(--accent-dim); text-decoration: none; }
+  .rerun-copy { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+  .rerun-copy strong { font-size: 13.5px; font-weight: 600; }
+  .rerun-copy span { font-size: var(--meta-size); color: var(--text-muted); line-height: 1.6; }
 </style>

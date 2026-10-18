@@ -1,14 +1,18 @@
 <script lang="ts">
   /**
-   * First run. `+page@.svelte` resets to the root layout, so the console's
-   * sidebar is not around it — there is nothing in there worth navigating to
-   * yet, and a wizard framed by an empty dashboard reads as optional.
+   * First run, rendered inside the console like any other page.
+   *
+   * It deliberately does NOT take over the screen. Someone who wants to look
+   * around mid-flow should be able to, and seeing the navigation while being
+   * walked through it is how the walkthrough teaches where things live —
+   * which a full-bleed wizard, however focused, cannot do.
    */
   import { enhance } from '$app/forms';
   import { t, getLocale } from '$lib/i18n.svelte';
   import { eur } from '$lib/extras';
   import { ONBOARDING_STEPS, stepIndex, type OnboardingStep } from '$lib/onboarding';
   import { SETUP_SERVICE_INCLUDES, SETUP_SERVICE_GUARANTEE, SETUP_SERVICE_EXCLUDES } from '$lib/setup-service';
+  import VenueLocationPicker from '$lib/marketing/VenueLocationPicker.svelte';
   import type { PageData, ActionData } from './$types';
 
   let { data, form }: { data: PageData; form: ActionData } = $props();
@@ -35,16 +39,55 @@
   });
 
   const PAID = ['starter', 'professional'] as const;
+
+  // ── Address → map ──────────────────────────────────────────────────────
+  // Typing an address and seeing the pin land on it is the whole point of
+  // asking for one, and it is also the only check an operator gets that we
+  // read it the way they meant it.
+  let address = $state(data.hall?.address ?? '');
+  let latitude = $state<number | null>(data.hall?.latitude ?? null);
+  let longitude = $state<number | null>(data.hall?.longitude ?? null);
+  let geoState = $state<'idle' | 'searching' | 'found' | 'notfound'>(
+    data.hall?.latitude != null ? 'found' : 'idle'
+  );
+
+  /** Debounced: a lookup per keystroke would hammer a rate-limited proxy. */
+  let geoTimer: ReturnType<typeof setTimeout> | undefined;
+  let lastLookup = '';
+  function scheduleLookup() {
+    clearTimeout(geoTimer);
+    const query = address.trim();
+    if (query.length < 4 || query === lastLookup) return;
+    geoTimer = setTimeout(() => void lookup(query), 700);
+  }
+
+  async function lookup(query: string) {
+    lastLookup = query;
+    geoState = 'searching';
+    try {
+      const res = await fetch(`/api/geocode?q=${encodeURIComponent(query)}`);
+      const body = res.ok ? await res.json() : null;
+      if (body?.result) {
+        latitude = body.result.latitude;
+        longitude = body.result.longitude;
+        geoState = 'found';
+      } else {
+        geoState = 'notfound';
+      }
+    } catch {
+      geoState = 'notfound';
+    }
+  }
 </script>
 
 <svelte:head><title>{t.onboarding.title} – Hallify</title></svelte:head>
 
 <div class="ob">
   <header class="ob-head">
-    <img src="/Hallify.svg" alt="" width="28" height="28" />
-    <span class="ob-brand">Hallify</span>
-    <!-- Always available. An onboarding flow you cannot leave is a trap. -->
-    <form method="POST" action="?/finish" class="ob-skip-form" use:enhance>
+    <p class="eyebrow">{t.onboarding.eyebrow} · {data.orgName}</p>
+    <!-- Always available, and it LEAVES rather than finishes: skipping must not
+         mark the flow done, or there is no way back to it. -->
+    <form method="POST" action="?/leave" class="ob-skip-form" use:enhance>
       <button type="submit" class="ob-skip">{t.onboarding.skipAll}</button>
     </form>
   </header>
@@ -63,7 +106,6 @@
 
     <!-- ── 1. A venue ───────────────────────────────────────────── -->
     {#if viewing === 'venue'}
-      <p class="eyebrow">{t.onboarding.eyebrow} · {data.orgName}</p>
       <h1>{t.onboarding.venueTitle}</h1>
       <p class="ob-lead">{t.onboarding.venueLead}</p>
 
@@ -99,7 +141,6 @@
 
     <!-- ── 2. What a visitor needs to know ──────────────────────── -->
     {:else if viewing === 'details'}
-      <p class="eyebrow">{t.onboarding.eyebrow}</p>
       <h1>{t.onboarding.detailsTitle}</h1>
       <p class="ob-lead">{t.onboarding.detailsLead}</p>
 
@@ -109,8 +150,22 @@
           <div class="field">
             <label class="field-label" for="ob-addr">{t.onboarding.venueAddress}</label>
             <input id="ob-addr" name="address" type="text" maxlength="200"
-              value={data.hall.address ?? ''} placeholder={t.onboarding.venueAddressPlaceholder} />
-            <p class="ob-hint">{t.onboarding.venueAddressHint}</p>
+              bind:value={address} oninput={scheduleLookup}
+              placeholder={t.onboarding.venueAddressPlaceholder} />
+            <p class="ob-hint" aria-live="polite">
+              {#if geoState === 'searching'}{t.onboarding.geoSearching}
+              {:else if geoState === 'found'}{t.onboarding.geoFound}
+              {:else if geoState === 'notfound'}{t.onboarding.geoNotFound}
+              {:else}{t.onboarding.venueAddressHint}{/if}
+            </p>
+          </div>
+
+          <!-- The pin is draggable: geocoding gets the street right and the
+               building wrong often enough that an operator needs the last word. -->
+          <input type="hidden" name="latitude" value={latitude ?? ''} />
+          <input type="hidden" name="longitude" value={longitude ?? ''} />
+          <div class="ob-map">
+            <VenueLocationPicker bind:latitude bind:longitude english={locale === 'en'} />
           </div>
 
           <label class="ob-toggle">
@@ -136,7 +191,6 @@
 
     <!-- ── 3. What the plan does and does not do ────────────────── -->
     {:else if viewing === 'plan'}
-      <p class="eyebrow">{t.onboarding.eyebrow}</p>
       <h1>{t.onboarding.planTitle}</h1>
       <!-- The honest version: what the free plan is for, and the exact line it
            stops at. An upgrade prompt that hides the limit gets clicked once. -->
@@ -183,7 +237,6 @@
 
     <!-- ── 4. Or have us do all of it ───────────────────────────── -->
     {:else if viewing === 'help'}
-      <p class="eyebrow">{t.onboarding.eyebrow}</p>
       <h1>{t.setupService.title}</h1>
       <p class="ob-lead">{t.setupService.lead}</p>
 
@@ -223,7 +276,6 @@
 
     <!-- ── 5. Out into the product ──────────────────────────────── -->
     {:else}
-      <p class="eyebrow">{t.onboarding.eyebrow}</p>
       <h1>{t.onboarding.doneTitle}</h1>
       <p class="ob-lead">{t.onboarding.doneLead}</p>
 
@@ -241,9 +293,9 @@
 </div>
 
 <style>
+  /* Sits in the console's scroll container, so it sizes to its content rather
+     than claiming a viewport height it does not own. */
   .ob {
-    min-height: 100vh;
-    background: var(--bg-base);
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -255,9 +307,9 @@
     display: flex;
     align-items: center;
     gap: 9px;
-    padding: 22px 24px 0;
+    padding: 26px 24px 0;
   }
-  .ob-brand { font-size: 15px; font-weight: 650; letter-spacing: -.03em; }
+  .ob-head .eyebrow { margin: 0; }
   .ob-skip-form { margin-left: auto; }
   .ob-skip {
     background: none; border: 0; cursor: pointer; font-family: inherit;
@@ -271,7 +323,7 @@
     max-width: 720px;
     display: flex;
     gap: 6px;
-    padding: 26px 24px 0;
+    padding: 20px 24px 0;
   }
   .ob-tick { flex: 1; display: flex; flex-direction: column; gap: 7px; }
   .ob-tick-dot {
@@ -289,6 +341,10 @@
   .ob-hint { font-size: var(--meta-size); color: var(--text-subtle); margin: 6px 0 0; }
 
   .ob-form { display: flex; flex-direction: column; gap: 18px; max-width: 420px; }
+  /* The step carrying a map gets the whole column; 420px is a form width, not
+     a map width. */
+  .ob-form:has(.ob-map) { max-width: none; }
+  .ob-map { max-width: 100%; }
   .ob-actions { display: flex; align-items: center; gap: 16px; margin-top: 8px; flex-wrap: wrap; }
   .ob-link {
     background: none; border: 0; cursor: pointer; font-family: inherit;
