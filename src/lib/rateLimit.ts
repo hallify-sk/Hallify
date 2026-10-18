@@ -103,9 +103,17 @@ function allow(): RateLimitResult {
 }
 
 /** Build a counter key. Identifiers are lowercased so `A@b.com` and `a@b.com` share
- *  a bucket, and truncated so a hostile client can't bloat the table with long keys. */
-export function rateLimitKey(bucket: string, identifier: string): string {
-  return `${bucket}:${identifier.toLowerCase().slice(0, 200)}`;
+ *  a bucket, and truncated so a hostile client can't bloat the table with long keys.
+ *
+ *  The identifier is usually `getClientAddress()`, which adapter-cloudflare reads
+ *  from `cf-connecting-ip`. Only Cloudflare sets that header, so behind
+ *  `wrangler dev` — or any non-Cloudflare host — it is absent and the call hands
+ *  back null despite its `string` type. Lowercasing null threw, which turned every
+ *  rate-limited surface (login, sign-up, password reset, the invite links) into a
+ *  500. Falling back here rather than at each call site means a surface added later
+ *  cannot reintroduce it. Sharing one bucket limits harder, never less. */
+export function rateLimitKey(bucket: string, identifier: string | null | undefined): string {
+  return `${bucket}:${(identifier || 'unknown').toLowerCase().slice(0, 200)}`;
 }
 
 /** Fill the {minutes} placeholder in the localized "too many attempts" message. */

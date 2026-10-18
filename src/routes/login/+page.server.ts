@@ -7,6 +7,25 @@ import { st } from '$lib/i18n-server';
 import { rateLimit, rateLimitKey, tooManyAttemptsMessage, RATE_LIMITS } from '$lib/rateLimit';
 import type { Actions, PageServerLoad } from './$types';
 
+/** Only a same-origin absolute path may be followed after sign-in or sign-up.
+ *
+ *  `?redirect=` is carried into a hidden field and then into a 303, so without this
+ *  `/login?redirect=https://evil.example.com` is an open redirect: a link on the
+ *  org's own domain that signs somebody in and then hands them to an attacker's
+ *  copy of the page. A value starting `//` or `/\` is a protocol-relative URL the
+ *  browser resolves against another host, so those go too.
+ *
+ *  Same rule as /app/login and /app/register — this is the reservation-invite side
+ *  of it (`/invite/[token]` links here with `?redirect=/invite/<token>`). */
+const DEFAULT_NEXT = '/halls';
+
+function safeNext(raw: unknown): string {
+  const v = typeof raw === 'string' ? raw.trim() : '';
+  if (!v.startsWith('/')) return DEFAULT_NEXT;
+  if (v.startsWith('//') || v.startsWith('/\\')) return DEFAULT_NEXT;
+  return v;
+}
+
 export const load: PageServerLoad = async ({ locals, url }) => {
   // This route is only for custom-domain visitors
   if (!locals.domainOrg) redirect(303, '/app/login');
@@ -14,7 +33,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
   if (locals.user) redirect(303, locals.user.account_type === 'client' ? '/halls' : '/app/manage');
   return {
     domainOrg: locals.domainOrg,
-    redirectTo: url.searchParams.get('redirect') ?? '/halls',
+    redirectTo: safeNext(url.searchParams.get('redirect')),
   };
 };
 
@@ -29,7 +48,9 @@ export const actions: Actions = {
     const data = await request.formData();
     const email    = String(data.get('email') ?? '').toLowerCase().trim();
     const password = String(data.get('password') ?? '');
-    const redirectTo = String(data.get('redirect') ?? '/halls');
+    // Re-validated here, not just where it was rendered: the field is in the POST
+    // body and nothing stops it being replaced before the form is submitted.
+    const redirectTo = safeNext(data.get('redirect'));
 
     if (!email || !password) return fail(400, { ...formShape, tab: 'login', email, error: st(locals.locale).serverErrors.emailPasswordRequired });
 
@@ -90,7 +111,7 @@ export const actions: Actions = {
     const last_name  = String(data.get('last_name') ?? '').trim();
     const email      = String(data.get('email') ?? '').toLowerCase().trim();
     const password   = String(data.get('password') ?? '');
-    const redirectTo = String(data.get('redirect') ?? '/halls');
+    const redirectTo = safeNext(data.get('redirect'));
 
     if (!first_name || !last_name) return fail(400, { ...formShape, tab: 'register', first_name, last_name, email, error: st(locals.locale).serverErrors.firstLastNameRequired });
     if (!email) return fail(400, { ...formShape, tab: 'register', first_name, last_name, email, error: st(locals.locale).serverErrors.emailRequired });
