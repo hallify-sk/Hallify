@@ -3,6 +3,7 @@
   import { saas } from '$lib/analytics';
   import { t } from '$lib/i18n.svelte';
   import { reveal } from '$lib/reveal';
+  import SetupServiceCard from '$lib/components/SetupServiceCard.svelte';
   import type { PageData } from './$types';
   let { data }: { data: PageData } = $props();
 
@@ -167,6 +168,29 @@
           </ul>
         </div>
       {/each}
+    </div>
+  </section>
+  <!-- Add-ons. Work we do for an organisation, as opposed to the plans above,
+       which are what the software costs. -->
+  <section class="section" use:reveal>
+    <div class="section-head">
+      <h2>{t.setupService.addonsTitle}</h2>
+      <p>{t.setupService.addonsLead}</p>
+    </div>
+
+    <h3 class="addon-name">{t.setupService.title}</h3>
+    <p class="addon-lead">{t.setupService.lead}</p>
+    <SetupServiceCard priceCents={data.setupPriceCents} pending={data.setupRequest} />
+
+    <h3 class="addon-name addon-name--spaced">{t.floorplanService.addonTitle}</h3>
+    <p class="addon-lead">{t.floorplanService.addonLead}</p>
+    <div class="card--inset addon-row">
+      <span class="addon-price">{t.floorplanService.addonPrice}</span>
+      {#if data.unmappedVenues > 0}
+        <a class="btn-outline btn-sm" href="/app/manage/halls">{t.floorplanService.addonCta}</a>
+      {:else}
+        <span class="addon-note">{t.floorplanService.addonAllMapped}</span>
+      {/if}
     </div>
   </section>
 </div>
@@ -358,4 +382,11 @@
   @media (prefers-reduced-motion: reduce) {
     .btn-accent-cta:hover, .btn-accent-sm:hover { transform: none; }
   }
+  /* ── Add-ons ───────────────────────────────── */
+  .addon-name { font-size: 15px; font-weight: 650; letter-spacing: -.03em; margin: 0 0 4px; }
+  .addon-name--spaced { margin-top: 34px; }
+  .addon-lead { font-size: var(--meta-size); color: var(--text-muted); margin: 0 0 14px; line-height: 1.6; }
+  .addon-row { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 15px 18px; }
+  .addon-price { font-size: 13px; font-weight: 600; }
+  .addon-note { font-size: var(--meta-size); color: var(--text-subtle); }
 </style>

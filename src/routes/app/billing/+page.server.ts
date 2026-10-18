@@ -5,12 +5,16 @@ import {
   getSubscription, changeSubscriptionPlan, cancelScheduledChange, getPendingPlanChange,
   previewPlanChange,
 } from '$lib/stripe';
-import { dbFirst } from '$lib/db/index';
+import { dbFirst, dbRun } from '$lib/db/index';
 import { PLANS, comparePlanPrice } from '$lib/plans';
 import { st } from '$lib/i18n-server';
 import type { PlanId } from '$lib/plans';
 import type { D1Database } from '@cloudflare/workers-types';
 import { requireOrgOwner } from '$lib/guards';
+import { requireOrgPermission } from '$lib/server/access';
+import { sendEmail } from '$lib/email';
+import { OPERATOR } from '$lib/legal';
+import { SETUP_SERVICE_PRICE_CENTS } from '$lib/setup-service';
 
 async function getSubId(db: D1Database, orgId: string): Promise<string | null> {
   const row = await dbFirst<{ stripe_subscription_id: string | null }>(db,
@@ -47,8 +51,36 @@ export const load: PageServerLoad = async ({ locals, url }) => {
     }
   }
 
+  // The paid add-ons belong on the page where an organisation looks at what
+  // Hallify costs them, not only on the Help page where the offer happens to be
+  // contextual.
+  let setupRequest: { id: string; status: string } | null = null;
+  try {
+    setupRequest = await dbFirst<{ id: string; status: string }>(
+      locals.db,
+      `SELECT id, status FROM setup_requests
+        WHERE org_id = ? AND status NOT IN ('delivered', 'cancelled')
+        ORDER BY created_at DESC LIMIT 1`,
+      locals.currentOrg.id
+    );
+  } catch {
+    // Table arrives with migration 0010; absent is simply "never requested".
+  }
+
+  // How many venues still have no floor plan. The mapping add-on is per venue,
+  // so an org that has already mapped everything should be told that rather
+  // than sold it again.
+  const unmapped = await dbFirst<{ n: number }>(
+    locals.db,
+    'SELECT COUNT(*) AS n FROM halls WHERE org_id = ? AND floorplan_json IS NULL',
+    locals.currentOrg.id
+  ).catch(() => null);
+
   return {
     currentOrg: locals.currentOrg,
+    setupRequest,
+    setupPriceCents: SETUP_SERVICE_PRICE_CENTS,
+    unmappedVenues: unmapped?.n ?? 0,
     plans: PLANS,
     cancelAtPeriodEnd,
     pendingDowngrade,
@@ -64,6 +96,44 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 };
 
 export const actions: Actions = {
+  /** Ask us to set the account up. Not a charge — we confirm and invoice on
+   *  delivery — so this is gated on settings.manage rather than on ownership,
+   *  and matches the identical offer on the Help page. */
+  requestSetup: async ({ request, locals }) => {
+    const org = await requireOrgPermission(locals, 'settings.manage');
+    const user = locals.user!;
+    const data = await request.formData();
+    const note = String(data.get('note') ?? '').trim().slice(0, 1000);
+
+    const existing = await dbFirst<{ id: string }>(locals.db,
+      `SELECT id FROM setup_requests
+        WHERE org_id = ? AND status NOT IN ('delivered', 'cancelled') LIMIT 1`, org.id);
+    if (existing) return { setupRequested: true };
+
+    await dbRun(locals.db,
+      `INSERT INTO setup_requests (id, org_id, requested_by, note, price_cents)
+       VALUES (?, ?, ?, ?, ?)`,
+      crypto.randomUUID(), org.id, user.id, note || null, SETUP_SERVICE_PRICE_CENTS);
+
+    try {
+      const escape = (v: string) => v.replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c] as string));
+      await sendEmail(
+        locals.db,
+        OPERATOR.contactEmail,
+        `Setup service request — ${org.name}`,
+        `<p><strong>${escape(org.name)}</strong> asked us to set their account up.</p>
+         <p>Agreed price: €${(SETUP_SERVICE_PRICE_CENTS / 100).toFixed(2)} one-off<br>
+         Requested by: ${escape(`${user.first_name} ${user.last_name}`)} (${escape(user.email)})</p>
+         <p>${note ? escape(note) : 'No additional notes.'}</p>`,
+        'setup-request'
+      );
+    } catch {
+      /* recorded regardless — the queue is the source of truth */
+    }
+
+    return { setupRequested: true };
+  },
+
   // Pick a paid plan. A first-time subscriber (currently Free) goes through
   // Checkout; an org that already has a paid subscription has THAT subscription
   // changed in place — upgrades prorate + charge the difference now, downgrades
