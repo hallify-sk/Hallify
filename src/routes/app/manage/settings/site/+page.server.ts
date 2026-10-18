@@ -2,9 +2,10 @@ import type { PageServerLoad, Actions } from './$types';
 import { fail } from '@sveltejs/kit';
 import { dbFirst, dbRun, fromJson, toJson } from '$lib/db/index';
 import { st } from '$lib/i18n-server';
-import { requireOrgStaff } from '$lib/guards';
+import { requireOrgPermission } from '$lib/server/access';
 import { PLANS, type PlanId } from '$lib/plans';
 import { SITE_TEMPLATES, DEFAULT_TEMPLATE, resolveTemplate } from '$lib/site-templates';
+import { SECTION_DEFINITIONS, resolveSections } from '$lib/site-sections';
 
 /**
  * The look of the organisation's own public site (its subdomain or custom domain).
@@ -21,11 +22,26 @@ function planAllowsTemplates(plan: string, status: string | null | undefined): b
 }
 
 export const load: PageServerLoad = async ({ locals }) => {
-  const org = requireOrgStaff(locals);
+  const org = await requireOrgPermission(locals, 'settings.manage');
 
-  const row = await dbFirst<{ value: string | null }>(locals.db,
-    `SELECT value FROM org_settings WHERE org_id = ? AND key = 'site'`, org.id);
-  const site = fromJson<{ template?: string; tagline?: string; intro?: string }>(row?.value ?? null) ?? {};
+  // What the org actually has to put on a page. The builder uses it to mark a
+  // section that is switched on but would render nothing, so an operator is not
+  // left wondering why Contact never appears on their live site.
+  const [row, counts] = await Promise.all([
+    dbFirst<{ value: string | null }>(locals.db,
+      `SELECT value FROM org_settings WHERE org_id = ? AND key = 'site'`, org.id),
+    dbFirst<{ halls: number; contacts: number }>(locals.db,
+      `SELECT COUNT(*) AS halls,
+              SUM(CASE WHEN contact_phone IS NOT NULL OR contact_email IS NOT NULL
+                         OR contact_website IS NOT NULL OR address IS NOT NULL
+                       THEN 1 ELSE 0 END) AS contacts
+         FROM halls
+        WHERE is_public = 1 AND slug IS NOT NULL AND org_id = ?`, org.id)
+  ]);
+
+  const site = fromJson<{
+    template?: string; tagline?: string; intro?: string; sections?: unknown;
+  }>(row?.value ?? null) ?? {};
 
   const allowPremium = planAllowsTemplates(org.subscription.plan, org.subscription.status);
 
@@ -37,6 +53,16 @@ export const load: PageServerLoad = async ({ locals }) => {
     effective: resolveTemplate(site.template, allowPremium).id,
     tagline: site.tagline ?? '',
     intro: site.intro ?? '',
+    // Reconciled against this build's catalogue, so the builder lists exactly the
+    // sections that exist — including any added since the org last saved.
+    sections: resolveSections(site.sections),
+    sectionCatalogue: SECTION_DEFINITIONS.map((d) => ({
+      type: d.type,
+      label: d.label,
+      description: d.description
+    })),
+    hallCount: counts?.halls ?? 0,
+    hasContact: (counts?.contacts ?? 0) > 0,
     allowPremium,
     plan: org.subscription.plan,
     templates: SITE_TEMPLATES.map((t) => ({
@@ -61,7 +87,7 @@ const PREMIUM = new Set(SITE_TEMPLATES.filter((t) => t.premium).map((t) => t.id)
 
 export const actions: Actions = {
   save: async ({ request, locals }) => {
-    const org = requireOrgStaff(locals);
+    const org = await requireOrgPermission(locals, 'settings.manage');
     const data = await request.formData();
 
     const template = String(data.get('template') ?? '');
@@ -83,10 +109,21 @@ export const actions: Actions = {
     const tagline = strip(data.get('tagline'), 140);
     const intro = strip(data.get('intro'), 600);
 
+    // The arrangement travels as JSON in one hidden field: it is an ordered list,
+    // and ordinary form encoding has no faithful way to carry one. It is parsed
+    // defensively and run through resolveSections, which drops unknown types and
+    // collapses duplicates — the field is client-supplied like any other.
+    let sections;
+    try {
+      sections = resolveSections(JSON.parse(String(data.get('sections') ?? 'null')));
+    } catch {
+      sections = resolveSections(null);
+    }
+
     await dbRun(locals.db,
       `INSERT OR REPLACE INTO org_settings (org_id, key, value, updated_at)
        VALUES (?, 'site', ?, datetime('now'))`,
-      org.id, toJson({ template, tagline, intro }));
+      org.id, toJson({ template, tagline, intro, sections }));
 
     return { saved: true };
   }

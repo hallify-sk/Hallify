@@ -103,6 +103,9 @@
 	const isDocPage = $derived($page.url.pathname.endsWith('/manifest'));
 	// Legal documents render standalone, like the landing page.
 	const isLegalPage = $derived(['/terms', '/privacy', '/dpa'].includes($page.url.pathname));
+	// The site builder's preview is a public site inside an iframe: it must render
+	// with no app chrome around it, or the operator is previewing our sidebar.
+	const isSitePreview = $derived($page.url.pathname === '/app/manage/settings/site/preview');
 
 	// Density by surface. Anything a customer sees breathes like the landing page;
 	// the operator tools (manage, platform, reservations, messages, the editor) use
@@ -139,10 +142,13 @@
 	});
 </script>
 
-<!-- Consent gate for GTM. Renders nothing when no container is configured. -->
-<ConsentBanner containerId={data.gtmId ?? null} />
+<!-- Consent gate for GTM. Renders nothing when no container is configured — which
+     is how the builder's preview suppresses it: a cookie banner inside the preview
+     iframe would cover the page the operator is trying to look at, and the preview
+     has no analytics to consent to anyway. -->
+<ConsentBanner containerId={isSitePreview ? null : (data.gtmId ?? null)} />
 
-{#if isLandingPage || isPublicHallsPage || isDocPage || isLegalPage}
+{#if isLandingPage || isPublicHallsPage || isDocPage || isLegalPage || isSitePreview}
 	<div style={brandStyle} data-density={isDocPage ? 'compact' : 'comfortable'}>
 		{@render children()}
 	</div>

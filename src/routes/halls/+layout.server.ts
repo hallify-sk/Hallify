@@ -2,6 +2,7 @@ import { redirect } from '@sveltejs/kit';
 import { dbFirst, fromJson } from '$lib/db/index';
 import { PLANS, type PlanId } from '$lib/plans';
 import { resolveTemplate, templateStyle } from '$lib/site-templates';
+import { resolveSections } from '$lib/site-sections';
 import type { LayoutServerLoad } from './$types';
 
 export const load: LayoutServerLoad = async ({ locals }) => {
@@ -32,7 +33,7 @@ export const load: LayoutServerLoad = async ({ locals }) => {
     (sub?.status === 'active' || sub?.status === 'trialing');
 
   const branding = fromJson<Record<string, string>>(brandingRow?.value ?? null) ?? {};
-  const site = fromJson<{ template?: string; tagline?: string; intro?: string }>(siteRow?.value ?? null) ?? {};
+  const site = fromJson<{ template?: string; tagline?: string; intro?: string; sections?: unknown }>(siteRow?.value ?? null) ?? {};
 
   // resolveTemplate falls back to the Hallify default when the stored id is unknown
   // or the plan no longer includes it, so a downgrade quietly reverts a live public
@@ -47,7 +48,10 @@ export const load: LayoutServerLoad = async ({ locals }) => {
       templateStyle: templateStyle(template),
       headingFont: template.tokens.headingFont,
       tagline: paidAndCurrent ? (site.tagline ?? '') : '',
-      intro: paidAndCurrent ? (site.intro ?? '') : ''
+      intro: paidAndCurrent ? (site.intro ?? '') : '',
+      // Arrangement follows the same plan rule as the look: a free site gets the
+      // default page rather than a half-applied custom one.
+      sections: resolveSections(paidAndCurrent ? site.sections : null)
     },
     canCustomize: paidAndCurrent
   };
