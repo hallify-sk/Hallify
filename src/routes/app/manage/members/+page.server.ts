@@ -1,3 +1,4 @@
+import { requireOrgPermission } from '$lib/server/access';
 import { fail } from '@sveltejs/kit';
 import { dbAll, dbFirst, dbRun } from '$lib/db/index';
 import type { OrgMemberRow } from '$lib/db/index';
@@ -46,6 +47,7 @@ function denied(locals: App.Locals) {
 }
 
 export const load: PageServerLoad = async ({ locals }) => {
+	await requireOrgPermission(locals, 'members.manage');
 	const org = locals.currentOrg!;
 	const orgId = org.id;
 	const meId = locals.user?.id ?? '';

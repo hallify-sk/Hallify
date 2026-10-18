@@ -4,18 +4,18 @@ import type { RsvpTemplateRow } from '$lib/db/index';
 import { st } from '$lib/i18n-server';
 import type { Actions, PageServerLoad } from './$types';
 import { RSVP_ENABLED } from '$lib/features';
-import { requireOrgStaff } from '$lib/guards';
+import { requireOrgPermission } from '$lib/server/access';
 
 export const load: PageServerLoad = async ({ locals }) => {
   if (!RSVP_ENABLED) error(404, 'Not found');
-  const orgId = locals.currentOrg!.id;
+  const orgId = (await requireOrgPermission(locals, 'templates.manage')).id;
   const templates = await dbAll<RsvpTemplateRow>(locals.db, 'SELECT * FROM rsvp_templates WHERE org_id = ? ORDER BY created_at DESC', orgId);
   return { templates };
 };
 
 export const actions: Actions = {
   create: async ({ request, locals }) => {
-    requireOrgStaff(locals);
+    await requireOrgPermission(locals, 'templates.manage');
     if (!RSVP_ENABLED) error(404, 'Not found');
     const orgId = locals.currentOrg!.id;
     const data = await request.formData();
@@ -31,7 +31,7 @@ export const actions: Actions = {
   },
 
   delete: async ({ request, locals }) => {
-    requireOrgStaff(locals);
+    await requireOrgPermission(locals, 'templates.manage');
     if (!RSVP_ENABLED) error(404, 'Not found');
     const orgId = locals.currentOrg!.id;
     const data = await request.formData();

@@ -5,7 +5,7 @@ import { getPlan } from '$lib/plans';
 import { st } from '$lib/i18n-server';
 import { env } from '$env/dynamic/private';
 import type { PageServerLoad, Actions } from './$types';
-import { requireOrgStaff } from '$lib/guards';
+import { requireOrgPermission } from '$lib/server/access';
 
 interface DomainRow {
   id: string;
@@ -16,7 +16,7 @@ interface DomainRow {
 }
 
 export const load: PageServerLoad = async ({ locals }) => {
-  const org = locals.currentOrg!;
+  const org = await requireOrgPermission(locals, 'settings.manage');
 
   const domains = await dbAll<DomainRow>(locals.db,
     `SELECT id, domain, cf_hostname_id, verified_at, created_at
@@ -41,7 +41,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 
 export const actions: Actions = {
   add: async ({ request, locals }) => {
-    requireOrgStaff(locals);
+    await requireOrgPermission(locals, 'settings.manage');
     const orgId = locals.currentOrg!.id;
 
     // Custom domains are a paid feature. Free orgs use their <slug>.hallify.sk subdomain.
@@ -89,7 +89,7 @@ export const actions: Actions = {
   },
 
   refresh: async ({ request, locals }) => {
-    requireOrgStaff(locals);
+    await requireOrgPermission(locals, 'settings.manage');
     const orgId = locals.currentOrg!.id;
     const data = await request.formData();
     const id = String(data.get('id') ?? '');
@@ -122,7 +122,7 @@ export const actions: Actions = {
   },
 
   delete: async ({ request, locals }) => {
-    requireOrgStaff(locals);
+    await requireOrgPermission(locals, 'settings.manage');
     const orgId = locals.currentOrg!.id;
     const data = await request.formData();
     const id = String(data.get('id') ?? '');

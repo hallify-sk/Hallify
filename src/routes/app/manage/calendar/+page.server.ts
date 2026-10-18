@@ -1,5 +1,6 @@
 import { dbAll, fromJsonArr } from '$lib/db/index';
 import type { PageServerLoad } from './$types';
+import { requireOrgPermission } from '$lib/server/access';
 
 type View = 'month' | 'week' | 'day' | 'agenda';
 
@@ -22,6 +23,7 @@ function mondayIndex(jsDay: number): number {
 }
 
 export const load: PageServerLoad = async ({ locals, url }) => {
+  await requireOrgPermission(locals, 'reservations.manage');
   const orgId = locals.currentOrg!.id;
 
   const allowed: View[] = ['month', 'week', 'day', 'agenda'];

@@ -1,7 +1,7 @@
 import { fail } from '@sveltejs/kit';
 import { dbAll, dbFirst, dbRun } from '$lib/db/index';
 import { requireOrgStaff } from '$lib/guards';
-import { loadMemberAccess } from '$lib/server/access';
+import { loadMemberAccess, requireOrgPermission } from '$lib/server/access';
 import {
 	PERMISSIONS,
 	can,
@@ -96,6 +96,7 @@ function readColor(raw: FormDataEntryValue | null): string | null | false {
 }
 
 export const load: PageServerLoad = async ({ locals }) => {
+	await requireOrgPermission(locals, 'roles.manage');
 	const { orgId, access } = await actorOf(locals);
 
 	const rows = await listRoles(locals.db, orgId);

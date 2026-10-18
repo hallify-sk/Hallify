@@ -1,7 +1,9 @@
 import { dbFirst, dbAll } from '$lib/db/index';
 import type { PageServerLoad } from './$types';
+import { requireOrgConsole } from '$lib/server/access';
 
 export const load: PageServerLoad = async ({ locals }) => {
+  await requireOrgConsole(locals);
   const orgId = locals.currentOrg!.id;
 
   // ─── Summary stats ───────────────────────────────────────────────────────

@@ -9,6 +9,7 @@ import type { Actions, PageServerLoad } from './$types';
 import { requireOrgStaff } from '$lib/guards';
 import { can, canManageRole, grantablePermissions } from '$lib/permissions';
 import { actorContext, buildAccess, loadOrgRoles, loadOverrides, loadRoleAssignments } from '$lib/server/people';
+import { requireOrgPermission } from '$lib/server/access';
 
 /**
  * The Invites tab of the People area.
@@ -38,6 +39,7 @@ interface InviteRow {
 const MAX_NAME = 80;
 
 export const load: PageServerLoad = async ({ locals }) => {
+	await requireOrgPermission(locals, 'invites.manage');
 	const org = locals.currentOrg!;
 	const orgId = org.id;
 	const meId = locals.user?.id ?? '';

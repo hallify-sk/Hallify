@@ -47,6 +47,61 @@ export const PERMISSIONS = [
 
 export type Permission = (typeof PERMISSIONS)[number];
 
+/**
+ * What the built-in "Administrator" role carries, and what the legacy
+ * `organization_members.role = 'admin'` flag has always implied: everything except
+ * `billing.manage`, which stays with the owner.
+ *
+ * It lives here, next to the catalogue, because three places have to agree on it —
+ * migration 0007's seed, `seedBuiltInRoles` for organisations created after it, and
+ * the legacy-admin fallback in `$lib/server/access`. A copy that drifts in any one of
+ * them is an access bug nobody notices until an admin is refused.
+ */
+export const ADMINISTRATOR_PERMISSIONS: Permission[] = PERMISSIONS.filter(
+	(p) => p !== 'billing.manage'
+);
+
+/**
+ * What the built-in default role grants — the floor of what any member can do.
+ *
+ * Here beside the catalogue for the same reason ADMINISTRATOR_PERMISSIONS is:
+ * migration 0007's seed and `seedBuiltInRoles` both have to agree with it, and a
+ * copy that drifts is an access bug nobody notices.
+ */
+export const DEFAULT_ROLE_PERMISSIONS: Permission[] = [
+	'reservations.view',
+	'halls.view',
+	'calendar.view',
+	'messages.view',
+	'messages.send',
+	'members.view'
+];
+
+/**
+ * Permissions that open at least one page of the management console.
+ *
+ * Used by the /app/manage layout to decide who may be in the console at all —
+ * which pages they then see is each page's own load to answer.
+ *
+ * Every entry is a MANAGE permission, never a view one, and that is the whole
+ * point: the default Member role holds `reservations.view`, `halls.view`,
+ * `calendar.view`, `messages.view` and `members.view`, so admitting a single view
+ * permission here would hand the operator console to every ordinary member of
+ * every organisation on the platform. The test next to this file holds that line.
+ */
+export const CONSOLE_PERMISSIONS: Permission[] = [
+	'reservations.manage',
+	'halls.manage',
+	'floorplans.manage',
+	'templates.manage',
+	'announcements.manage',
+	'members.manage',
+	'roles.manage',
+	'invites.manage',
+	'settings.manage',
+	'billing.manage'
+];
+
 /** Grouping drives the tabbed role editor; it has no effect on evaluation. */
 export const PERMISSION_GROUPS: { key: string; permissions: Permission[] }[] = [
 	{

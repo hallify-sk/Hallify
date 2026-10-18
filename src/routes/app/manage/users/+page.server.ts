@@ -4,13 +4,13 @@ import type { UserRow } from '$lib/db/index';
 import { deleteUserAndCleanup } from '$lib/orgLifecycle';
 import { st } from '$lib/i18n-server';
 import type { Actions, PageServerLoad } from './$types';
-import { requireOrgStaff } from '$lib/guards';
+import { requireOrgPermission } from '$lib/server/access';
 
 /** Every query here is scoped to the caller's organization. Previously this route was
  *  entirely unscoped — it listed every user on the platform and let any org owner/admin
  *  change the role of, or delete, users belonging to other tenants. */
 export const load: PageServerLoad = async ({ locals }) => {
-	const orgId = requireOrgStaff(locals).id;
+	const orgId = (await requireOrgPermission(locals, 'members.manage')).id;
 	const users = await dbAll<UserRow & { reservation_count: string }>(locals.db,
 		`SELECT u.id, u.email, u.first_name, u.last_name, u.role, u.created_at,
 		       CAST(COUNT(r.id) AS TEXT) AS reservation_count
@@ -40,7 +40,7 @@ async function isMemberOfOrg(db: App.Locals['db'], userId: string, orgId: string
 
 export const actions: Actions = {
 	setRole: async ({ request, locals }) => {
-		const orgId = requireOrgStaff(locals).id;
+		const orgId = (await requireOrgPermission(locals, 'members.manage')).id;
 		if (locals.currentOrg?.impersonated) return fail(403, { error: st(locals.locale).serverErrors.impersonationBlockAnOrg });
 		const data = await request.formData();
 		const id = String(data.get('id') ?? '');
@@ -69,7 +69,7 @@ export const actions: Actions = {
 	},
 
 	deleteUser: async ({ request, locals }) => {
-		const orgId = requireOrgStaff(locals).id;
+		const orgId = (await requireOrgPermission(locals, 'members.manage')).id;
 		if (locals.currentOrg?.impersonated) return fail(403, { error: st(locals.locale).serverErrors.impersonationBlockAnOrg });
 		const data = await request.formData();
 		const id = String(data.get('id') ?? '');

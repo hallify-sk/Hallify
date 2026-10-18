@@ -4,6 +4,10 @@ import type { TicketRow, MessageRow } from '$lib/db/index';
 import { error, fail } from '@sveltejs/kit';
 import { notifyNewMessage } from '$lib/email';
 import { st } from '$lib/i18n-server';
+// NOT converted to requireOrgPermission on purpose — see the note in
+// ../+page.server.ts. messages.view and messages.send are both held by the seeded
+// default "Member" role, so gating this thread view and its five mutating actions
+// on them would open every customer conversation to any member of the org.
 import { requireOrgStaff } from '$lib/guards';
 
 export const load: PageServerLoad = async ({ params, locals }) => {
@@ -31,7 +35,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 
 export const actions: Actions = {
 	send: async ({ request, params, locals }) => {
-	  requireOrgStaff(locals);
+	  const org = requireOrgStaff(locals);
 		if (!locals.user) return fail(401);
 		const data = await request.formData();
 		const body = String(data.get('body') ?? '').trim();
@@ -53,13 +57,13 @@ export const actions: Actions = {
 			VALUES (?, ?, ?, ?, ?, ?, ?)`,
 			crypto.randomUUID(), params.id, locals.user.id, body || '', attachmentUrl, attachmentName, attachmentType
 		);
-		await dbRun(locals.db, `UPDATE tickets SET updated_at = datetime('now') WHERE id = ? AND org_id = ?`, params.id, requireOrgStaff(locals).id);
+		await dbRun(locals.db, `UPDATE tickets SET updated_at = datetime('now') WHERE id = ? AND org_id = ?`, params.id, org.id);
 
 		// Notify the ticket owner
 		const tk = await dbFirst<{ subject: string; user_email: string }>(
 			locals.db,
 			`SELECT t.subject, u.email AS user_email FROM tickets t JOIN users u ON u.id = t.user_id WHERE t.id = ? AND t.org_id = ?`,
-			params.id, requireOrgStaff(locals).id
+			params.id, org.id
 		);
 		if (tk?.user_email) {
 			notifyNewMessage(locals.db, locals.currentOrg!.id, tk.user_email, tk.subject, `${locals.user.first_name} ${locals.user.last_name}`).catch(() => {});
@@ -68,7 +72,7 @@ export const actions: Actions = {
 		return { success: true };
 	},
 	editMessage: async ({ request, locals }) => {
-	  requireOrgStaff(locals);
+	  const org = requireOrgStaff(locals);
 		if (!locals.user) return fail(401);
 		const data = await request.formData();
 		const messageId = String(data.get('messageId') ?? '');
@@ -80,17 +84,17 @@ export const actions: Actions = {
 			locals.db,
 			`SELECT m.sender_id, m.message_type FROM messages m JOIN tickets t ON t.id = m.ticket_id
 			 WHERE m.id = ? AND t.org_id = ?`,
-			messageId, requireOrgStaff(locals).id
+			messageId, org.id
 		);
 		if (!msg || msg.sender_id !== locals.user.id || msg.message_type !== 'text') return fail(403);
 
 		await dbRun(locals.db, `UPDATE messages SET body = ?, edited_at = datetime('now')
 			 WHERE id = ? AND ticket_id IN (SELECT id FROM tickets WHERE org_id = ?)`,
-			body, messageId, requireOrgStaff(locals).id);
+			body, messageId, org.id);
 		return { success: true };
 	},
 	deleteMessage: async ({ request, locals }) => {
-	  requireOrgStaff(locals);
+	  const org = requireOrgStaff(locals);
 		if (!locals.user) return fail(401);
 		const data = await request.formData();
 		const messageId = String(data.get('messageId') ?? '');
@@ -100,7 +104,7 @@ export const actions: Actions = {
 			locals.db,
 			`SELECT m.sender_id, m.message_type FROM messages m JOIN tickets t ON t.id = m.ticket_id
 			 WHERE m.id = ? AND t.org_id = ?`,
-			messageId, requireOrgStaff(locals).id
+			messageId, org.id
 		);
 		if (!msg || msg.message_type !== 'text') return fail(403);
 		// Org owners/admins can delete any text message; others only their own
@@ -108,17 +112,17 @@ export const actions: Actions = {
 		if (!isOrgAdmin && msg.sender_id !== locals.user.id) return fail(403);
 
 		await dbRun(locals.db, `DELETE FROM messages WHERE id = ? AND ticket_id IN (SELECT id FROM tickets WHERE org_id = ?)`,
-			messageId, requireOrgStaff(locals).id);
+			messageId, org.id);
 		return { success: true };
 	},
 	close: async ({ params, locals }) => {
-	  requireOrgStaff(locals);
-		await dbRun(locals.db, `UPDATE tickets SET status = 'closed', updated_at = datetime('now') WHERE id = ? AND org_id = ?`, params.id, requireOrgStaff(locals).id);
+	  const org = requireOrgStaff(locals);
+		await dbRun(locals.db, `UPDATE tickets SET status = 'closed', updated_at = datetime('now') WHERE id = ? AND org_id = ?`, params.id, org.id);
 		return { success: true };
 	},
 	reopen: async ({ params, locals }) => {
-	  requireOrgStaff(locals);
-		await dbRun(locals.db, `UPDATE tickets SET status = 'open', updated_at = datetime('now') WHERE id = ? AND org_id = ?`, params.id, requireOrgStaff(locals).id);
+	  const org = requireOrgStaff(locals);
+		await dbRun(locals.db, `UPDATE tickets SET status = 'open', updated_at = datetime('now') WHERE id = ? AND org_id = ?`, params.id, org.id);
 		return { success: true };
 	}
 };

@@ -5,7 +5,7 @@ import { fail, redirect } from '@sveltejs/kit';
 import { notifyStatusChange } from '$lib/email';
 import { postSystemMessage } from '$lib/tickets';
 import { st } from '$lib/i18n-server';
-import { requireOrgStaff } from '$lib/guards';
+import { requireOrgPermission } from '$lib/server/access';
 import { earliestBookableISO } from '$lib/availability';
 import { createReservation } from '$lib/server/reservations';
 
@@ -17,7 +17,7 @@ const CUSTOMER_CONTACT_MAX = 160;
 const NOTES_MAX = 2000;
 
 export const load: PageServerLoad = async ({ locals }) => {
-  const orgId = locals.currentOrg!.id;
+  const orgId = (await requireOrgPermission(locals, 'reservations.manage')).id;
   const reservations = await dbAll<ReservationRow>(locals.db,
     `SELECT r.*, h.name AS hall_name, u.first_name AS user_first_name,
       u.last_name AS user_last_name, u.email AS user_email
@@ -69,7 +69,7 @@ const ALLOWED_STATUSES: ReservationStatus[] = ['pending', 'waiting_payment', 'ap
 
 export const actions: Actions = {
   updateStatus: async ({ request, locals }) => {
-    requireOrgStaff(locals);
+    await requireOrgPermission(locals, 'reservations.manage');
     const orgId = locals.currentOrg!.id;
     const data = await request.formData();
     const id = String(data.get('id') ?? '');
@@ -130,7 +130,7 @@ export const actions: Actions = {
    *  one-per-hall-day rule, capacity, the monthly cap) goes through exactly the
    *  same createReservation path the self-service wizard uses. */
   createManual: async ({ request, locals }) => {
-    requireOrgStaff(locals);
+    await requireOrgPermission(locals, 'reservations.manage');
     const orgId = locals.currentOrg!.id;
     const d = st(locals.locale);
     const data = await request.formData();

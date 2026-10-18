@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
+	ADMINISTRATOR_PERMISSIONS,
+	CONSOLE_PERMISSIONS,
+	DEFAULT_ROLE_PERMISSIONS,
 	PERMISSIONS,
 	can,
 	canManageMember,
@@ -192,5 +195,46 @@ describe('the sock-puppet escalation', () => {
 	it('lets the owner assign anything', () => {
 		const grantable = grantablePermissions(OWNER);
 		expect(finance.permissions.filter((p) => !grantable.has(p))).toEqual([]);
+	});
+});
+
+describe('who may reach the management console', () => {
+	// The /app/manage layout gates on this list alone, so what is in it decides who
+	// sees the operator console across the whole platform.
+
+	it('names only manage permissions, never a view one', () => {
+		// A view permission here would open the console to every ordinary member:
+		// the default role grants five of them.
+		expect(CONSOLE_PERMISSIONS.filter((p) => p.endsWith('.view'))).toEqual([]);
+	});
+
+	it('leaves an ordinary member outside', () => {
+		const ordinary = member([role('Member', 0, DEFAULT_ROLE_PERMISSIONS)]);
+		const held = effectivePermissions(ordinary);
+		expect(CONSOLE_PERMISSIONS.filter((p) => held.has(p))).toEqual([]);
+	});
+
+	it('lets a custom role in on one manage permission', () => {
+		// The case the whole conversion exists for: before it, this member was
+		// redirected off every console page regardless of what they were granted.
+		const editor = member([role('Site editor', 5, ['settings.manage'])]);
+		const held = effectivePermissions(editor);
+		expect(CONSOLE_PERMISSIONS.some((p) => held.has(p))).toBe(true);
+	});
+
+	it('lets an administrator in', () => {
+		const admin = member([role('Administrator', 10, ADMINISTRATOR_PERMISSIONS)]);
+		const held = effectivePermissions(admin);
+		expect(CONSOLE_PERMISSIONS.some((p) => held.has(p))).toBe(true);
+	});
+
+	it('only lists permissions this build understands', () => {
+		expect(sanitize(CONSOLE_PERMISSIONS)).toEqual(CONSOLE_PERMISSIONS);
+	});
+
+	it('keeps the default role within what an Administrator holds', () => {
+		// A member must never hold something an admin of the same org does not.
+		const beyond = DEFAULT_ROLE_PERMISSIONS.filter((p) => !ADMINISTRATOR_PERMISSIONS.includes(p));
+		expect(beyond).toEqual([]);
 	});
 });

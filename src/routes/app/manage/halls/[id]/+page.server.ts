@@ -8,7 +8,7 @@ import { st } from '$lib/i18n-server';
 import type { Actions, PageServerLoad } from './$types';
 import { sendEmail } from '$lib/email';
 import { OPERATOR } from '$lib/legal';
-import { requireOrgStaff } from '$lib/guards';
+import { requireOrgPermission } from '$lib/server/access';
 import { parseCoordinates } from '$lib/venue-location';
 import { geocodeAddress } from '$lib/server/geocode';
 
@@ -98,6 +98,7 @@ function parseTableType(data: FormData, locale: 'sk' | 'en'): ParsedTableType | 
 }
 
 export const load: PageServerLoad = async ({ params, locals }) => {
+	await requireOrgPermission(locals, 'halls.manage');
 	const orgId = locals.currentOrg!.id;
 	// price_band arrived with 0006 and is not on HallRow yet; widen it here rather
 	// than wait for the shared type.
@@ -174,8 +175,8 @@ async function assertHallInOrg(db: App.Locals['db'], hallId: string, orgId: stri
 
 export const actions: Actions = {
 	saveInfo: async ({ request, params, locals }) => {
-	  requireOrgStaff(locals);
-		await assertHallInOrg(locals.db, params.id, requireOrgStaff(locals).id);
+		const org = await requireOrgPermission(locals, 'halls.manage');
+		await assertHallInOrg(locals.db, params.id, org.id);
 		const data = await request.formData();
 		const name = String(data.get('name') ?? '').trim();
 		const description = String(data.get('description') ?? '').trim();
@@ -214,26 +215,26 @@ export const actions: Actions = {
 			forceLayouts ? 1 : 0, allowFeedback ? 1 : 0,
 			minDaysAdvance, address || null, coordinates.latitude, coordinates.longitude,
 			preReservationText || null, autoApprove ? 1 : 0,
-			minCancelDays, params.id, requireOrgStaff(locals).id
+			minCancelDays, params.id, org.id
 		);
 		return { infoSuccess: true };
 	},
 
 	saveFloorplan: async ({ request, params, locals }) => {
-	  requireOrgStaff(locals);
-		await assertHallInOrg(locals.db, params.id, requireOrgStaff(locals).id);
+		const org = await requireOrgPermission(locals, 'floorplans.manage');
+		await assertHallInOrg(locals.db, params.id, org.id);
 		const data = await request.formData();
 		const floorplanJson = String(data.get('floorplanJson') ?? '');
 		if (!floorplanJson) return fail(400, { floorplanError: st(locals.locale).serverErrors.noData });
-		await dbRun(locals.db, 'UPDATE halls SET floorplan_json=? WHERE id=? AND org_id=?', floorplanJson, params.id, requireOrgStaff(locals).id);
+		await dbRun(locals.db, 'UPDATE halls SET floorplan_json=? WHERE id=? AND org_id=?', floorplanJson, params.id, org.id);
 		return { floorplanSuccess: true };
 	},
 
 	// Create a template from the hall's CURRENT live floorplan (walls/zones/bounds),
 	// then open the restricted template editor so the admin can lay out tables/chairs.
 	createTemplate: async ({ request, params, locals }) => {
-	  requireOrgStaff(locals);
-		await assertHallInOrg(locals.db, params.id, requireOrgStaff(locals).id);
+		const org = await requireOrgPermission(locals, 'templates.manage');
+		await assertHallInOrg(locals.db, params.id, org.id);
 		const orgId = locals.currentOrg!.id;
 		const data = await request.formData();
 		const name = String(data.get('name') ?? '').trim();
@@ -260,18 +261,18 @@ export const actions: Actions = {
 	},
 
 	deleteTemplate: async ({ request, locals }) => {
-	  requireOrgStaff(locals);
+		const org = await requireOrgPermission(locals, 'templates.manage');
 		const data = await request.formData();
 		const id = String(data.get('id') ?? '');
 		await dbRun(locals.db,
 			'DELETE FROM floorplan_templates WHERE id = ? AND hall_id IN (SELECT id FROM halls WHERE org_id = ?)',
-			id, requireOrgStaff(locals).id);
+			id, org.id);
 		return { success: true };
 	},
 
 	addBlock: async ({ request, params, locals }) => {
-	  requireOrgStaff(locals);
-		await assertHallInOrg(locals.db, params.id, requireOrgStaff(locals).id);
+		const org = await requireOrgPermission(locals, 'halls.manage');
+		await assertHallInOrg(locals.db, params.id, org.id);
 		const data = await request.formData();
 		const blockType = String(data.get('blockType') ?? '') as 'date_range' | 'weekly';
 		const dateFrom = String(data.get('dateFrom') ?? '') || null;
@@ -297,32 +298,32 @@ export const actions: Actions = {
 	},
 
 	deleteBlock: async ({ request, locals }) => {
-	  requireOrgStaff(locals);
+		const org = await requireOrgPermission(locals, 'halls.manage');
 		const data = await request.formData();
 		const id = String(data.get('id') ?? '');
 		await dbRun(locals.db,
 			'DELETE FROM hall_blocks WHERE id = ? AND hall_id IN (SELECT id FROM halls WHERE org_id = ?)',
-			id, requireOrgStaff(locals).id);
+			id, org.id);
 		return { success: true };
 	},
 
 	cancelEvents: async ({ request, locals }) => {
-	  requireOrgStaff(locals);
+		const org = await requireOrgPermission(locals, 'halls.manage');
 		const data = await request.formData();
 		const ids = String(data.get('ids') ?? '').split(',').filter(Boolean);
 		if (ids.length > 0) {
 			for (const reservationId of ids) {
 				await dbRun(locals.db,
 					"UPDATE reservations SET status = 'cancelled' WHERE id = ? AND org_id = ?",
-					reservationId, requireOrgStaff(locals).id);
+					reservationId, org.id);
 			}
 		}
 		return { cancelSuccess: true };
 	},
 
 	addTableType: async ({ request, params, locals }) => {
-	  requireOrgStaff(locals);
-		await assertHallInOrg(locals.db, params.id, requireOrgStaff(locals).id);
+		const org = await requireOrgPermission(locals, 'halls.manage');
+		await assertHallInOrg(locals.db, params.id, org.id);
 		const tt = parseTableType(await request.formData(), locals.locale);
 		if ('error' in tt) return fail(400, { tableTypeError: tt.error });
 
@@ -336,8 +337,8 @@ export const actions: Actions = {
 	},
 
 	updateTableType: async ({ request, params, locals }) => {
-	  requireOrgStaff(locals);
-		await assertHallInOrg(locals.db, params.id, requireOrgStaff(locals).id);
+		const org = await requireOrgPermission(locals, 'halls.manage');
+		await assertHallInOrg(locals.db, params.id, org.id);
 		const data = await request.formData();
 		const id = String(data.get('id') ?? '');
 		if (!id) return fail(400, { tableTypeError: st(locals.locale).serverErrors.missingTableType });
@@ -354,8 +355,8 @@ export const actions: Actions = {
 	},
 
 	deleteTableType: async ({ request, params, locals }) => {
-	  requireOrgStaff(locals);
-		await assertHallInOrg(locals.db, params.id, requireOrgStaff(locals).id);
+		const org = await requireOrgPermission(locals, 'halls.manage');
+		await assertHallInOrg(locals.db, params.id, org.id);
 		const data = await request.formData();
 		const id = String(data.get('id') ?? '');
 		await dbRun(locals.db, 'DELETE FROM table_types WHERE id=? AND hall_id=?', id, params.id);
@@ -364,8 +365,8 @@ export const actions: Actions = {
 
 	// ─── Extras (bookable add-ons) ──────────────────────────────────────────
 	addExtra: async ({ request, params, locals }) => {
-	  requireOrgStaff(locals);
-		await assertHallInOrg(locals.db, params.id, requireOrgStaff(locals).id);
+		const org = await requireOrgPermission(locals, 'halls.manage');
+		await assertHallInOrg(locals.db, params.id, org.id);
 		const data = await request.formData();
 		const name = String(data.get('name') ?? '').trim();
 		const description = String(data.get('description') ?? '').trim() || null;
@@ -383,8 +384,8 @@ export const actions: Actions = {
 	},
 
 	updateExtra: async ({ request, params, locals }) => {
-	  requireOrgStaff(locals);
-		await assertHallInOrg(locals.db, params.id, requireOrgStaff(locals).id);
+		const org = await requireOrgPermission(locals, 'halls.manage');
+		await assertHallInOrg(locals.db, params.id, org.id);
 		const data = await request.formData();
 		const id = String(data.get('id') ?? '');
 		const name = String(data.get('name') ?? '').trim();
@@ -399,8 +400,8 @@ export const actions: Actions = {
 	},
 
 	deleteExtra: async ({ request, params, locals }) => {
-	  requireOrgStaff(locals);
-		await assertHallInOrg(locals.db, params.id, requireOrgStaff(locals).id);
+		const org = await requireOrgPermission(locals, 'halls.manage');
+		await assertHallInOrg(locals.db, params.id, org.id);
 		const data = await request.formData();
 		const id = String(data.get('id') ?? '');
 		await dbRun(locals.db, 'DELETE FROM hall_extras WHERE id=? AND hall_id=?', id, params.id);
@@ -412,7 +413,7 @@ export const actions: Actions = {
 	// translate, so it carries its own label per locale — and only one of the two is
 	// required: writing "Vírivka" should not oblige anybody to also write "Hot tub".
 	addAmenity: async ({ request, locals }) => {
-		const orgId = requireOrgStaff(locals).id;
+		const orgId = (await requireOrgPermission(locals, 'halls.manage')).id;
 		const data = await request.formData();
 		const labelSk = String(data.get('labelSk') ?? '').trim().slice(0, 60);
 		const labelEn = String(data.get('labelEn') ?? '').trim().slice(0, 60);
@@ -443,7 +444,7 @@ export const actions: Actions = {
 	},
 
 	deleteAmenity: async ({ request, locals }) => {
-		const orgId = requireOrgStaff(locals).id;
+		const orgId = (await requireOrgPermission(locals, 'halls.manage')).id;
 		const data = await request.formData();
 		const id = String(data.get('id') ?? '');
 		if (!id) return fail(400, { amenityError: st(locals.locale).serverErrors.missingId });
@@ -456,8 +457,8 @@ export const actions: Actions = {
 	},
 
 	saveProfile: async ({ request, params, locals }) => {
-	  requireOrgStaff(locals);
-		await assertHallInOrg(locals.db, params.id, requireOrgStaff(locals).id);
+		const org = await requireOrgPermission(locals, 'halls.manage');
+		await assertHallInOrg(locals.db, params.id, org.id);
 		const data = await request.formData();
 
 		const name        = String(data.get('name') ?? '').trim();
@@ -505,7 +506,7 @@ export const actions: Actions = {
 		let ownSlugs: string[] = [];
 		try {
 			ownSlugs = (await dbAll<{ slug: string }>(
-				locals.db, 'SELECT slug FROM org_amenities WHERE org_id = ?', requireOrgStaff(locals).id
+				locals.db, 'SELECT slug FROM org_amenities WHERE org_id = ?', org.id
 			)).map((row) => row.slug);
 		} catch {
 			ownSlugs = [];
@@ -592,7 +593,7 @@ export const actions: Actions = {
 			contactEmail,
 			contactWebsite,
 			toJson(openingHours),
-			params.id, requireOrgStaff(locals).id
+			params.id, org.id
 		);
 
 		return { profileSuccess: true };
@@ -601,8 +602,8 @@ export const actions: Actions = {
 	// Re-enable a hall that was suspended by a plan downgrade, if there's room
 	// under the current plan's active-hall limit.
 	reactivate: async ({ params, locals }) => {
-	  requireOrgStaff(locals);
-		await assertHallInOrg(locals.db, params.id, requireOrgStaff(locals).id);
+		const org = await requireOrgPermission(locals, 'halls.manage');
+		await assertHallInOrg(locals.db, params.id, org.id);
 		const orgId = locals.currentOrg!.id;
 		if (!(await canAddHall(locals.db, orgId, locals.currentOrg!.subscription.plan))) {
 			const limit = getPlan(locals.currentOrg!.subscription.plan).limits.maxHalls;
@@ -618,7 +619,7 @@ export const actions: Actions = {
 	 *  records an enquiry and notifies us. It charges nothing and promises no
 	 *  figure — a number shown here would be one we cannot stand behind. */
 	requestFloorplanService: async ({ request, locals }) => {
-		const org = requireOrgStaff(locals);
+		const org = await requireOrgPermission(locals, 'halls.manage');
 		const user = locals.user!;
 		const data = await request.formData();
 		const hallId = String(data.get('hallId') ?? '');

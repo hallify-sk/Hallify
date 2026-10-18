@@ -2,10 +2,11 @@ import { dbFirst, dbRun, fromJson, toJson } from '$lib/db/index';
 import { ARTICLES } from '$lib/knowledgebase';
 import type { PageServerLoad, Actions } from './$types';
 import { fail } from '@sveltejs/kit';
-import { requireOrgStaff } from '$lib/guards';
+import { requireOrgConsole, requireOrgPermission } from '$lib/server/access';
 import { st } from '$lib/i18n-server';
 
 export const load: PageServerLoad = async ({ locals }) => {
+	await requireOrgConsole(locals);
 	const orgId = locals.currentOrg!.id;
 	const n = async (sql: string, ...args: unknown[]) =>
 		(await dbFirst<{ n: number }>(locals.db, sql, ...args))?.n ?? 0;
@@ -68,7 +69,7 @@ const CHECKLIST_KEYS = new Set(['hall', 'plan', 'tables', 'public', 'extras', 't
 
 export const actions: Actions = {
 	toggleStep: async ({ request, locals }) => {
-		const org = requireOrgStaff(locals);
+		const org = await requireOrgPermission(locals, 'settings.manage');
 		const data = await request.formData();
 		const key = String(data.get('key') ?? '');
 		if (!CHECKLIST_KEYS.has(key)) return fail(400, { error: 'unknown_step' });

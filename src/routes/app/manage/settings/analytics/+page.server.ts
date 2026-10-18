@@ -2,13 +2,13 @@ import type { PageServerLoad, Actions } from './$types';
 import { fail } from '@sveltejs/kit';
 import { dbFirst, dbRun, toJson } from '$lib/db/index';
 import { st } from '$lib/i18n-server';
-import { requireOrgStaff } from '$lib/guards';
+import { requireOrgPermission } from '$lib/server/access';
 
 /** Analytics has a tab of its own. It is neither a delivery integration nor a
  *  destructive action, so it sat oddly at the bottom of Advanced and was easy to
  *  miss. */
 export const load: PageServerLoad = async ({ locals }) => {
-  const org = requireOrgStaff(locals);
+  const org = await requireOrgPermission(locals, 'settings.manage');
 
   const gtmRow = await dbFirst<{ value: string | null }>(locals.db,
     `SELECT value FROM org_settings WHERE org_id = ? AND key = 'gtm'`, org.id);
@@ -28,7 +28,7 @@ export const actions: Actions = {
    *  the controller for its visitors' data under the DPA, so the tracking there must
    *  be theirs. Empty value clears it. */
   saveGtm: async ({ request, locals }) => {
-    requireOrgStaff(locals);
+    await requireOrgPermission(locals, 'settings.manage');
     const orgId = locals.currentOrg!.id;
     const data = await request.formData();
     const raw = String(data.get('gtmContainerId') ?? '').trim().toUpperCase();

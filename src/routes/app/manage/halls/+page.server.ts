@@ -5,7 +5,7 @@ import { getPlan } from '$lib/plans';
 import { canAddHall, activeHallCount } from '$lib/limits';
 import { st } from '$lib/i18n-server';
 import type { Actions, PageServerLoad } from './$types';
-import { requireOrgStaff } from '$lib/guards';
+import { requireOrgPermission } from '$lib/server/access';
 
 /** Brand accent. The markup default on the hall detail form and this fallback must
  *  agree, or a hall created here changes colour the first time it is saved. */
@@ -15,6 +15,7 @@ const DEFAULT_MAX_PEOPLE = 100;
 const MAX_NAME_LENGTH = 120;
 
 export const load: PageServerLoad = async ({ locals }) => {
+  await requireOrgPermission(locals, 'halls.manage');
   const orgId = locals.currentOrg!.id;
   const halls = await dbAll<HallRow & { reservation_count: string }>(
     locals.db,
@@ -36,7 +37,7 @@ export const actions: Actions = {
    *  actually lives. A `name` may still be posted — by an older client, or by hand —
    *  so it is accepted, trimmed and bounded rather than trusted or ignored. */
   create: async ({ request, locals }) => {
-    const org = requireOrgStaff(locals);
+    const org = await requireOrgPermission(locals, 'halls.manage');
     const data = await request.formData();
     const typedName = String(data.get('name') ?? '').trim().slice(0, MAX_NAME_LENGTH);
     const name = typedName || st(locals.locale).halls.untitledHall;
@@ -65,7 +66,7 @@ export const actions: Actions = {
   },
 
   delete: async ({ request, locals }) => {
-    requireOrgStaff(locals);
+    await requireOrgPermission(locals, 'halls.manage');
     const orgId = locals.currentOrg!.id;
     const data = await request.formData();
     const id = String(data.get('id') ?? '');

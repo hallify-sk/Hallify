@@ -3,9 +3,10 @@ import { dbFirst, dbAll, dbRun } from '$lib/db/index';
 import type { HallRow, TableTypeRow } from '$lib/db/index';
 import { st } from '$lib/i18n-server';
 import type { Actions, PageServerLoad } from './$types';
-import { requireOrgStaff } from '$lib/guards';
+import { requireOrgPermission } from '$lib/server/access';
 
 export const load: PageServerLoad = async ({ params, locals }) => {
+	await requireOrgPermission(locals, 'floorplans.manage');
 	const orgId = locals.currentOrg!.id;
 	const hall = await dbFirst<HallRow>(locals.db, 'SELECT * FROM halls WHERE id = ? AND org_id = ?', params.id, orgId);
 	if (!hall) error(404, st(locals.locale).serverErrors.hallNotFound);
@@ -21,7 +22,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 
 export const actions: Actions = {
 	saveFloorplan: async ({ request, params, locals }) => {
-	  requireOrgStaff(locals);
+		await requireOrgPermission(locals, 'floorplans.manage');
 		const orgId = locals.currentOrg!.id;
 		const data = await request.formData();
 		const floorplanJson = String(data.get('floorplanJson') ?? '');

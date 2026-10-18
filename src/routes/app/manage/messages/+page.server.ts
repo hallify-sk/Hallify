@@ -1,10 +1,17 @@
 import type { PageServerLoad, Actions } from './$types';
 import { dbAll, dbRun } from '$lib/db/index';
 import { fail } from '@sveltejs/kit';
+// NOT converted to requireOrgPermission on purpose. The staff ticket console has
+// no `messages.manage` in the catalogue, and the two permissions that exist —
+// messages.view and messages.send — both sit in the seeded default "Member" role
+// (migration 0007), which loadMemberAccess applies to every member whether it was
+// assigned or not. Gating here on either one would let any ordinary member read
+// every customer thread and POST directly to the actions below. Left on
+// requireOrgStaff until a `messages.manage` permission exists.
 import { requireOrgStaff } from '$lib/guards';
 
 export const load: PageServerLoad = async ({ locals }) => {
-  const orgId = locals.currentOrg!.id;
+  const orgId = requireOrgStaff(locals).id;
 
   const tickets = await dbAll<{
     id: string; subject: string; status: string; updated_at: string;

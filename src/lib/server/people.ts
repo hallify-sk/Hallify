@@ -16,6 +16,8 @@ import { dbAll, dbFirst, dbRun } from '$lib/db/index';
 import { requireOrg, requireUser } from '$lib/guards';
 import { loadMemberAccess } from '$lib/server/access';
 import {
+	ADMINISTRATOR_PERMISSIONS,
+	DEFAULT_ROLE_PERMISSIONS,
 	PERMISSIONS,
 	canManageRole,
 	parsePermissions,
@@ -78,20 +80,10 @@ export async function loadOrgRoles(db: Db, orgId: string): Promise<OrgRole[]> {
 	}
 }
 
-/** What the built-in "Administrator" role grants: everything except billing, which
- *  stays with the owner. Identical to migration 0007's seed. */
-const ADMINISTRATOR_PERMISSIONS: Permission[] = PERMISSIONS.filter((p) => p !== 'billing.manage');
-
-/** What the built-in default role grants — the floor of what any member can do.
- *  Identical to migration 0007's seed. */
-const DEFAULT_ROLE_PERMISSIONS: Permission[] = [
-	'reservations.view',
-	'halls.view',
-	'calendar.view',
-	'messages.view',
-	'messages.send',
-	'members.view'
-];
+// What the built-in "Administrator" role grants — everything except billing, which
+// stays with the owner — is `ADMINISTRATOR_PERMISSIONS` in $lib/permissions, next to
+// the catalogue, so this seed, migration 0007 and the legacy-admin fallback in
+// $lib/server/access cannot drift apart.
 
 /**
  * Give a newly created organisation its two built-in roles.

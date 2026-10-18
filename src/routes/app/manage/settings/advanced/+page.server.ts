@@ -3,7 +3,7 @@ import { redirect, fail } from '@sveltejs/kit';
 import { dbAll, dbFirst, dbRun, toJson, fromJson, fromJsonArr } from '$lib/db/index';
 import { st } from '$lib/i18n-server';
 import { PLANS } from '$lib/plans';
-import { requireOrgStaff } from '$lib/guards';
+import { requireOrgPermission } from '$lib/server/access';
 import { archiveAndDeleteOrg, orgMemberCount } from '$lib/orgLifecycle';
 import type { TeamNotifyEvent } from '$lib/email';
 
@@ -50,8 +50,7 @@ const ALL_EVENTS = [
 
 export const load: PageServerLoad = async ({ locals }) => {
   if (!locals.user) redirect(303, '/app/login');
-  const org = locals.currentOrg!;
-  if (org.role !== 'owner' && org.role !== 'admin') redirect(303, '/app/manage');
+  const org = await requireOrgPermission(locals, 'settings.manage');
 
   // ── Email notifications ──────────────────────────────────────────────
   const notifyRow = await dbFirst<{ value: string | null }>(locals.db,
@@ -127,7 +126,7 @@ export const actions: Actions = {
    *  never trusted: anything that is not a current owner/admin of THIS org is
    *  dropped before the preference is stored. */
   saveNotifications: async ({ request, locals }) => {
-    requireOrgStaff(locals);
+    await requireOrgPermission(locals, 'settings.manage');
     const orgId = locals.currentOrg!.id;
     const data = await request.formData();
 
@@ -172,9 +171,8 @@ export const actions: Actions = {
   },
 
   create: async ({ request, locals }) => {
-    requireOrgStaff(locals);
+    await requireOrgPermission(locals, 'settings.manage');
     const org = locals.currentOrg!;
-    if (org.role !== 'owner' && org.role !== 'admin') return fail(403);
     if (!planHasWebhooks(org.subscription.plan)) return fail(403, { error: st(locals.locale).serverErrors.webhooksPaidPlan });
 
     const data = await request.formData();
@@ -194,9 +192,8 @@ export const actions: Actions = {
   },
 
   toggle: async ({ request, locals }) => {
-    requireOrgStaff(locals);
+    await requireOrgPermission(locals, 'settings.manage');
     const org = locals.currentOrg!;
-    if (org.role !== 'owner' && org.role !== 'admin') return fail(403);
     if (!planHasWebhooks(org.subscription.plan)) return fail(403, { error: st(locals.locale).serverErrors.webhooksPaidPlan });
     const data = await request.formData();
     const id = String(data.get('id') ?? '');
@@ -214,9 +211,8 @@ export const actions: Actions = {
   },
 
   delete: async ({ request, locals }) => {
-    requireOrgStaff(locals);
+    await requireOrgPermission(locals, 'settings.manage');
     const org = locals.currentOrg!;
-    if (org.role !== 'owner' && org.role !== 'admin') return fail(403);
     if (!planHasWebhooks(org.subscription.plan)) return fail(403, { error: st(locals.locale).serverErrors.webhooksPaidPlan });
     const data = await request.formData();
     const id = String(data.get('id') ?? '');
@@ -227,7 +223,7 @@ export const actions: Actions = {
   // Current user leaves the org. The last member (usually the owner) cannot
   // leave — they must explicitly close the organization.
   leave: async ({ locals, cookies }) => {
-    requireOrgStaff(locals);
+    await requireOrgPermission(locals, 'settings.manage');
     if (locals.currentOrg?.impersonated) return fail(403, { error: st(locals.locale).serverErrors.impersonationBlockThisOrg });
     const orgId = locals.currentOrg!.id;
     const userId = locals.user!.id;
@@ -257,7 +253,7 @@ export const actions: Actions = {
   // record (kept indefinitely) then deletes all live data. Requires typing the
   // org name to confirm.
   closeOrg: async ({ request, locals }) => {
-    requireOrgStaff(locals);
+    await requireOrgPermission(locals, 'settings.manage');
     const org = locals.currentOrg!;
     if (org.impersonated) return fail(403, { error: st(locals.locale).serverErrors.impersonationBlockThisOrg });
     if (org.role !== 'owner') return fail(403, { error: st(locals.locale).serverErrors.onlyOwnerCanCloseOrg });
