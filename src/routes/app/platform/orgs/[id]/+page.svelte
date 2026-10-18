@@ -214,7 +214,7 @@
   .danger-row { margin-top: 16px; }
 
   /* ── Invoice rows ── */
-  .inv-rows .row-item { display: grid; grid-template-columns: 1.4fr 1fr .8fr .8fr auto; gap: 12px; align-items: center; font-size: 13px; }
+  .inv-rows .row-item { display: grid; grid-template-columns: minmax(0,1.4fr) minmax(0,1fr) minmax(0,.8fr) minmax(0,.8fr) 120px; gap: 12px; align-items: center; font-size: 13px; }
   .row-head { font-size: 10px; font-weight: 650; color: var(--text-muted); text-transform: uppercase; letter-spacing: .13em; border-bottom-color: var(--border); padding-bottom: 9px; }
   .r { text-align: right; }
   .link { color: var(--accent-ink); font-weight: 600; text-decoration: none; margin-left: 10px; }

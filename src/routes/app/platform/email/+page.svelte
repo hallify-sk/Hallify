@@ -226,7 +226,7 @@
 	.empty-state { display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center; }
 	.empty { font-size: 13px; color: var(--text-muted); margin: 0; }
 	.log-wrap { overflow-x: auto; }
-	.log .row-item { display: grid; grid-template-columns: 1.3fr 1.6fr .9fr .8fr .9fr; gap: 12px; align-items: center; font-size: 12px; padding: 9px 0; }
+	.log .row-item { display: grid; grid-template-columns: minmax(0,1.3fr) minmax(0,1.6fr) minmax(0,.9fr) minmax(0,.8fr) minmax(0,.9fr); gap: 12px; align-items: center; font-size: 12px; padding: 9px 0; }
 	.row-head {
 		font-size: 10px; font-weight: 650; color: var(--text-muted);
 		text-transform: uppercase; letter-spacing: .13em; white-space: nowrap;

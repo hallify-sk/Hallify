@@ -59,12 +59,12 @@
   .count { font-size: .875rem; color: var(--text-muted); }
 
   /* ── Hairline rows ── */
-  .user-rows .row-item { display: grid; grid-template-columns: 1.4fr 1.6fr .6fr .9fr .8fr auto; gap: 12px; align-items: center; font-size: 13px; }
+  .user-rows .row-item { display: grid; grid-template-columns: minmax(0,1.4fr) minmax(0,1.6fr) minmax(0,.6fr) minmax(0,.9fr) minmax(0,.8fr) 240px; gap: 12px; align-items: center; font-size: 13px; }
   .row-head { font-size: 10px; font-weight: 650; color: var(--text-muted); text-transform: uppercase; letter-spacing: .13em; border-bottom-color: var(--border); padding-bottom: 9px; }
   .muted { color: var(--text-muted); }
   .user-link { color: var(--text-base); text-decoration: none; }
   .user-link:hover { color: var(--accent-ink); }
-  .row-actions { display: flex; gap: 6px; align-items: center; justify-content: flex-end; }
+  .row-actions { display: flex; gap: 6px; align-items: center; justify-content: flex-end; flex-wrap: wrap; }
   .row-actions .btn-outline { text-decoration: none; }
   .badge { display: inline-block; padding: 2px 9px; border-radius: 3px; font-size: .7rem; font-weight: 650; letter-spacing: .03em; }
   .badge-admin { background: var(--accent-action-dim); color: var(--accent-ink); }

@@ -92,7 +92,7 @@
   .count { font-size: .875rem; color: var(--text-muted); white-space: nowrap; }
 
   /* ── Hairline rows ── */
-  .closed-rows > .row-item { display: grid; grid-template-columns: 1.6fr .7fr .7fr .8fr .9fr 1.1fr auto; gap: 12px; align-items: center; font-size: 13px; }
+  .closed-rows > .row-item { display: grid; grid-template-columns: minmax(0,1.6fr) minmax(0,.7fr) minmax(0,.7fr) minmax(0,.8fr) minmax(0,.9fr) minmax(0,1.1fr) 150px; gap: 12px; align-items: center; font-size: 13px; }
   .row-head { font-size: 10px; font-weight: 650; color: var(--text-muted); text-transform: uppercase; letter-spacing: .13em; border-bottom-color: var(--border); padding-bottom: 9px; }
   .row-actions { display: flex; justify-content: flex-end; }
   .muted { color: var(--text-muted); }

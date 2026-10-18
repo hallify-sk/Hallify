@@ -110,13 +110,13 @@
   .search-clear:hover { background: var(--text-muted); }
 
   /* ── Hairline rows ── */
-  .org-rows .row-item { display: grid; grid-template-columns: 1.6fr 1.1fr .8fr .7fr .9fr .9fr auto; gap: 12px; align-items: center; font-size: 13px; }
+  .org-rows .row-item { display: grid; grid-template-columns: minmax(0,1.6fr) minmax(0,1.1fr) minmax(0,.8fr) minmax(0,.7fr) minmax(0,.9fr) minmax(0,.9fr) 340px; gap: 12px; align-items: center; font-size: 13px; }
   .row-head { font-size: 10px; font-weight: 650; color: var(--text-muted); text-transform: uppercase; letter-spacing: .13em; border-bottom-color: var(--border); padding-bottom: 9px; }
   .org-rows .row-item.suspended { opacity: .5; }
   .muted { color: var(--text-muted); }
   .org-link { color: var(--text-base); text-decoration: none; }
   .org-link:hover { color: var(--accent-ink); }
-  .actions { display: flex; gap: 6px; align-items: center; justify-content: flex-end; }
+  .actions { display: flex; gap: 6px; align-items: center; justify-content: flex-end; flex-wrap: wrap; }
   .actions .btn-outline { text-decoration: none; }
 
   .empty-state { display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center; margin-top: 14px; }
