@@ -6,6 +6,8 @@ import { canAddHall, canAddExtra } from '$lib/limits';
 import { serializeEventTypes } from '$lib/eventTypes';
 import { st } from '$lib/i18n-server';
 import type { Actions, PageServerLoad } from './$types';
+import { sendEmail } from '$lib/email';
+import { OPERATOR } from '$lib/legal';
 import { requireOrgStaff } from '$lib/guards';
 import { parseCoordinates } from '$lib/venue-location';
 import { geocodeAddress } from '$lib/server/geocode';
@@ -143,7 +145,21 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 	}
 
 	const plan = getPlan(locals.currentOrg!.subscription.plan);
-	return { hall, templates, blocks, tableTypes, reservations, extras, plan, orgAmenities };
+	// The mapping add-on. Only the latest request matters to the page: it decides
+	// whether to offer the option or report that we are already on it.
+	let floorplanRequest: { id: string; status: string; created_at: string } | null = null;
+	try {
+		floorplanRequest = await dbFirst<{ id: string; status: string; created_at: string }>(
+			locals.db,
+			`SELECT id, status, created_at FROM floorplan_requests
+			  WHERE hall_id = ? AND status NOT IN ('delivered', 'cancelled')
+			  ORDER BY created_at DESC LIMIT 1`,
+			hall.id);
+	} catch {
+		// Table arrives with migration 0008; absent is simply "never requested".
+	}
+
+	return { hall, templates, blocks, tableTypes, reservations, extras, plan, orgAmenities, floorplanRequest };
 };
 
 /** The hall in the URL must belong to the acting organization. Every action below
@@ -594,5 +610,52 @@ export const actions: Actions = {
 		}
 		await dbRun(locals.db, 'UPDATE halls SET plan_locked = 0 WHERE id = ? AND org_id = ?', params.id, orgId);
 		return { reactivated: true };
-	}
+	},
+
+	/** Ask Hallify to survey the venue and draw the plan.
+	 *
+	 *  Quote-only by design: the price depends on size, access and travel, so this
+	 *  records an enquiry and notifies us. It charges nothing and promises no
+	 *  figure — a number shown here would be one we cannot stand behind. */
+	requestFloorplanService: async ({ request, locals }) => {
+		const org = requireOrgStaff(locals);
+		const user = locals.user!;
+		const data = await request.formData();
+		const hallId = String(data.get('hallId') ?? '');
+		const note = String(data.get('note') ?? '').trim().slice(0, 1000);
+
+		// Scope to the caller's org: an id alone must not reach another org's hall.
+		const hall = await dbFirst<{ id: string; name: string }>(locals.db,
+			'SELECT id, name FROM halls WHERE id = ? AND org_id = ?', hallId, org.id);
+		if (!hall) return fail(404, { fpError: st(locals.locale).serverErrors.hallNotFound });
+
+		// One open request per hall; asking twice should not make a second queue entry.
+		const existing = await dbFirst<{ id: string }>(locals.db,
+			`SELECT id FROM floorplan_requests
+			  WHERE hall_id = ? AND status NOT IN ('delivered', 'cancelled') LIMIT 1`, hall.id);
+		if (existing) return { floorplanRequested: true };
+
+		await dbRun(locals.db,
+			`INSERT INTO floorplan_requests (id, org_id, hall_id, requested_by, note)
+			 VALUES (?, ?, ?, ?, ?)`,
+			crypto.randomUUID(), org.id, hall.id, user.id, note || null);
+
+		// Reaches us, not the organisation's own inbox. A failure here must not lose
+		// the request — it is already recorded and visible in the platform queue.
+		try {
+			await sendEmail(
+				locals.db,
+				OPERATOR.contactEmail,
+				`Floor plan mapping request — ${org.name}`,
+				`<p><strong>${org.name}</strong> asked us to map a venue.</p>
+				 <p>Venue: ${hall.name}<br>Requested by: ${user.first_name} ${user.last_name} (${user.email})</p>
+				 <p>${note ? note.replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c] as string)) : 'No additional notes.'}</p>`,
+				'floorplan-request'
+			);
+		} catch {
+			/* recorded regardless */
+		}
+
+		return { floorplanRequested: true };
+	},
 };

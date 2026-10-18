@@ -1354,6 +1354,36 @@
           <p>{t.hallAdmin.noFloorplanDrawn}</p>
         </div>
       {/if}
+      {#if !data.hall.floorplan_json}
+        <!-- Two ways to end up with a plan. Drawing it yourself is free and
+             immediate; the survey is a quoted add-on, so this only starts a
+             conversation and never shows a price we have not agreed. -->
+        <div class="fp-choice">
+          {#if data.floorplanRequest}
+            <div class="card--inset fp-requested">
+              <span class="icon-tile">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+              </span>
+              <div>
+                <strong>{t.hallAdmin.mappingRequested}</strong>
+                <p>{t.hallAdmin.mappingRequestedHint}</p>
+              </div>
+            </div>
+          {:else}
+            <form method="POST" action="?/requestFloorplanService" use:enhance={() => async ({ update }) => { await update({ reset: false }); }}>
+              <input type="hidden" name="hallId" value={data.hall.id} />
+              <div class="fp-choice-head">
+                <strong>{t.hallAdmin.mappingOffer}</strong>
+                <p>{t.hallAdmin.mappingOfferHint}</p>
+              </div>
+              <label class="sr-only" for="fp-note">{t.hallAdmin.mappingNote}</label>
+              <textarea id="fp-note" name="note" rows="2" maxlength="1000"
+                placeholder={t.hallAdmin.mappingNotePlaceholder}></textarea>
+              <button type="submit" class="btn-outline btn-sm">{t.hallAdmin.mappingRequest}</button>
+            </form>
+          {/if}
+        </div>
+      {/if}
       <div class="fp-footer">
         <a href="/app/manage/halls/{data.hall.id}/editor" class="btn-primary btn-full">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>

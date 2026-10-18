@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { enhance } from '$app/forms';
   import { t } from '$lib/i18n.svelte';
   import type { PageData } from './$types';
   let { data }: { data: PageData } = $props();
@@ -47,17 +48,36 @@
     <ul class="row-list cl-list">
       {#each data.checklist as item}
         <li class="row-item cl-item" class:done={item.done}>
-          <span class="cl-check">
-            {#if item.done}
+          {#if item.auto}
+            <!-- The app can see this is finished, so there is nothing to tick. -->
+            <span class="cl-check" title={t.membersAdmin.stepDetected}>
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
-            {/if}
-          </span>
+            </span>
+          {:else}
+            <form method="POST" action="?/toggleStep" use:enhance class="cl-check-form">
+              <input type="hidden" name="key" value={item.key} />
+              <button
+                type="submit"
+                class="cl-check cl-check-btn"
+                class:is-checked={item.manual}
+                aria-pressed={item.manual}
+                aria-label={item.manual ? t.membersAdmin.markNotDone : t.membersAdmin.markDone}
+                title={item.manual ? t.membersAdmin.markNotDone : t.membersAdmin.markDone}
+              >
+                {#if item.manual}
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
+                {/if}
+              </button>
+            </form>
+          {/if}
           <div class="cl-text">
             <span class="cl-label">{item.label}</span>
             <span class="cl-desc">{item.desc}</span>
           </div>
           {#if !item.done}
             <a href={item.href} class="cl-cta">{item.cta}</a>
+          {:else if item.manual && !item.auto}
+            <span class="cl-manual">{t.membersAdmin.markedDone}</span>
           {/if}
         </li>
       {/each}
@@ -94,6 +114,11 @@
 </div>
 
 <style>
+  .cl-check-form { display: flex; margin: 0; }
+  .cl-check-btn { cursor: pointer; padding: 0; background: none; transition: border-color .15s, background .15s, color .15s; }
+  .cl-check-btn:hover { border-color: var(--accent); color: var(--accent-ink); }
+  .cl-manual { font-size: var(--meta-size); color: var(--text-subtle); white-space: nowrap; }
+
   .page { padding: 24px 0; }
   .page-head { margin-bottom: 4px; }
   .page-title { font-size: var(--display-size); font-weight: 550; letter-spacing: -.055em; margin: 0; }

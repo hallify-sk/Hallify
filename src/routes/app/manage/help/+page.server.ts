@@ -1,6 +1,8 @@
-import { dbFirst } from '$lib/db/index';
+import { dbFirst, dbRun, fromJson, toJson } from '$lib/db/index';
 import { ARTICLES } from '$lib/knowledgebase';
-import type { PageServerLoad } from './$types';
+import type { PageServerLoad, Actions } from './$types';
+import { fail } from '@sveltejs/kit';
+import { requireOrgStaff } from '$lib/guards';
 import { st } from '$lib/i18n-server';
 
 export const load: PageServerLoad = async ({ locals }) => {
@@ -20,7 +22,19 @@ export const load: PageServerLoad = async ({ locals }) => {
 	// Localized — these were hardcoded English literals, so the whole checklist
 	// rendered in English even under the Slovak default locale.
 	const C = st(locals.locale).membersAdmin.checklistItems;
-	const checklist = [
+	// Items an operator has ticked by hand. Some steps are legitimately finished in
+	// ways the app cannot observe — a floor plan drawn by us, a team that works from
+	// one shared login — and a checklist that can never reach 100% stops being a
+	// checklist. Stored per org, keyed by step, so adding or renaming a step later
+	// cannot silently mark the wrong one done.
+	const manualRow = await dbFirst<{ value: string | null }>(locals.db,
+		`SELECT value FROM org_settings WHERE org_id = ? AND key = 'checklist'`, orgId);
+	const manual = new Set(
+		(fromJson<{ checked?: string[] }>(manualRow?.value ?? null)?.checked ?? [])
+			.filter((k): k is string => typeof k === 'string')
+	);
+
+	const detected = [
 		{ key: 'hall', label: C.hall.label, desc: C.hall.desc, done: halls > 0, href: '/app/manage/halls', cta: C.hall.cta },
 		{ key: 'plan', label: C.plan.label, desc: C.plan.desc, done: withPlan > 0, href: hallHref, cta: C.plan.cta },
 		{ key: 'tables', label: C.tables.label, desc: C.tables.desc, done: tableTypes > 0, href: hallHref, cta: C.tables.cta },
@@ -28,6 +42,15 @@ export const load: PageServerLoad = async ({ locals }) => {
 		{ key: 'extras', label: C.extras.label, desc: C.extras.desc, done: extras > 0, href: hallHref, cta: C.extras.cta },
 		{ key: 'team', label: C.team.label, desc: C.team.desc, done: members > 1, href: '/app/manage/members', cta: C.team.cta },
 	];
+
+	// `auto` is kept separate from `done` so the UI can tell the two apart: a step the
+	// app can see is finished should not offer a tick box that does nothing.
+	const checklist = detected.map((item) => ({
+		...item,
+		auto: item.done,
+		manual: manual.has(item.key),
+		done: item.done || manual.has(item.key)
+	}));
 
 	const completed = checklist.filter((c) => c.done).length;
 
@@ -37,4 +60,34 @@ export const load: PageServerLoad = async ({ locals }) => {
 		total: checklist.length,
 		articles: ARTICLES.map(({ slug, title, category, summary }) => ({ slug, title, category, summary })),
 	};
+};
+
+/** The steps that may be ticked by hand. A key from the client is never trusted:
+ *  without this, any string could be written into the stored set. */
+const CHECKLIST_KEYS = new Set(['hall', 'plan', 'tables', 'public', 'extras', 'team']);
+
+export const actions: Actions = {
+	toggleStep: async ({ request, locals }) => {
+		const org = requireOrgStaff(locals);
+		const data = await request.formData();
+		const key = String(data.get('key') ?? '');
+		if (!CHECKLIST_KEYS.has(key)) return fail(400, { error: 'unknown_step' });
+
+		const row = await dbFirst<{ value: string | null }>(locals.db,
+			`SELECT value FROM org_settings WHERE org_id = ? AND key = 'checklist'`, org.id);
+		const current = new Set(
+			(fromJson<{ checked?: string[] }>(row?.value ?? null)?.checked ?? [])
+				.filter((k): k is string => typeof k === 'string' && CHECKLIST_KEYS.has(k))
+		);
+
+		if (current.has(key)) current.delete(key);
+		else current.add(key);
+
+		await dbRun(locals.db,
+			`INSERT OR REPLACE INTO org_settings (org_id, key, value, updated_at)
+			 VALUES (?, 'checklist', ?, datetime('now'))`,
+			org.id, toJson({ checked: [...current] }));
+
+		return { checklistSaved: true };
+	}
 };
