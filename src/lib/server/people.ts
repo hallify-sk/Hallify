@@ -12,10 +12,11 @@
  * Every query is scoped with `org_id = ?`. Being an owner somewhere is not permission
  * to read or write another organisation's rows.
  */
-import { dbAll, dbFirst } from '$lib/db/index';
+import { dbAll, dbFirst, dbRun } from '$lib/db/index';
 import { requireOrg, requireUser } from '$lib/guards';
 import { loadMemberAccess } from '$lib/server/access';
 import {
+	PERMISSIONS,
 	canManageRole,
 	parsePermissions,
 	type MemberAccess,
@@ -74,6 +75,69 @@ export async function loadOrgRoles(db: Db, orgId: string): Promise<OrgRole[]> {
 		}));
 	} catch {
 		return [];
+	}
+}
+
+/** What the built-in "Administrator" role grants: everything except billing, which
+ *  stays with the owner. Identical to migration 0007's seed. */
+const ADMINISTRATOR_PERMISSIONS: Permission[] = PERMISSIONS.filter((p) => p !== 'billing.manage');
+
+/** What the built-in default role grants — the floor of what any member can do.
+ *  Identical to migration 0007's seed. */
+const DEFAULT_ROLE_PERMISSIONS: Permission[] = [
+	'reservations.view',
+	'halls.view',
+	'calendar.view',
+	'messages.view',
+	'messages.send',
+	'members.view'
+];
+
+/**
+ * Give a newly created organisation its two built-in roles.
+ *
+ * Migration 0007 seeded these for every organisation that already existed, but an
+ * organisation created AFTER it ran got none — so it had no default role at all.
+ * That is not cosmetic. The default role is the floor every member holds implicitly
+ * (see `loadMemberAccess`), and it is the one role the Roles tab deliberately cannot
+ * create: `is_default` is never settable from the UI, because an org must have
+ * exactly one. Without this, a brand-new organisation has no floor, an invited
+ * administrator lands with zero permissions, and the People area refuses them.
+ *
+ * The owner gets no role row on purpose — they are not a role, and they bypass every
+ * check. Idempotent and org-scoped: nothing is inserted if the org already has roles,
+ * so calling it twice is safe. Positions are 0 and 1, i.e. already contiguous and
+ * distinct, which is the invariant the Roles tab's renumbering maintains.
+ */
+export async function seedBuiltInRoles(db: Db, orgId: string): Promise<void> {
+	try {
+		const already = await dbFirst<{ ok: number }>(
+			db,
+			'SELECT 1 AS ok FROM org_roles WHERE org_id = ? LIMIT 1',
+			orgId
+		);
+		if (already) return;
+
+		await dbRun(
+			db,
+			`INSERT INTO org_roles (id, org_id, name, color, position, permissions, is_default)
+			 VALUES (?, ?, 'Administrator', '#a6225e', 1, ?, 0)`,
+			crypto.randomUUID(),
+			orgId,
+			JSON.stringify(ADMINISTRATOR_PERMISSIONS)
+		);
+		await dbRun(
+			db,
+			`INSERT INTO org_roles (id, org_id, name, color, position, permissions, is_default)
+			 VALUES (?, ?, 'Member', NULL, 0, ?, 1)`,
+			crypto.randomUUID(),
+			orgId,
+			JSON.stringify(DEFAULT_ROLE_PERMISSIONS)
+		);
+	} catch {
+		// Pre-migration 0007 the table does not exist yet. Creating an organisation
+		// must not fail over it: organization_members.role still governs access, as
+		// it did before any of this landed.
 	}
 }
 

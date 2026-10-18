@@ -1,6 +1,6 @@
 <script lang="ts">
   import { enhance } from '$app/forms';
-  import { t } from '$lib/i18n.svelte';
+  import { getLocale, t } from '$lib/i18n.svelte';
   import { ELEVATED, PERMISSION_GROUPS, type Permission } from '$lib/permissions';
   import type { PageData, ActionData } from './$types';
   let { data, form }: { data: PageData; form: ActionData } = $props();
@@ -27,8 +27,10 @@
     return AV_COLORS[h % AV_COLORS.length];
   }
 
+  // Dates follow the interface language, the same way the dashboard does it.
+  const dateLocale = $derived(getLocale() === 'en' ? 'en-GB' : 'sk-SK');
   function fmtDate(d: string) {
-    return new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+    return new Date(d).toLocaleDateString(dateLocale, { day: 'numeric', month: 'short', year: 'numeric' });
   }
 
   // A role's colour is free text in the database. Only a plain hex reaches a style
@@ -250,15 +252,15 @@
                            different answers, and only one of them survives a role
                            being added later. -->
                       <div class="tri" role="radiogroup" aria-label={t.peopleArea.perm[perm]}>
-                        <label class="tri-opt tri-inherit" class:on={state === 'inherit'}>
+                        <label class="tri-opt tri-inherit">
                           <input type="radio" name="p:{perm}" value="inherit" checked={state === 'inherit'} disabled={!editable} />
                           <span>{t.peopleArea.stateInherit}</span>
                         </label>
-                        <label class="tri-opt tri-allow" class:on={state === 'allow'}>
+                        <label class="tri-opt tri-allow">
                           <input type="radio" name="p:{perm}" value="allow" checked={state === 'allow'} disabled={!editable} />
                           <span>{t.peopleArea.stateAllow}</span>
                         </label>
-                        <label class="tri-opt tri-deny" class:on={state === 'deny'}>
+                        <label class="tri-opt tri-deny">
                           <input type="radio" name="p:{perm}" value="deny" checked={state === 'deny'} disabled={!editable} />
                           <span>{t.peopleArea.stateDeny}</span>
                         </label>
@@ -460,9 +462,12 @@
   .tri-opt:first-child span { border-left: none; }
   .tri-opt:hover span { background: var(--bg-hover); color: var(--text-base); }
   .tri-opt input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: -2px; }
-  .tri-opt.on.tri-inherit span { background: var(--bg-hover); color: var(--text-base); }
-  .tri-opt.on.tri-allow span { background: var(--success); color: var(--on-success); }
-  .tri-opt.on.tri-deny span { background: var(--danger); color: var(--on-danger); }
+  /* Driven by :checked, not by a class computed on the server: the segment has to
+     light up the moment it is clicked, otherwise the control reads as dead until
+     the form is saved — and a tri-state whose state you cannot see is a checkbox. */
+  .tri-opt input:checked + span { background: var(--bg-hover); color: var(--text-base); }
+  .tri-allow input:checked + span { background: var(--success); color: var(--on-success); }
+  .tri-deny input:checked + span { background: var(--danger); color: var(--on-danger); }
   .perm-row.locked .tri { opacity: .72; }
 
   /* ── Responsive ─────────────────────────────────────────────────────────── */

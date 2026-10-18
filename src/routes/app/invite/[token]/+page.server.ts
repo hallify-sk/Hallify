@@ -159,7 +159,12 @@ async function seatLimitHit(
  *
  *  `organization_members.role` is still written: it is what identifies the owner
  *  and what every existing guard reads. It is clamped to admin/member — an
- *  invitation must never be able to mint a second owner, whatever sits in the row. */
+ *  invitation must never be able to mint a second owner, whatever sits in the row.
+ *
+ *  The upsert's `WHERE role <> 'owner'` is the other half of that: an invitation
+ *  must not DEMOTE one either. A stale invite addressed to somebody who has since
+ *  become the owner would otherwise overwrite their row with 'member' and leave the
+ *  organisation with nobody who can close it or pay for it. */
 async function joinOrg(db: D1Database, invite: InviteRow, userId: string): Promise<void> {
 	const memberRole = invite.role === 'admin' ? 'admin' : 'member';
 
@@ -167,7 +172,8 @@ async function joinOrg(db: D1Database, invite: InviteRow, userId: string): Promi
 		db,
 		`INSERT INTO organization_members (id, org_id, user_id, role)
 		 VALUES (?, ?, ?, ?)
-		 ON CONFLICT (org_id, user_id) DO UPDATE SET role = excluded.role`,
+		 ON CONFLICT (org_id, user_id) DO UPDATE SET role = excluded.role
+		   WHERE organization_members.role <> 'owner'`,
 		crypto.randomUUID(),
 		invite.org_id,
 		userId,

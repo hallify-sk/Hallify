@@ -1,6 +1,6 @@
 <script lang="ts">
   import { enhance } from '$app/forms';
-  import { t } from '$lib/i18n.svelte';
+  import { getLocale, t } from '$lib/i18n.svelte';
   import type { PageData, ActionData } from './$types';
   let { data, form }: { data: PageData; form: ActionData } = $props();
 
@@ -11,8 +11,10 @@
   // and the default role needs no granting because everybody holds it.
   const pickableRoles = $derived(data.roles.filter((r) => r.assignable && !r.isDefault));
 
+  // Dates follow the interface language, the same way the dashboard does it.
+  const dateLocale = $derived(getLocale() === 'en' ? 'en-GB' : 'sk-SK');
   function fmtDate(d: string) {
-    return new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+    return new Date(d).toLocaleDateString(dateLocale, { day: 'numeric', month: 'short', year: 'numeric' });
   }
 
   // A role's colour is free text in the database; only a plain hex reaches a style

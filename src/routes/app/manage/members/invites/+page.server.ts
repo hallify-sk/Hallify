@@ -153,8 +153,16 @@ export const actions: Actions = {
 			return fail(403, { error: T.serverErrors.memberSeatLimit(limit) });
 		}
 
-		// Check if already a member
-		const existingUser = await dbFirst<{ id: string }>(locals.db, 'SELECT id FROM users WHERE email = ?', email);
+		// Check if already a member. Scoped to `org_id IS NULL`, the accounts that can
+		// BE members: the same address may also exist as a client account inside an
+		// org's bubble (users_email_org_unique), and an unscoped lookup can return
+		// that one instead — which would clear this guard and let an invite be
+		// issued for somebody who is already in the organisation.
+		const existingUser = await dbFirst<{ id: string }>(
+			locals.db,
+			'SELECT id FROM users WHERE email = ? AND org_id IS NULL',
+			email
+		);
 		if (existingUser) {
 			const existing = await dbFirst<{ id: string }>(
 				locals.db,

@@ -2,6 +2,7 @@ import { redirect, fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import { dbFirst, dbRun } from '$lib/db/index';
 import { isReservedSubdomain } from '$lib/reserved-subdomains';
+import { seedBuiltInRoles } from '$lib/server/people';
 import { st } from '$lib/i18n-server';
 
 /** Who may reach the org form.
@@ -91,6 +92,12 @@ export const actions: Actions = {
       userId,
       'owner'
     );
+
+    // The built-in roles. Migration 0007 seeded these for organisations that
+    // already existed; one created here needs them too, or it has no default role
+    // — the floor every member holds implicitly, and the one role the Roles tab
+    // cannot create for itself. Never fatal: see seedBuiltInRoles.
+    await seedBuiltInRoles(locals.db, orgId);
 
     // Free subscription
     await dbRun(

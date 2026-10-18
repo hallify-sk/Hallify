@@ -32,9 +32,16 @@ export async function loadMemberAccess(
 	try {
 		const rows = await dbAll<{ id: string; name: string; position: number; permissions: string }>(
 			db,
+			// `r.org_id = mr.org_id` is not redundant. Scoping the ASSIGNMENT row by
+			// org is not the same as scoping the ROLE it points at: a single
+			// org_member_roles row naming a role of another organisation would
+			// otherwise be loaded here with that foreign role's position and
+			// permissions — i.e. a rank and an access level minted outside this org.
+			// Nothing writes such a row today; this is the join that must not rely
+			// on that staying true.
 			`SELECT r.id, r.name, r.position, r.permissions
 			   FROM org_member_roles mr
-			   JOIN org_roles r ON r.id = mr.role_id
+			   JOIN org_roles r ON r.id = mr.role_id AND r.org_id = mr.org_id
 			  WHERE mr.org_id = ? AND mr.user_id = ?`,
 			orgId,
 			userId
