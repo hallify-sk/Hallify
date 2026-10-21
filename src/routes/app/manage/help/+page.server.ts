@@ -14,13 +14,13 @@ export const load: PageServerLoad = async ({ locals }) => {
 	const n = async (sql: string, ...args: unknown[]) =>
 		(await dbFirst<{ n: number }>(locals.db, sql, ...args))?.n ?? 0;
 
-	const halls       = await n('SELECT COUNT(*) AS n FROM halls WHERE org_id = ?', orgId);
+	const halls       = await n('SELECT COUNT(*) AS n FROM halls WHERE org_id = ? AND archived_at IS NULL', orgId);
 	const withPlan    = await n('SELECT COUNT(*) AS n FROM halls WHERE org_id = ? AND floorplan_json IS NOT NULL', orgId);
 	const tableTypes  = await n('SELECT COUNT(*) AS n FROM table_types WHERE hall_id IN (SELECT id FROM halls WHERE org_id = ?)', orgId);
 	const publicHalls = await n('SELECT COUNT(*) AS n FROM halls WHERE org_id = ? AND is_public = 1', orgId);
 	const extras      = await n('SELECT COUNT(*) AS n FROM hall_extras WHERE hall_id IN (SELECT id FROM halls WHERE org_id = ?)', orgId);
 	const members     = await n('SELECT COUNT(*) AS n FROM organization_members WHERE org_id = ?', orgId);
-	const firstHall   = await dbFirst<{ id: string }>(locals.db, 'SELECT id FROM halls WHERE org_id = ? ORDER BY created_at LIMIT 1', orgId);
+	const firstHall   = await dbFirst<{ id: string }>(locals.db, 'SELECT id FROM halls WHERE org_id = ? AND archived_at IS NULL ORDER BY created_at LIMIT 1', orgId);
 	const hallHref = firstHall ? `/app/manage/halls/${firstHall.id}` : '/app/manage/halls';
 
 	// Localized — these were hardcoded English literals, so the whole checklist

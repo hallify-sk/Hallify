@@ -1,5 +1,6 @@
 <script lang="ts">
 	import type { FloorData, TableObj, Guest, Point } from '$lib/floorplan-types';
+	import { roomOutlinePath, roomParts } from '$lib/floorplan-geometry';
 
 	interface Props {
 		floor: FloorData;
@@ -95,7 +96,7 @@
 <svg class="fp" viewBox="{viewBox.x} {viewBox.y} {viewBox.w} {viewBox.h}" preserveAspectRatio="xMidYMid meet">
 	<!-- bounds -->
 	{#if floor.bounds}
-		<rect x={floor.bounds.x} y={floor.bounds.y} width={floor.bounds.w} height={floor.bounds.h}
+		<path d={roomOutlinePath(roomParts(floor))}
 			fill="none" stroke="var(--border)" stroke-width="0.03" stroke-dasharray="0.15 0.1" />
 	{/if}
 	<!-- zones -->

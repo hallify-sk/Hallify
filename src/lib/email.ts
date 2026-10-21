@@ -36,6 +36,7 @@ export interface EmailTemplates {
 	guestCancel?: string;
 	guestEdit?: string;
 	statusChange?: string;
+	hallCancellation?: string;
 	newMessage?: string;
 	passwordReset?: string;
 	testEmail?: string;
@@ -53,6 +54,10 @@ const DEFAULT_TEMPLATES: Required<EmailTemplates> = {
 <p><b>{{guestName}}</b> updated their booking <b>{{title}}</b> at <b>{{hallName}}</b> (date: <b>{{date}}</b>).</p>`,
 	statusChange: `<h2>Reservation Status Updated</h2>
 <p>Your reservation <b>{{title}}</b> has been updated to: <b>{{status}}</b>.</p>`,
+	hallCancellation: `<h2>Your reservation has been cancelled</h2>
+<p>Your reservation <b>{{title}}</b> at <b>{{hallName}}</b> on <b>{{date}}</b> has been cancelled by the venue.</p>
+<blockquote style="white-space:pre-wrap">{{message}}</blockquote>
+<p>You can reply to the venue from your reservation in Hallify.</p>`,
 	newMessage: `<h2>New Message</h2>
 <p><b>{{senderName}}</b> sent a message in ticket <b>{{subject}}</b>.</p>`,
 	passwordReset: `<h2>Password Reset</h2>
@@ -225,6 +230,26 @@ export async function notifyStatusChange(db: D1Database, orgId: string, userEmai
 	const templates = await getEmailTemplates(db);
 	const html = renderTemplate(templates.statusChange, { title, status: newStatus });
 	await sendEmail(db, userEmail, `Reservation update: ${title}`, html, 'statusChange');
+}
+
+// The venue cancelled a booking with a note (closing a hall) → email the guest.
+// One email carrying the note rather than a status mail plus a "new message" mail.
+// It is a status change, so it honours the org's statusChange switch. Every value is
+// escaped here: the note is free text typed by staff and renderTemplate escapes nothing.
+export async function notifyHallCancellation(
+	db: D1Database,
+	orgId: string,
+	userEmail: string,
+	vars: { title: string; hallName: string; date: string; message: string }
+) {
+	const notify = await getNotifyConfig(db, orgId);
+	if (!notify.statusChange) return;
+	const esc = (s: string) => s.replace(/[<>&"]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' }[c] as string));
+	const templates = await getEmailTemplates(db);
+	const html = renderTemplate(templates.hallCancellation, {
+		title: esc(vars.title), hallName: esc(vars.hallName), date: esc(vars.date), message: esc(vars.message),
+	});
+	await sendEmail(db, userEmail, `Reservation cancelled: ${vars.title}`, html, 'hallCancellation');
 }
 
 // New message in a ticket thread → email the recipient.

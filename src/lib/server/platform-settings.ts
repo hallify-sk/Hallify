@@ -1,4 +1,5 @@
 import { dbFirst, dbRun, fromJson, toJson } from '$lib/db/index';
+import { normaliseServerUrl } from '$lib/analytics-servers';
 
 /**
  * Settings that belong to Hallify itself, not to any organisation.
@@ -11,19 +12,23 @@ import { dbFirst, dbRun, fromJson, toJson } from '$lib/db/index';
 
 type Db = App.Locals['db'];
 
-export const PLATFORM_KEYS = ['analytics'] as const;
+export const PLATFORM_KEYS = ['analytics', 'ai'] as const;
 export type PlatformKey = (typeof PLATFORM_KEYS)[number];
 
 export interface PlatformAnalytics {
   /** Hallify's own GTM container, run across the whole platform. */
   containerId: string;
-  /** Whether it also runs on organisations' own public sites. Off by default. */
+  /** Whether it also runs on organisations' own public sites, beside their own
+   *  container. On unless an admin turns it off. */
   includeBubbles: boolean;
+  /** Server-side GTM origin (https://…), or '' to load from Google. */
+  serverUrl: string;
 }
 
 export const DEFAULT_ANALYTICS: PlatformAnalytics = {
   containerId: '',
-  includeBubbles: false
+  includeBubbles: true,
+  serverUrl: ''
 };
 
 export const GTM_PATTERN = /^GTM-[A-Z0-9]{4,}$/;
@@ -64,6 +69,7 @@ export async function loadPlatformAnalytics(db: Db): Promise<PlatformAnalytics> 
   const id = String(stored?.containerId ?? '').trim().toUpperCase();
   return {
     containerId: GTM_PATTERN.test(id) ? id : '',
-    includeBubbles: stored?.includeBubbles === true
+    includeBubbles: stored?.includeBubbles !== false,
+    serverUrl: normaliseServerUrl(stored?.serverUrl) ?? ''
   };
 }

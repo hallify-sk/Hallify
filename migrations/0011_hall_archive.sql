@@ -1,0 +1,11 @@
+-- Halls are archived, not deleted.
+--
+-- reservations.hall_id references halls(id) with no ON DELETE action, and D1
+-- enforces foreign keys, so deleting a hall that ever had a booking (cancelled
+-- ones included) failed outright. Deleting the bookings with it would erase
+-- clients' past events and guest lists. An archived hall keeps all of that and
+-- leaves everything an operator or a visitor works with day to day: it is
+-- unlisted, closed to bookings, and does not count toward the plan's hall limit.
+--
+-- NULL = active. The timestamp is when it was archived.
+ALTER TABLE halls ADD COLUMN archived_at TEXT;

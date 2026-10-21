@@ -7,6 +7,7 @@
 
   let containerId = $state(data.analytics.containerId);
   let includeBubbles = $state(data.analytics.includeBubbles);
+  let serverUrl = $state(data.analytics.serverUrl);
 
   const fmt = (d: string | null) => (d ? new Date(d + 'Z').toLocaleString() : '—');
 </script>
@@ -39,6 +40,13 @@
           placeholder="GTM-XXXXXXX" spellcheck="false" autocomplete="off" maxlength="20"
         />
         <p class="field-hint">{t.platformSettings.containerHint}</p>
+      </div>
+
+      <div class="field">
+        <label class="field-label" for="pf-sgtm">{t.platformSettings.serverUrlLabel}</label>
+        <input id="pf-sgtm" name="serverUrl" type="url" bind:value={serverUrl}
+          placeholder="https://data.hallify.sk" spellcheck="false" autocomplete="off" maxlength="200" />
+        <p class="field-hint">{t.platformSettings.serverUrlHint}</p>
       </div>
 
       {#if data.envContainer && data.envContainer !== containerId}
@@ -74,6 +82,53 @@
     </form>
   </section>
 
+  <!-- AI assistant. Admin-only and English-only on purpose: these numbers set what
+       every organisation pays, and are read by the people who set prices. -->
+  <section class="section">
+    <div class="section-head">
+      <h2>AI assistant</h2>
+      <p>Model, markup and exchange rate for every organisation's credits (100 credits = €1).
+        Charge = OpenAI cost × markup, in euros.</p>
+    </div>
+    {#if !data.aiConfigured}
+      <p class="alert-warning">OPENAI_API_KEY is not set on this deployment — the assistant shows as unavailable everywhere.</p>
+    {/if}
+    <form method="POST" action="?/saveAi" use:enhance>
+      <div class="toggle-row">
+        <label class="ui-switch">
+          <input id="pf-ai" type="checkbox" name="enabled" checked={data.ai.enabled} />
+          <span class="ui-switch-track" aria-hidden="true"></span>
+        </label>
+        <label class="toggle-copy" for="pf-ai">
+          <strong>Assistant available</strong>
+          <span>Off stops every organisation from starting a turn. Balances and history are kept.</span>
+        </label>
+      </div>
+      <div class="ai-grid">
+        <div class="field">
+          <span class="field-label">Model</span>
+          <!-- Fixed in code (AI_MODEL), not a setting: one model, one reasoning effort. -->
+          <p class="fixed-model">
+            <code>{data.model.id}</code> · {data.model.effort} reasoning<br />
+            <span>${data.model.input} in / ${data.model.output} out per 1M · ≈{data.model.turnCredits.toFixed(1)} credits a turn</span>
+          </p>
+        </div>
+        <div class="field">
+          <label class="field-label" for="pf-markup">Markup (×)</label>
+          <input id="pf-markup" name="markup" type="number" min="1" max="20" step="0.1" value={data.ai.markup} />
+        </div>
+        <div class="field">
+          <label class="field-label" for="pf-rate">EUR per USD</label>
+          <input id="pf-rate" name="usdToEur" type="number" min="0.3" max="3" step="0.001" value={data.ai.usdToEur} />
+        </div>
+      </div>
+      <p class="field-hint">"A turn" assumes 6,000 input and 600 output tokens; tool-heavy turns cost more.</p>
+      <div class="row-actions-end">
+        <button type="submit" class="btn-action">{t.common.save}</button>
+      </div>
+    </form>
+  </section>
+
   <section class="section">
     <div class="section-head">
       <h2>{t.platformSettings.moreTitle}</h2>
@@ -84,6 +139,10 @@
 
 <style>
   .field-hint { font-size: var(--meta-size); color: var(--text-muted); margin: 6px 0 0; }
+  .fixed-model { margin: 6px 0 0; font-size: 13px; line-height: 1.6; }
+  .fixed-model span { font-size: var(--meta-size); color: var(--text-muted); }
+  .ai-grid { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr); gap: 14px; margin-top: 18px; }
+  @media (max-width: 720px) { .ai-grid { grid-template-columns: minmax(0, 1fr); } }
 
   .toggle-row {
     display: flex;

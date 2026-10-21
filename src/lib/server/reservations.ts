@@ -33,6 +33,10 @@ export interface CreateReservationInput {
 	eventType?: string | null;
 	/** Raw typed-in label, only meaningful when `eventType` is "other". */
 	eventTypeOther?: string | null;
+	/** A bulk import: skip the per-booking staff email and activity note, which would
+	 *  otherwise arrive once per imported row. Webhooks still fire — integrations
+	 *  need every booking. */
+	silent?: boolean;
 }
 
 export type CreateReservationResult =
@@ -90,6 +94,8 @@ export async function createReservation(
 	const hall = await dbFirst<HallRow>(locals.db,
 		'SELECT * FROM halls WHERE id = ? AND org_id = ?', hallId, input.orgId);
 	if (!hall) return { ok: false, status: 400, error: e.hallNotFound };
+	// Staff may book a hall that is merely closed to bookings; an archived one is retired.
+	if (hall.archived_at) return { ok: false, status: 400, error: e.hallArchived };
 
 	if (hall.force_layouts && !templateId) {
 		return { ok: false, status: 400, error: e.layoutMustBeSelected };
@@ -132,8 +138,10 @@ export async function createReservation(
 	await releaseHold(locals.db, hallId, eventDate, user.id);
 
 	const userName = `${user.first_name} ${user.last_name}`;
-	await postSystemMessage(locals.db, user.id, title, `reservation_created:${initialStatus}:${userName}`, user.id);
-	notifyNewReservation(locals.db, input.orgId, title, userName, hall.name, eventDate).catch(() => {});
+	if (!input.silent) {
+		await postSystemMessage(locals.db, user.id, title, `reservation_created:${initialStatus}:${userName}`, user.id);
+		notifyNewReservation(locals.db, input.orgId, title, userName, hall.name, eventDate).catch(() => {});
+	}
 	// `reservation.new` is declared in WebhookEvent and offered in the webhook
 	// settings UI, but nothing ever dispatched it — subscribing was a no-op.
 	dispatchWebhooks(locals.db, input.orgId, 'reservation.new', {

@@ -7,7 +7,9 @@
 	import { setLocale } from '$lib/i18n.svelte';
 	import { playSound } from '$lib/sounds';
 	import ConsentBanner from '$lib/components/ConsentBanner.svelte';
+	import AssistantWidget from '$lib/components/assistant/AssistantWidget.svelte';
 	import { setUserContext } from '$lib/analytics';
+	import { cameFromHallify } from '$lib/analytics-referral';
 	import { readableInkOn, inkOnLight, inkOnDark } from '$lib/contrast';
 
 	const { children, data } = $props();
@@ -61,8 +63,9 @@
 
 	// Push segmentation context on load and whenever it changes (login, org switch,
 	// plan change). setUserContext de-dupes, so navigation doesn't spam the dataLayer.
-	$effect(() => {
-		if (data.analyticsUser) setUserContext(data.analyticsUser);
+	// $effect.pre, so the context is in place before a page's first event (its onMount).
+	$effect.pre(() => {
+		if (data.analyticsUser) setUserContext({ ...data.analyticsUser, hallify_referral: data.onBubble ? cameFromHallify(data.hallifyHost) : undefined });
 	});
 
 	const branding = $derived(data.branding);
@@ -146,7 +149,7 @@
      is how the builder's preview suppresses it: a cookie banner inside the preview
      iframe would cover the page the operator is trying to look at, and the preview
      has no analytics to consent to anyway. -->
-<ConsentBanner containerId={isSitePreview ? null : (data.gtmId ?? null)} />
+<ConsentBanner containers={isSitePreview ? [] : (data.analyticsContainers ?? [])} onVenueSite={!!data.onBubble} />
 
 {#if isLandingPage || isPublicHallsPage || isDocPage || isLegalPage || isSitePreview}
 	<div style={brandStyle} data-density={isDocPage ? 'compact' : 'comfortable'}>
@@ -180,6 +183,10 @@
 			{/if}
 			{@render children()}
 		</main>
+		<!-- The assistant page IS the assistant, so the widget steps aside there. -->
+		{#if data.assistant && data.currentOrg && !isAuthPage && !$page.url.pathname.startsWith('/app/manage/assistant')}
+			<AssistantWidget orgId={data.currentOrg.id} />
+		{/if}
 	</div>
 {/if}
 
@@ -197,7 +204,13 @@
 		overflow-x: hidden;
 		background: var(--bg-base);
 		min-width: 0;
+		/* A column, so a page that wants the whole height (the floor-plan editor) can
+		   take what is left under the impersonation banner instead of overflowing it. */
+		display: flex;
+		flex-direction: column;
 	}
+	.app-main > :global(*) { flex-shrink: 0; }
+	.app-main > :global(.fill-main) { flex: 1 1 auto; min-height: 0; }
 
 	.app-main.full-page {
 		background: var(--bg-panel);

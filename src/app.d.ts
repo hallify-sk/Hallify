@@ -43,6 +43,8 @@ declare global {
       currentOrg: OrgContext | null;
       domainOrg: { id: string; name: string; slug: string; logoUrl: string | null } | null;
       locale: 'sk' | 'en';
+      /** Server-container origins this page loads analytics from; added to the CSP. */
+      analyticsOrigins?: string[];
     }
     interface PageData {
       user?: SessionUser | null;

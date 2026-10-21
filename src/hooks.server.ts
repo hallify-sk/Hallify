@@ -1,4 +1,5 @@
 import { getSessionUser, switchOrg } from '$lib/auth';
+import { extendCsp } from '$lib/analytics-servers';
 import { isReservedSubdomain } from '$lib/reserved-subdomains';
 import { getBrandingCacheTime, setBrandingCacheTime, BRANDING_CACHE_TTL } from '$lib/branding-cache';
 import { dbAll, dbFirst, dbRun } from '$lib/db';
@@ -332,6 +333,14 @@ const SELF_EMBEDDABLE = '/app/manage/settings/site/preview';
 
 const securityHeaders: Handle = async ({ event, resolve }) => {
   const response = await resolve(event);
+
+  // Server-side GTM: the page's own server-container origins (set by the root
+  // layout) are allowed for scripts, beacons and pixels, and nothing else is.
+  const origins = event.locals.analyticsOrigins ?? [];
+  if (origins.length) {
+    const policy = response.headers.get('content-security-policy');
+    if (policy) response.headers.set('content-security-policy', extendCsp(policy, origins));
+  }
 
   // Clickjacking. frame-ancestors in the CSP is the modern control; X-Frame-Options
   // is kept for older browsers that ignore it.

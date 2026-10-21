@@ -6,6 +6,7 @@
   import type { Branding, OrgContext } from '../../app.d';
   import { t, getLocale, chooseLocale, type Locale } from '$lib/i18n.svelte';
   import { themeStore } from '$lib/stores/theme.svelte';
+  import { uiStore } from '$lib/stores/ui.svelte';
 
   interface OrgOption { id: string; name: string; slug: string; role: string; }
 
@@ -67,7 +68,7 @@
   });
 </script>
 
-<aside class="sidebar">
+<aside class="sidebar" class:rail={uiStore.sidebarRail}>
   <!-- Logo -->
   <div class="sidebar-header">
     <a href="/app/" class="logo-link">
@@ -155,6 +156,13 @@
               <line x1="3" y1="10" x2="21" y2="10"/>
             </svg>
             {t.nav.calendar}
+          </a>
+          <a href="/app/manage/assistant" class="nav-item" class:active={$page.url.pathname.startsWith('/app/manage/assistant')}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/>
+            </svg>
+            {t.ai.navLabel}
+            <span class="beta nav-beta" title={t.ai.betaHint}>{t.ai.beta}</span>
           </a>
           <a href="/app/manage/messages" class="nav-item" class:active={$page.url.pathname.startsWith('/app/manage/messages')}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -267,6 +275,15 @@
         </div>
       {/if}
 
+      <!-- The public site: the venue search on hallify, or this organisation's own
+           site on its bubble (where "/" leads to its halls). -->
+      <div class="nav-section">
+        <a href="/" class="nav-item">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+          {onBubble ? t.sidebar.publicSiteOrg : t.sidebar.publicSite}
+        </a>
+      </div>
+
     </nav>
 
     <!-- Language switcher -->
@@ -341,6 +358,14 @@
 </aside>
 
 <style>
+  /* The assistant is in beta: said wherever it is offered. */
+  .beta {
+    display: inline-flex; align-items: center; padding: 1px 6px; border-radius: var(--radius-sm);
+    font-size: 9.5px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; line-height: 1.5;
+    background: var(--accent-dim); color: var(--accent-ink); vertical-align: middle;
+  }
+  .nav-beta { margin-left: auto; }
+
   .sidebar {
     width: var(--sidebar-width, 240px);
     flex-shrink: 0;
@@ -657,4 +682,42 @@
     color: var(--text-base);
     font-weight: 600;
   }
+
+  /* ── Rail mode ──
+     The floor-plan editor asks for the menu as a 56 px strip of icons so the plan
+     gets the width. Hovering the strip opens the full menu OVER the page (the
+     negative margin keeps its slot 56 px wide), so nothing reflows while editing. */
+  .sidebar { transition: width .18s ease, margin-right .18s ease; }
+  .sidebar.rail {
+    width: 56px;
+    position: relative;
+    z-index: 60;
+  }
+  .sidebar.rail:hover {
+    width: var(--sidebar-width, 240px);
+    margin-right: calc(56px - var(--sidebar-width, 240px));
+    box-shadow: var(--shadow);
+  }
+  .sidebar.rail:not(:hover) .logo-text,
+  .sidebar.rail:not(:hover) .sidebar-org,
+  .sidebar.rail:not(:hover) .nav-label,
+  .sidebar.rail:not(:hover) .nav-beta,
+  .sidebar.rail:not(:hover) .lang-switcher,
+  .sidebar.rail:not(:hover) .theme-switcher,
+  .sidebar.rail:not(:hover) .user-info,
+  .sidebar.rail:not(:hover) .user-footer .chevron { display: none; }
+  .sidebar.rail:not(:hover) .sidebar-header { padding: 16px 0 10px; text-align: center; }
+  .sidebar.rail:not(:hover) .sidebar-nav { padding: 4px 8px 8px; }
+  .sidebar.rail:not(:hover) .nav-item {
+    font-size: 0;
+    gap: 0;
+    justify-content: center;
+    padding: 9px 0;
+  }
+  .sidebar.rail:not(:hover) .nav-item svg { width: 16px; height: 16px; }
+  .sidebar.rail:not(:hover) .nav-badge {
+    position: absolute; top: 2px; right: 2px; margin: 0;
+    font-size: 9px; padding: 0 4px; min-width: 14px;
+  }
+  .sidebar.rail:not(:hover) .nav-ping { position: absolute; top: 4px; right: 4px; margin: 0; }
 </style>

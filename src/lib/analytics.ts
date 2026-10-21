@@ -8,20 +8,27 @@
  *     are pushed *before* the container loads (denied across the board). Declining
  *     leaves no GTM script on the page at all.
  *
- *  2. MULTI-TENANCY. On an org bubble the visitors are the VENUE's customers, and the
- *     DPA makes the venue the controller and Hallify the processor for that data.
- *     Running Hallify's own container there would quietly make Hallify a controller of
- *     the venue's visitor data. So there are two separate containers:
- *       - apex (hallify.sk)  -> GTM_CONTAINER_ID, Hallify's own SaaS funnel
- *       - org bubble         -> that org's OWN container id (org_settings key 'gtm')
- *     They are never both active, and Hallify's container never runs on a customer
- *     domain.
+ *  2. MULTI-TENANCY. Two containers, each with its own owner:
+ *       - Hallify's platform container (platform setting 'analytics'), on every
+ *         surface: the apex, the console, and venues' public sites. On a venue's site
+ *         it measures whether Hallify brings that venue visitors and bookings.
+ *       - the venue's OWN container (org_settings key 'gtm'), on that venue's site.
+ *     On a venue's site both load, one after the other, into the same dataLayer.
+ *     They report to different properties, so nothing is counted twice. The consent
+ *     banner there names both, and one choice covers both.
+ *
+ *  3. SERVER-SIDE GTM. Either container may have a server container (sGTM): gtm.js
+ *     is then loaded from that first-party origin, and its origin is pushed to the
+ *     dataLayer (sgtm_platform_url / sgtm_venue_url) for the GA4 tag's
+ *     server_container_url. The page's CSP allows exactly those origins.
  *
  *  No inline <script> is used: the loader is bundled, so `script-src 'self'` still
  *  covers our own code and only googletagmanager.com has to be allowed.
  */
 
 export { consentUi, openConsentSettings } from './analytics.svelte';
+import { GOOGLE_TAG_ORIGIN, type AnalyticsContainer } from './analytics-servers';
+export type { AnalyticsContainer } from './analytics-servers';
 
 export const CONSENT_COOKIE = 'hallify-consent';
 /** Bumped 1 -> 2 when consent became granular. A version change re-asks everyone,
@@ -49,6 +56,7 @@ declare global {
     dataLayer?: DataLayerEvent[];
     gtag?: Gtag;
     __hallifyGtmLoaded?: string;
+    __hallifyGtmIds?: string[];
   }
 }
 
@@ -107,14 +115,32 @@ function pushConsentDefaults(): void {
   });
 }
 
-function injectGtm(containerId: string): void {
-  if (window.__hallifyGtmLoaded === containerId) return;
-  window.__hallifyGtmLoaded = containerId;
-  dl().push({ 'gtm.start': Date.now(), event: 'gtm.js' });
+/** A container to load: an id alone means Google's loader. */
+export type ContainerRef = string | AnalyticsContainer;
+type ContainerInput = ContainerRef | ContainerRef[] | null | undefined;
+
+function asContainers(input: ContainerInput): AnalyticsContainer[] {
+  const list = Array.isArray(input) ? input : input ? [input] : [];
+  return list.map((c) => (typeof c === 'string' ? { id: c, origin: GOOGLE_TAG_ORIGIN, owner: 'platform' as const } : c)).filter((c) => !!c.id);
+}
+
+function injectGtm(c: AnalyticsContainer): void {
+  const loaded = (window.__hallifyGtmIds ??= []);
+  if (loaded.includes(c.id)) return;
+  if (!loaded.length) dl().push({ 'gtm.start': Date.now(), event: 'gtm.js' });
+  loaded.push(c.id);
+  window.__hallifyGtmLoaded = c.id;
   const s = document.createElement('script');
   s.async = true;
-  s.src = `https://www.googletagmanager.com/gtm.js?id=${encodeURIComponent(containerId)}`;
+  s.src = `${c.origin}/gtm.js?id=${encodeURIComponent(c.id)}`;
   document.head.appendChild(s);
+}
+
+/** Tell the containers where their server containers are, for server_container_url. */
+function pushServerConfig(list: AnalyticsContainer[]): void {
+  const of = (owner: AnalyticsContainer['owner']) => list.find((c) => c.owner === owner && c.origin !== GOOGLE_TAG_ORIGIN)?.origin;
+  const platform = of('platform'), venue = of('venue');
+  if (platform || venue) dl().push({ event: 'hallify_config', sgtm_platform_url: platform, sgtm_venue_url: venue });
 }
 
 /** True when at least one consent-based category is on. */
@@ -122,14 +148,16 @@ function anyGranted(state: ConsentState): boolean {
   return state.analytics || state.marketing;
 }
 
-/** Call once on mount. Sets defaults, and loads GTM only if something was accepted. */
-export function initAnalytics(containerId: string | null): void {
-  if (typeof window === 'undefined' || !containerId) return;
+/** Call once on mount. Sets defaults, and loads the containers only if something was accepted. */
+export function initAnalytics(containers: ContainerInput): void {
+  const list = asContainers(containers);
+  if (typeof window === 'undefined' || !list.length) return;
   pushConsentDefaults();
+  pushServerConfig(list);
   const stored = readConsent();
   if (stored && anyGranted(stored)) {
     gtag('consent', 'update', consentSignals(stored));
-    injectGtm(containerId);
+    for (const c of list) injectGtm(c);
   }
 }
 
@@ -140,11 +168,11 @@ export function initAnalytics(containerId: string | null): void {
  *  signals denied, so Google stops using storage immediately. The container script
  *  stays in memory for the current page — a reload clears it entirely, and no
  *  further storage or identifiers are used in the meantime. */
-export function setConsent(state: ConsentState, containerId: string | null): void {
+export function setConsent(state: ConsentState, containers: ContainerInput): void {
   if (typeof window === 'undefined') return;
   writeConsent(state);
   gtag('consent', 'update', consentSignals(state));
-  if (anyGranted(state) && containerId) injectGtm(containerId);
+  if (anyGranted(state)) for (const c of asContainers(containers)) injectGtm(c);
 }
 
 // ─── Funnel events ────────────────────────────────────────────────────────────
@@ -237,6 +265,13 @@ export interface UserContext {
   subscription_status?: string;
   /** apex = hallify.sk (our SaaS funnel); bubble = a venue's own domain. */
   surface: 'apex' | 'bubble';
+  /** The venue whose site this is (bubble only). Opaque UUID. Lets Hallify's own
+   *  container report each venue's traffic and bookings separately. */
+  venue_id?: string;
+  /** This visit came from Hallify: from hallify.sk, or a link tagged
+   *  utm_source=hallify. Kept for the browser session, so a booking made a few pages
+   *  later is still credited. This is what answers "does Hallify bring them business". */
+  hallify_referral?: boolean;
   locale: string;
 }
 

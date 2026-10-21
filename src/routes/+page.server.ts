@@ -1,12 +1,11 @@
-import { redirect } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 import { publicVenues } from '$lib/server/public-venues';
 
 export const load: PageServerLoad = async ({ locals, url, setHeaders }) => {
   // On a bubble (org subdomain / custom domain) hooks already redirect "/" → /halls,
-  // so this only runs on the main app. Staff keep their dashboard shortcut;
-  // client accounts can discover public venues here.
-  if (locals.user && locals.user.account_type !== 'client') redirect(303, '/app');
+  // so this only runs on the main app. Everyone may browse it, signed in or not:
+  // the venue search is a working tool, not only a sign-up page. The header offers
+  // a signed-in user the way back into the app.
 
   const raw = url.searchParams.get('lang');
   const lang: 'sk' | 'en' | null = raw === 'en' ? 'en' : raw === 'sk' ? 'sk' : null;

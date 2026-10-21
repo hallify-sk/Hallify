@@ -129,5 +129,7 @@ export const USER_DIMENSIONS = [
 	'plan',
 	'subscription_status',
 	'surface',
-	'locale'
+	'locale',
+	'venue_id',
+	'hallify_referral'
 ] as const;

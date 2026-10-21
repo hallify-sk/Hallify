@@ -1,4 +1,5 @@
 import { fail } from '@sveltejs/kit';
+import { normaliseServerUrl } from '$lib/analytics-servers';
 import { env } from '$env/dynamic/private';
 import { dbFirst } from '$lib/db/index';
 import { requirePlatformAdmin } from '$lib/guards';
@@ -9,6 +10,8 @@ import {
   loadPlatformAnalytics,
   writePlatformSetting
 } from '$lib/server/platform-settings';
+import { DEFAULT_AI, MODEL_PRICES, AI_MODEL, AI_REASONING_EFFORT, loadAiPlatform, costUsdMicro, toMilliCredits } from '$lib/server/ai/pricing';
+import { aiConfigured } from '$lib/server/ai/openai';
 import type { PageServerLoad, Actions } from './$types';
 
 /**
@@ -36,7 +39,16 @@ export const load: PageServerLoad = async ({ locals }) => {
 
   const envContainer = (env.GTM_CONTAINER_ID ?? '').trim().toUpperCase();
 
+  const ai = await loadAiPlatform(locals.db);
+  // What an ordinary turn costs an organisation at these settings: a few thousand
+  // tokens of instructions, tools and history in, a short answer out.
+  const typicalTurnMc = (model: string) =>
+    toMilliCredits(costUsdMicro(model, { input_tokens: 6000, cached_tokens: 0, output_tokens: 600 }), ai);
+
   return {
+    ai,
+    aiConfigured: aiConfigured(),
+    model: { id: AI_MODEL, effort: AI_REASONING_EFFORT, ...MODEL_PRICES[AI_MODEL], turnCredits: typicalTurnMc(AI_MODEL) / 1000 },
     analytics,
     // Shown so an admin can tell whether a blank field means "off" or "still
     // running on whatever the deployment was configured with".
@@ -60,14 +72,30 @@ export const actions: Actions = {
     // just a technical one, so it is a separate explicit opt-in rather than
     // something that follows from setting a container id.
     const includeBubbles = data.get('includeBubbles') === 'on';
+    const rawServer = String(data.get('serverUrl') ?? '').trim();
+    const serverUrl = normaliseServerUrl(rawServer);
+    if (rawServer && !serverUrl) return fail(400, { error: st(locals.locale).serverErrors.invalidServerUrl });
 
     await writePlatformSetting(
       locals.db,
       'analytics',
-      { ...DEFAULT_ANALYTICS, containerId: raw, includeBubbles },
+      { ...DEFAULT_ANALYTICS, containerId: raw, includeBubbles, serverUrl: serverUrl ?? '' },
       locals.user?.id ?? null
     );
 
+    return { saved: true };
+  },
+
+  saveAi: async ({ request, locals }) => {
+    requirePlatformAdmin(locals);
+    const data = await request.formData();
+    const markup = Number(data.get('markup'));
+    const usdToEur = Number(data.get('usdToEur'));
+    if (!Number.isFinite(markup) || markup < 1 || markup > 20) return fail(400, { error: 'Markup must be between 1 and 20.' });
+    if (!Number.isFinite(usdToEur) || usdToEur <= 0.3 || usdToEur >= 3) return fail(400, { error: 'Exchange rate looks wrong.' });
+    await writePlatformSetting(locals.db, 'ai',
+      { ...DEFAULT_AI, enabled: data.get('enabled') === 'on', markup, usdToEur },
+      locals.user?.id ?? null);
     return { saved: true };
   }
 };

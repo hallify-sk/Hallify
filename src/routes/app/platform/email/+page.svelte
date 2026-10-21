@@ -14,6 +14,7 @@
 		{ key: 'guestCancel', label: t.platformMisc.tplGuestCancel, vars: 'guestName, title, hallName, date' },
 		{ key: 'guestEdit', label: t.platformMisc.tplGuestEdit, vars: 'guestName, title, hallName, date' },
 		{ key: 'statusChange', label: t.platformMisc.tplStatusChange, vars: 'title, status' },
+		{ key: 'hallCancellation', label: t.platformMisc.tplHallCancellation, vars: 'title, hallName, date, message' },
 		{ key: 'newMessage', label: t.platformMisc.tplNewMessage, vars: 'senderName, subject' },
 		{ key: 'passwordReset', label: t.platformMisc.tplPasswordReset, vars: 'resetUrl' },
 		{ key: 'testEmail', label: t.platformMisc.tplTestEmail, vars: '' },

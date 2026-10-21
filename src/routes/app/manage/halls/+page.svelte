@@ -29,7 +29,12 @@
   const fmtDate = (d: Date | string, locale: string) =>
     new Date(d).toLocaleDateString(locale, { day: 'numeric', month: 'short', year: 'numeric' });
 
-  const maxRes = $derived(Math.max(...data.halls.map(h => Number(h.reservation_count)), 1));
+  // Archived halls are kept for their history but are not part of the working set:
+  // they sit in their own section below and do not count toward the plan.
+  const activeHalls = $derived(data.halls.filter(h => !h.archived_at));
+  const archivedHalls = $derived(data.halls.filter(h => h.archived_at));
+
+  const maxRes = $derived(Math.max(...activeHalls.map(h => Number(h.reservation_count)), 1));
   const limitNote = $derived(
     data.hallLimit === -1
       ? ''
@@ -62,7 +67,7 @@
   {/if}
 
   <!-- ─── Empty state ───────────────────────────────────────────────────────── -->
-  {#if data.halls.length === 0}
+  {#if activeHalls.length === 0}
     <section class="section section--lead">
       <div class="card--inset empty-state">
         <span class="icon-tile">
@@ -86,13 +91,13 @@
       <div class="section-head section-head--row">
         <h2>{t.halls.hallOverview}</h2>
         <p class="footer-note">
-          {data.halls.length}
-          {data.halls.length === 1 ? t.hallAdmin.hallConfiguredSingular : t.hallAdmin.hallsConfiguredPlural}{#if limitNote} · {limitNote}{/if}
+          {activeHalls.length}
+          {activeHalls.length === 1 ? t.hallAdmin.hallConfiguredSingular : t.hallAdmin.hallsConfiguredPlural}{#if limitNote} · {limitNote}{/if}
         </p>
       </div>
 
       <div class="media-grid">
-        {#each data.halls as h (h.id)}
+        {#each activeHalls as h (h.id)}
           <article class="media-card hall-card">
             <a href="/app/manage/halls/{h.id}" class="media-photo" aria-label={h.name}>
               {#if h.cover_image_url}
@@ -143,17 +148,35 @@
 
             <div class="media-bottom">
               <a href="/app/manage/halls/{h.id}" class="btn-manage">{t.hallAdmin.manageAction}</a>
-              <form method="POST" action="?/delete" use:enhance style="display:contents">
-                <input type="hidden" name="id" value={h.id} />
-                <button type="submit" class="btn-delete" aria-label="{t.common.delete} {h.name}"
-                  onclick={(e) => { if (!confirm(`${t.hallAdmin.confirmDeleteHall} "${h.name}"? ${t.hallAdmin.cannotBeUndone}`)) e.preventDefault(); }}>
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
-                </button>
-              </form>
             </div>
           </article>
         {/each}
       </div>
+    </section>
+  {/if}
+
+  <!-- ─── Archived ──────────────────────────────────────────────────────────── -->
+  {#if archivedHalls.length > 0}
+    <section class="section">
+      <details class="archived">
+        <summary class="archived-summary">
+          <span>{t.hallAdmin.archivedHalls}</span>
+          <span class="archived-count">{archivedHalls.length}</span>
+        </summary>
+        <p class="archived-hint">{t.hallAdmin.archivedHallsHint}</p>
+        <ul class="archived-list">
+          {#each archivedHalls as h (h.id)}
+            <li>
+              <a href="/app/manage/halls/{h.id}" class="archived-row">
+                <span class="archived-name">{h.name}</span>
+                <span class="archived-meta">
+                  {t.hallAdmin.archivedOn} {fmtDate(h.archived_at!, dateLocale)} · {h.reservation_count} {t.hallAdmin.allTimeBookings.toLowerCase()}
+                </span>
+              </a>
+            </li>
+          {/each}
+        </ul>
+      </details>
     </section>
   {/if}
 
@@ -244,17 +267,33 @@
     transition: color .15s, border-color .15s;
   }
   .btn-manage:hover { color: var(--accent-ink); border-color: var(--accent); }
-  .btn-delete {
-    width: 30px; height: 30px; border-radius: var(--radius-sm); border: 1px solid var(--border);
-    background: var(--bg-panel); color: var(--text-muted); cursor: pointer;
-    display: flex; align-items: center; justify-content: center;
-    transition: color .15s, border-color .15s, background .15s;
+
+  /* ── Archived ── */
+  .archived-summary {
+    display: inline-flex; align-items: center; gap: 8px; cursor: pointer;
+    font-size: 13px; font-weight: 600; color: var(--text-muted); list-style: none;
   }
-  .btn-delete:hover {
-    color: var(--danger);
-    border-color: color-mix(in srgb, var(--danger) 40%, transparent);
-    background: var(--danger-dim);
+  .archived-summary::-webkit-details-marker { display: none; }
+  .archived-summary::before {
+    content: ''; width: 6px; height: 6px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor;
+    transform: rotate(-45deg); transition: transform .15s;
   }
+  .archived[open] .archived-summary::before { transform: rotate(45deg); }
+  .archived-summary:hover { color: var(--text-base); }
+  .archived-count {
+    font-size: 11px; padding: 1px 7px; border-radius: 99px;
+    background: var(--bg-hover); color: var(--text-muted);
+  }
+  .archived-hint { font-size: 12px; color: var(--text-muted); margin: 10px 0 12px; max-width: 60ch; line-height: 1.5; }
+  .archived-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 6px; }
+  .archived-row {
+    display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+    padding: 10px 14px; border: 1px solid var(--border); border-radius: var(--radius-sm);
+    text-decoration: none; color: inherit; transition: border-color .15s;
+  }
+  .archived-row:hover { border-color: var(--accent); }
+  .archived-name { font-size: 13px; font-weight: 600; color: var(--text-base); }
+  .archived-meta { font-size: 12px; color: var(--text-muted); }
 
   /* ── Empty state ── */
   .empty-state {

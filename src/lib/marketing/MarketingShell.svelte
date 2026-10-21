@@ -5,11 +5,14 @@
   import { LEGAL_LABELS } from '$lib/legal';
   import { openConsentSettings } from '$lib/analytics';
   import './marketing.css';
+  import { page } from '$app/stores';
   let { audience, children, explorer = false }: { audience: 'customer' | 'business'; children: Snippet; explorer?: boolean } = $props();
   let theme = $state<'light' | 'dark'>('dark');
   setContext('marketing-theme', () => theme);
   const en = $derived(getLocale() === 'en');
   const legal = $derived(LEGAL_LABELS[getLocale()]);
+  // Signed in: the header leads back into the app instead of to the sign-in form.
+  const signedIn = $derived(!!($page.data as { user?: unknown }).user);
 </script>
 <div class="marketing" class:explorer-shell={explorer} data-audience={audience} data-theme={theme}>
   <a class="skip" href="#main">{en ? 'Skip to content' : 'Preskočiť na obsah'}</a>
@@ -22,7 +25,11 @@
     <div class="header-right">
       <button class="locale-toggle" onclick={() => chooseLocale(en ? 'sk' : 'en')} aria-label={en ? 'Switch to Slovak' : 'Prepnúť na angličtinu'}>{en ? 'SK' : 'EN'}</button>
       <button class="theme-toggle" onclick={() => theme = theme === 'dark' ? 'light' : 'dark'} aria-label={en ? 'Switch color theme' : 'Prepnúť farebný režim'}>◐</button>
-      <a class="header-cta" href={audience === 'customer' ? '/app/login?type=client' : '/app/login'}>{en ? 'Sign in' : 'Prihlásiť sa'} <Icon /></a>
+      {#if signedIn}
+        <a class="header-cta" href="/app">{en ? 'Go to the app' : 'Prejsť do aplikácie'} <Icon /></a>
+      {:else}
+        <a class="header-cta" href={audience === 'customer' ? '/app/login?type=client' : '/app/login'}>{en ? 'Sign in' : 'Prihlásiť sa'} <Icon /></a>
+      {/if}
     </div>
   </header>
   <main id="main">{@render children()}</main>

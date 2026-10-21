@@ -30,6 +30,9 @@ export const PERMISSIONS = [
 	'floorplans.manage',
 	'templates.manage',
 	'calendar.view',
+	// Spends the organisation's AI credits. Every tool the assistant runs is still
+	// checked against the member's own permissions; this only lets them ask.
+	'ai.use',
 
 	// ── Communication ────────────────────────────────────────────────────────
 	'messages.view',
@@ -94,6 +97,7 @@ export const CONSOLE_PERMISSIONS: Permission[] = [
 	'halls.manage',
 	'floorplans.manage',
 	'templates.manage',
+	'ai.use',
 	'announcements.manage',
 	'members.manage',
 	'roles.manage',
@@ -113,7 +117,8 @@ export const PERMISSION_GROUPS: { key: string; permissions: Permission[] }[] = [
 			'halls.manage',
 			'floorplans.manage',
 			'templates.manage',
-			'calendar.view'
+			'calendar.view',
+			'ai.use'
 		]
 	},
 	{

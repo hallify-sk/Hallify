@@ -3,6 +3,7 @@ import { dbRun } from '$lib/db/index';
 import { planFromAmount } from '$lib/plans';
 import type { PlanId } from '$lib/plans';
 import { enforcePlanLimits } from '$lib/limits';
+import { grantPurchase } from '$lib/server/ai/credits';
 import type { RequestHandler } from './$types';
 import type Stripe from 'stripe';
 import type { D1Database } from '@cloudflare/workers-types';
@@ -86,6 +87,15 @@ export const POST: RequestHandler = async (event) => {
 
     case 'checkout.session.completed': {
       const session = stripeEvent.data.object as Stripe.Checkout.Session;
+      // An AI credit pack. Credited once per session id (grantPurchase is idempotent),
+      // and only when the money has actually arrived.
+      if (session.mode === 'payment' && session.metadata?.kind === 'ai_credits' && session.metadata.orgId) {
+        const credits = Number(session.metadata.credits);
+        if (session.payment_status === 'paid' && Number.isInteger(credits) && credits > 0) {
+          await grantPurchase(db, session.metadata.orgId, credits, session.id, session.metadata.userId ?? null);
+        }
+        break;
+      }
       if (session.subscription && session.customer && session.metadata?.orgId) {
         await dbRun(
           db,

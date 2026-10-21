@@ -2,9 +2,10 @@
 // legal/accounting retention, kept indefinitely) and then removing all live
 // operational data.
 //
-// Cloudflare D1 defaults PRAGMA foreign_keys OFF, so `ON DELETE CASCADE` does
-// NOT fire automatically — we delete every descendant row by hand, child-first.
-// Keep this in sync with the schema's org-scoped tables.
+// D1 enforces foreign keys (PRAGMA foreign_keys is ON), but several references
+// have no ON DELETE action — reservations.hall_id among them — so a parent row
+// cannot simply be deleted out from under them. We delete every descendant row by
+// hand, child-first. Keep this in sync with the schema's org-scoped tables.
 import { dbRun, dbFirst, dbAll } from '$lib/db/index';
 import { listInvoices } from '$lib/stripe';
 import { deleteCustomHostname, isCFEnabled } from '$lib/cloudflare-saas';

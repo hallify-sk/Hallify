@@ -35,7 +35,7 @@ export const load: PageServerLoad = async ({ locals }) => {
   const halls = await dbAll<Pick<HallRow, 'id' | 'name' | 'max_people' | 'allow_reservations' | 'min_days_advance' | 'force_layouts'>>(
     locals.db,
     `SELECT id, name, max_people, allow_reservations, min_days_advance, force_layouts
-     FROM halls WHERE org_id = ? AND plan_locked = 0 ORDER BY name`,
+     FROM halls WHERE org_id = ? AND plan_locked = 0 AND archived_at IS NULL ORDER BY name`,
     orgId
   );
 
@@ -77,13 +77,17 @@ export const actions: Actions = {
     const message = String(data.get('message') ?? '').trim();
     if (!id || !ALLOWED_STATUSES.includes(status)) return fail(400, { error: st(locals.locale).serverErrors.invalidStatus });
 
-    const res = await dbFirst<ReservationRow & { user_email: string }>(locals.db,
-      `SELECT r.title, r.user_id, r.status AS old_status, u.email AS user_email
-      FROM reservations r JOIN users u ON u.id = r.user_id
+    const res = await dbFirst<ReservationRow & { user_email: string; old_status: string; hall_archived_at: string | null }>(locals.db,
+      `SELECT r.title, r.user_id, r.status AS old_status, u.email AS user_email, h.archived_at AS hall_archived_at
+      FROM reservations r JOIN users u ON u.id = r.user_id JOIN halls h ON h.id = r.hall_id
       WHERE r.id = ? AND r.org_id = ?`,
       id, orgId
     );
     if (!res) return fail(404, { error: st(locals.locale).serverErrors.notFound });
+    // A retired hall cannot take an event back; it would have to be restored first.
+    if (res.hall_archived_at && res.old_status === 'cancelled' && status !== 'cancelled') {
+      return fail(409, { error: st(locals.locale).serverErrors.hallArchived });
+    }
 
     await dbRun(locals.db,
       `UPDATE reservations SET status = ? WHERE id = ? AND org_id = ?`,

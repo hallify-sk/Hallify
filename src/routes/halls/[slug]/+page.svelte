@@ -5,6 +5,7 @@
   import type { PageData } from './$types';
   import type { HallDayHours } from '$lib/db/index';
   import { migrateToMultiFloor } from '$lib/floorplan-types';
+  import { roomOutlinePath, roomParts } from '$lib/floorplan-geometry';
   import type { FloorData } from '$lib/floorplan-types';
   import { t } from '$lib/i18n.svelte';
   import Lightbox from '$lib/components/Lightbox.svelte';
@@ -220,7 +221,7 @@
         <div class="fp-wrap">
           <svg viewBox={computeViewBox(f0)} preserveAspectRatio="xMidYMid meet">
             {#if f0.bounds}
-              <rect x={f0.bounds.x*10} y={f0.bounds.y*10} width={f0.bounds.w*10} height={f0.bounds.h*10}
+              <path d={roomOutlinePath(roomParts(f0), 10)}
                 fill="none" stroke="color-mix(in srgb, var(--editor-wall) 30%, transparent)" stroke-width="0.6" stroke-dasharray="3 2"/>
             {/if}
             {#each f0.zones as zone}

@@ -1,12 +1,15 @@
 <script lang="ts">
 	import MapEditor from '$lib/MapEditor.svelte';
 	import { enhance } from '$app/forms';
+	import { onMount } from 'svelte';
+	import { goto } from '$app/navigation';
+	import { registerAssistantPage } from '$lib/assistant/page-hooks';
 	import { t } from '$lib/i18n.svelte';
 	import { EVENT_TYPE_KEYS } from '$lib/eventTypes';
 	import type { PageData, ActionData } from './$types';
 
 	interface Props { data: PageData; form: ActionData; }
-	const { data }: Props = $props();
+	const { data, form }: Props = $props();
 
 	const numGuests = data.reservation.num_guests ?? null;
 
@@ -18,13 +21,46 @@
 	let formRef: HTMLFormElement | undefined = $state();
 	let autoTimer: ReturnType<typeof setTimeout> | undefined;
 
-	// Autosave: debounce a save shortly after the last meaningful change.
+	// An AI assistant's seating plan, opened to look at before anything is saved.
+	const draft = $derived(data.draft && !data.draft.stale ? data.draft : null);
+	const plainLayout = $derived(`/app/reservation/${data.reservation.id}/layout`);
+
+	// Autosave: debounce a save shortly after the last meaningful change. Never for a
+	// draft — looking at one and nudging a chair must not quietly save it.
 	function onLayoutChange(json: string) {
 		layoutJson = json;
 		saveState = 'dirty';
 		clearTimeout(autoTimer);
-		autoTimer = setTimeout(() => formRef?.requestSubmit(), 900);
+		if (!draft) autoTimer = setTimeout(() => formRef?.requestSubmit(), 900);
 	}
+
+	async function discardDraft() {
+		if (!draft) return;
+		await fetch(`/app/manage/assistant/proposals/${draft.id}`, {
+			method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action: 'discard' })
+		});
+		await goto(plainLayout, { replaceState: true, invalidateAll: true });
+		currentInitial = data.initialLayout ?? null;
+		layoutJson = currentInitial ? JSON.stringify(currentInitial) : null;
+		editorKey++;
+		saveState = 'idle';
+	}
+
+	// The floating assistant can save seating for this event. This editor holds its
+	// own copy of the layout, so: refuse that while edits here are unsaved (one would
+	// overwrite the other), and reload the copy once the assistant's plan is saved —
+	// otherwise the next autosave would quietly write the old seating back.
+	onMount(() =>
+		registerAssistantPage({
+			blocker: () => (saveState === 'dirty' || saveState === 'saving' ? t.ai.errors.page_unsaved : null),
+			afterApply: () => {
+				currentInitial = data.initialLayout ?? null;
+				layoutJson = currentInitial ? JSON.stringify(currentInitial) : null;
+				editorKey++;
+				saveState = 'saved';
+			}
+		})
+	);
 
 	// ── Template picker + recommendation (by event type, then closest guest→seat match) ──
 	let pickerOpen = $state(false);
@@ -67,7 +103,7 @@
 
 <svelte:head><title>{data.reservation.title} — {t.event.layoutEditorTitle} – Hallify</title></svelte:head>
 
-<div class="layout-page">
+<div class="layout-page fill-main">
 	<div class="layout-toolbar">
 		<a href="/app/reservation/{data.reservation.id}" class="btn-outline btn-sm">
 			<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -132,22 +168,38 @@
 				</form>
 			{/if}
 
+			<button type="button" class="btn-outline btn-sm" onclick={() => window.dispatchEvent(new CustomEvent('hallify:assistant:open'))}>{t.editor.seatWithAi}</button>
 			<span class="save-status save-{saveState}">
 				{#if saveState === 'saving'}{t.myRes.saving}
 				{:else if saveState === 'dirty'}{t.myRes.unsavedChanges}
 				{:else if saveState === 'saved'}{t.myRes.allChangesSaved}{/if}
 			</span>
+			{#if draft}
+				<button type="button" class="btn-outline btn-sm" onclick={discardDraft}>{t.ai.draftDiscard}</button>
+			{/if}
 			<form method="POST" action="?/saveLayout" bind:this={formRef} use:enhance={() => {
 				saveState = 'saving';
-				return async ({ update }) => { await update({ reset: false }); saveState = 'saved'; };
+				return async ({ update, result }) => {
+					await update({ reset: false });
+					saveState = result.type === 'success' ? 'saved' : 'dirty';
+					if (result.type === 'success' && draft) await goto(plainLayout, { replaceState: true, invalidateAll: true });
+				};
 			}}>
 				<input type="hidden" name="layoutJson" value={layoutJson ?? ''} />
+				{#if draft}<input type="hidden" name="proposalId" value={draft.id} />{/if}
 				<button type="submit" class="btn-action btn-sm" disabled={!layoutJson}>
-					{t.event.saveLayout}
+					{draft ? t.ai.draftSave : t.event.saveLayout}
 				</button>
 			</form>
 		</div>
 	</div>
+
+	{#if form?.error}<div class="save-err" role="alert">{form.error}</div>{/if}
+	{#if draft}
+		<div class="draft-banner" role="status"><span class="draft-tag">AI</span>{t.ai.draftBanner}</div>
+	{:else if data.draft?.stale}
+		<div class="draft-banner draft-banner--stale" role="status">{t.ai.draftStale}</div>
+	{/if}
 
 	<div class="editor-wrap">
 		{#key editorKey}
@@ -155,7 +207,11 @@
 				initialState={currentInitial}
 				onchange={onLayoutChange}
 				tableTypes={data.tableTypes}
-				hiddenTools={data.tableTypes.length ? ['wall', 'bounds'] : ['wall', 'bounds', 'table']}
+				mode="event"
+				{saveState}
+				onSave={() => formRef?.requestSubmit()}
+				saveLabel={t.event.saveLayout}
+				printHref={`/app/reservation/${data.reservation.id}/manifest`}
 				protectWallsZones={true}
 				allowZones={true}
 				lockFloors={true}
@@ -170,7 +226,7 @@
 	.layout-page {
 		display: flex;
 		flex-direction: column;
-		height: 100vh;
+		height: 100%;
 		overflow: hidden;
 	}
 
@@ -206,6 +262,23 @@
 	.save-status { font-size: 12px; font-weight: 600; min-width: 90px; text-align: right; }
 	.save-status.save-saving { color: var(--text-muted); }
 	.save-status.save-dirty  { color: var(--warning); }
+	.draft-banner {
+		display: flex; align-items: center; gap: 10px; flex-shrink: 0;
+		padding: 9px 16px; font-size: 12.5px; line-height: 1.45;
+		background: var(--accent-dim); color: var(--text-base);
+		border-bottom: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+	}
+	.draft-banner--stale { background: var(--warning-dim); }
+	/* A save the server refused (e.g. more tables than the venue owns). */
+	.save-err {
+		flex-shrink: 0; padding: 9px 16px; font-size: 12.5px; line-height: 1.45;
+		background: var(--danger-dim); color: var(--danger); font-weight: 550;
+		border-bottom: 1px solid color-mix(in srgb, var(--danger) 25%, transparent);
+	}
+	.draft-tag {
+		font-size: 10px; font-weight: 700; letter-spacing: .08em; padding: 2px 6px; border-radius: var(--radius-sm);
+		background: var(--accent); color: var(--accent-contrast);
+	}
 	.save-status.save-saved  { color: var(--success); }
 	.save-status.save-idle   { color: transparent; }
 

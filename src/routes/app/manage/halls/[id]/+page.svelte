@@ -3,15 +3,20 @@
   import { slide } from 'svelte/transition';
   import { t, getLocale } from '$lib/i18n.svelte';
   import VenueLocationPicker from '$lib/marketing/VenueLocationPicker.svelte';
-  import { migrateToMultiFloor } from '$lib/floorplan-types';
+  import { migrateToMultiFloor, countSeats } from '$lib/floorplan-types';
+  import { roomOutlinePath, roomParts, roomArea, totalChairs, localChairs, defaultChairSides, CHAIR_R } from '$lib/floorplan-geometry';
+  import type { TableObj } from '$lib/floorplan-types';
   import type { FloorData } from '$lib/floorplan-types';
   import DateRangePicker from '$lib/components/DateRangePicker.svelte';
   import InfoHint from '$lib/components/InfoHint.svelte';
+  import StatusBadge from '$lib/components/StatusBadge.svelte';
   import ImageUploadDialog from '$lib/components/ImageUploadDialog.svelte';
   import type { TableTypeRow, HallExtraRow } from '$lib/db/index';
   import { eur } from '$lib/extras';
   import { EVENT_TYPE_KEYS, parseEventTypes } from '$lib/eventTypes';
   import type { PageData, ActionData } from './$types';
+  import { onMount } from 'svelte';
+  import { registerAssistantPage } from '$lib/assistant/page-hooks';
 
   interface Props { data: PageData; form: ActionData; }
   const { data, form }: Props = $props();
@@ -35,6 +40,33 @@
 
   // ── Unsaved-changes tracking ────────────────────────────────────────────────
   let profileFormEl:  HTMLFormElement | null = null;
+
+  // ── Tabs ──
+  // Every tab's content stays on the page and is only hidden, because profile,
+  // photos and pricing are one form with one save bar: switching tabs must never
+  // drop an unsaved edit. The open tab lives in the URL hash so a reload or a
+  // shared link lands on it.
+  const TABS = ['overview', 'profile', 'media', 'pricing', 'floorplan', 'settings'] as const;
+  type Tab = (typeof TABS)[number];
+  let tab = $state<Tab>('overview');
+  function openTab(next: Tab) {
+    tab = next;
+    try { history.replaceState(history.state, '', `#${next}`); } catch { /* not in a browser */ }
+  }
+  function tabLabel(k: Tab): string {
+    return k === 'overview' ? t.hallAdmin.tabOverview : k === 'profile' ? t.hallAdmin.tabProfile : k === 'media' ? t.hallAdmin.tabMedia
+      : k === 'pricing' ? t.hallAdmin.tabPricing : k === 'floorplan' ? t.halls.floorplan : t.hallAdmin.tabSettings;
+  }
+  // A message from the server belongs to one tab: show that tab.
+  $effect(() => {
+    const f = form as Record<string, unknown> | null;
+    if (!f) return;
+    if (f.profileError || f.amenityError) tab = f.amenityError ? 'media' : 'profile';
+    else if (f.extraError) tab = 'pricing';
+    else if (f.tableTypeError || f.templateError) tab = 'floorplan';
+    else if (f.archiveError) tab = 'settings';
+    else if (f.blockError) tab = 'overview';
+  });
   let settingsFormEl: HTMLFormElement | null = null;
   let settingsDirty = $state(false);
   let savingAll     = $state(false);
@@ -47,6 +79,26 @@
   let blockDays         = $state<number[]>([0,1,2,3,4,5,6]);
   let blockReason       = $state('');
   let showCancelConfirm = $state(false);
+
+  // ── Retiring the hall ───────────────────────────────────────────────────────
+  // Archive is refused while live upcoming bookings remain; the bulk dialog clears
+  // them in one go with a single note to every client. Archive and delete both ask
+  // for the hall's name typed back, the one confirmation that can't be clicked
+  // through on autopilot.
+  const archived = $derived(!!data.hall.archived_at);
+  let showBulkCancel = $state(false);
+  let cancelNote = $state('');
+  let retireDialog = $state<'archive' | 'delete' | null>(null);
+  let confirmName = $state('');
+  const nameMatches = $derived(confirmName.trim() === data.hall.name.trim());
+  function openBulkCancel() {
+    cancelNote = t.hallAdmin.bulkCancelDefault(data.hall.name);
+    showBulkCancel = true;
+  }
+  function openRetire(kind: 'archive' | 'delete') {
+    confirmName = '';
+    retireDialog = kind;
+  }
 
   // ── Extras (bookable add-ons) ───────────────────────────────────────────────
   let extraDialogOpen = $state(false);
@@ -73,12 +125,12 @@
   let ttColor      = $state('#9a6512');
 
   function openTtNew() {
-    ttEditId = null; ttName = ''; ttShape = 'rect';
+    ttEditId = null; ttName = ''; ttShape = 'rect'; ttNameTouched = false;
     ttWidth = 2; ttHeight = 1; ttRadius = 1; ttMaxChairs = 8; ttAmount = 0; ttColor = '#9a6512';
     ttDialogOpen = true;
   }
   function openTtEdit(tt: TableTypeRow) {
-    ttEditId = tt.id; ttName = tt.name; ttShape = tt.shape;
+    ttEditId = tt.id; ttName = tt.name; ttShape = tt.shape; ttNameTouched = true;
     ttWidth = tt.width; ttHeight = tt.height; ttRadius = tt.radius;
     ttMaxChairs = tt.max_chairs; ttAmount = tt.amount; ttColor = tt.color || '#9a6512';
     ttDialogOpen = true;
@@ -135,8 +187,52 @@
     for (let i = 0; i < right; i++)  pts.push({ x: g.x + g.w + gap,  y: g.y + ((i + 0.5) / right) * g.h });
     return pts;
   }
+  // ── The dialog's live preview: the table as the editor will place it ──
+  /** The editor's default spacing between chairs (MapEditor tChairSpacing). */
+  const TT_SPACING = 0.15;
+  const ttPreview = $derived.by(() => {
+    const round = ttShape === 'round';
+    const w = round ? ttRadius * 2 : Math.max(0.3, Number(ttWidth) || 0.5);
+    const h = round ? ttRadius * 2 : Math.max(0.3, Number(ttHeight) || 0.5);
+    const n = Math.max(0, Math.min(40, Math.round(Number(ttMaxChairs) || 0)));
+    const sides = round ? { chairsTop: 0, chairsBottom: 0, chairsLeft: 0, chairsRight: 0 } : defaultChairSides(w, h, n, TT_SPACING);
+    const tbl: TableObj = { id: 'preview', x: 0, y: 0, width: w, height: h, radius: Number(ttRadius) || 0.5, shape: ttShape, chairs: n,
+      rotation: 0, label: '', ...sides, chairSpacing: TT_SPACING, assignments: [] };
+    const chairs = localChairs(tbl);
+    // Half the footprint, chairs included.
+    const ex = Math.max(w / 2, ...chairs.map((c) => Math.abs(c.x) + CHAIR_R));
+    const ey = Math.max(h / 2, ...chairs.map((c) => Math.abs(c.y) + CHAIR_R));
+    const step = 2 * CHAIR_R + TT_SPACING;
+    const fitLen = (len: number) => Math.max(0, Math.floor((len + TT_SPACING) / step + 1e-6));
+    const fits = round ? Math.max(1, Math.floor((2 * Math.PI * (tbl.radius + 0.06 + CHAIR_R)) / step + 1e-6))
+      : 2 * fitLen(w) + 2 * fitLen(h);
+    return { tbl, w, h, chairs, ex, ey, fits, round };
+  });
+  /** Common tables, one click away. Sizes are typical event-rental sizes. */
+  const TT_PRESETS = [
+    { key: 'round8',  shape: 'round' as const, radius: 0.9,  width: 1.8, height: 1.8, chairs: 8 },
+    { key: 'round10', shape: 'round' as const, radius: 0.9 + 0.15, width: 2.1, height: 2.1, chairs: 10 },
+    { key: 'banquet', shape: 'rect' as const,  radius: 1,    width: 1.8, height: 0.8, chairs: 6 },
+    { key: 'rect',    shape: 'rect' as const,  radius: 1,    width: 2,   height: 1,   chairs: 8 },
+  ];
+  function ttPresetName(key: string): string {
+    return key === 'round8' ? t.hallAdmin.ttPresetRound(8, 1.8) : key === 'round10' ? t.hallAdmin.ttPresetRound(10, 2.1)
+      : key === 'banquet' ? t.hallAdmin.ttPresetBanquet : t.hallAdmin.ttPresetRect;
+  }
+  let ttNameTouched = $state(false);
+  function ttApplyPreset(p: (typeof TT_PRESETS)[number]) {
+    ttShape = p.shape; ttRadius = p.radius; ttWidth = p.width; ttHeight = p.height; ttMaxChairs = p.chairs;
+    if (!ttNameTouched || !ttName.trim()) ttName = ttPresetName(p.key);
+  }
+  const ttPresetActive = (p: (typeof TT_PRESETS)[number]) =>
+    ttShape === p.shape && ttMaxChairs === p.chairs &&
+    (p.shape === 'round' ? Math.abs(ttRadius - p.radius) < 1e-6 : Math.abs(ttWidth - p.width) < 1e-6 && Math.abs(ttHeight - p.height) < 1e-6);
+  const clampN = (v: number, lo: number, hi: number, step = 0.1) => Math.round(Math.min(hi, Math.max(lo, v)) / step) * step;
+
   function ttMeta(tt: TableTypeRow): string {
-    const dims = tt.shape === 'round' ? `⌀ ${tt.radius}m` : `${tt.width}×${tt.height}m`;
+    // ⌀ is the diameter everywhere in the app (the stored value is the radius).
+    const m = (v: number) => `${+Number(v).toFixed(2)}`;
+    const dims = tt.shape === 'round' ? `⌀ ${m(tt.radius * 2)} m` : `${m(tt.width)} × ${m(tt.height)} m`;
     const qty = tt.amount > 0 ? `×${tt.amount}` : '∞';
     return `${dims} · ${tt.max_chairs} ${t.event.seats} · ${qty}`;
   }
@@ -259,6 +355,22 @@
     settingsFormEl?.reset();
     settingsDirty      = false;
   }
+
+  // The floating assistant can save this hall's details. The form holds its own
+  // copy of every field, so: hold that off while the form has unsaved edits, and
+  // afterwards take the saved values into the form (its defaults already follow the
+  // reloaded data; revertAll copies them into the fields).
+  onMount(() => {
+    const h = location.hash.slice(1) as Tab;
+    if ((TABS as readonly string[]).includes(h)) tab = h;
+  });
+
+  onMount(() =>
+    registerAssistantPage({
+      blocker: () => (anyDirty ? t.ai.errors.page_unsaved : null),
+      afterApply: () => revertAll()
+    })
+  );
 
   const AMENITIES = $derived([
     { id: 'parking',    label: t.hallProfile.amenityParking },
@@ -410,8 +522,6 @@
   // The floor plan, its templates and its table types used to sit in three loose
   // rows. They are now collapsible sections under one "Floor plan" eyebrow, open by
   // default so nothing an operator used to see is hidden behind a click.
-  let templatesOpen  = $state(true);
-  let tableTypesOpen = $state(true);
 
   // ── Create-template dialog ──
   let tmplDialogOpen = $state(false);
@@ -515,7 +625,7 @@
   </svg>
 {/snippet}
 
-<div class="wrap page">
+<div class="wrap page" data-tab={tab}>
 
   <!-- ─── Breadcrumb ──────────────────────────────────────────────────────────── -->
   <nav class="breadcrumb">
@@ -535,6 +645,20 @@
         <button type="submit" class="btn-action btn-sm">{t.hallAdmin.reactivate}</button>
       </form>
     </div>
+  {/if}
+
+  {#if archived}
+    <div class="locked-banner archived-banner">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/></svg>
+      <div>
+        <strong>{t.hallAdmin.archivedBannerTitle}</strong>
+        <span>{t.hallAdmin.archivedBannerDesc}</span>
+      </div>
+      <form method="POST" action="?/restore" use:enhance>
+        <button type="submit" class="btn-action btn-sm">{t.hallAdmin.restoreHall}</button>
+      </form>
+    </div>
+    {#if form?.archiveError}<div class="inline-err">{form.archiveError}</div>{/if}
   {/if}
 
   <!-- ─── Profile + Overview (merged, always open) ────────────────────────────── -->
@@ -578,8 +702,19 @@
       </div>
     </div>
 
+    <!-- Tabs: one area of the hall at a time -->
+    <div class="hall-tabs" role="tablist" aria-label={data.hall.name}>
+      {#each TABS as k}
+        <button type="button" role="tab" class="hall-tab" class:on={tab === k} aria-selected={tab === k} onclick={() => openTab(k)}>
+          {tabLabel(k)}
+          {#if k === 'overview' && upcomingReservations.length}<span class="hall-tab-count">{upcomingReservations.length}</span>{/if}
+          {#if k === 'floorplan' && !data.hall.floorplan_json}<span class="hall-tab-dot" title={t.status.unset}></span>{/if}
+        </button>
+      {/each}
+    </div>
+
     <!-- Two-column editor -->
-    <div class="profile-editor-wrap">
+    <div class="profile-editor-wrap" data-panel="profile media pricing">
 
       <!-- ── Left: form ── -->
       <form
@@ -597,7 +732,7 @@
         {/if}
 
         <!-- Hall details -->
-        <div class="profile-section">
+        <div data-panel="profile" class="profile-section">
           <p class="eyebrow">{t.hallAdmin.hallDetails}</p>
           <div class="edit-row">
             <div class="field field-grow">
@@ -644,7 +779,7 @@
 
         <!-- Location: the address and the pin are one subject, and each can be
              derived from the other, so they live together. -->
-        <div class="profile-section location-section">
+        <div data-panel="profile" class="profile-section location-section">
           <p class="eyebrow">{t.hallAdmin.location}</p>
           <div class="field">
             <label class="field-label" for="pf-addr">{t.halls.address} {#if profileIsPublic}*{/if}</label>
@@ -677,7 +812,7 @@
         </div>
 
         <!-- Visibility -->
-        <div class="profile-section">
+        <div data-panel="profile" class="profile-section">
           <p class="eyebrow">{t.hallAdmin.visibility}</p>
           <label class="toggle-item" style="padding:6px 0;border-bottom:none">
             <div class="toggle-text">
@@ -685,7 +820,7 @@
               <span class="toggle-hint">{t.hallAdmin.listedInDiscoveryHint}</span>
             </div>
             <div class="toggle-switch">
-              <input type="checkbox" name="isPublic" bind:checked={profileIsPublic} />
+              <input type="checkbox" name="isPublic" bind:checked={profileIsPublic} disabled={archived} />
               <span class="toggle-slider"></span>
             </div>
           </label>
@@ -723,7 +858,7 @@
         </div>
 
         <!-- Cover image — recommended, never required -->
-        <div class="profile-section">
+        <div data-panel="media" class="profile-section">
           <div class="sub-head">
             <p class="eyebrow">{t.hallAdmin.coverImage}</p>
             <span class="recommend-pill">{t.hallAdmin.coverRecommended}</span>
@@ -751,7 +886,7 @@
         </div>
 
         <!-- Gallery -->
-        <div class="profile-section">
+        <div data-panel="media" class="profile-section">
           <div class="gallery-header">
             <p class="eyebrow" style="margin:0">{t.hallProfile.gallery}</p>
             <span class="gallery-count" class:at-limit={galleryAtLimit}>
@@ -790,7 +925,7 @@
         </div>
 
         <!-- Amenities -->
-        <div class="profile-section">
+        <div data-panel="media" class="profile-section">
           <p class="eyebrow">{t.hallProfile.amenities}</p>
           <div class="amenities-grid">
             {#each AMENITIES as a}
@@ -830,7 +965,7 @@
 
         <!-- Pricing — the band is what discovery filters on, the text is the nuance,
              so the two sit side by side rather than in separate places. -->
-        <div class="profile-section">
+        <div data-panel="pricing" class="profile-section">
           <p class="eyebrow">{t.hallProfile.pricing}</p>
           <div class="pricing-row">
             <div class="field field-grow">
@@ -856,7 +991,7 @@
         </div>
 
         <!-- Contact -->
-        <div class="profile-section">
+        <div data-panel="profile" class="profile-section">
           <p class="eyebrow">{t.hallProfile.contact}</p>
           <div class="profile-fields-row">
             <div class="field field-grow">
@@ -878,7 +1013,7 @@
         </div>
 
         <!-- Opening hours -->
-        <div class="profile-section" style="border-bottom:none">
+        <div data-panel="profile" class="profile-section" style="border-bottom:none">
           <p class="eyebrow">{t.hallProfile.openingHours}</p>
           <div class="hours-grid">
             {#each DAYS as day}
@@ -1021,7 +1156,7 @@
   </section><!-- /profile -->
 
   <!-- ─── Extras (sits with pricing — add-ons guests can order) ─────────────────── -->
-  <section class="section extras-block">
+  <section class="section extras-block" data-panel="pricing">
     <div class="section-head section-head--row">
       <div class="extras-head-text">
         <p class="eyebrow">{t.hallProfile.pricing}</p>
@@ -1093,7 +1228,7 @@
   </section>
 
   <!-- ─── Activity row: Upcoming + Blocked side by side ──────────────────────── -->
-  <div class="dual-col">
+  <div class="dual-col" data-panel="overview">
 
     <section class="section">
       <div class="section-head section-head--row">
@@ -1185,7 +1320,7 @@
   </div><!-- /dual-col -->
 
   <!-- ─── Settings + Floorplan row ─────────────────────────────────────────── -->
-  <div class="settings-row">
+  <div class="settings-row" data-panel="settings">
 
     <section class="section settings-block">
       <form
@@ -1222,7 +1357,7 @@
                 <span class="toggle-hint">{t.halls.allowReservationsHint}</span>
               </div>
               <div class="toggle-switch">
-                <input type="checkbox" name="allowReservations" checked={!!data.hall.allow_reservations} />
+                <input type="checkbox" name="allowReservations" checked={!!data.hall.allow_reservations} disabled={archived} />
                 <span class="toggle-slider"></span>
               </div>
             </label>
@@ -1296,8 +1431,11 @@
 
   </div><!-- /settings-row -->
 
-  <!-- ─── Floor plan: the plan, its templates and its table types, one block ─── -->
-  <section class="section fp-block">
+  <!-- ─── Floor plan: three steps in the order they depend on each other ───
+       The room's plan, then the tables the venue owns, then templates that arrange
+       those tables on that plan. Side by side, so the order reads at a glance and
+       an empty step is a short card, not a page-wide panel. -->
+  <section class="section fp-block" data-panel="floorplan">
     <div class="section-head section-head--row">
       <div>
         <p class="eyebrow">{t.halls.floorplanStatus}</p>
@@ -1307,226 +1445,235 @@
         {data.hall.floorplan_json ? t.status.set : t.status.unset}
       </span>
     </div>
-    <div class="fp-plan">
-      {#if data.hall.floorplan_json}
-        {@const mfState = migrateToMultiFloor(data.hall.floorplan_json)}
-        {@const floor0  = mfState.floors[0]}
-        <div class="fp-preview">
-          <svg viewBox={computeViewBox(floor0)} preserveAspectRatio="xMidYMid meet">
+    {#if form?.tableTypeSuccess}<div class="alert alert-success" style="margin:0 0 12px">{t.hallAdmin.tableTypeSaved}</div>{/if}
+    {#if form?.tableTypeError}<div class="alert alert-error" style="margin:0 0 12px">{form.tableTypeError}</div>{/if}
+
+    <div class="fp-flow">
+      <!-- 1 · The room -->
+      <article class="fp-step" class:done={!!data.hall.floorplan_json}>
+        <header class="fp-step-head">
+          <span class="fp-num">{data.hall.floorplan_json ? '✓' : '1'}</span>
+          <h3>{t.halls.floorplan}</h3>
+        </header>
+        {#if data.hall.floorplan_json}
+          {@const mfState = migrateToMultiFloor(data.hall.floorplan_json)}
+          {@const floor0  = mfState.floors[0]}
+          {@const vb = computeViewBox(floor0).split(' ').map(Number)}
+          {@const parts = roomParts(floor0)}
+          <a class="fp-preview" href="/app/manage/halls/{data.hall.id}/editor" style="--ar:{(vb[2] / vb[3]).toFixed(3)}" aria-label={t.event.openLayoutEditor}>
+            <svg viewBox={computeViewBox(floor0)} preserveAspectRatio="xMidYMid meet">
+                {#if floor0.bounds}
+                  <path d={roomOutlinePath(roomParts(floor0), 10)}
+                    fill="none" stroke="var(--border)" stroke-width="0.6" stroke-dasharray="3 2"/>
+                {/if}
+                {#each floor0.zones as zone}
+                  {@const zx = zone.points.reduce((s,p)=>s+p.x,0)/zone.points.length}
+                  {@const zy = zone.points.reduce((s,p)=>s+p.y,0)/zone.points.length}
+                  <polygon points={zone.points.map(p => `${p.x*10},${p.y*10}`).join(' ')}
+                    fill={zone.color ?? 'var(--accent)'} fill-opacity="0.22" stroke={zone.color ?? 'var(--accent)'} stroke-width="0.4" stroke-opacity="0.6"/>
+                  {#if zone.label}
+                    <text x={zx*10} y={zy*10} text-anchor="middle" dominant-baseline="middle"
+                      font-size="3.4" font-weight="650" fill={zone.color ?? 'var(--accent-ink)'}>{zone.label}</text>
+                  {/if}
+                {/each}
+                {#each floor0.walls as wall}
+                  <polygon points={wall.points.map(p => `${p.x*10},${p.y*10}`).join(' ')} fill="var(--editor-wall)" opacity="0.9"/>
+                {/each}
+                {#each floor0.tables as tbl}
+                  {#if tbl.shape === 'round'}
+                    <circle cx={tbl.x*10} cy={tbl.y*10} r={(tbl.radius??1)*10*0.8} fill="var(--warning)" opacity="0.75"/>
+                  {:else}
+                    <rect x={(tbl.x-(tbl.width??2)/2)*10} y={(tbl.y-(tbl.height??1)/2)*10}
+                      width={(tbl.width??2)*10} height={(tbl.height??1)*10} rx="2" fill="var(--warning)" opacity="0.75"/>
+                  {/if}
+                {/each}
+                {#each floor0.seats ?? [] as seat}
+                  <circle cx={seat.x*10} cy={seat.y*10} r="2.1" fill="var(--text-muted)" opacity="0.8"/>
+                {/each}
+              </svg>
+            {#if mfState.floors.length > 1}<span class="fp-floors-badge">{mfState.floors.length} {t.hallAdmin.floors}</span>{/if}
+          </a>
+          <div class="fp-facts">
             {#if floor0.bounds}
-              <rect x={floor0.bounds.x*10} y={floor0.bounds.y*10} width={floor0.bounds.w*10} height={floor0.bounds.h*10}
-                fill="none" stroke="var(--border)" stroke-width="0.6" stroke-dasharray="3 2"/>
+              <strong class="fp-size">{floor0.bounds.w.toFixed(1)} × {floor0.bounds.h.toFixed(1)} m</strong>
+              <span class="fp-sub">{roomArea(parts).toFixed(0)} m² · {parts.length > 1 ? t.hallAdmin.fpShapeParts(parts.length) : t.hallAdmin.fpShapeRect} · {t.hallAdmin.fpWalls(mfState.floors.reduce((n, f) => n + f.walls.length, 0))}</span>
+            {:else}
+              <strong class="fp-size fp-size--muted">{t.hallAdmin.fpNoRoom}</strong>
+              <span class="fp-sub">{t.hallAdmin.fpNoRoomHint}</span>
             {/if}
-            {#each floor0.zones as zone}
-              {@const zx = zone.points.reduce((s,p)=>s+p.x,0)/zone.points.length}
-              {@const zy = zone.points.reduce((s,p)=>s+p.y,0)/zone.points.length}
-              <polygon points={zone.points.map(p => `${p.x*10},${p.y*10}`).join(' ')}
-                fill={zone.color ?? 'var(--accent)'} fill-opacity="0.22" stroke={zone.color ?? 'var(--accent)'} stroke-width="0.4" stroke-opacity="0.6"/>
-              {#if zone.label}
-                <text x={zx*10} y={zy*10} text-anchor="middle" dominant-baseline="middle"
-                  font-size="3.4" font-weight="650" fill={zone.color ?? 'var(--accent-ink)'}>{zone.label}</text>
-              {/if}
-            {/each}
-            {#each floor0.walls as wall}
-              <polygon points={wall.points.map(p => `${p.x*10},${p.y*10}`).join(' ')} fill="var(--editor-wall)" opacity="0.9"/>
-            {/each}
-            {#each floor0.tables as tbl}
-              {#if tbl.shape === 'round'}
-                <circle cx={tbl.x*10} cy={tbl.y*10} r={(tbl.radius??1)*10*0.8} fill="var(--warning)" opacity="0.75"/>
-              {:else}
-                <rect x={(tbl.x-(tbl.width??2)/2)*10} y={(tbl.y-(tbl.height??1)/2)*10}
-                  width={(tbl.width??2)*10} height={(tbl.height??1)*10} rx="2" fill="var(--warning)" opacity="0.75"/>
-              {/if}
-            {/each}
-            {#each floor0.seats ?? [] as seat}
-              <circle cx={seat.x*10} cy={seat.y*10} r="2.1" fill="var(--text-muted)" opacity="0.8"/>
-            {/each}
-          </svg>
-          {#if mfState.floors.length > 1}
-            <span class="fp-floors-badge">{mfState.floors.length} {t.hallAdmin.floors}</span>
-          {/if}
-        </div>
-      {:else}
-        <div class="card--inset fp-empty">
-          <span class="icon-tile">
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
-          </span>
-          <p>{t.hallAdmin.noFloorplanDrawn}</p>
-        </div>
-      {/if}
-      {#if !data.hall.floorplan_json}
-        <!-- Two ways to end up with a plan. Drawing it yourself is free and
-             immediate; the survey is a quoted add-on, so this only starts a
-             conversation and never shows a price we have not agreed. -->
-        <div class="fp-choice">
-          {#if data.floorplanRequest}
-            <div class="card--inset fp-requested">
-              <span class="icon-tile">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
-              </span>
-              <div>
-                <strong>{t.hallAdmin.mappingRequested}</strong>
-                <p>{t.hallAdmin.mappingRequestedHint}</p>
-              </div>
-            </div>
-          {:else}
-            <form method="POST" action="?/requestFloorplanService" use:enhance={() => async ({ update }) => { await update({ reset: false }); }}>
-              <input type="hidden" name="hallId" value={data.hall.id} />
-              <div class="fp-choice-head">
-                <strong>{t.hallAdmin.mappingOffer}</strong>
-                <p>{t.hallAdmin.mappingOfferHint}</p>
-              </div>
-              <label class="sr-only" for="fp-note">{t.hallAdmin.mappingNote}</label>
-              <textarea id="fp-note" name="note" rows="2" maxlength="1000"
-                placeholder={t.hallAdmin.mappingNotePlaceholder}></textarea>
-              <button type="submit" class="btn-outline btn-sm">{t.hallAdmin.mappingRequest}</button>
-            </form>
-          {/if}
-        </div>
-      {/if}
-      <div class="fp-footer">
-        <a href="/app/manage/halls/{data.hall.id}/editor" class="btn-primary btn-full">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-          {t.event.openLayoutEditor}
-        </a>
-      </div>
-    </div>
-    <div class="fp-group">
-    <div class="fp-subhead">
-      <h2>
-        <button class="section-trigger section-head--row" type="button" aria-expanded={templatesOpen} onclick={() => templatesOpen = !templatesOpen}>
-          <span class="section-trigger-left">
-            {t.halls.templates}
-            {#if data.templates.length > 0}<span class="card-count">{data.templates.length}</span>{/if}
-          </span>
-          <svg class="chevron" class:open={templatesOpen} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
-        </button>
-      </h2>
-    </div>
-    {#if templatesOpen}
-      <div class="section-body" transition:slide={{ duration: 180 }}>
-        <div class="templates-bar">
-          <p class="templates-hint">{t.hallAdmin.templatesHint}</p>
-          <button type="button" class="btn-action btn-sm" onclick={openTmplNew}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-            {t.hallAdmin.createTemplate}
-          </button>
-        </div>
-        {#if data.templates.length === 0}
-          <div class="card--inset list-empty">
-            <span class="icon-tile">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
-            </span>
-            <span>{t.hallAdmin.templatesEmpty}</span>
+            {#if floor0.zones.length}
+              <ul class="fp-zones" aria-label={t.editor.zones}>
+                {#each floor0.zones as zone}<li><i style="background:{zone.color ?? 'var(--accent)'}"></i>{zone.label || '—'}</li>{/each}
+              </ul>
+            {/if}
           </div>
+          <footer class="fp-step-foot">
+            <a href="/app/manage/halls/{data.hall.id}/editor" class="btn-primary btn-sm">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+              {t.event.openLayoutEditor}
+            </a>
+          </footer>
         {:else}
-          <div class="media-grid templates-grid">
+          <!-- No plan yet: draw it now, or ask us to measure it (a quoted add-on, so it
+               only starts a conversation and never shows a price we have not agreed). -->
+          <p class="fp-text">{t.hallAdmin.drawYourselfHint}</p>
+          {#if data.floorplanRequest}
+            <p class="fp-text fp-text--done">✓ {t.hallAdmin.mappingRequested}. {t.hallAdmin.mappingRequestedHint}</p>
+          {:else}
+            <details class="fp-mapping">
+              <summary>{t.hallAdmin.mappingOffer}</summary>
+              <form method="POST" action="?/requestFloorplanService" use:enhance={() => async ({ update }) => { await update({ reset: false }); }}>
+                <input type="hidden" name="hallId" value={data.hall.id} />
+                <p class="fp-text">{t.hallAdmin.mappingOfferHint}</p>
+                <label class="field-label" for="fp-note">{t.hallAdmin.mappingNote}</label>
+                <textarea id="fp-note" name="note" rows="2" maxlength="1000" class="fp-note" placeholder={t.hallAdmin.mappingNotePlaceholder}></textarea>
+                <button type="submit" class="btn-outline btn-sm">{t.hallAdmin.mappingRequest}</button>
+              </form>
+            </details>
+          {/if}
+          <footer class="fp-step-foot">
+            <a href="/app/manage/halls/{data.hall.id}/editor" class="btn-primary btn-sm">{t.hallAdmin.drawYourselfTitle}</a>
+          </footer>
+        {/if}
+      </article>
+
+      <!-- 2 · The tables the venue owns -->
+      <article class="fp-step" class:done={data.tableTypes.length > 0}>
+        <header class="fp-step-head">
+          <span class="fp-num">{data.tableTypes.length ? '✓' : '2'}</span>
+          <h3>{t.halls.tableTypes}</h3>
+          {#if data.tableTypes.length}<span class="card-count">{data.tableTypes.length}</span>{/if}
+        </header>
+        {#if data.tableTypes.length === 0}
+          <p class="fp-text">{t.hallAdmin.tableTypesEmptySub}</p>
+        {:else}
+          <ul class="fp-list">
+            {#each data.tableTypes as tt}
+              <li>
+                <button type="button" class="fp-row" onclick={() => openTtEdit(tt)} aria-label="{t.common.edit} {tt.name}">
+                  <span class="fp-thumb">{@render tablePreview(tt.shape, tt.width, tt.height, tt.max_chairs, tt.color || '#9a6512')}</span>
+                  <span class="fp-row-text"><b>{tt.name}</b><span>{ttMeta(tt)}</span></span>
+                </button>
+                <form method="POST" action="?/deleteTableType" use:enhance>
+                  <input type="hidden" name="id" value={tt.id} />
+                  <button type="submit" class="fp-del" title={t.common.delete} aria-label="{t.common.delete} {tt.name}"
+                    onclick={(e) => { if (!confirm(t.hallAdmin.confirmDeleteTableType)) e.preventDefault(); }}>
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+                  </button>
+                </form>
+              </li>
+            {/each}
+          </ul>
+        {/if}
+        <footer class="fp-step-foot">
+          <button type="button" class={data.tableTypes.length ? 'btn-outline btn-sm' : 'btn-primary btn-sm'} onclick={openTtNew}>+ {t.halls.addTableType}</button>
+        </footer>
+      </article>
+
+      <!-- 3 · Templates: those tables arranged on this plan -->
+      <article class="fp-step" class:done={data.templates.length > 0}>
+        <header class="fp-step-head">
+          <span class="fp-num">{data.templates.length ? '✓' : '3'}</span>
+          <h3>{t.halls.templates}</h3>
+          {#if data.templates.length}<span class="card-count">{data.templates.length}</span>{/if}
+        </header>
+        {#if data.templates.length === 0}
+          <p class="fp-text">{t.hallAdmin.templatesHint}</p>
+          {#if !data.tableTypes.length}<p class="fp-text fp-text--warn">{t.hallAdmin.fpNeedTypes}</p>{/if}
+        {:else}
+          <ul class="fp-list">
             {#each data.templates as tmpl}
               {@const tmplFloor = migrateToMultiFloor(tmpl.layout_json).floors[0]}
-              <article class="media-card template-card">
-                <a class="media-photo template-preview" href="/app/manage/halls/{data.hall.id}/templates/{tmpl.id}" aria-label="{t.common.edit} {tmpl.name}">
-                  <svg viewBox={computeViewBox(tmplFloor)} preserveAspectRatio="xMidYMid meet">
-                    {#each tmplFloor.tables as tbl}
-                      {#if tbl.shape === 'round'}
-                        <circle cx={tbl.x*10} cy={tbl.y*10} r={(tbl.radius??1)*10*0.8} fill="var(--warning)" opacity="0.75"/>
-                      {:else}
-                        <rect x={(tbl.x-(tbl.width??2)/2)*10} y={(tbl.y-(tbl.height??1)/2)*10}
-                          width={(tbl.width??2)*10} height={(tbl.height??1)*10} rx="2" fill="var(--warning)" opacity="0.75"/>
-                      {/if}
-                    {/each}
-                  </svg>
-                </a>
-                <div class="template-meta">
-                  <h3 class="template-name">{tmpl.name}</h3>
-                  {#if parseEventTypes(tmpl.event_type).length}
-                    <span class="template-types">
-                      {#each parseEventTypes(tmpl.event_type) as key}
-                        <span class="template-type">{t.eventTypes[key]}</span>
+              <li>
+                <a class="fp-row" href="/app/manage/halls/{data.hall.id}/templates/{tmpl.id}" aria-label="{t.common.edit} {tmpl.name}">
+                  <span class="fp-thumb fp-thumb--plan">
+                    <svg viewBox={computeViewBox(tmplFloor)} preserveAspectRatio="xMidYMid meet" aria-hidden="true">
+                      <path d={roomOutlinePath(roomParts(tmplFloor), 10)} fill="none" stroke="var(--text-subtle)" stroke-width="1.5"/>
+                      {#each tmplFloor.walls as wall}<polygon points={wall.points.map(p => `${p.x*10},${p.y*10}`).join(' ')} fill="var(--editor-wall)" opacity="0.8"/>{/each}
+                      {#each tmplFloor.tables as tbl}
+                        {#if tbl.shape === 'round'}
+                          <circle cx={tbl.x*10} cy={tbl.y*10} r={(tbl.radius??1)*10*0.8} fill="var(--warning)" opacity="0.85"/>
+                        {:else}
+                          <rect x={(tbl.x-(tbl.width??2)/2)*10} y={(tbl.y-(tbl.height??1)/2)*10} width={(tbl.width??2)*10} height={(tbl.height??1)*10} rx="2" fill="var(--warning)" opacity="0.85"/>
+                        {/if}
                       {/each}
-                    </span>
-                  {/if}
-                </div>
-                <div class="media-bottom template-actions">
-                  <a class="btn-edit-tmpl" href="/app/manage/halls/{data.hall.id}/templates/{tmpl.id}">{t.event.editLayout}</a>
-                  <form method="POST" action="?/deleteTemplate" use:enhance>
-                    <input type="hidden" name="id" value={tmpl.id} />
-                    <button class="btn-del" type="submit" aria-label="{t.common.delete} {tmpl.name}"
-                      onclick={(e) => { if (!confirm(t.hallAdmin.confirmDeleteTemplate)) e.preventDefault(); }}>
-                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
-                    </button>
-                  </form>
-                </div>
-              </article>
+                    </svg>
+                  </span>
+                  <span class="fp-row-text">
+                    <b>{tmpl.name}</b>
+                    <span>{[`${countSeats(tmpl.layout_json)} ${t.event.seats}`, ...parseEventTypes(tmpl.event_type).map((k) => t.eventTypes[k])].join(' · ')}</span>
+                  </span>
+                </a>
+                <form method="POST" action="?/deleteTemplate" use:enhance>
+                  <input type="hidden" name="id" value={tmpl.id} />
+                  <button type="submit" class="fp-del" title={t.common.delete} aria-label="{t.common.delete} {tmpl.name}"
+                    onclick={(e) => { if (!confirm(t.hallAdmin.confirmDeleteTemplate)) e.preventDefault(); }}>
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+                  </button>
+                </form>
+              </li>
             {/each}
-          </div>
+          </ul>
         {/if}
-      </div>
+        <footer class="fp-step-foot">
+          <button type="button" class={data.templates.length || !data.tableTypes.length ? 'btn-outline btn-sm' : 'btn-primary btn-sm'} onclick={openTmplNew}>+ {t.hallAdmin.createTemplate}</button>
+        </footer>
+      </article>
+    </div>
+  </section>
+
+  <!-- ─── Retire: archive (or delete, if never booked) ──────────────────────── -->
+  <section class="section retire-block" data-panel="settings">
+    <div class="section-head">
+      <p class="eyebrow">{t.hallAdmin.retireEyebrow}</p>
+      <h2>{archived ? t.hallAdmin.archivedHeading : t.hallAdmin.archiveHeading}</h2>
+      <p>{archived ? t.hallAdmin.archivedExplain : t.hallAdmin.archiveExplain}</p>
+    </div>
+
+    {#if form?.archiveError && !archived}<div class="inline-err">{form.archiveError}</div>{/if}
+    {#if form?.bulkCancelled}
+      <p class="alert alert-success">{t.hallAdmin.bulkCancelled(form.bulkCancelled)}</p>
     {/if}
-    </div>
-    <div class="fp-group">
-    <div class="fp-subhead">
-      <h2>
-        <button class="section-trigger section-head--row" type="button" aria-expanded={tableTypesOpen} onclick={() => tableTypesOpen = !tableTypesOpen}>
-          <span class="section-trigger-left">
-            {t.halls.tableTypes}
-            {#if data.tableTypes.length > 0}<span class="card-count">{data.tableTypes.length}</span>{/if}
-          </span>
-          <svg class="chevron" class:open={tableTypesOpen} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
-        </button>
-      </h2>
-    </div>
-    {#if tableTypesOpen}
-      <div class="section-body" transition:slide={{ duration: 180 }}>
-        {#if form?.tableTypeSuccess}
-          <div class="alert alert-success" style="margin:12px 0 0">{t.hallAdmin.tableTypeSaved}</div>
+
+    {#if !archived && data.blocking.length > 0}
+      <div class="retire-blocked">
+        <strong>{t.hallAdmin.archiveBlocked(data.blocking.length)}</strong>
+        <span class="retire-hint">{t.hallAdmin.archiveBlockedHint}</span>
+        <ul class="row-list retire-list">
+          {#each data.blocking.slice(0, 6) as r (r.id)}
+            <li>
+              <a href="/app/reservation/{r.id}" class="row-item retire-row">
+                <span class="res-date">{shortDate(r.event_date)}</span>
+                <span class="retire-title">{r.title}{#if r.client_name}<span class="retire-client">{' · '}{r.client_name}</span>{/if}</span>
+                <StatusBadge status={r.status} />
+              </a>
+            </li>
+          {/each}
+        </ul>
+        {#if data.blocking.length > 6}
+          <div class="res-more">+{data.blocking.length - 6} {t.hallAdmin.moreUpcoming}</div>
         {/if}
-        {#if form?.tableTypeError}
-          <div class="alert alert-error" style="margin:12px 0 0">{form.tableTypeError}</div>
-        {/if}
-        <div class="tt-wrap">
-          {#if data.tableTypes.length === 0}
-            <div class="card--inset tt-empty">
-              <span class="icon-tile">
-                <svg class="tt-empty-icon" width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="3" y="8" width="18" height="9" rx="2"/><line x1="7" y1="17" x2="7" y2="20"/><line x1="17" y1="17" x2="17" y2="20"/><line x1="3" y1="12" x2="21" y2="12"/></svg>
-              </span>
-              <div>
-                <h3 class="tt-empty-title">{t.hallAdmin.noTableTypes}</h3>
-                <p class="tt-empty-sub">{t.hallAdmin.tableTypesEmptySub}</p>
-              </div>
-              <button type="button" class="btn-save" onclick={openTtNew}>{t.halls.addTableType}</button>
-            </div>
-          {:else}
-            <div class="media-grid tt-grid">
-              {#each data.tableTypes as tt}
-                <article class="media-card tt-card">
-                  <button type="button" class="tt-card-hit" onclick={() => openTtEdit(tt)} aria-label="{t.common.edit} {tt.name}"></button>
-                  {#if tt.amount > 0}<span class="tt-qty">×{tt.amount}</span>{/if}
-                  <div class="media-photo tt-preview">
-                    {@render tablePreview(tt.shape, tt.width, tt.height, tt.max_chairs, tt.color || '#9a6512')}
-                  </div>
-                  <div class="tt-card-body">
-                    <h3 class="tt-card-name">{tt.name}</h3>
-                    <span class="tt-card-meta">{ttMeta(tt)}</span>
-                  </div>
-                  <form class="tt-card-del" method="POST" action="?/deleteTableType" use:enhance>
-                    <input type="hidden" name="id" value={tt.id} />
-                    <button type="submit" title={t.common.delete} aria-label="{t.common.delete} {tt.name}"
-                      onclick={(e) => { if (!confirm(t.hallAdmin.confirmDeleteTableType)) e.preventDefault(); }}>
-                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
-                    </button>
-                  </form>
-                </article>
-              {/each}
-              <button type="button" class="tt-add-tile" onclick={openTtNew}>
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                {t.halls.addTableType}
-              </button>
-            </div>
-          {/if}
+        <div>
+          <button type="button" class="btn-danger btn-sm" onclick={openBulkCancel}>{t.hallAdmin.cancelAllAndNotify}</button>
         </div>
       </div>
     {/if}
+
+    <div class="retire-actions">
+      {#if !archived}
+        <button type="button" class="btn-outline btn-sm" disabled={data.blocking.length > 0} onclick={() => openRetire('archive')}>
+          {t.hallAdmin.archiveHall}
+        </button>
+      {:else}
+        <form method="POST" action="?/restore" use:enhance>
+          <button type="submit" class="btn-outline btn-sm">{t.hallAdmin.restoreHall}</button>
+        </form>
+      {/if}
+      {#if data.unused}
+        <button type="button" class="retire-delete" onclick={() => openRetire('delete')}>{t.hallAdmin.deletePermanently}</button>
+      {/if}
     </div>
+    {#if data.unused}<p class="retire-hint">{t.hallAdmin.deleteUnusedHint}</p>{/if}
   </section>
 
 </div><!-- /page -->
@@ -1674,86 +1821,205 @@
   </div>
 {/if}
 
+<!-- ─── Bulk cancel dialog ───────────────────────────────────────────────────── -->
+{#if showBulkCancel}
+  <div class="dialog-backdrop" onmousedown={(e) => { if (e.target === e.currentTarget) showBulkCancel = false; }} role="presentation">
+    <div class="card--raised dialog" onclick={(e) => e.stopPropagation()} role="dialog" tabindex="-1">
+      <div class="dialog-header">
+        <h2 class="dialog-title">{t.hallAdmin.bulkCancelTitle(data.blocking.length)}</h2>
+        <button class="dialog-close" type="button" onclick={() => showBulkCancel = false} aria-label={t.hallAdmin.close}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <form method="POST" action="?/cancelAllReservations"
+        use:enhance={() => async ({ result, update }) => {
+          await update();
+          if (result.type === 'success') showBulkCancel = false;
+        }}>
+        <div class="dialog-body">
+          <p class="confirm-text">{t.hallAdmin.bulkCancelIntro}</p>
+          <ul class="conflict-list">
+            {#each data.blocking as r (r.id)}
+              <li>{shortDate(r.event_date)} — {r.title}{#if r.client_name}{' · '}{r.client_name}{/if}</li>
+            {/each}
+          </ul>
+          <label class="field-label" for="bulk-note">{t.hallAdmin.bulkCancelMessageLabel}</label>
+          <textarea id="bulk-note" name="message" class="field-input field-textarea bulk-note" rows="9" maxlength="2000"
+            bind:value={cancelNote}></textarea>
+        </div>
+        <div class="dialog-footer">
+          <button type="button" class="btn-ghost" onclick={() => showBulkCancel = false}>{t.hallAdmin.goBack}</button>
+          <button type="submit" class="btn-destructive">{t.hallAdmin.bulkCancelConfirm(data.blocking.length)}</button>
+        </div>
+      </form>
+    </div>
+  </div>
+{/if}
+
+<!-- ─── Archive / delete confirm dialog ──────────────────────────────────────── -->
+{#if retireDialog}
+  <div class="dialog-backdrop" onmousedown={(e) => { if (e.target === e.currentTarget) retireDialog = null; }} role="presentation">
+    <div class="card--raised dialog dialog-sm" onclick={(e) => e.stopPropagation()} role="dialog" tabindex="-1">
+      <div class="dialog-header">
+        <h2 class="dialog-title">{retireDialog === 'archive' ? t.hallAdmin.archiveDialogTitle : t.hallAdmin.deleteDialogTitle}</h2>
+        <button class="dialog-close" type="button" onclick={() => retireDialog = null} aria-label={t.hallAdmin.close}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <form method="POST" action={retireDialog === 'archive' ? '?/archive' : '?/deleteHall'}
+        use:enhance={() => async ({ result, update }) => {
+          await update();
+          if (result.type === 'success' || result.type === 'redirect') retireDialog = null;
+        }}>
+        <div class="dialog-body">
+          <p class="confirm-text">{retireDialog === 'archive' ? t.hallAdmin.archiveExplain : t.hallAdmin.deleteDialogBody}</p>
+          <label class="field-label" for="retire-name">{t.hallAdmin.typeNameToConfirm}</label>
+          <input id="retire-name" name="confirmName" class="field-input retire-name" type="text"
+            autocomplete="off" spellcheck="false" placeholder={data.hall.name} bind:value={confirmName} />
+        </div>
+        <div class="dialog-footer">
+          <button type="button" class="btn-ghost" onclick={() => retireDialog = null}>{t.hallAdmin.goBack}</button>
+          <button type="submit" class="btn-destructive" disabled={!nameMatches}>
+            {retireDialog === 'archive' ? t.hallAdmin.archiveHall : t.hallAdmin.deletePermanently}
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+{/if}
+
 <!-- ─── Table type editor dialog ──────────────────────────────────────────────── -->
 {#if ttDialogOpen}
+  {@const P = ttPreview}
+  {@const pad = 0.45}
   <div class="dialog-backdrop" onmousedown={(e) => { if (e.target === e.currentTarget) ttDialogOpen = false; }} role="presentation">
-    <div class="card--raised dialog dialog-tt" onclick={(e) => e.stopPropagation()} role="dialog" tabindex="-1">
+    <div class="card--raised dialog dialog-tt" onclick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="tt-title" tabindex="-1">
       <div class="dialog-header">
-        <h2 class="dialog-title">{ttEditId ? t.hallAdmin.editTableType : t.hallAdmin.newTableType}</h2>
+        <h2 class="dialog-title" id="tt-title">{ttEditId ? t.hallAdmin.editTableType : t.hallAdmin.newTableType}</h2>
         <button class="dialog-close" type="button" onclick={() => ttDialogOpen=false} aria-label={t.hallAdmin.close}>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
         </button>
       </div>
 
-      <div class="dialog-body tt-editor">
-        {#if form?.tableTypeError}
-          <div class="alert alert-error">{form.tableTypeError}</div>
-        {/if}
+      <div class="dialog-body tt2">
+        <!-- Left: the table to scale, exactly as the floor-plan editor will place it. -->
+        <figure class="tt2-preview" aria-label={t.hallAdmin.ttFootprint((P.ex * 2).toFixed(1), (P.ey * 2).toFixed(1))}>
+          <svg viewBox="{-P.ex - pad} {-P.ey - pad} {(P.ex + pad) * 2} {(P.ey + pad) * 2}" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
+            <defs>
+              <pattern id="tt2-grid" x="0" y="0" width="0.5" height="0.5" patternUnits="userSpaceOnUse">
+                <path d="M 0.5 0 L 0 0 0 0.5" fill="none" stroke="var(--editor-grid-strong)" stroke-width="0.012"/>
+              </pattern>
+            </defs>
+            <rect x={-P.ex - pad} y={-P.ey - pad} width={(P.ex + pad) * 2} height={(P.ey + pad) * 2} fill="url(#tt2-grid)"/>
+            <!-- footprint with chairs -->
+            <rect x={-P.ex} y={-P.ey} width={P.ex * 2} height={P.ey * 2} fill="none" stroke="var(--text-subtle)" stroke-width="0.015" stroke-dasharray="0.06 0.05" rx={P.round ? P.ex : 0.04}/>
+            {#each P.chairs as c}
+              <g transform="translate({c.x} {c.y}) rotate({c.rot})">
+                <rect x={-CHAIR_R} y={-CHAIR_R} width={CHAIR_R * 2} height="0.09" rx="0.04" fill="#78350f"/>
+                <rect x={-CHAIR_R} y={-CHAIR_R + 0.09} width={CHAIR_R * 2} height="0.33" rx="0.05" fill="#a16207" stroke="#78350f" stroke-width="0.01"/>
+              </g>
+            {/each}
+            {#if P.round}
+              <circle r={P.tbl.radius} fill="#92400e" stroke="#78350f" stroke-width="0.02"/>
+            {:else}
+              <rect x={-P.w / 2} y={-P.h / 2} width={P.w} height={P.h} rx="0.06" fill="#92400e" stroke="#78350f" stroke-width="0.02"/>
+            {/if}
+            <text x="0" y="0" text-anchor="middle" dominant-baseline="middle" class="tt2-dim-in">{P.round ? `⌀ ${(P.tbl.radius * 2).toFixed(2)} m` : `${P.w.toFixed(2)} × ${P.h.toFixed(2)} m`}</text>
+          </svg>
+          <figcaption>
+            <span>{t.hallAdmin.ttFootprint((P.ex * 2).toFixed(1), (P.ey * 2).toFixed(1))}</span>
+            <span>{t.hallAdmin.ttGridNote}</span>
+          </figcaption>
+        </figure>
 
-        <div class="tt-editor-preview">
-          {@render tablePreview(ttShape, ttWidth, ttHeight, ttMaxChairs, ttColor)}
-          <span class="tt-editor-cap">{ttMaxChairs} {t.event.seats}</span>
-        </div>
-
-        <form id="tt-editor-form" class="tt-editor-form"
+        <!-- Right: what the table is -->
+        <form id="tt-editor-form" class="tt2-form"
           method="POST" action={ttEditId ? '?/updateTableType' : '?/addTableType'}
           use:enhance={() => async ({ result, update }) => {
             await update({ reset: false });
             if (result.type === 'success') ttDialogOpen = false;
           }}>
+          {#if form?.tableTypeError}<div class="alert alert-error">{form.tableTypeError}</div>{/if}
           {#if ttEditId}<input type="hidden" name="id" value={ttEditId} />{/if}
           <input type="hidden" name="shape" value={ttShape} />
           <input type="hidden" name="color" value={ttColor} />
+          <input type="hidden" name="width" value={ttShape === 'round' ? ttRadius * 2 : ttWidth} />
+          <input type="hidden" name="height" value={ttShape === 'round' ? ttRadius * 2 : ttHeight} />
+          <input type="hidden" name="radius" value={ttRadius} />
+          <input type="hidden" name="maxChairs" value={ttMaxChairs} />
+          <input type="hidden" name="amount" value={ttAmount} />
+
+          {#if !ttEditId}
+            <div class="tt2-presets" role="group" aria-label={t.hallAdmin.ttPresets}>
+              {#each TT_PRESETS as p}
+                <button type="button" class="tt2-preset" class:on={ttPresetActive(p)} onclick={() => ttApplyPreset(p)}>
+                  <span class="tt2-preset-ic" aria-hidden="true">{@render tablePreview(p.shape, p.width, p.height, p.chairs, '#9a6512')}</span>
+                  {ttPresetName(p.key)}
+                </button>
+              {/each}
+            </div>
+          {/if}
 
           <div class="field">
-            <label class="field-label" for="tt-name">{t.common.name} *</label>
-            <input class="field-input" id="tt-name" name="name" type="text"
-              bind:value={ttName} placeholder={t.hallAdmin.tableNamePlaceholder} required />
+            <label class="field-label" for="tt-name">{t.common.name}</label>
+            <input class="field-input" id="tt-name" name="name" type="text" bind:value={ttName} oninput={() => ttNameTouched = true}
+              placeholder={t.hallAdmin.tableNamePlaceholder} required />
           </div>
 
           <div class="field">
             <span class="field-label">{t.halls.tableShape}</span>
-            <div class="shape-toggle">
-              <button type="button" class="shape-btn" class:active={ttShape==='rect'} onclick={() => ttShape='rect'}>
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="6" width="18" height="12" rx="2"/></svg>
-                {t.halls.rectangular}
+            <div class="tt2-seg" role="radiogroup" aria-label={t.halls.tableShape}>
+              <button type="button" role="radio" aria-checked={ttShape==='rect'} class:on={ttShape==='rect'} onclick={() => { ttShape = 'rect'; }}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><rect x="3" y="7" width="18" height="10" rx="2"/></svg>{t.halls.rectangular}
               </button>
-              <button type="button" class="shape-btn" class:active={ttShape==='round'} onclick={() => ttShape='round'}>
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="9"/></svg>
-                {t.halls.round}
+              <button type="button" role="radio" aria-checked={ttShape==='round'} class:on={ttShape==='round'} onclick={() => { ttShape = 'round'; }}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="12" cy="12" r="8"/></svg>{t.halls.round}
               </button>
             </div>
           </div>
 
-          {#if ttShape === 'rect'}
-            <div class="field-row">
-              <div class="field field-grow">
-                <label class="field-label" for="tt-w">{t.halls.tableWidth}</label>
-                <input class="field-input" id="tt-w" name="width" type="number" min="0.5" max="10" step="0.1" bind:value={ttWidth} />
-              </div>
-              <div class="field field-grow">
-                <label class="field-label" for="tt-h">{t.halls.tableHeight}</label>
-                <input class="field-input" id="tt-h" name="height" type="number" min="0.5" max="10" step="0.1" bind:value={ttHeight} />
-              </div>
-            </div>
-          {:else}
+          {#snippet stepper(id: string, label: string, value: number, step: number, lo: number, hi: number, set: (v: number) => void, unit: string, digits: number)}
             <div class="field">
-              <label class="field-label" for="tt-r">{t.halls.tableRadius}</label>
-              <input class="field-input" id="tt-r" name="radius" type="number" min="0.3" max="5" step="0.1" bind:value={ttRadius} />
+              <label class="field-label" for={id}>{label}</label>
+              <div class="tt2-step">
+                <button type="button" aria-label="−" onclick={() => set(clampN(value - step, lo, hi, step))} disabled={value <= lo}>−</button>
+                <input id={id} type="number" inputmode="decimal" min={lo} max={hi} step={step} value={value}
+                  oninput={(e) => { const v = Number((e.target as HTMLInputElement).value); if (Number.isFinite(v)) set(Math.min(hi, Math.max(lo, v))); }} />
+                <span class="tt2-unit">{unit}</span>
+                <button type="button" aria-label="+" onclick={() => set(clampN(value + step, lo, hi, step))} disabled={value >= hi}>+</button>
+              </div>
             </div>
-          {/if}
+          {/snippet}
 
-          <div class="field-row">
-            <div class="field field-grow">
-              <label class="field-label" for="tt-chairs">{t.halls.maxChairs}</label>
-              <input class="field-input" id="tt-chairs" name="maxChairs" type="number" min="1" max="40" bind:value={ttMaxChairs} />
+          <div class="tt2-row">
+            {#if ttShape === 'rect'}
+              {@render stepper('tt-w', t.hallAdmin.ttWidth, ttWidth, 0.1, 0.5, 10, (v) => ttWidth = +v.toFixed(2), 'm', 1)}
+              {@render stepper('tt-h', t.hallAdmin.ttDepth, ttHeight, 0.1, 0.5, 10, (v) => ttHeight = +v.toFixed(2), 'm', 1)}
+            {:else}
+              {@render stepper('tt-d', t.hallAdmin.ttDiameter, +(ttRadius * 2).toFixed(2), 0.1, 0.6, 10, (v) => ttRadius = +(v / 2).toFixed(3), 'm', 1)}
+              <div></div>
+            {/if}
+          </div>
+
+          <div class="tt2-row">
+            <div>
+              {@render stepper('tt-chairs', t.hallAdmin.ttSeats, ttMaxChairs, 1, 1, 40, (v) => ttMaxChairs = Math.round(v), '', 0)}
+              <p class="tt2-hint" class:warn={ttMaxChairs > P.fits}>{ttMaxChairs > P.fits ? t.hallAdmin.ttTooMany(P.fits) : t.hallAdmin.ttFits(P.fits)}</p>
             </div>
-            <div class="field field-grow">
-              <label class="field-label" for="tt-amount">{t.hallAdmin.quantity} <span class="field-hint-inline">({t.hallAdmin.zeroUnlimited})</span></label>
-              <input class="field-input" id="tt-amount" name="amount" type="number" min="0" max="200" bind:value={ttAmount} />
+            <div>
+              {#if ttAmount > 0}
+                {@render stepper('tt-amount', t.hallAdmin.quantity, ttAmount, 1, 1, 200, (v) => ttAmount = Math.round(v), t.hallAdmin.ttPieces, 0)}
+              {:else}
+                <div class="field">
+                  <span class="field-label">{t.hallAdmin.quantity}</span>
+                  <div class="tt2-unlimited">{t.hallAdmin.ttUnlimited}</div>
+                </div>
+              {/if}
+              <label class="tt2-check"><input type="checkbox" checked={ttAmount === 0} onchange={(e) => ttAmount = (e.target as HTMLInputElement).checked ? 0 : 10} />{t.hallAdmin.ttUnlimitedLabel}</label>
             </div>
           </div>
 
+          <p class="tt2-total">{ttAmount > 0 ? t.hallAdmin.ttTotal(ttAmount * ttMaxChairs, ttAmount) : t.hallAdmin.ttTotalUnlimited(ttMaxChairs)}</p>
         </form>
       </div>
 
@@ -1773,7 +2039,7 @@
         {/if}
         <div class="dfr">
           <button type="button" class="btn-ghost" onclick={() => ttDialogOpen=false}>{t.common.cancel}</button>
-          <button type="submit" form="tt-editor-form" class="btn-save">{ttEditId ? t.hallAdmin.saveChanges : t.halls.addTableType}</button>
+          <button type="submit" form="tt-editor-form" class="btn-save" disabled={!ttName.trim()}>{ttEditId ? t.hallAdmin.saveChanges : t.halls.addTableType}</button>
         </div>
       </div>
     </div>
@@ -1941,10 +2207,6 @@
   /* Floor plan is one block: the plan itself, then its templates, then its table
      types as sub-groups. They used to be three separate .section blocks, each with
      its own hairline and full padding, which read as three unrelated areas. */
-  .fp-plan { margin-bottom: 4px; }
-  .fp-group { border-top: 1px solid var(--border-subtle); padding-top: 14px; margin-top: 14px; }
-  .fp-subhead { margin-bottom: 10px; }
-  .fp-subhead h2 { font-size: var(--h3-size); font-weight: 600; letter-spacing: -.02em; }
 
   /* The status card no longer sits in the settings grid, so that row is one column. */
   .settings-row { grid-template-columns: 1fr !important; }
@@ -2089,6 +2351,28 @@
 
   .page { padding-block: 24px; animation: pageFadeIn 0.15s ease both; }
 
+  /* ── Tabs ── Panels are hidden, never removed (see the script). */
+  .hall-tabs {
+    position: sticky; top: 0; z-index: 25; display: flex; gap: 2px; overflow-x: auto; scrollbar-width: none;
+    margin: 18px 0 0; padding: 0; border-bottom: 1px solid var(--border); background: var(--bg-base);
+  }
+  .hall-tabs::-webkit-scrollbar { display: none; }
+  .hall-tab {
+    position: relative; display: inline-flex; align-items: center; gap: 7px; flex: none; height: 42px; padding: 0 14px;
+    border: 0; background: none; color: var(--text-muted); font: inherit; font-size: 13.5px; font-weight: 500; cursor: pointer; white-space: nowrap;
+  }
+  .hall-tab:hover { color: var(--text-base); }
+  .hall-tab.on { color: var(--accent-ink); font-weight: 600; }
+  .hall-tab.on::after { content: ''; position: absolute; left: 10px; right: 10px; bottom: -1px; height: 2px; border-radius: 2px; background: var(--accent); }
+  .hall-tab-count { min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; background: var(--accent-dim); color: var(--accent-ink); font-size: 11px; font-weight: 650; display: inline-flex; align-items: center; justify-content: center; box-sizing: border-box; }
+  .hall-tab-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--warning); }
+  .page[data-tab="overview"]  [data-panel]:not([data-panel~="overview"]),
+  .page[data-tab="profile"]   [data-panel]:not([data-panel~="profile"]),
+  .page[data-tab="media"]     [data-panel]:not([data-panel~="media"]),
+  .page[data-tab="pricing"]   [data-panel]:not([data-panel~="pricing"]),
+  .page[data-tab="floorplan"] [data-panel]:not([data-panel~="floorplan"]),
+  .page[data-tab="settings"]  [data-panel]:not([data-panel~="settings"]) { display: none !important; }
+
   /* ── Breadcrumb ── */
   .breadcrumb {
     display: flex; align-items: center; gap: 5px; margin-bottom: 16px;
@@ -2107,6 +2391,36 @@
   .locked-banner strong { font-size: 13px; font-weight: 650; letter-spacing: -.02em; }
   .locked-banner span { font-size: 12px; color: var(--text-muted); }
   .locked-banner form { margin: 0; flex-shrink: 0; }
+  .archived-banner {
+    background: var(--bg-hover); color: var(--text-muted);
+    border-color: var(--border);
+  }
+  .archived-banner strong { color: var(--text-base); }
+
+  /* ── Retire ── */
+  .retire-blocked {
+    display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px;
+    padding: 14px 16px; border-radius: var(--radius-sm);
+    background: var(--warning-dim);
+    border: 1px solid color-mix(in srgb, var(--warning) 30%, transparent);
+  }
+  .retire-blocked > strong { font-size: 13px; font-weight: 650; letter-spacing: -.02em; color: var(--text-base); }
+  .retire-hint { font-size: 12px; color: var(--text-muted); line-height: 1.5; margin: 0; }
+  .retire-list { list-style: none; padding: 0; margin: 0; }
+  .retire-row { display: flex; align-items: center; gap: 12px; text-decoration: none; color: inherit; }
+  .retire-title { flex: 1; min-width: 0; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .retire-client { color: var(--text-muted); }
+  .retire-actions { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; margin-bottom: 8px; }
+  .retire-actions form { margin: 0; }
+  .retire-actions .btn-outline:disabled { opacity: .45; cursor: not-allowed; }
+  .retire-delete {
+    border: none; background: none; padding: 0; cursor: pointer; font-family: inherit;
+    font-size: 12px; font-weight: 600; color: var(--danger); text-decoration: underline; text-underline-offset: 3px;
+  }
+  .retire-delete:hover { opacity: .8; }
+  .bulk-note { display: block; width: 100%; margin-top: 6px; line-height: 1.5; }
+  .retire-name { display: block; width: 100%; margin-top: 6px; }
+  .btn-destructive:disabled { opacity: .45; cursor: not-allowed; transform: none; }
   .breadcrumb a { color: var(--text-muted); text-decoration: none; transition: color .15s; }
   .breadcrumb a:hover { color: var(--accent-ink); }
   .breadcrumb svg { opacity: .5; flex-shrink: 0; }
@@ -2227,26 +2541,75 @@
   .toggle-switch input:checked + .toggle-slider::after { transform: translateX(16px); }
 
   /* ── Floorplan block ── */
-  .fp-preview {
-    position: relative; height: 160px; overflow: hidden;
-    /* The same canvas token the floor-plan editor and viewer paint on, so the
-       thumbnail, the editor and the printable manifest all read as one surface.
-       It flips with the theme, and so do the wall/table/seat tokens drawn on it. */
-    background: var(--editor-canvas);
-    border-radius: var(--radius);
+  /* Three steps side by side, equal height; each card: head, body, actions at the foot. */
+  .fp-flow { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+  .fp-step {
+    display: flex; flex-direction: column; gap: 12px; min-width: 0;
+    padding: 16px; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--bg-panel);
   }
-  .fp-preview svg { width: 100%; height: 100%; }
+  .fp-step-head { display: flex; align-items: center; gap: 10px; }
+  .fp-step-head h3 { margin: 0; font-size: 14px; font-weight: 600; letter-spacing: -.02em; flex: 1; }
+  .fp-num {
+    width: 24px; height: 24px; border-radius: 50%; flex: none; display: inline-flex; align-items: center; justify-content: center;
+    font-size: 12px; font-weight: 700; background: var(--bg-panel2); color: var(--text-muted);
+  }
+  .fp-step.done .fp-num { background: var(--success-dim); color: var(--success); }
+  .fp-step-foot { margin-top: auto; display: flex; gap: 8px; padding-top: 4px; }
+  .fp-text { margin: 0; font-size: 12.5px; line-height: 1.55; color: var(--text-muted); }
+  .fp-text--warn { color: var(--warning); }
+  .fp-text--done { color: var(--success); }
+
+  /* The plan, at its own proportions inside a fixed-height frame. */
+  .fp-preview {
+    position: relative; display: flex; align-items: center; justify-content: center; overflow: hidden;
+    height: 190px; border-radius: var(--radius); border: 1px solid var(--border-subtle);
+    /* The same canvas token the floor-plan editor and viewer paint on, so the
+       thumbnail, the editor and the printable manifest all read as one surface. */
+    background: var(--editor-canvas); transition: border-color .15s, box-shadow .15s;
+  }
+  .fp-preview:hover { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-dim); }
+  .fp-preview svg { height: 100%; max-width: 100%; aspect-ratio: var(--ar, 1.4); padding: 12px; box-sizing: border-box; }
   .fp-floors-badge {
-    position: absolute; bottom: 8px; right: 8px;
-    font-size: 10px; font-weight: 650; padding: 2px 8px; border-radius: 3px;
+    position: absolute; bottom: 8px; right: 8px; font-size: 10px; font-weight: 650; padding: 2px 8px; border-radius: 3px;
     background: var(--bg-panel); border: 1px solid var(--border); color: var(--text-muted);
   }
-  .fp-empty {
-    display: flex; flex-direction: column; align-items: center; justify-content: center;
-    gap: 8px; color: var(--text-subtle);
+  .fp-facts { display: flex; flex-direction: column; gap: 4px; }
+  .fp-size { font-size: 19px; font-weight: 600; letter-spacing: -.03em; color: var(--text-base); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .fp-size--muted { font-size: 15px; color: var(--text-muted); }
+  .fp-sub { font-size: 12px; color: var(--text-muted); }
+  .fp-zones { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+  .fp-zones li { display: inline-flex; align-items: center; gap: 6px; height: 22px; padding: 0 8px; border-radius: 11px; background: var(--bg-panel2); font-size: 11.5px; color: var(--text-base); }
+  .fp-zones i { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+
+  /* Table types and templates: compact rows, the whole row opens the item. */
+  .fp-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; max-height: 280px; overflow-y: auto; }
+  .fp-list li { display: flex; align-items: center; gap: 4px; }
+  .fp-list form { margin: 0; }
+  .fp-row {
+    flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; padding: 6px; border-radius: var(--radius);
+    border: 0; background: none; text-align: left; color: inherit; text-decoration: none; cursor: pointer; font: inherit;
   }
-  .fp-empty p { font-size: 12px; color: var(--text-muted); margin: 0; }
-  .fp-footer { padding-top: 14px; }
+  .fp-row:hover { background: var(--bg-hover); text-decoration: none; }
+  .fp-thumb { width: 40px; height: 40px; flex: none; border-radius: var(--radius-sm); background: var(--editor-canvas); display: flex; align-items: center; justify-content: center; overflow: hidden; }
+  .fp-thumb :global(svg) { width: 100%; height: 100%; }
+  .fp-thumb--plan svg { padding: 3px; box-sizing: border-box; }
+  .fp-row-text { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+  .fp-row-text b { font-size: 13px; font-weight: 600; color: var(--text-base); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .fp-row-text span { font-size: 11.5px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .fp-del { width: 28px; height: 28px; border: 0; border-radius: var(--radius); background: none; color: var(--text-subtle); cursor: pointer; display: inline-flex; align-items: center; justify-content: center; }
+  .fp-del:hover { background: var(--danger-dim); color: var(--danger); }
+  .fp-mapping summary { font-size: 12.5px; font-weight: 600; color: var(--accent-ink); cursor: pointer; }
+  .fp-mapping form { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; align-items: flex-start; }
+  .fp-mapping textarea { width: 100%; box-sizing: border-box; }
+  @media (max-width: 1100px) { .fp-flow { grid-template-columns: 1fr; } }
+
+  .fp-note {
+    width: 100%; margin: 2px 0 12px; padding: 8px 10px; resize: vertical; min-height: 58px;
+    border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg-panel2);
+    color: var(--text-base); font-family: inherit; font-size: 12.5px; line-height: 1.5; outline: none;
+    transition: border-color .15s, box-shadow .15s;
+  }
+  .fp-note:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-dim); }
 
   /* ── Field shared ── */
   .field { display: flex; flex-direction: column; gap: 4px; }
@@ -2257,7 +2620,6 @@
     letter-spacing: .09em; color: var(--text-muted);
   }
   .field-hint        { font-size: 11px; color: var(--text-muted); line-height: 1.5; }
-  .field-hint-inline { text-transform: none; font-weight: 400; letter-spacing: 0; font-size: 10px; }
   .field-input {
     padding: 7px 10px; border: 1px solid var(--border); border-radius: var(--radius-sm);
     background: var(--bg-panel2); font-size: 13px;
@@ -2301,7 +2663,6 @@
   }
   .btn-primary:hover { background: var(--accent-hover); transform: translateY(-2px); text-decoration: none; }
   .btn-primary:active { transform: translateY(0); }
-  .btn-full { width: 100%; justify-content: center; box-sizing: border-box; }
 
   .btn-save {
     padding: 7px 16px; border-radius: var(--radius-sm); font-size: 12px; font-weight: 650;
@@ -2371,32 +2732,7 @@
     color: var(--danger);
   }
 
-  /* ── Collapsible sections — the trigger sits inside the .section-head ── */
-  /* The button carries the heading's own type, so the h2 can wrap it (a heading
-     may not sit inside a button). */
-  .section-trigger {
-    width: 100%; padding: 0; background: none; border: none; cursor: pointer;
-    font: inherit; letter-spacing: inherit; text-align: left; color: inherit;
-  }
-  .section-trigger:hover { color: var(--accent-ink); }
-  .section-trigger-left { display: flex; align-items: center; gap: 8px; }
-  .chevron { color: var(--text-subtle); transition: transform .2s; flex-shrink: 0; }
-  .chevron.open { transform: rotate(90deg); }
-  .section-body { overflow: hidden; }
 
-  /* ── Templates — .media-grid of chrome-free cards ── */
-  .templates-grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
-  .template-card { display: flex; flex-direction: column; }
-  .template-preview { aspect-ratio: 1.5; }
-  .template-preview svg { width: 100%; height: 100%; }
-  .template-meta { flex: 1; display: flex; flex-direction: column; gap: 3px; margin: 10px 0 10px; }
-  .template-name { font-size: 12px; font-weight: 600; letter-spacing: -.01em; color: var(--text-base); margin: 0; }
-  .template-types { display: flex; flex-wrap: wrap; gap: 4px; }
-  .template-type {
-    font-size: 9.5px; font-weight: 650; color: var(--accent-ink);
-    text-transform: uppercase; letter-spacing: .09em;
-    background: var(--accent-dim); padding: 2px 6px; border-radius: var(--radius-sm);
-  }
 
   /* Event-type multi-select chips (create/edit template dialogs) */
   .type-chips { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -2407,18 +2743,6 @@
   }
   .type-chip:hover { background: var(--bg-hover); border-color: var(--text-subtle); color: var(--text-base); }
   .type-chip.on { background: var(--text-base); border-color: var(--text-base); color: var(--bg-panel); }
-  .template-actions { align-items: center; }
-  .btn-edit-tmpl {
-    font-size: 12px; font-weight: 600; color: var(--accent-ink); text-decoration: none;
-    padding: 4px 10px; border: 1px solid var(--border); border-radius: var(--radius-sm);
-    transition: background .15s, border-color .15s;
-  }
-  .btn-edit-tmpl:hover { background: var(--bg-hover); border-color: var(--text-subtle); text-decoration: none; }
-  .templates-bar {
-    display: flex; align-items: center; justify-content: space-between; gap: 16px;
-    padding: 0 0 14px;
-  }
-  .templates-hint { margin: 0; font-size: 12px; color: var(--text-muted); line-height: 1.75; }
 
   /* ── Table types ── */
   /* The sub-block overlines inside the profile form are field-group labels, not
@@ -2426,71 +2750,59 @@
      (there are nine of these in this one form), so they take --text-muted.
      Descendant, not child: two of them sit inside .sub-head / .gallery-header. */
   .profile-section .eyebrow { margin: 0; color: var(--text-muted); }
-  .tt-wrap { padding: 14px 0 0; }
   /* Table types — a .media-grid; the table drawing is the card's picture. */
-  .tt-grid { grid-template-columns: repeat(auto-fill, minmax(154px, 1fr)); }
-  .tt-card { position: relative; display: flex; flex-direction: column; }
-  .tt-card-hit { position: absolute; inset: 0; z-index: 1; background: none; border: none; cursor: pointer; padding: 0; }
-  .tt-preview {
-    aspect-ratio: 1.4; padding: 10px; box-sizing: border-box;
-    background: radial-gradient(circle at 50% 42%, var(--bg-panel) 0%, var(--bg-panel2) 95%);
-  }
   .tt-svg { width: 100%; height: 100%; display: block; }
   .tt-chair { fill: var(--text-subtle); opacity: .5; }
-  .tt-card-body { position: relative; z-index: 0; padding: 10px 0 0; }
-  .tt-card-name { display: block; font-size: 12.5px; font-weight: 600; letter-spacing: -.01em; color: var(--text-base); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin: 0; }
-  .tt-card-meta { display: block; font-size: 10.5px; color: var(--text-muted); margin-top: 2px; }
-  .tt-qty {
-    position: absolute; top: 8px; left: 8px; z-index: 2;
-    font-size: 10px; font-weight: 650; color: var(--text-base);
-    background: var(--bg-panel); border: 1px solid var(--border);
-    padding: 1px 7px; border-radius: 3px;
-  }
-  .tt-card-del { position: absolute; top: 6px; right: 6px; z-index: 3; margin: 0; opacity: 0; transition: opacity .15s; }
-  .tt-card:hover .tt-card-del, .tt-card:focus-within .tt-card-del { opacity: 1; }
-  .tt-card-del button {
-    width: 26px; height: 26px; border-radius: var(--radius-sm); display: flex; align-items: center; justify-content: center;
-    background: var(--bg-panel); border: 1px solid var(--border); color: var(--text-muted); cursor: pointer;
-    transition: color .15s, border-color .15s, background .15s;
-  }
-  .tt-card-del button:hover { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 45%, var(--border)); background: var(--danger-dim); }
 
-  .tt-add-tile {
-    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 7px;
-    min-height: 140px; border: 1.5px dashed var(--border); border-radius: var(--radius);
-    background: none; color: var(--text-muted); cursor: pointer; font: inherit; font-size: 12px; font-weight: 600;
-    transition: border-color .15s, color .15s, background .15s;
-  }
-  .tt-add-tile:hover { border-color: var(--accent); color: var(--accent-ink); background: var(--accent-dim); }
 
-  .tt-empty {
-    display: flex; flex-direction: column; align-items: center; gap: 14px;
-    text-align: center;
-  }
-  .tt-empty-icon { color: var(--text-subtle); opacity: .55; }
-  .tt-empty-title { font-size: 13px; font-weight: 600; letter-spacing: -.02em; color: var(--text-base); margin: 0 0 4px; }
-  .tt-empty-sub { font-size: 12px; color: var(--text-muted); max-width: 44ch; margin: 0; line-height: 1.75; }
-
-  /* shape toggle (table-type editor) */
-  .shape-toggle { display: flex; gap: 6px; }
-  .shape-btn {
-    flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px;
-    padding: 8px 6px; border-radius: var(--radius-sm); font: inherit; font-size: 11px; font-weight: 600;
-    border: 1.5px solid var(--border); background: var(--bg-panel2);
-    color: var(--text-muted); cursor: pointer; transition: background .15s, border-color .15s, color .15s;
-  }
-  .shape-btn.active { background: var(--accent-dim); color: var(--accent-ink); border-color: var(--accent); }
 
   /* table-type editor dialog */
-  .dialog-tt { width: 470px; }
-  .tt-editor { display: flex; flex-direction: column; gap: 16px; }
-  .tt-editor-preview {
-    position: relative; align-self: center; width: 180px; aspect-ratio: 1.3; padding: 12px;
-    background: radial-gradient(circle at 50% 42%, var(--bg-panel) 0%, var(--bg-panel2) 95%);
-    border: 1px solid var(--border); border-radius: var(--radius-lg);
+  /* Wider than the shared .dialog (520px), which is declared further down. */
+  .dialog.dialog-tt { width: min(780px, calc(100vw - 32px)); }
+  .tt2 { display: grid; grid-template-columns: minmax(0, 300px) minmax(0, 1fr); gap: 22px; align-items: start; }
+  .tt2-preview { margin: 0; position: sticky; top: 0; display: flex; flex-direction: column; gap: 8px; }
+  .tt2-preview svg {
+    width: 100%; aspect-ratio: 1; display: block; border-radius: var(--radius-lg);
+    background: var(--editor-canvas); border: 1px solid var(--border-subtle);
   }
-  .tt-editor-cap { position: absolute; bottom: 7px; right: 10px; font-size: 10px; font-weight: 650; color: var(--text-muted); }
-  .tt-editor-form { display: flex; flex-direction: column; gap: 12px; }
+  .tt2-dim-in { font-size: 0.15px; font-weight: 650; fill: #fff7ed; font-family: Inter, system-ui, sans-serif; }
+  .tt2-preview figcaption { display: flex; flex-direction: column; gap: 2px; font-size: 12px; color: var(--text-muted); }
+  .tt2-preview figcaption span:first-child { color: var(--text-base); font-weight: 600; }
+  .tt2-form { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+  .tt2-presets { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+  .tt2-preset {
+    display: flex; align-items: center; gap: 8px; padding: 6px 8px; border: 1px solid var(--border); border-radius: var(--radius);
+    background: var(--bg-panel); color: var(--text-base); font: inherit; font-size: 12.5px; font-weight: 500; text-align: left; cursor: pointer;
+  }
+  .tt2-preset:hover { border-color: var(--accent); }
+  .tt2-preset.on { border-color: var(--accent); background: var(--accent-dim); color: var(--accent-ink); }
+  .tt2-preset-ic { width: 30px; height: 30px; flex: none; border-radius: var(--radius-sm); background: var(--editor-canvas); }
+  .tt2-seg { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 3px; border-radius: var(--radius); background: var(--bg-panel2); }
+  .tt2-seg button {
+    display: inline-flex; align-items: center; justify-content: center; gap: 7px; height: 32px; border: 0; border-radius: var(--radius-sm);
+    background: transparent; color: var(--text-muted); font: inherit; font-size: 13px; font-weight: 500; cursor: pointer;
+  }
+  .tt2-seg button.on { background: var(--bg-panel); color: var(--accent-ink); font-weight: 600; box-shadow: var(--shadow-xs); }
+  .tt2-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; align-items: start; }
+  .tt2-step { display: flex; align-items: stretch; height: var(--control-h, 38px); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; background: var(--bg-panel); }
+  .tt2-step:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-dim); }
+  .tt2-step button { width: 34px; flex: none; border: 0; background: var(--bg-panel2); color: var(--text-base); font-size: 16px; cursor: pointer; }
+  .tt2-step button:hover:not(:disabled) { background: var(--bg-hover); }
+  .tt2-step button:disabled { opacity: .35; cursor: default; }
+  .tt2-step input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--text-base); font: inherit; font-size: 14px; text-align: center; font-variant-numeric: tabular-nums; -moz-appearance: textfield; appearance: textfield; }
+  .tt2-step input::-webkit-outer-spin-button, .tt2-step input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+  .tt2-unit { align-self: center; padding-right: 8px; font-size: 12px; color: var(--text-muted); }
+  .tt2-hint { margin: 5px 0 0; font-size: 11.5px; color: var(--text-muted); }
+  .tt2-hint.warn { color: var(--warning); font-weight: 600; }
+  .tt2-unlimited { height: var(--control-h, 38px); display: flex; align-items: center; padding: 0 12px; border: 1px dashed var(--border); border-radius: var(--radius); color: var(--text-muted); font-size: 13px; box-sizing: border-box; }
+  .tt2-check { display: flex; align-items: center; gap: 7px; margin-top: 6px; font-size: 12px; color: var(--text-muted); cursor: pointer; }
+  .tt2-check input { accent-color: var(--accent); margin: 0; }
+  .tt2-total { margin: 0; padding: 10px 12px; border-radius: var(--radius); background: var(--bg-panel2); font-size: 12.5px; color: var(--text-base); }
+  @media (max-width: 720px) {
+    .tt2 { grid-template-columns: 1fr; }
+    .tt2-preview { position: static; }
+    .tt2-preview svg { max-height: 240px; }
+  }
   .btn-del-text {
     background: none; border: none; font: inherit; font-size: 12px; font-weight: 600;
     color: var(--danger); cursor: pointer; padding: 6px 2px;

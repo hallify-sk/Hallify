@@ -18,7 +18,7 @@ export const load: PageServerLoad = async ({ locals }) => {
     completed: string;
   }>(locals.db, `
     SELECT
-      (SELECT COUNT(*) FROM halls WHERE org_id = ?) AS total_halls,
+      (SELECT COUNT(*) FROM halls WHERE org_id = ? AND archived_at IS NULL) AS total_halls,
       (SELECT COUNT(*) FROM organization_members WHERE org_id = ?) AS total_members,
       (SELECT COUNT(*) FROM reservations WHERE org_id = ?) AS total_reservations,
       (SELECT COUNT(*) FROM reservations WHERE org_id = ? AND status = 'pending') AS pending,
@@ -83,7 +83,7 @@ export const load: PageServerLoad = async ({ locals }) => {
       SUM(CASE WHEN r.event_date >= datetime('now') AND r.status != 'cancelled' THEN 1 ELSE 0 END) AS upcoming_count
     FROM halls h
     LEFT JOIN reservations r ON r.hall_id = h.id
-    WHERE h.org_id = ?
+    WHERE h.org_id = ? AND h.archived_at IS NULL
     GROUP BY h.id
     ORDER BY reservation_count DESC
   `, orgId);

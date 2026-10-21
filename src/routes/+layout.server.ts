@@ -4,45 +4,39 @@ import { env } from '$env/dynamic/private';
 import { unreadMessageCount } from '$lib/unread';
 import { unreadAnnouncementCount } from '$lib/announcements';
 import { loadPlatformAnalytics } from '$lib/server/platform-settings';
+import { container, cspOrigins, type AnalyticsContainer } from '$lib/analytics-servers';
+import { assistantVisible } from '$lib/server/ai/credits';
 
-/** Which GTM container applies to THIS surface.
+/** The GTM containers on THIS page, in load order.
  *
- *  On an org bubble the visitors belong to that venue, and the DPA makes the venue the
- *  controller for their data — so only the venue's own container may run there, never
- *  Hallify's. On the apex it is Hallify's own container. The two are never mixed, and
- *  either may be absent (analytics is entirely opt-in). */
-async function resolveGtmId(locals: App.Locals): Promise<string | null> {
+ *  Hallify's own platform container runs everywhere it is configured, venues'
+ *  public sites included: that is how Hallify sees whether it brings a venue
+ *  visitors and bookings. On a venue's site the venue's own container loads as well.
+ *  Each reports to its own property, so nothing is counted twice. A platform admin
+ *  can still keep Hallify's container off venue sites (the includeBubbles switch).
+ *  Each container may come from a server container (sGTM) instead of Google. */
+async function resolveContainers(locals: App.Locals): Promise<AnalyticsContainer[]> {
+  const out: AnalyticsContainer[] = [];
+  const platform = await loadPlatformAnalytics(locals.db);
+  const platformId = platform.containerId || (/^GTM-[A-Z0-9]+$/i.test(env.GTM_CONTAINER_ID ?? '') ? env.GTM_CONTAINER_ID! : '');
+  if (platformId && (!locals.domainOrg || platform.includeBubbles)) {
+    const c = container(platformId, platform.serverUrl, 'platform');
+    if (c) out.push(c);
+  }
   if (locals.domainOrg) {
-    // A venue's own container always wins on its own domain. Hallify's runs here
-    // only when a platform admin has turned on platform-wide measurement, and
-    // even then it yields to the venue's: two containers on one page double-count
-    // every event, and the venue's is the one its DPA accounts for.
-    const platformFallback = async () => {
-      const platform = await loadPlatformAnalytics(locals.db);
-      return platform.includeBubbles && platform.containerId ? platform.containerId : null;
-    };
     try {
       const row = await dbFirst<{ value: string }>(
         locals.db,
         "SELECT value FROM org_settings WHERE org_id = ? AND key = 'gtm'",
         locals.domainOrg.id
       );
-      if (!row?.value) return platformFallback();
-      const parsed = typeof row.value === 'string' ? JSON.parse(row.value) : row.value;
-      const id = (parsed as { containerId?: unknown })?.containerId;
-      if (typeof id === 'string' && /^GTM-[A-Z0-9]+$/i.test(id)) return id;
-      return platformFallback();
-    } catch {
-      return null;
-    }
+      const parsed = row?.value ? (typeof row.value === 'string' ? JSON.parse(row.value) : row.value) : null;
+      const c = parsed ? container(String(parsed.containerId ?? ''), parsed.serverUrl, 'venue') : null;
+      // The same container entered twice would load once anyway; skip the duplicate.
+      if (c && !out.some((o) => o.id === c.id)) out.push(c);
+    } catch { /* a malformed row means no venue container */ }
   }
-  // The platform container is a setting now, so it can be changed without a
-  // redeploy. GTM_CONTAINER_ID remains the fallback for an environment that was
-  // configured before the settings page existed.
-  const platform = await loadPlatformAnalytics(locals.db);
-  if (platform.containerId) return platform.containerId;
-  const id = env.GTM_CONTAINER_ID ?? '';
-  return /^GTM-[A-Z0-9]+$/i.test(id) ? id : null;
+  return out;
 }
 
 export const load: LayoutServerLoad = async ({ locals }) => {
@@ -97,11 +91,18 @@ export const load: LayoutServerLoad = async ({ locals }) => {
     plan: locals.currentOrg?.subscription?.plan,
     subscription_status: locals.currentOrg?.subscription?.status,
     surface: (locals.domainOrg ? 'bubble' : 'apex') as 'apex' | 'bubble',
+    venue_id: locals.domainOrg?.id,
     locale: locals.locale,
   };
 
+  const analyticsContainers = await resolveContainers(locals);
+  // Read back by the security-header hook, which lets these origins through the CSP.
+  locals.analyticsOrigins = cspOrigins(analyticsContainers);
+
   return {
-    gtmId: await resolveGtmId(locals),
+    analyticsContainers,
+    // Where a visit counts as coming from Hallify (see the layout).
+    hallifyHost: env.HALLIFY_DOMAIN ?? 'hallify.app',
     analyticsUser,
     user: locals.user,
     branding: locals.branding,
@@ -112,5 +113,7 @@ export const load: LayoutServerLoad = async ({ locals }) => {
     allOrgs,
     unreadMessages,
     unreadAnnouncements,
+    // The floating AI assistant (bottom right of every console page).
+    assistant: await assistantVisible(locals),
   };
 };

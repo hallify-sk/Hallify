@@ -195,3 +195,41 @@ describe('user context', () => {
     }
   });
 });
+
+describe('several containers and server-side GTM', () => {
+  beforeEach(() => { vi.unstubAllGlobals(); });
+  const granted = 'hallify-consent=2%3Aanalytics%3D1%2Cmarketing%3D0';
+  const containers = [
+    { id: 'GTM-PLAT001', origin: 'https://data.hallify.sk', owner: 'platform' as const },
+    { id: 'GTM-VENU001', origin: 'https://www.googletagmanager.com', owner: 'venue' as const },
+  ];
+
+  it('loads each container from its own origin, once', async () => {
+    const { appended } = installDom(granted);
+    const a = await freshModule();
+    a.initAnalytics(containers);
+    a.setConsent({ analytics: true, marketing: false }, containers);
+    const srcs = appended.map((s) => s.src);
+    expect(srcs).toEqual([
+      'https://data.hallify.sk/gtm.js?id=GTM-PLAT001',
+      'https://www.googletagmanager.com/gtm.js?id=GTM-VENU001',
+    ]);
+  });
+
+  it('loads none of them before consent', async () => {
+    const { appended } = installDom('');
+    const a = await freshModule();
+    a.initAnalytics(containers);
+    expect(appended).toHaveLength(0);
+  });
+
+  it('tells the tags where the server containers are', async () => {
+    installDom('');
+    const a = await freshModule();
+    a.initAnalytics(containers);
+    const dl = (globalThis as unknown as { window: { dataLayer: Record<string, unknown>[] } }).window.dataLayer;
+    const cfg = dl.find((e) => e.event === 'hallify_config')!;
+    expect(cfg.sgtm_platform_url).toBe('https://data.hallify.sk');
+    expect(cfg.sgtm_venue_url).toBeUndefined();
+  });
+});

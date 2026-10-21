@@ -3,9 +3,9 @@ import { dbAll, dbFirst, dbRun, fromJson, fromJsonArr, toJson } from '$lib/db/in
 import type { ReservationRow, RsvpRow, TableTypeRow, TemplateRow, HallRow, ReservationStatus, RsvpConfig, HallExtraRow } from '$lib/db/index';
 import { parseExtraIds } from '$lib/extras';
 import type { Actions, PageServerLoad } from './$types';
-import { notifyStatusChange, notifyNewMessage, sendReservationInviteEmail, notifyEventAssigned } from '$lib/email';
+import { notifyStatusChange, sendReservationInviteEmail, notifyEventAssigned } from '$lib/email';
 import { postSystemMessage } from '$lib/tickets';
-import { dispatchWebhooks } from '$lib/notifications';
+import { changeReservationStatus, messageReservationClient, setReservationExtras } from '$lib/server/ops/reservation-ops';
 import { st } from '$lib/i18n-server';
 import { orgPublicBaseUrl } from '$lib/orgUrl';
 import { env } from '$env/dynamic/private';
@@ -115,7 +115,6 @@ export const load: PageServerLoad = async ({ locals, params, url }) => {
 	};
 };
 
-const ALLOWED_STATUSES: ReservationStatus[] = ['pending', 'waiting_payment', 'approved', 'planned', 'completed', 'cancelled'];
 
 export const actions: Actions = {
 	// Staff message the booking's client directly from the reservation page. Reuses
@@ -126,42 +125,10 @@ export const actions: Actions = {
 		const orgId = locals.currentOrg?.id;
 		if (!orgId) return fail(403, { error: st(locals.locale).serverErrors.accessDenied });
 		if (!isOrgStaff(locals)) return fail(403, { error: st(locals.locale).serverErrors.onlyStaffCanMessageClient });
-
-		const data = await request.formData();
-		const body = String(data.get('body') ?? '').trim();
-		if (!body) return fail(400, { error: st(locals.locale).serverErrors.messageCannotBeEmpty });
-
-		const res = await dbFirst<{ user_id: string; event_date: string; hall_name: string; user_email: string | null }>(locals.db,
-			`SELECT r.user_id, r.event_date, h.name AS hall_name, u.email AS user_email
-			 FROM reservations r JOIN halls h ON h.id = r.hall_id LEFT JOIN users u ON u.id = r.user_id
-			 WHERE r.id = ? AND r.org_id = ?`,
-			params.id, orgId
-		);
-		if (!res) return fail(404, { error: st(locals.locale).serverErrors.notFound });
-		if (!res.user_id) return fail(400, { error: st(locals.locale).serverErrors.reservationHasNoClientAccount });
-
-		const existing = await dbFirst<{ id: string; subject: string }>(locals.db,
-			'SELECT id, subject FROM tickets WHERE org_id = ? AND reservation_id = ? AND user_id = ? LIMIT 1',
-			orgId, params.id, res.user_id
-		);
-		const subject = existing?.subject ?? `${res.hall_name} – ${new Date(res.event_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}`;
-		let ticketId = existing?.id;
-		if (!ticketId) {
-			ticketId = crypto.randomUUID();
-			await dbRun(locals.db, `INSERT INTO tickets (id, org_id, user_id, reservation_id, subject, status) VALUES (?, ?, ?, ?, ?, 'open')`,
-				ticketId, orgId, res.user_id, params.id, subject);
-		} else {
-			await dbRun(locals.db, "UPDATE tickets SET status = 'open', updated_at = datetime('now') WHERE id = ?", ticketId);
-		}
-		await dbRun(locals.db, `INSERT INTO messages (id, ticket_id, sender_id, body, message_type) VALUES (?, ?, ?, ?, 'text')`,
-			crypto.randomUUID(), ticketId, locals.user.id, body);
-
-		if (res.user_email) {
-			notifyNewMessage(locals.db, orgId, res.user_email, subject, `${locals.user.first_name} ${locals.user.last_name}`).catch(() => {});
-		}
-		dispatchWebhooks(locals.db, orgId, 'ticket.reply', { ticket_id: ticketId, reservation_id: params.id }).catch(() => {});
-
-		return { messageSent: true, ticketId };
+		const body = String((await request.formData()).get('body') ?? '');
+		const res = await messageReservationClient(locals, orgId, params.id, body, locals.user);
+		if (!res.ok) return fail(res.status, { error: res.error });
+		return { messageSent: true, ticketId: res.ticketId };
 	},
 
 	// Staff assign the event to a client. If the email already belongs to a client
@@ -257,16 +224,9 @@ export const actions: Actions = {
 		const orgId = locals.currentOrg?.id;
 		if (!orgId) return fail(403, { error: st(locals.locale).serverErrors.accessDenied });
 		if (!isOrgStaff(locals)) return fail(403, { error: st(locals.locale).serverErrors.onlyStaffCanChangeExtras });
-
-		const res = await dbFirst<{ hall_id: string }>(locals.db, 'SELECT hall_id FROM reservations WHERE id = ? AND org_id = ?', params.id, orgId);
-		if (!res) return fail(404, { error: st(locals.locale).serverErrors.notFound });
-
-		const data = await request.formData();
-		const requested = data.getAll('extras').map(String);
-		const valid = (await dbAll<{ id: string }>(locals.db, 'SELECT id FROM hall_extras WHERE hall_id = ?', res.hall_id)).map(e => e.id);
-		const ids = requested.filter(id => valid.includes(id));
-		await dbRun(locals.db, 'UPDATE reservations SET extras_json = ? WHERE id = ? AND org_id = ?',
-			ids.length ? JSON.stringify(ids) : null, params.id, orgId);
+		const requested = (await request.formData()).getAll('extras').map(String);
+		const res = await setReservationExtras(locals.db, orgId, params.id, requested);
+		if (!res.ok) return fail(404, { error: st(locals.locale).serverErrors.notFound });
 		return { extrasSaved: true };
 	},
 
@@ -299,57 +259,9 @@ export const actions: Actions = {
 		const orgId = locals.currentOrg?.id;
 		if (!orgId) return fail(403, { error: st(locals.locale).serverErrors.accessDenied });
 		if (!isOrgStaff(locals)) return fail(403, { error: st(locals.locale).serverErrors.onlyStaffCanChangeStatus });
-		const data = await request.formData();
-		const status = String(data.get('status') ?? '') as ReservationStatus;
-		if (!ALLOWED_STATUSES.includes(status)) {
-			return fail(400, { error: st(locals.locale).serverErrors.invalidStatus });
-		}
-
-		const reservation = await dbFirst<ReservationRow>(locals.db,
-			'SELECT user_id, title, hall_id, status, event_date FROM reservations WHERE id = ? AND org_id = ?',
-			params.id, orgId
-		);
-		if (!reservation) return fail(404, { error: st(locals.locale).serverErrors.notFound });
-
-		// Bringing a reservation out of 'cancelled' can collide with the unique index
-		// (one active reservation per hall per day) if the date was re-booked meanwhile.
-		// Catch it and report cleanly instead of surfacing a 500.
-		if (reservation.status === 'cancelled' && status !== 'cancelled') {
-			const clash = await dbFirst<{ id: string }>(locals.db,
-				"SELECT id FROM reservations WHERE hall_id = ? AND event_date = ? AND status != 'cancelled' AND id != ? LIMIT 1",
-				reservation.hall_id, reservation.event_date, params.id);
-			if (clash) return fail(409, { error: st(locals.locale).serverErrors.hallAlreadyBooked });
-		}
-		try {
-			await dbRun(locals.db, 'UPDATE reservations SET status = ? WHERE id = ? AND org_id = ?', status, params.id, orgId);
-		} catch {
-			return fail(409, { error: st(locals.locale).serverErrors.hallAlreadyBooked });
-		}
-
-		const actorName = `${locals.user.first_name} ${locals.user.last_name}`;
-		await postSystemMessage(
-			locals.db,
-			reservation.user_id,
-			reservation.title,
-			`status_change:${status}:${actorName}`,
-			locals.user.id
-		);
-
-		const userInfo = await dbFirst<{ email: string }>(locals.db,
-			'SELECT email FROM users WHERE id = ?',
-			reservation.user_id
-		);
-		if (userInfo?.email) {
-			notifyStatusChange(locals.db, orgId, userInfo.email, reservation.title, status).catch(() => {});
-		}
-
-		// Only the client's own self-cancel fired this before, so an org subscribed to
-		// `reservation.status_changed` saw nothing when staff changed a status.
-		dispatchWebhooks(locals.db, orgId, 'reservation.status_changed', {
-			reservation_id: params.id, title: reservation.title,
-			event_date: reservation.event_date, status, changed_by: 'staff',
-		}).catch(() => {});
-
+		const status = String((await request.formData()).get('status') ?? '') as ReservationStatus;
+		const res = await changeReservationStatus(locals, orgId, params.id, status, locals.user);
+		if (!res.ok) return fail(res.status, { error: res.error });
 		return { success: true };
 	},
 

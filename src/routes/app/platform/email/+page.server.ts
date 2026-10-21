@@ -7,7 +7,7 @@ import { st } from '$lib/i18n-server';
 import { env } from '$env/dynamic/private';
 import { requirePlatformAdmin } from '$lib/guards';
 
-const TEMPLATE_KEYS = ['newReservation', 'guestMessage', 'guestCancel', 'guestEdit', 'statusChange', 'newMessage', 'passwordReset', 'testEmail'] as const;
+const TEMPLATE_KEYS = ['newReservation', 'guestMessage', 'guestCancel', 'guestEdit', 'statusChange', 'hallCancellation', 'newMessage', 'passwordReset', 'testEmail'] as const;
 
 export const load: PageServerLoad = async ({ locals }) => {
   const templates = await getEmailTemplates(locals.db);

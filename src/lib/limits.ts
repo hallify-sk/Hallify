@@ -33,7 +33,7 @@ export async function reservationCapReached(
 /** Active (non-plan-locked) halls in an org. */
 export async function activeHallCount(db: D1Database, orgId: string): Promise<number> {
   const row = await dbFirst<{ n: number }>(db,
-    'SELECT COUNT(*) AS n FROM halls WHERE org_id = ? AND plan_locked = 0', orgId);
+    'SELECT COUNT(*) AS n FROM halls WHERE org_id = ? AND plan_locked = 0 AND archived_at IS NULL', orgId);
   return row?.n ?? 0;
 }
 
@@ -79,5 +79,5 @@ export async function enforcePlanLimits(db: D1Database, orgId: string, plan: Pla
 /** Lock a single hall (used when an owner reactivates and we want to swap). */
 export async function lockedHalls(db: D1Database, orgId: string): Promise<{ id: string; name: string }[]> {
   return dbAll<{ id: string; name: string }>(db,
-    'SELECT id, name FROM halls WHERE org_id = ? AND plan_locked = 1 ORDER BY name', orgId);
+    'SELECT id, name FROM halls WHERE org_id = ? AND plan_locked = 1 AND archived_at IS NULL ORDER BY name', orgId);
 }

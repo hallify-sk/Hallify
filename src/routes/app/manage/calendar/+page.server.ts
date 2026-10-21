@@ -76,9 +76,15 @@ export const load: PageServerLoad = async ({ locals, url }) => {
     orgId, isoLocal(rangeStart), isoLocal(rangeEnd)
   );
 
+  // An archived hall is listed only while the visible range holds one of its events:
+  // its history stays on the calendar without leaving a filter chip behind for good.
+  const eventHallIds = [...new Set(events.map((e) => e.hall_id))];
   const halls = await dbAll<{ id: string; name: string; color: string; opening_hours: string | null }>(locals.db,
-    `SELECT id, name, color, opening_hours FROM halls WHERE org_id = ? ORDER BY name`,
-    orgId
+    `SELECT id, name, color, opening_hours FROM halls
+      WHERE org_id = ?
+        AND (archived_at IS NULL OR id IN (${eventHallIds.length ? eventHallIds.map(() => '?').join(',') : 'NULL'}))
+      ORDER BY name`,
+    orgId, ...eventHallIds
   );
 
   // Raw blocking rules for the org's halls — expanded client-side over the visible range.

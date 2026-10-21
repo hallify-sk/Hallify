@@ -51,76 +51,78 @@
 </script>
 
 <div class="b-shell" style={templateStyle} data-template={template}>
-  <aside class="b-sidebar">
-    <a href={to('/halls')} class="b-brand" tabindex={tab}>
-      {#if org.logoUrl}
-        <img src={org.logoUrl} alt="" class="b-logo" />
-      {:else}
-        <div class="b-logo-ph">
-          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
-        </div>
-      {/if}
-      <span class="b-name">{org.name}</span>
-    </a>
-
-    <nav class="b-nav">
-      <a href={to('/halls')} class="b-item" class:active={isBrowse} tabindex={tab}>
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-        {t.bubble.browseHalls}
-      </a>
-      {#if user}
-        <a href={to('/halls/my-reservations')} class="b-item" class:active={path.startsWith('/halls/my-reservations')} tabindex={tab}>
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-          {t.bubble.myReservations}
-        </a>
-        <a href={to('/halls/messages')} class="b-item" class:active={path.startsWith('/halls/messages')} tabindex={tab}>
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-          {t.nav.messages}
-          {#if unread > 0}<span class="b-badge">{unread}</span>{/if}
-        </a>
-      {/if}
-    </nav>
-
-    <div class="b-foot">
-      <div class="b-langs">
-        {#each LANGS as l}
-          <button
-            type="button"
-            class="b-lang"
-            class:active={getLocale() === l.id}
-            disabled={inert}
-            tabindex={tab}
-            onclick={() => chooseLocale(l.id)}
-          >{l.label}</button>
-        {/each}
-      </div>
-
-      {#if user}
-        <div class="b-account">
-          <div class="b-avatar">{initials}</div>
-          <div class="b-acct-info">
-            <span class="b-acct-name">{user.first_name} {user.last_name}</span>
-            <span class="b-acct-sub">{t.bubble.signedIn}</span>
+  <div class="b-frame">
+    <aside class="b-sidebar">
+      <a href={to('/halls')} class="b-brand" tabindex={tab}>
+        {#if org.logoUrl}
+          <img src={org.logoUrl} alt="" class="b-logo" />
+        {:else}
+          <div class="b-logo-ph">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
           </div>
-          <a href={to('/logout')} class="b-signout" title={t.nav.signOut} aria-label={t.nav.signOut} tabindex={tab}>
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
-          </a>
-        </div>
-      {:else}
-        <a href={to('/login')} class="b-signin" tabindex={tab}>{t.nav.signIn}</a>
-      {/if}
-    </div>
-  </aside>
-
-  <div class="b-main-wrap">
-    <main class="b-main">{@render children()}</main>
-    <footer class="b-pwr">
-      {t.bubble.poweredBy}
-      <a href={inert ? undefined : 'https://hallify.sk'} target="_blank" rel="noopener" class="b-pwr-link" tabindex={tab}>
-        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-1px"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
-        <strong>Hallify</strong>
+        {/if}
+        <span class="b-name">{org.name}</span>
       </a>
-    </footer>
+
+      <nav class="b-nav">
+        <a href={to('/halls')} class="b-item" class:active={isBrowse} tabindex={tab}>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          {t.bubble.browseHalls}
+        </a>
+        {#if user}
+          <a href={to('/halls/my-reservations')} class="b-item" class:active={path.startsWith('/halls/my-reservations')} tabindex={tab}>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+            {t.bubble.myReservations}
+          </a>
+          <a href={to('/halls/messages')} class="b-item" class:active={path.startsWith('/halls/messages')} tabindex={tab}>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+            {t.nav.messages}
+            {#if unread > 0}<span class="b-badge">{unread}</span>{/if}
+          </a>
+        {/if}
+      </nav>
+
+      <div class="b-foot">
+        <div class="b-langs">
+          {#each LANGS as l}
+            <button
+              type="button"
+              class="b-lang"
+              class:active={getLocale() === l.id}
+              disabled={inert}
+              tabindex={tab}
+              onclick={() => chooseLocale(l.id)}
+            >{l.label}</button>
+          {/each}
+        </div>
+
+        {#if user}
+          <div class="b-account">
+            <div class="b-avatar">{initials}</div>
+            <div class="b-acct-info">
+              <span class="b-acct-name">{user.first_name} {user.last_name}</span>
+              <span class="b-acct-sub">{t.bubble.signedIn}</span>
+            </div>
+            <a href={to('/logout')} class="b-signout" title={t.nav.signOut} aria-label={t.nav.signOut} tabindex={tab}>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+            </a>
+          </div>
+        {:else}
+          <a href={to('/login')} class="b-signin" tabindex={tab}>{t.nav.signIn}</a>
+        {/if}
+      </div>
+    </aside>
+
+    <div class="b-main-wrap">
+      <main class="b-main">{@render children()}</main>
+      <footer class="b-pwr">
+        {t.bubble.poweredBy}
+        <a href={inert ? undefined : 'https://hallify.sk'} target="_blank" rel="noopener" class="b-pwr-link" tabindex={tab}>
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-1px"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
+          <strong>Hallify</strong>
+        </a>
+      </footer>
+    </div>
   </div>
 </div>
 
@@ -138,9 +140,11 @@
   }
 
   /* A container, so the preview collapses on ITS OWN width. Keyed to the iframe,
-     the rail would stay desktop-wide inside a 420px phone preview. */
+     the rail would stay desktop-wide inside a 420px phone preview.
+     The flex layout lives on .b-frame, not here: a container query cannot style
+     the container itself, so a `flex-direction: column` aimed at .b-shell never
+     applied — the rail went horizontal but stayed a column beside the content. */
   .b-shell {
-    display: flex;
     min-height: 100vh;
     background: var(--bg-base);
     /* `color` is as necessary as `background` here, and for a subtler reason.
@@ -153,6 +157,7 @@
     color: var(--text-base);
     container: b-shell / inline-size;
   }
+  .b-frame { display: flex; min-height: 100vh; }
 
   .b-sidebar {
     width: 232px; flex-shrink: 0; background: var(--bg-panel); border-right: 1px solid var(--border);
@@ -207,7 +212,7 @@
   }
 
   @container b-shell (max-width: 760px) {
-    .b-shell { flex-direction: column; }
+    .b-frame { flex-direction: column; }
     .b-sidebar { width: auto; height: auto; position: static; flex-direction: row; align-items: center; border-right: none; border-bottom: 1px solid var(--border); padding: 0 8px; gap: 4px; overflow-x: auto; }
     .b-brand { padding: 10px 8px; }
     .b-name { display: none; }

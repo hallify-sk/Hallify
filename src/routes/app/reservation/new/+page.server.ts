@@ -18,7 +18,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		locals.db,
 		`SELECT id, name, description, max_people, auto_approve, pre_reservation_text, allow_reservations,
 		        custom_layouts, force_layouts, min_days_advance, color, slug, cover_image_url
-		 FROM halls WHERE org_id = ? ORDER BY name`,
+		 FROM halls WHERE org_id = ? AND archived_at IS NULL ORDER BY name`,
 		orgId ?? null
 	);
 

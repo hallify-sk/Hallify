@@ -6,8 +6,10 @@ import { parseEventTypes } from '$lib/eventTypes';
 import { countSeats } from '$lib/floorplan-types';
 import { st } from '$lib/i18n-server';
 import type { Actions, PageServerLoad } from './$types';
+import { seatingDraft, markProposalApplied } from '$lib/server/ai/proposals';
+import { tableInventoryError } from '$lib/server/table-inventory';
 
-export const load: PageServerLoad = async ({ locals, params }) => {
+export const load: PageServerLoad = async ({ locals, params, url }) => {
 	if (!locals.user) redirect(303, '/app/login');
 	const orgId = locals.currentOrg?.id;
 	if (!orgId) error(403, st(locals.locale).serverErrors.accessDenied);
@@ -43,6 +45,10 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 
 	const { layout } = await buildSeatableLayout(locals.db, params.id, reservation.hall_floorplan_json, reservation.layout_json);
 
+	// ?draft=<proposal>: an AI assistant's seating plan, shown here unsaved.
+	const draftId = url.searchParams.get('draft');
+	const draft = draftId && locals.currentOrg ? await seatingDraft(locals, locals.currentOrg, draftId, params.id) : null;
+
 	return {
 		reservation: {
 			...reservation,
@@ -51,7 +57,8 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 		},
 		tableTypes,
 		templates,
-		initialLayout: layout,
+		initialLayout: draft?.built ? draft.built.layout : layout,
+		draft: draft ? { id: draft.proposalId, stale: draft.stale } : null,
 	};
 };
 
@@ -65,7 +72,7 @@ export const actions: Actions = {
 		if (!layoutJson) return fail(400, { error: st(locals.locale).serverErrors.noLayoutData });
 
 		const reservation = await dbFirst<ReservationRow & { hall_floorplan_json: unknown }>(locals.db,
-			'SELECT r.user_id, r.status, h.floorplan_json AS hall_floorplan_json FROM reservations r JOIN halls h ON h.id = r.hall_id WHERE r.id = ? AND r.org_id = ?',
+			'SELECT r.user_id, r.status, r.hall_id, h.floorplan_json AS hall_floorplan_json FROM reservations r JOIN halls h ON h.id = r.hall_id WHERE r.id = ? AND r.org_id = ?',
 			params.id, orgId
 		);
 		if (!reservation) return fail(404, { error: st(locals.locale).serverErrors.notFound });
@@ -79,6 +86,23 @@ export const actions: Actions = {
 		}
 		if (!staff && !['approved', 'planned'].includes(reservation.status)) {
 			return fail(403, { error: st(locals.locale).serverErrors.reservationMustBeApprovedToEditLayout });
+		}
+
+		const overStock = await tableInventoryError(locals.db, reservation.hall_id, layoutJson, locals.locale);
+		if (overStock) return fail(400, { error: overStock });
+
+		const proposalId = String(data.get('proposalId') ?? '');
+		if (proposalId && locals.currentOrg) {
+			// Saving an assistant's draft: only onto the seating it was planned on, and the
+			// proposal is closed with it so it cannot be applied a second time.
+			const draft = await seatingDraft(locals, locals.currentOrg, proposalId, params.id);
+			if (!draft?.built) return fail(409, { error: st(locals.locale).ai.draftStale });
+			const write = await dbRun(locals.db,
+				'UPDATE reservations SET layout_json = ? WHERE id = ? AND org_id = ? AND layout_json IS ?',
+				layoutJson, params.id, orgId, draft.built.baseJson);
+			if (write.meta.changes !== 1) return fail(409, { error: st(locals.locale).ai.draftStale });
+			await markProposalApplied(locals.db, proposalId, { seated: draft.built.seated, savedFromEditor: true });
+			return { success: true, draftSaved: true };
 		}
 
 		await dbRun(locals.db, 'UPDATE reservations SET layout_json = ? WHERE id = ? AND org_id = ?', layoutJson, params.id, orgId);

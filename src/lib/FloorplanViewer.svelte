@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { RSVP_ENABLED } from '$lib/features';
 	import { migrateToMultiFloor } from '$lib/floorplan-types';
+	import { roomOutlinePath, roomParts } from '$lib/floorplan-geometry';
 	import type { FloorData, MultiFloorState, WallObj, ZoneObj, TableObj, Guest, Point, TableShape } from '$lib/floorplan-types';
 
 	// ─── Types ────────────────────────────────────────────────────────────────
@@ -456,8 +457,7 @@
 			{#if activeFloorIdx > 0}
 				{@const below = floors[activeFloorIdx - 1]}
 				{#if below.bounds}
-					<rect x={wx(below.bounds.x)} y={wy(below.bounds.y)}
-						width={ws(below.bounds.w)} height={ws(below.bounds.h)}
+					<path d={roomOutlinePath(roomParts(below), zoom, panX, panY)}
 						fill="none" stroke="color-mix(in srgb, var(--editor-wall) 30%, transparent)"
 						stroke-width="1.5" stroke-dasharray="6,4"
 						pointer-events="none"/>

@@ -433,18 +433,29 @@
   }
 
   /* ─── Save bar ─── */
+  /* Solid behind the button, with a long, soft fade ABOVE it: squeezing the fade
+     into the bar's own top edge drew a hard dark band across whatever scrolled
+     under it. It also bleeds past the column on both sides — exactly flush, the
+     selected template's ring and the focus outlines stuck out at the edges. */
   .sb-save {
     position: sticky; bottom: 0; z-index: 5;
     display: flex; align-items: center; justify-content: flex-end; gap: 14px;
-    margin-top: 10px; padding: 13px 0;
-    background: linear-gradient(to top, var(--bg-base) 72%, transparent);
+    margin: 10px -14px 0; padding: 13px 14px;
+    background: var(--bg-base);
+  }
+  .sb-save::before {
+    content: ''; position: absolute; left: 0; right: 0; bottom: 100%; height: 36px;
+    background: linear-gradient(to top, var(--bg-base), color-mix(in srgb, var(--bg-base) 0%, transparent));
+    pointer-events: none;
   }
   .sb-save-note { display: flex; align-items: center; gap: 6px; font-size: var(--meta-size); color: var(--text-subtle); }
   .sb-save.is-dirty .sb-save-note { color: var(--warning); font-weight: 600; }
   .sb-save.is-saved .sb-save-note { color: var(--success); font-weight: 600; }
 
   /* ─── Preview ─── */
-  .preview-pane { position: sticky; top: 18px; min-width: 0; }
+  /* Starts where the builder's first section does (its --section-pad), so the
+     two headings line up instead of the preview sitting on the tabs' rule. */
+  .preview-pane { position: sticky; top: 18px; min-width: 0; padding-top: var(--section-pad); }
   .pv-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 4px; }
   .pv-head h2 { margin: 0; font-size: var(--h2-size); }
   .pv-note { font-size: var(--meta-size); color: var(--text-muted); margin: 0 0 11px; }
@@ -508,7 +519,8 @@
      moves under the controls and stops sticking. */
   @media (max-width: 1100px) {
     .builder { grid-template-columns: minmax(0, 1fr); }
-    .preview-pane { position: static; }
+    /* Under the controls it is one more section: same rule, same room. */
+    .preview-pane { position: static; border-top: 1px solid var(--border); }
     .pv-frame { height: 70vh; }
   }
 </style>

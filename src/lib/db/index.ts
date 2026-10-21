@@ -170,6 +170,8 @@ export interface HallRow {
   contact_website: string | null;
   opening_hours: string;
   plan_locked: number;
+  /** Set when the hall is archived (migration 0011); NULL while it is in use. */
+  archived_at: string | null;
 }
 
 export interface TableTypeRow {

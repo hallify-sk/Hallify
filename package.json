@@ -29,6 +29,7 @@
     "@tabler/icons-svelte": "^3.49.0",
     "bcryptjs": "^2.4.3",
     "leaflet": "^1.9.4",
+    "pdf-lib": "^1.17.1",
     "stripe": "^22.2.0"
   },
   "devDependencies": {

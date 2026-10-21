@@ -6,7 +6,7 @@
 	import type { PageData, ActionData } from './$types';
 
 	interface Props { data: PageData; form: ActionData; }
-	const { data }: Props = $props();
+	const { data, form }: Props = $props();
 
 	const numGuests = data.reservation.numGuests;
 
@@ -139,13 +139,14 @@
 			</span>
 			<form method="POST" action="?/saveLayout" bind:this={formRef} use:enhance={() => {
 				saveState = 'saving';
-				return async ({ update }) => { await update({ reset: false }); saveState = 'saved'; };
+				return async ({ update, result }) => { await update({ reset: false }); saveState = result.type === 'success' ? 'saved' : 'dirty'; };
 			}}>
 				<input type="hidden" name="layoutJson" value={layoutJson ?? ''} />
 				<button type="submit" class="btn-action btn-sm" disabled={!layoutJson}>{t.event.saveLayout}</button>
 			</form>
 		</div>
 	</div>
+	{#if form?.error}<div class="save-err" role="alert">{form.error}</div>{/if}
 
 	<div class="editor-wrap">
 		{#key editorKey}
@@ -153,7 +154,11 @@
 				initialState={currentInitial}
 				onchange={onLayoutChange}
 				tableTypes={data.tableTypes}
-				hiddenTools={data.tableTypes.length ? ['wall', 'bounds'] : ['wall', 'bounds', 'table']}
+				mode="event"
+				{saveState}
+				onSave={() => formRef?.requestSubmit()}
+				saveLabel={t.event.saveLayout}
+				printHref={`/halls/my-reservations/${data.reservation.id}/manifest`}
 				protectWallsZones={true}
 				allowZones={true}
 				lockFloors={true}
@@ -173,6 +178,12 @@
 	.layout-toolbar h1 { font-size: 15px; font-weight: 550; letter-spacing: -.03em; margin: 0; }
 	.toolbar-actions { display: flex; gap: 10px; align-items: center; }
 	.editor-wrap { flex: 1; overflow: hidden; position: relative; }
+	/* A save the server refused (e.g. more tables than the venue owns). */
+	.save-err {
+		flex-shrink: 0; padding: 9px 16px; font-size: 12.5px; line-height: 1.45;
+		background: var(--danger-dim); color: var(--danger); font-weight: 550;
+		border-bottom: 1px solid color-mix(in srgb, var(--danger) 25%, transparent);
+	}
 	.save-status { font-size: 12px; font-weight: 600; min-width: 90px; text-align: right; }
 	.save-status.save-saving { color: var(--text-muted); }
 	.save-status.save-dirty  { color: var(--warning); }

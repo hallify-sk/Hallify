@@ -23,12 +23,22 @@
   </div>
   <form method="POST" action="?/saveGtm" class="gtm-form"
     use:enhance={() => { return async ({ update }) => { await update({ reset: false }); }; }}>
-    <label class="sr-only" for="gtm-id">{t.settingsPages.analyticsTitle}</label>
-    <input id="gtm-id" class="gtm-input" type="text" name="gtmContainerId" placeholder="GTM-XXXXXXX"
-      value={data.gtmContainerId ?? ''} autocomplete="off" spellcheck="false" />
+    <div class="gtm-field">
+      <label class="gtm-label" for="gtm-id">{t.settingsPages.gtmIdLabel}</label>
+      <input id="gtm-id" class="gtm-input" type="text" name="gtmContainerId" placeholder="GTM-XXXXXXX"
+        value={data.gtmContainerId ?? ''} autocomplete="off" spellcheck="false" />
+    </div>
+    <div class="gtm-field gtm-field--wide">
+      <label class="gtm-label" for="gtm-sgtm">{t.settingsPages.gtmServerLabel}</label>
+      <input id="gtm-sgtm" class="gtm-input" type="url" name="gtmServerUrl" placeholder="https://data.vasa-domena.sk"
+        value={data.gtmServerUrl ?? ''} autocomplete="off" spellcheck="false" />
+    </div>
     <button type="submit" class="btn-action gtm-save">{t.settingsPages.saveAnalytics}</button>
   </form>
   {#if form?.gtmSuccess}<p class="gtm-ok">{t.settingsPages.analyticsSaved}</p>{/if}
+  {#if form?.error}<p class="gtm-err">{form.error}</p>{/if}
+  <p class="gtm-note">{t.settingsPages.gtmServerHint}</p>
+  <p class="gtm-note">{t.settingsPages.gtmPlatformNote}</p>
 </section>
 
 <!-- ══ Event reference ════════════════════════════════════════════ -->
@@ -76,7 +86,13 @@
 </section>
 
 <style>
-  .gtm-form { display: flex; align-items: stretch; gap: 10px; flex-wrap: wrap; }
+  .gtm-form { display: flex; align-items: flex-end; gap: 10px; flex-wrap: wrap; }
+  .gtm-field { display: flex; flex-direction: column; gap: 5px; flex: 1; min-width: 180px; max-width: 260px; }
+  .gtm-field--wide { max-width: 340px; }
+  .gtm-field .gtm-input { max-width: none; width: 100%; }
+  .gtm-label { font-size: 12px; font-weight: 600; color: var(--text-muted); }
+  .gtm-err { color: var(--danger); font-size: 12px; margin: 8px 0 0; }
+  .gtm-note { font-size: var(--meta-size); color: var(--text-muted); margin: 10px 0 0; max-width: 72ch; line-height: 1.6; }
   .gtm-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-dim); }
   .gtm-input {
     flex: 1; min-width: 200px; max-width: 320px; height: 38px; box-sizing: border-box;
@@ -129,9 +145,5 @@
   @media (max-width: 760px) {
     .ev-rows > .row-item { grid-template-columns: 1fr; gap: 6px; }
     .ev-rows > .row-head { display: none; }
-  }
-  .sr-only {
-    position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
-    overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
   }
 </style>

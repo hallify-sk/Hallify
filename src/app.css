@@ -556,8 +556,10 @@ label {
 
    The knob is SQUARE. §4 of the design system lets physical-metaphor controls
    keep their curves, but the product owner asked for a square knob
-   explicitly, so --radius-sm it is; the track keeps a soft pill so the
-   control still reads as a switch rather than two buttons. The track's "off"
+   explicitly, so --radius-sm it is. The track's corners are CONCENTRIC with
+   the knob's: its radius is the knob's plus the gap between them. A pill
+   track around a square knob left the two outlines visibly disagreeing at
+   every corner. The track's "off"
    fill is --text-subtle rather than --border because --border lands around
    1.2:1 on a panel and the control looked blank when off. */
 .ui-switch {
@@ -577,7 +579,7 @@ label {
 	display: block;
 	width: 38px;
 	height: 22px;
-	border-radius: 99px;
+	border-radius: calc(var(--radius-sm) + 3px); /* knob radius + 3px inset */
 	background: var(--text-subtle);
 	transition: background .15s;
 }
@@ -620,6 +622,15 @@ label {
 .switch-track::after {
 	border-radius: var(--radius-sm) !important;
 }
+
+/* …and their tracks, concentric with the knob: knob radius + the inset (plus
+   the border, where the track has one). Each one sits its knob at a different
+   offset, hence one radius each rather than a shared value. */
+.toggle-slider                  { border-radius: calc(var(--radius-sm) + 3px) !important; } /* 3px inset */
+.toggle-switch:has(.toggle-knob),
+.rsvp-toggle                    { border-radius: calc(var(--radius-sm) + 2px) !important; } /* 2px inset */
+.switch                         { border-radius: calc(var(--radius-sm) + 3px) !important; } /* 2px inset + 1px border */
+.switch-track                   { border-radius: calc(var(--radius-sm) + 4px) !important; } /* 3px inset + 1px border */
 
 /* ─── Scrollbar ───────────────────────────────────────────────────── */
 

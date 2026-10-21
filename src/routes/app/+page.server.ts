@@ -45,7 +45,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 
   const hallCount = await dbFirst<{ count: number }>(
     locals.db,
-    'SELECT COUNT(*) AS count FROM halls WHERE org_id = ?',
+    'SELECT COUNT(*) AS count FROM halls WHERE org_id = ? AND archived_at IS NULL',
     orgId
   );
 

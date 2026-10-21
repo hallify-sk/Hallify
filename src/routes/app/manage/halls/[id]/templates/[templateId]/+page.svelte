@@ -41,7 +41,7 @@
 
 <svelte:head><title>{data.template.name} — {t.halls.templates} – Hallify</title></svelte:head>
 
-<div class="layout-page">
+<div class="layout-page fill-main">
 	<div class="layout-toolbar">
 		<a href="/app/manage/halls/{data.hallId}" class="btn-outline btn-sm">
 			<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -64,7 +64,7 @@
 			</span>
 			<form method="POST" action="?/saveLayout" bind:this={formRef} use:enhance={() => {
 				saveState = 'saving';
-				return async ({ update }) => { await update({ reset: false }); saveState = 'saved'; };
+				return async ({ update, result }) => { await update({ reset: false }); saveState = result.type === 'success' ? 'saved' : 'dirty'; };
 			}}>
 				<input type="hidden" name="layoutJson" value={layoutJson ?? ''} />
 				<button type="submit" class="btn-action btn-sm" disabled={!layoutJson}>
@@ -73,13 +73,17 @@
 			</form>
 		</div>
 	</div>
+	{#if form?.error}<div class="save-err" role="alert">{form.error}</div>{/if}
 
 	<div class="editor-wrap">
 		<MapEditor
 			initialState={initialLayout}
 			onchange={onLayoutChange}
 			tableTypes={data.tableTypes}
-			hiddenTools={data.tableTypes.length ? ['wall', 'bounds'] : ['wall', 'bounds', 'table']}
+			mode="template"
+			{saveState}
+			onSave={() => formRef?.requestSubmit()}
+			saveLabel={t.common.save}
 			protectWallsZones={true}
 			allowZones={true}
 			lockFloors={true}
@@ -130,7 +134,7 @@
 	.layout-page {
 		display: flex;
 		flex-direction: column;
-		height: 100vh;
+		height: 100%;
 		overflow: hidden;
 	}
 
@@ -192,6 +196,12 @@
 	}
 	.meta-close:hover { background: var(--bg-hover); }
 	.meta-dialog form { padding: 18px 22px 20px; display: flex; flex-direction: column; gap: 16px; }
+	/* A save the server refused (e.g. more tables than the venue owns). */
+	.save-err {
+		flex-shrink: 0; padding: 9px 16px; font-size: 12.5px; line-height: 1.45;
+		background: var(--danger-dim); color: var(--danger); font-weight: 550;
+		border-bottom: 1px solid color-mix(in srgb, var(--danger) 25%, transparent);
+	}
 	.meta-err {
 		font-size: 12.5px; color: var(--danger); background: var(--danger-dim);
 		border: 1px solid color-mix(in srgb, var(--danger) 25%, transparent);

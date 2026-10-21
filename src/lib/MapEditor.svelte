@@ -2,19 +2,33 @@
 	import { onMount, untrack } from 'svelte';
 	import { t as tr } from '$lib/i18n.svelte';
 	import { migrateToMultiFloor } from '$lib/floorplan-types';
+	import {
+		CHAIR_R, SEAT_R, localChairs, totalChairs, defaultChairSides, tableHitbox, seatHitbox, hitboxesOverlap,
+		hitboxHitsWall, hitboxInRoom, pointInPoly, roomParts, withRoom, partsBBox, partsConnected, roomOutline, roomArea,
+		countTablesByType, type Hitbox
+	} from '$lib/floorplan-geometry';
 	import type { FloorData, MultiFloorState, WallObj, ZoneObj, TableObj, SeatObj, Guest, BoundsRect, Point, TableShape } from '$lib/floorplan-types';
+	import { stepsFor, toolsFor, TOOL_KEYS, toolForKey, type EditorMode, type StepId, type Tool } from '$lib/editor-steps';
+	import { parseGuestCsv } from '$lib/guest-csv';
+	import { uiStore } from '$lib/stores/ui.svelte';
+	import StepStrip, { type StepItem } from '$lib/editor/StepStrip.svelte';
+	import ToolCards, { type ToolCard } from '$lib/editor/ToolCards.svelte';
+	import GuestList, { type GuestRow } from '$lib/editor/GuestList.svelte';
+	import CoachMark from '$lib/editor/CoachMark.svelte';
 
 	// ─── Props ────────────────────────────────────────────────────────────────
 	interface TableType {
 		id: string; name: string; shape: 'rect' | 'round';
 		width: number; height: number; radius: number;
 		max_chairs: number;
+		amount?: number;   // how many the venue owns; 0 = unlimited
 	}
+	type SaveState = 'idle' | 'dirty' | 'saving' | 'saved';
 	interface Props {
 		initialState?: unknown;              // Existing walls/zones/tables to load
 		onchange?: (json: string) => void;   // Called whenever state changes
 		tableTypes?: TableType[];            // Predefined table inventory from admin
-		hiddenTools?: Tool[];                // Tools to hide from toolbar
+		hiddenTools?: Tool[];                // Tools to hide from the step's tool cards
 		protectWallsZones?: boolean;         // Prevent erasing/selecting walls & zones
 		allowZones?: boolean;                // …but still allow zones (e.g. clients organising space)
 		lockFloors?: boolean;                // Hide add/remove-floor controls (reservation editor)
@@ -23,14 +37,29 @@
 		 *  describe the ROOM, which has no guests — a guest list only means something
 		 *  once a layout belongs to a booked event. Off unless a caller opts in. */
 		allowGuests?: boolean;
+		/** Which guided steps to walk through. Derived from the flags above when omitted:
+		 *  guests → event, a locked shell → template, otherwise the room itself. */
+		mode?: EditorMode;
+		/** The host page's save state and save action, shown in the last step. */
+		saveState?: SaveState;
+		onSave?: () => void;
+		saveLabel?: string;
+		/** Where "Preview & print" leads (events have a printable manifest). */
+		printHref?: string;
 	}
-	const { initialState, onchange, tableTypes, hiddenTools = [], protectWallsZones = false, allowZones = false, lockFloors = false, tablesFromTypesOnly = false, allowGuests = false }: Props = $props();
+	const {
+		initialState, onchange, tableTypes, hiddenTools = [], protectWallsZones = false, allowZones = false,
+		lockFloors = false, tablesFromTypesOnly = false, allowGuests = false,
+		mode, saveState = 'idle', onSave, saveLabel, printHref
+	}: Props = $props();
 
 	// Walls (the venue shell) can be protected while zones stay editable.
 	const wallsLocked = $derived(protectWallsZones);
 	const zonesLocked = $derived(protectWallsZones && !allowZones);
 	// The room boundary is part of the venue shell — locked whenever walls are.
 	const boundsLocked = $derived(protectWallsZones);
+
+	const editorMode = $derived<EditorMode>(mode ?? (allowGuests ? 'event' : protectWallsZones ? 'template' : 'room'));
 
 	// ─── Undo / Redo ──────────────────────────────────────────────────────────
 	interface Snapshot { floors: FloorData[]; guests: Guest[]; activeFloorIdx: number }
@@ -41,7 +70,7 @@
 	function takeSnapshot(): string {
 		// Flush working copy into floors before snapshotting
 		const currentFloors = floors.map((f, i) =>
-			i === activeFloorIdx ? { ...f, walls, zones, tables, seats, bounds } : f
+			i === activeFloorIdx ? withRoom({ ...f, walls, zones, tables, seats }, roomRects) : f
 		);
 		return JSON.stringify({ floors: currentFloors, guests, activeFloorIdx });
 	}
@@ -69,7 +98,7 @@
 			const s = JSON.parse(json) as Snapshot;
 			floors = s.floors; guests = s.guests; activeFloorIdx = s.activeFloorIdx;
 			const f = floors[activeFloorIdx];
-			walls = f.walls; zones = f.zones; tables = f.tables; seats = f.seats ?? []; bounds = f.bounds;
+			walls = f.walls; zones = f.zones; tables = f.tables; seats = f.seats ?? []; roomRects = roomParts(f);
 		} catch { /* ignore */ }
 		suppressHistory = false;
 	}
@@ -88,15 +117,25 @@
 	});
 
 	// ─── Types ────────────────────────────────────────────────────────────────
-	type Tool       = 'select' | 'wall' | 'zone' | 'table' | 'chair' | 'eraser' | 'bounds' | 'measure';
 	// A popover targets either a table chair (tableId+chairIdx) or a standalone seat (seatId).
 	type ChairPopover = { tableId?: string; chairIdx?: number; seatId?: string; x: number; y: number };
+	type SeatTarget = { tableId?: string; chairIdx?: number; seatId?: string };
 
 	// ─── Map state ────────────────────────────────────────────────────────────
 	let zoom     = $state(60);
 	let gridSnap = $state(0.5);
 	let snapDropOpen = $state(false);
 	let tool     = $state<Tool>('select');
+
+	// ─── Guided steps ─────────────────────────────────────────────────────────
+	const steps = $derived(stepsFor(editorMode));
+	let step = $state<StepId>(stepsFor(mode ?? (allowGuests ? 'event' : protectWallsZones ? 'template' : 'room'))[0]);
+	let visited = $state<StepId[]>([]);
+	const readOnly = $derived(step === 'check');
+	// What may be touched right now: walls only in their own step, zones in theirs
+	// (and next to the chairs, where events add a dance floor).
+	const wallsOff = $derived(wallsLocked || step !== 'walls');
+	const zonesOff = $derived(zonesLocked || !(step === 'zones' || step === 'chairs'));
 
 	// ─── Multi-floor state ────────────────────────────────────────────────────
 	let floors = $state<FloorData[]>([{ id: crypto.randomUUID(), name: 'Floor 1', walls: [], zones: [], tables: [], bounds: null }]);
@@ -130,9 +169,33 @@
 	// Zone config
 	let zoneColor = $state('#a78bfa');
 
-	// Bounds (floor plan boundary rectangle)
-	let bounds = $state<BoundsRect | null>(null);
+	// The room: one or more rectangles joined into one shape (two make an L, three
+	// a U). `bounds` is their bounding box; `roomEdges` the outline tables may not cross.
+	let roomRects = $state<BoundsRect[]>([]);
+	const bounds = $derived(partsBBox(roomRects));
+	const roomEdges = $derived(roomOutline(roomRects));
 	let boundsStart = $state<Point | null>(null);  // first corner during drawing
+	let hoverPart = $state<number | null>(null);
+	/** A short reason shown in the instruction bar when the room refused a change. */
+	let roomNotice = $state<string | null>(null);
+	let roomNoticeTimer: ReturnType<typeof setTimeout> | undefined;
+	function noticeRoom(msg: string) {
+		roomNotice = msg;
+		clearTimeout(roomNoticeTimer);
+		roomNoticeTimer = setTimeout(() => { roomNotice = null; }, 4500);
+	}
+	/** Remove a room part, unless that would leave the rest in separate pieces. */
+	function removeRoomPart(idx: number): boolean {
+		const rest = roomRects.filter((_, j) => j !== idx);
+		if (!partsConnected(rest)) { noticeRoom(tr.editor.roomWouldSplit); return false; }
+		pushUndo();
+		roomRects = rest;
+		hoverPart = null; selectedPart = null;
+		return true;
+	}   // room part highlighted from the panel list
+	// A room part picked with Select & move: dragged whole, or resized by a corner.
+	let selectedPart = $state<number | null>(null);
+	let partDrag = $state<{ idx: number; kind: 'move' | 'resize'; corner: number; start: Point; orig: BoundsRect } | null>(null);
 
 	// Selection / drag
 	let selectedId = $state<string | null>(null);
@@ -160,6 +223,7 @@
 	let panX      = $state(40);
 	let panY      = $state(40);
 	let isPanning = $state(false);
+	let spaceDown = $state(false);   // Space + drag pans, like every canvas tool
 
 	// Measure tool
 	let measureStart = $state<Point | null>(null);
@@ -172,32 +236,40 @@
 	// Ruler mouse tracking (screen coords within canvas)
 	let rulerMouseX = $state(0);
 	let rulerMouseY = $state(0);
+	let showRulers  = $state(true);
+	// Every measurement on the plan: always in the check step, on request elsewhere.
+	let showDims    = $state(false);
+	const dimsOn    = $derived(showDims || step === 'check');
+
+	// Experimental: walls and zones start as a dragged rectangle; an edge of the
+	// selected shape takes a new corner on click, which can be dragged at once.
+	// A plain click (no drag) still starts the corner-by-corner polygon.
+	const RECT_KEY = 'hallify-editor-rectdraw';
+	let rectDraw   = $state(true);
+	let rectStart  = $state<Point | null>(null);
+	let rectMoved  = $state(false);
+
+	// Canvas annotations
+	let showSeatNumbers = $state(untrack(() => allowGuests));
+	let showNames       = $state(true);
 
 	// ─── Guest system ─────────────────────────────────────────────────────────
 	let guests       = $state<Guest[]>([]);
-	let newFirst     = $state('');
-	let newLast      = $state('');
-	let newGroup     = $state('');
-	let groupDropOpen = $state(false);
 	// Existing group/family names for the combobox suggestions.
 	const existingGroups = $derived(
 		[...new Set(guests.map(g => g.group?.trim()).filter((x): x is string => !!x))].sort((a, b) => a.localeCompare(b))
 	);
-	const groupSuggestions = $derived.by(() => {
-		const q = newGroup.trim().toLowerCase();
-		return existingGroups.filter(g => q ? (g.toLowerCase().includes(q) && g.toLowerCase() !== q) : true).slice(0, 6);
-	});
 	let guestSearch  = $state('');
-	let noteEditId   = $state<string | null>(null);
 	let chairPopover = $state<ChairPopover | null>(null);
-	let activeTab    = $state<'props' | 'guests'>('props');
-	// Never strand the panel on a tab that is not rendered.
-	$effect(() => { if (!allowGuests && activeTab === 'guests') activeTab = 'props'; });
+	let importMessage = $state<string | null>(null);
+	// A guest being dragged from the list onto a chair.
+	let dragGuest  = $state<{ id: string; x: number; y: number } | null>(null);
+	let dragTarget = $state<SeatTarget | null>(null);
 
 	// ─── Floor management ────────────────────────────────────────────────────
 	/** Flush working copy back into floors array */
 	function saveCurrentFloor() {
-		floors[activeFloorIdx] = { ...floors[activeFloorIdx], walls, zones, tables, seats, bounds };
+		floors[activeFloorIdx] = withRoom({ ...floors[activeFloorIdx], walls, zones, tables, seats }, roomRects);
 	}
 
 	/** Switch to a different floor */
@@ -205,8 +277,8 @@
 		saveCurrentFloor();
 		activeFloorIdx = idx;
 		const f = floors[idx];
-		walls = f.walls; zones = f.zones; tables = f.tables; seats = f.seats ?? []; bounds = f.bounds;
-		selectedId = null; chairPopover = null;
+		walls = f.walls; zones = f.zones; tables = f.tables; seats = f.seats ?? []; roomRects = roomParts(f);
+		selectedId = null; selectedPart = null; chairPopover = null;
 	}
 
 	function addFloor() {
@@ -219,8 +291,8 @@
 		};
 		floors = [...floors, newFloor];
 		activeFloorIdx = floors.length - 1;
-		walls = []; zones = []; tables = []; seats = []; bounds = null;
-		selectedId = null; chairPopover = null;
+		walls = []; zones = []; tables = []; seats = []; roomRects = [];
+		selectedId = null; selectedPart = null; chairPopover = null;
 	}
 
 	function removeFloor(idx: number) {
@@ -232,15 +304,27 @@
 		if (activeFloorIdx >= floors.length) activeFloorIdx = floors.length - 1;
 		else if (idx < activeFloorIdx) activeFloorIdx--;
 		const f = floors[activeFloorIdx];
-		walls = f.walls; zones = f.zones; tables = f.tables; seats = f.seats ?? []; bounds = f.bounds;
-		selectedId = null; chairPopover = null;
+		walls = f.walls; zones = f.zones; tables = f.tables; seats = f.seats ?? []; roomRects = roomParts(f);
+		selectedId = null; selectedPart = null; chairPopover = null;
+		confirmRemoveIdx = null;
 	}
 
-	function renameFloor(idx: number) {
-		const name = prompt(tr.editor.floorNamePrompt, floors[idx].name);
-		if (name && name.trim()) {
-			floors = floors.map((f, i) => i === idx ? { ...f, name: name.trim() } : f);
+	// Inline rename: the tab turns into a field, Enter or leaving it commits.
+	let renamingIdx = $state<number | null>(null);
+	let renameValue = $state('');
+	let confirmRemoveIdx = $state<number | null>(null);
+	function startRename(idx: number) {
+		if (lockFloors) return;
+		renamingIdx = idx; renameValue = floors[idx].name;
+	}
+	function commitRename() {
+		if (renamingIdx === null) return;
+		const name = renameValue.trim();
+		if (name && name !== floors[renamingIdx].name) {
+			pushUndo();
+			floors = floors.map((f, i) => i === renamingIdx ? { ...f, name } : f);
 		}
+		renamingIdx = null;
 	}
 
 	// ─── Load initial state from prop ────────────────────────────────────────
@@ -253,7 +337,9 @@
 			floors = state.floors;
 			guests = state.guests;
 			activeFloorIdx = 0;
-			walls = f0.walls; zones = f0.zones; tables = f0.tables; seats = f0.seats ?? []; bounds = f0.bounds;
+			walls = f0.walls; zones = f0.zones; tables = f0.tables; seats = f0.seats ?? []; roomRects = roomParts(f0);
+			// Open on the whole room, not on its top-left corner.
+			requestAnimationFrame(() => fitToRoom());
 		} catch { /* ignore parse errors */ }
 	});
 
@@ -261,10 +347,11 @@
 	$effect(() => {
 		if (!onchange) return;
 		// Access reactive working copy to create dependency
-		const snap = { walls, zones, tables, seats, bounds, guests };
+		const snap = { walls, zones, tables, seats };
+		const room = roomRects;
 		// Read floors without creating deep dependency — use untrack for floors array
 		const currentFloors = untrack(() => floors).map((f, i) =>
-			i === untrack(() => activeFloorIdx) ? { ...f, ...snap } : f
+			i === untrack(() => activeFloorIdx) ? withRoom({ ...f, ...snap }, room) : f
 		);
 		const state: MultiFloorState = { version: 2, floors: currentFloors, guests };
 		onchange(JSON.stringify(state));
@@ -280,14 +367,10 @@
 	/**
 	 * How close the cursor must be to the first point to CLOSE a shape.
 	 *
-	 * Screen-space, not world-space. `zoom` is pixels-per-metre, so the old
-	 * `gridSnap * 1.5` radius grew with zoom: at 60 px/m it covered 45 px, and zoomed
-	 * in it swallowed the fourth corner of a square, turning it into a triangle. A
-	 * constant 12 px feels identical at every zoom and is small enough that a square
-	 * of any visible size can be drawn.
-	 *
-	 * It is also deliberately independent of grid snap, so closing still works — and
-	 * still previews green — with snapping switched off.
+	 * Screen-space, not world-space. `zoom` is pixels-per-metre, so a world radius
+	 * would grow with zoom and swallow the fourth corner of a small square. A
+	 * constant 12 px feels identical at every zoom, and is independent of grid snap
+	 * so closing still works — and still previews green — with snapping off.
 	 */
 	const CLOSE_HIT_PX = 12;
 	const closeRadius = $derived(CLOSE_HIT_PX / zoom);
@@ -307,22 +390,47 @@
 		return { x: sx(e.clientX - r.left), y: sy(e.clientY - r.top) };
 	}
 	function snap(p: Point): Point {
-		// 0 = snapping off (the dropdown offered no way to disable it before).
+		// 0 = snapping off.
 		if (!gridSnap) return { x: p.x, y: p.y };
 		return { x: Math.round(p.x / gridSnap) * gridSnap, y: Math.round(p.y / gridSnap) * gridSnap };
 	}
 
-	// ─── Geometry ─────────────────────────────────────────────────────────────
-	function pointInPoly(p: Point, poly: Point[]): boolean {
-		let inside = false;
-		for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
-			const xi = poly[i].x, yi = poly[i].y, xj = poly[j].x, yj = poly[j].y;
-			if ((yi > p.y) !== (yj > p.y) && p.x < ((xj - xi) * (p.y - yi)) / (yj - yi) + xi)
-				inside = !inside;
-		}
-		return inside;
+	// ─── View: fit and zoom ───────────────────────────────────────────────────
+	/** Everything on the active floor, as a box in metres. */
+	function contentBBox(): BoundsRect | null {
+		const xs: number[] = [], ys: number[] = [];
+		for (const w of walls) for (const p of w.points) { xs.push(Number(p.x)); ys.push(Number(p.y)); }
+		for (const z of zones) for (const p of z.points) { xs.push(Number(p.x)); ys.push(Number(p.y)); }
+		for (const t of tables) { xs.push(Number(t.x) - 2, Number(t.x) + 2); ys.push(Number(t.y) - 2, Number(t.y) + 2); }
+		for (const s of seats) { xs.push(Number(s.x)); ys.push(Number(s.y)); }
+		if (!xs.length) return null;
+		const x = Math.min(...xs), y = Math.min(...ys);
+		return { x, y, w: Math.max(...xs) - x, h: Math.max(...ys) - y };
+	}
+	/** Zoom and pan so the room (or whatever is drawn) fills the canvas with a margin. */
+	function fitToRoom() {
+		const r = svgEl?.getBoundingClientRect();
+		if (!r || r.width < 50 || r.height < 50) return;
+		const b = bounds ?? contentBBox();
+		if (!b || b.w <= 0 || b.h <= 0) { zoom = 60; panX = 40; panY = 40; return; }
+		const pad = 1; // metres of air around the room
+		const fit = Math.min((r.width - 32) / (b.w + 2 * pad), (r.height - 96) / (b.h + 2 * pad));
+		const z = Math.min(200, Math.max(15, fit));
+		zoom = z;
+		panX = (r.width - b.w * z) / 2 - b.x * z;
+		panY = (r.height - b.h * z) / 2 - b.y * z + 14;
+	}
+	/** Zoom around the canvas centre by a factor, within the usual limits. */
+	function zoomBy(factor: number) {
+		const r = svgEl?.getBoundingClientRect();
+		const cx = r ? r.width / 2 : 0, cy = r ? r.height / 2 : 0;
+		const nz = Math.min(200, Math.max(15, zoom * factor));
+		panX = cx - (cx - panX) * (nz / zoom); panY = cy - (cy - panY) * (nz / zoom); zoom = nz;
 	}
 
+	// ─── Geometry ─────────────────────────────────────────────────────────────
+	// Footprints, collisions and the room outline live in floorplan-geometry.ts so
+	// the rules are tested and shared; what is here is editor-only hit testing.
 	function rotatedCorners(t: TableObj): Point[] {
 		const a = (Number(t.rotation) * Math.PI) / 180, cos = Math.cos(a), sin = Math.sin(a);
 		const cx = Number(t.x), cy = Number(t.y);
@@ -334,194 +442,27 @@
 	}
 
 	// ─── Collision detection ─────────────────────────────────────────────────
-	// Simple AABB approach: imagine an axis-aligned bounding box over the entire
-	// table INCLUDING chairs. For round tables, use an expanded radius instead.
-
-	const CHAIR_EXT = 0.48; // TABLE_GAP(0.06) + 2×CR(0.42) — how far chairs extend beyond body edge
-
-	/** Get rotated hitbox corners for a table INCLUDING chair extent per side.
-	 *  For round tables returns { type:'circle', cx, cy, r }.
-	 *  For rect tables returns { type:'rect', corners: Point[4] } — rotated with the table. */
-	type Hitbox = { type: 'circle'; cx: number; cy: number; r: number }
-		| { type: 'rect'; cx: number; cy: number; corners: Point[] };
-
-	function tableHitbox(t: TableObj): Hitbox {
-		const cx = Number(t.x), cy = Number(t.y);
-		if (t.shape === 'round') {
-			const n = Number(t.chairs) || 0;
-			const pad = n > 0 ? CHAIR_EXT : 0;
-			return { type: 'circle', cx, cy, r: Number(t.radius) + pad };
-		}
-		// Rect: expand each side only if it has chairs
-		const padT = (Number(t.chairsTop) || 0) > 0 ? CHAIR_EXT : 0;
-		const padB = (Number(t.chairsBottom) || 0) > 0 ? CHAIR_EXT : 0;
-		const padL = (Number(t.chairsLeft) || 0) > 0 ? CHAIR_EXT : 0;
-		const padR = (Number(t.chairsRight) || 0) > 0 ? CHAIR_EXT : 0;
-		const hw = Number(t.width) / 2, hh = Number(t.height) / 2;
-		// Local-space corners (before rotation): left=-hw-padL, right=hw+padR, top=-hh-padT, bot=hh+padB
-		const left = -hw - padL, right = hw + padR, top = -hh - padT, bot = hh + padB;
-		const a = (Number(t.rotation) * Math.PI) / 180, cos = Math.cos(a), sin = Math.sin(a);
-		const corners: Point[] = ([
-			[left, top], [right, top], [right, bot], [left, bot]
-		] as [number, number][]).map(([dx, dy]) => ({
-			x: cx + dx * cos - dy * sin,
-			y: cy + dx * sin + dy * cos
-		}));
-		return { type: 'rect', cx, cy, corners };
+	// A table (chairs included) must stay on the room's floor and clear the walls,
+	// the other tables and the standalone chairs.
+	function hitsWalls(hb: Hitbox): boolean {
+		return walls.some(w => hitboxHitsWall(hb, w));
 	}
 
-	/** AABB from hitbox corners */
-	function hitboxAABB(hb: Hitbox): { minX: number; minY: number; maxX: number; maxY: number } {
-		if (hb.type === 'circle') {
-			return { minX: hb.cx - hb.r, minY: hb.cy - hb.r, maxX: hb.cx + hb.r, maxY: hb.cy + hb.r };
-		}
-		let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-		for (const p of hb.corners) {
-			if (p.x < minX) minX = p.x;
-			if (p.y < minY) minY = p.y;
-			if (p.x > maxX) maxX = p.x;
-			if (p.y > maxY) maxY = p.y;
-		}
-		return { minX, minY, maxX, maxY };
-	}
-
-	/** SAT overlap for two convex polygons */
-	function polyOverlap(polyA: Point[], polyB: Point[]): boolean {
-		function getAxes(poly: Point[]): Point[] {
-			const axes: Point[] = [];
-			for (let i = 0; i < poly.length; i++) {
-				const p1 = poly[i], p2 = poly[(i + 1) % poly.length];
-				const ex = p2.x - p1.x, ey = p2.y - p1.y;
-				const len = Math.sqrt(ex * ex + ey * ey);
-				if (len > 0) axes.push({ x: -ey / len, y: ex / len });
-			}
-			return axes;
-		}
-		for (const ax of [...getAxes(polyA), ...getAxes(polyB)]) {
-			let minA = Infinity, maxA = -Infinity, minB = Infinity, maxB = -Infinity;
-			for (const p of polyA) { const d = p.x * ax.x + p.y * ax.y; if (d < minA) minA = d; if (d > maxA) maxA = d; }
-			for (const p of polyB) { const d = p.x * ax.x + p.y * ax.y; if (d < minB) minB = d; if (d > maxB) maxB = d; }
-			if (maxA <= minB || maxB <= minA) return false;
-		}
-		return true;
-	}
-
-	/** Check overlap between two hitboxes */
-	function hitboxesOverlap(a: Hitbox, b: Hitbox): boolean {
-		// Quick AABB rejection
-		const aa = hitboxAABB(a), bb = hitboxAABB(b);
-		if (aa.maxX <= bb.minX || aa.minX >= bb.maxX || aa.maxY <= bb.minY || aa.minY >= bb.maxY) return false;
-		// Circle vs circle
-		if (a.type === 'circle' && b.type === 'circle') {
-			const dx = a.cx - b.cx, dy = a.cy - b.cy;
-			return dx * dx + dy * dy < (a.r + b.r) * (a.r + b.r);
-		}
-		// Rect vs rect — SAT on rotated corners
-		if (a.type === 'rect' && b.type === 'rect') {
-			return polyOverlap(a.corners, b.corners);
-		}
-		// Rect vs circle
-		const rect = a.type === 'rect' ? a : b as Extract<Hitbox, { type: 'rect' }>;
-		const circ = a.type === 'circle' ? a : b as Extract<Hitbox, { type: 'circle' }>;
-		// Transform circle center into rect's local space and do AABB-circle test
-		// But since rect is already rotated corners, use polygon-vs-circle: check distance from circle to each edge
-		return circleIntersectsPoly(circ.cx, circ.cy, circ.r, rect.corners);
-	}
-
-	function circleIntersectsPoly(cx: number, cy: number, r: number, poly: Point[]): boolean {
-		// Check if circle center is inside polygon
-		if (pointInPoly({ x: cx, y: cy }, poly)) return true;
-		// Check if circle intersects any edge
-		for (let i = 0; i < poly.length; i++) {
-			const p1 = poly[i], p2 = poly[(i + 1) % poly.length];
-			if (segDistSq(cx, cy, p1, p2) < r * r) return true;
-		}
-		return false;
-	}
-
-	function segDistSq(px: number, py: number, a: Point, b: Point): number {
-		const dx = b.x - a.x, dy = b.y - a.y;
-		const lenSq = dx * dx + dy * dy;
-		if (lenSq === 0) { const ex = px - a.x, ey = py - a.y; return ex * ex + ey * ey; }
-		const t = Math.max(0, Math.min(1, ((px - a.x) * dx + (py - a.y) * dy) / lenSq));
-		const projX = a.x + t * dx, projY = a.y + t * dy;
-		const ex = px - projX, ey = py - projY;
-		return ex * ex + ey * ey;
-	}
-
-	/** Check if a hitbox overlaps with any wall edge */
-	function hitboxCollidesWalls(hb: Hitbox): boolean {
-		return walls.some(w => {
-			if (w.points.length < 2) return false;
-			const pts = w.points.map(p => ({ x: Number(p.x), y: Number(p.y) }));
-			for (let i = 0; i < pts.length; i++) {
-				const p1 = pts[i], p2 = pts[(i + 1) % pts.length];
-				if (segmentHitsHitbox(p1, p2, hb)) return true;
-			}
-			return false;
-		});
-	}
-
-	function segmentHitsHitbox(p1: Point, p2: Point, hb: Hitbox): boolean {
-		if (hb.type === 'circle') {
-			return segDistSq(hb.cx, hb.cy, p1, p2) < hb.r * hb.r;
-		}
-		// Segment vs rotated rect: check if segment intersects any rect edge
-		for (let i = 0; i < hb.corners.length; i++) {
-			const c1 = hb.corners[i], c2 = hb.corners[(i + 1) % hb.corners.length];
-			if (segmentsIntersect(p1, p2, c1, c2)) return true;
-		}
-		// Also check if segment is entirely inside rect
-		if (pointInPoly(p1, hb.corners)) return true;
-		return false;
-	}
-
-	function segmentsIntersect(p1: Point, p2: Point, p3: Point, p4: Point): boolean {
-		const d1x = p2.x - p1.x, d1y = p2.y - p1.y;
-		const d2x = p4.x - p3.x, d2y = p4.y - p3.y;
-		const cross = d1x * d2y - d1y * d2x;
-		if (Math.abs(cross) < 1e-10) return false;
-		const t = ((p3.x - p1.x) * d2y - (p3.y - p1.y) * d2x) / cross;
-		const u = ((p3.x - p1.x) * d1y - (p3.y - p1.y) * d1x) / cross;
-		return t > 0.001 && t < 0.999 && u > 0.001 && u < 0.999;
-	}
-
-	function tableOutOfBounds(t: TableObj): boolean {
-		if (!bounds) return false;
-		const hb = tableHitbox(t);
-		const ext = hitboxAABB(hb);
-		const bx = Number(bounds.x), by = Number(bounds.y), bw = Number(bounds.w), bh = Number(bounds.h);
-		return ext.minX < bx || ext.minY < by || ext.maxX > bx + bw || ext.maxY > by + bh;
-	}
-
-	/** Combined collision check */
 	function tableHasCollision(candidate: TableObj, excludeId?: string, otherTables?: TableObj[]): boolean {
 		const hb = tableHitbox(candidate);
-		if (hitboxCollidesWalls(hb)) return true;
-		if (tableOutOfBounds(candidate)) return true;
+		if (hitsWalls(hb)) return true;
+		if (!hitboxInRoom(hb, roomRects, roomEdges)) return true;
 		const others = otherTables ?? tables;
 		const filtered = excludeId ? others.filter(o => o.id !== excludeId) : others;
 		if (filtered.some(o => hitboxesOverlap(hb, tableHitbox(o)))) return true;
-		// Tables must also clear any standalone chairs.
 		return seats.some(s => hitboxesOverlap(hb, seatHitbox(s)));
 	}
 
-	// ─── Standalone seat collision ─────────────────────────────────────────────
-	const SEAT_R = 0.26;   // collision radius for a standalone chair (metres)
-	function seatHitbox(s: SeatObj): Hitbox {
-		return { type: 'circle', cx: Number(s.x), cy: Number(s.y), r: SEAT_R };
-	}
-	function seatOutOfBounds(s: SeatObj): boolean {
-		if (!bounds) return false;
-		const ext = hitboxAABB(seatHitbox(s));
-		const bx = Number(bounds.x), by = Number(bounds.y), bw = Number(bounds.w), bh = Number(bounds.h);
-		return ext.minX < bx || ext.minY < by || ext.maxX > bx + bw || ext.maxY > by + bh;
-	}
-	/** A standalone chair must clear walls, bounds, tables, and other chairs. */
+	/** A standalone chair must clear walls, the room's edge, tables, and other chairs. */
 	function seatHasCollision(candidate: SeatObj, excludeId?: string): boolean {
 		const hb = seatHitbox(candidate);
-		if (hitboxCollidesWalls(hb)) return true;
-		if (seatOutOfBounds(candidate)) return true;
+		if (hitsWalls(hb)) return true;
+		if (!hitboxInRoom(hb, roomRects, roomEdges)) return true;
 		if (tables.some(t => hitboxesOverlap(hb, tableHitbox(t)))) return true;
 		const others = excludeId ? seats.filter(s => s.id !== excludeId) : seats;
 		return others.some(o => hitboxesOverlap(hb, seatHitbox(o)));
@@ -537,18 +478,25 @@
 	}
 
 	// Returns chair index the point hits (-1 = none), point in world coords (circular hitbox)
-	function findClickedChair(t: TableObj, p: Point): number {
+	function findClickedChair(t: TableObj, p: Point, radius = CHAIR_R): number {
 		const a = -(Number(t.rotation) * Math.PI) / 180;
 		const cos = Math.cos(a), sin = Math.sin(a);
 		const dx = p.x - Number(t.x), dy = p.y - Number(t.y);
 		const lx = dx * cos - dy * sin, ly = dx * sin + dy * cos;
-		const CR = 0.21;
 		const chairs = localChairs(t);
 		for (let i = 0; i < chairs.length; i++) {
 			const cdx = lx - chairs[i].x, cdy = ly - chairs[i].y;
-			if (Math.sqrt(cdx * cdx + cdy * cdy) <= CR) return i;
+			if (Math.sqrt(cdx * cdx + cdy * cdy) <= radius) return i;
 		}
 		return -1;
+	}
+
+	/** Where a table's chair sits on screen (canvas pixels), for anchoring a popover. */
+	function chairScreenPos(t: TableObj, ci: number): Point {
+		const ch = localChairs(t)[ci];
+		if (!ch) return { x: wx(Number(t.x)), y: wy(Number(t.y)) };
+		const a = (Number(t.rotation) * Math.PI) / 180, cos = Math.cos(a), sin = Math.sin(a);
+		return { x: wx(Number(t.x) + ch.x * cos - ch.y * sin), y: wy(Number(t.y) + ch.x * sin + ch.y * cos) };
 	}
 
 	// Full hit test (body + chairs) – used for eraser
@@ -556,67 +504,22 @@
 		return tableBodyHit(t, p) || findClickedChair(t, p) >= 0;
 	}
 
-	// ─── Chair layout (local table space) ────────────────────────────────────
-	type ChairPos = { x: number; y: number; rot: number };
-
-	/** Total chair count from per-side values */
-	function totalChairs(t: TableObj): number {
-		if (t.shape === 'round') return Number(t.chairs) || 0;
-		return (Number(t.chairsTop) || 0) + (Number(t.chairsBottom) || 0) +
-			(Number(t.chairsLeft) || 0) + (Number(t.chairsRight) || 0);
-	}
-
-	function localChairs(t: TableObj): ChairPos[] {
-		const CR = 0.21, TABLE_GAP = 0.06;
-		const gap  = Math.max(0, Number(t.chairSpacing ?? 0.05));
-		const step = 2 * CR + gap;
-
-		if (t.shape === 'round') {
-			const n = Number(t.chairs) || 0;
-			if (n === 0) return [];
-			// `gap` used to be ignored here — the spacing control rendered for round
-			// tables but did nothing. Chairs sit on a circle, so spacing means pushing
-			// the ring out until the arc between neighbours is at least (2*CR + gap).
-			const minRadius = Number(t.radius) + TABLE_GAP + CR;
-			const needed = n > 1 ? step / (2 * Math.sin(Math.PI / n)) : 0;
-			const r = Math.max(minRadius, needed);
-			return Array.from({ length: n }, (_, i) => {
-				const a = (i / n) * 2 * Math.PI - Math.PI / 2;
-				return { x: Math.cos(a) * r, y: Math.sin(a) * r, rot: (a * 180 / Math.PI) + 90 };
-			});
-		}
-
-		const hw = Number(t.width) / 2, hh = Number(t.height) / 2;
-		const topN = Number(t.chairsTop) || 0;
-		const botN = Number(t.chairsBottom) || 0;
-		const rightN = Number(t.chairsRight) || 0;
-		const leftN = Number(t.chairsLeft) || 0;
-
-		function sidePlacement(n: number, perp: number, horiz: boolean, rot: number): ChairPos[] {
-			if (n <= 0) return [];
-			const total = n * 2 * CR + (n - 1) * gap;
-			const start = -total / 2 + CR;
-			return Array.from({ length: n }, (_, i) => ({
-				x: horiz ? start + i * step : perp,
-				y: horiz ? perp : start + i * step,
-				rot
-			}));
-		}
-
-		return [
-			...sidePlacement(topN,   -hh - TABLE_GAP - CR, true,  180),
-			...sidePlacement(botN,    hh + TABLE_GAP + CR, true,  0),
-			...sidePlacement(rightN,  hw + TABLE_GAP + CR, false, 270),
-			...sidePlacement(leftN,  -hw - TABLE_GAP - CR, false, 90),
-		];
-	}
-
 	// ─── Guest helpers ────────────────────────────────────────────────────────
-	function addGuest() {
-		const first = newFirst.trim(), last = newLast.trim();
-		if (!first || !last) return;
-		guests = [...guests, { id: crypto.randomUUID(), firstName: first, lastName: last, group: newGroup.trim() || undefined }];
-		newFirst = ''; newLast = ''; newGroup = '';
+	function addGuest(first: string, last: string, group: string) {
+		if (!first && !last) return;
+		// A one-word name is kept as the surname so the list has something to sort on.
+		if (!last) { last = first; first = ''; }
+		pushUndo();
+		guests = [...guests, { id: crypto.randomUUID(), firstName: first, lastName: last, group: group || undefined }];
+	}
+
+	function importGuests(text: string) {
+		const rows = parseGuestCsv(text);
+		if (!rows.length) { importMessage = tr.editor.importNone; return; }
+		pushUndo();
+		guests = [...guests, ...rows.map(r => ({ id: crypto.randomUUID(), firstName: r.firstName, lastName: r.lastName, group: r.group, note: r.note }))];
+		importMessage = tr.editor.importDone(rows.length);
+		setTimeout(() => { importMessage = null; }, 5000);
 	}
 
 	function updateGuestNote(id: string, note: string) {
@@ -625,6 +528,7 @@
 	}
 
 	function removeGuest(id: string) {
+		pushUndo();
 		guests = guests.filter(g => g.id !== id);
 		// Clear from current floor (tables + standalone seats)
 		tables = tables.map(t => ({ ...t, assignments: t.assignments.map(a => a === id ? null : a) }));
@@ -637,9 +541,10 @@
 		}));
 	}
 
-	function assignGuest(guestId: string) {
-		if (!chairPopover) return;
-		const { tableId, chairIdx, seatId } = chairPopover;
+	/** Put a guest on one chair (table chair or standalone seat), taking them off
+	 *  wherever they sat before — on any floor. */
+	function assignGuestTo(guestId: string, target: SeatTarget) {
+		const { tableId, chairIdx, seatId } = target;
 		pushUndo();
 		// Remove guest from ALL floors' tables AND standalone seats first
 		floors = floors.map((f, fi) => {
@@ -666,12 +571,16 @@
 			if (seatId && s.id === seatId) assignment = guestId;
 			return { ...s, assignment };
 		});
+	}
+
+	function assignGuest(guestId: string) {
+		if (!chairPopover) return;
+		assignGuestTo(guestId, chairPopover);
 		chairPopover = null; guestSearch = '';
 	}
 
-	function clearChairAssignment() {
-		if (!chairPopover) return;
-		const { tableId, chairIdx, seatId } = chairPopover;
+	function clearSeat(target: SeatTarget) {
+		const { tableId, chairIdx, seatId } = target;
 		pushUndo();
 		if (seatId) {
 			seats = seats.map(s => s.id === seatId ? { ...s, assignment: null } : s);
@@ -682,6 +591,11 @@
 				return { ...t, assignments: a };
 			});
 		}
+	}
+
+	function clearChairAssignment() {
+		if (!chairPopover) return;
+		clearSeat(chairPopover);
 		chairPopover = null;
 	}
 
@@ -710,7 +624,6 @@
 			targets.push({ x: cx, y: cy });
 			if (t.shape === 'rect') {
 				const corners = rotatedCorners(t);
-				// Edge midpoints
 				for (let i = 0; i < corners.length; i++) {
 					const c1 = corners[i], c2 = corners[(i + 1) % corners.length];
 					targets.push({ x: (c1.x + c2.x) / 2, y: (c1.y + c2.y) / 2 });
@@ -749,67 +662,73 @@
 	}
 
 	function clearAllAssignments() {
+		pushUndo();
 		tables = tables.map(t => ({ ...t, assignments: Array(totalChairs(t)).fill(null) }));
 		seats = seats.map(s => ({ ...s, assignment: null }));
 	}
 
-	// Smart auto-seating: group by group field then by surname, seat groups together
-	function autoAssign() {
-		tables = tables.map(t => ({ ...t, assignments: Array(totalChairs(t)).fill(null) }));
-		// Group guests
+	/** Clear every seat of one table. */
+	function clearTableSeats(tableId: string) {
+		pushUndo();
+		tables = tables.map(t => t.id === tableId ? { ...t, assignments: Array(totalChairs(t)).fill(null) } : t);
+	}
+
+	/**
+	 * Seat everyone who has no seat yet, keeping what is already placed. Guests are
+	 * grouped by family (or surname); a group goes to a table that already seats
+	 * some of it when there is room, else to the smallest table that fits all of
+	 * it, else it is split across the tables with the most free seats.
+	 */
+	function autoSeatRest() {
+		const unseated = guests.filter(g => !assignedIds.has(g.id));
+		if (!unseated.length) return;
+		pushUndo();
+		const keyOf = (g: Guest) => (g.group?.trim() || g.lastName.trim()).toLowerCase();
+		const keyOfId = (id: string) => { const g = guests.find(x => x.id === id); return g ? keyOf(g) : ''; };
 		const groups = new Map<string, Guest[]>();
-		for (const g of guests) {
-			const key = (g.group?.trim() || g.lastName.trim()).toLowerCase();
-			if (!groups.has(key)) groups.set(key, []);
-			groups.get(key)!.push(g);
+		for (const g of unseated) {
+			const k = keyOf(g);
+			if (!groups.has(k)) groups.set(k, []);
+			groups.get(k)!.push(g);
 		}
-		// Sort groups: largest first, then alphabetical; sort members by first name
 		const sortedGroups = [...groups.entries()]
 			.sort(([ka, a], [kb, b]) => b.length - a.length || ka.localeCompare(kb))
 			.map(([, g]) => [...g].sort((a, b) => a.firstName.localeCompare(b.firstName)));
 
+		const work = snapTables(tables);
+		const freeOf = (t: TableObj) => t.assignments.filter(a => a === null).length;
+		const fill = (idx: number, people: Guest[]) => {
+			const a = [...work[idx].assignments];
+			let g = 0;
+			for (let j = 0; j < a.length && g < people.length; j++) if (a[j] === null) a[j] = people[g++].id;
+			work[idx] = { ...work[idx], assignments: a };
+		};
 		for (const group of sortedGroups) {
-			// Find smallest table that fits whole group
-			let bestIdx = -1, bestFree = Infinity;
-			for (let i = 0; i < tables.length; i++) {
-				const free = tables[i].assignments.filter(a => a === null).length;
-				if (free >= group.length && free < bestFree) { bestFree = free; bestIdx = i; }
+			const key = keyOf(group[0]);
+			// Join the rest of the family where it already sits, if there is room.
+			let idx = work.findIndex(t => freeOf(t) >= group.length && t.assignments.some(a => a !== null && keyOfId(a) === key));
+			if (idx < 0) {
+				let bestFree = Infinity;
+				work.forEach((t, i) => { const f = freeOf(t); if (f >= group.length && f < bestFree) { bestFree = f; idx = i; } });
 			}
-			if (bestIdx !== -1) {
-				let g = 0;
-				tables = tables.map((t, i) => {
-					if (i !== bestIdx) return t;
-					const a = [...t.assignments];
-					for (let j = 0; j < a.length && g < group.length; j++) if (a[j] === null) a[j] = group[g++].id;
-					return { ...t, assignments: a };
-				});
-			} else {
-				// Doesn't fit any single table – fill across tables by largest-free-first
-				let remaining = [...group];
-				while (remaining.length > 0) {
-					let maxFree = 0, maxIdx = -1;
-					for (let i = 0; i < tables.length; i++) {
-						const free = tables[i].assignments.filter(a => a === null).length;
-						if (free > maxFree) { maxFree = free; maxIdx = i; }
-					}
-					if (maxIdx === -1 || maxFree === 0) break;
-					const batch = remaining.splice(0, maxFree);
-					let g = 0;
-					tables = tables.map((t, i) => {
-						if (i !== maxIdx) return t;
-						const a = [...t.assignments];
-						for (let j = 0; j < a.length && g < batch.length; j++) if (a[j] === null) a[j] = batch[g++].id;
-						return { ...t, assignments: a };
-					});
-				}
+			if (idx >= 0) { fill(idx, group); continue; }
+			// Doesn't fit any single table – fill across tables by largest-free-first
+			const remaining = [...group];
+			while (remaining.length > 0) {
+				let maxFree = 0, maxIdx = -1;
+				work.forEach((t, i) => { const f = freeOf(t); if (f > maxFree) { maxFree = f; maxIdx = i; } });
+				if (maxIdx === -1) break;
+				fill(maxIdx, remaining.splice(0, maxFree));
 			}
 		}
+		tables = work;
 	}
 
 	// ─── Derived ──────────────────────────────────────────────────────────────
 	const selectedTable = $derived(tables.find(t => t.id === selectedId) ?? null);
 	const selectedWall  = $derived(walls.find(w => w.id === selectedId) ?? null);
 	const selectedZone  = $derived(zones.find(z => z.id === selectedId) ?? null);
+	const selectedSeat  = $derived(seats.find(s => s.id === selectedId) ?? null);
 
 	const ghostW = $derived(selectedType ? Number(selectedType.width) : tWidth);
 	const ghostH = $derived(selectedType ? Number(selectedType.height) : tHeight);
@@ -817,19 +736,54 @@
 	const ghostShape = $derived(selectedType ? selectedType.shape : tShape);
 	const ghostCh = $derived(selectedType ? Number(selectedType.max_chairs) : tChairs);
 
+	/** Chairs per side for a new table. A table type only says how many it seats,
+	 *  so those go round it the sensible way; a freeform table uses the panel's values. */
+	function newTableSides(type: TableType | null) {
+		if (type && type.shape === 'rect') {
+			return defaultChairSides(Number(type.width), Number(type.height), Number(type.max_chairs), tChairSpacing);
+		}
+		return { chairsTop: tChairsTop, chairsBottom: tChairsBottom, chairsLeft: tChairsLeft, chairsRight: tChairsRight };
+	}
+
 	function makeGhostTable(x: number, y: number): TableObj {
 		return {
 			id: '__ghost__', x, y, width: ghostW, height: ghostH,
 			radius: ghostR, shape: ghostShape, chairs: ghostCh,
-			chairsTop: tChairsTop, chairsBottom: tChairsBottom, chairsLeft: tChairsLeft, chairsRight: tChairsRight,
+			...newTableSides(selectedType),
 			rotation: 0, label: '', chairSpacing: tChairSpacing, assignments: []
 		};
 	}
 
+	// ─── Table inventory ──────────────────────────────────────────────────────
+	// A type's `amount` is how many of that table the venue owns. Every floor of
+	// the plan draws from the same stock; 0 means there is no limit.
+	const usedByType = $derived.by(() => countTablesByType(allFloors));
+	function typeLimit(tt: TableType): number {
+		const n = Number(tt.amount) || 0;
+		return n > 0 ? n : Infinity;
+	}
+	function typeLeft(tt: TableType): number {
+		return typeLimit(tt) - (usedByType.get(tt.id) ?? 0);
+	}
+	const selectedTypeExhausted = $derived(!!selectedType && typeLeft(selectedType) <= 0);
+	/** Types placed more often than the venue owns them — the server refuses such a save. */
+	const stockOverages = $derived.by(() =>
+		(tableTypes ?? []).filter(tt => Number.isFinite(typeLimit(tt)) && typeLeft(tt) < 0)
+			.map(tt => `${tt.name} ${usedByType.get(tt.id) ?? 0}/${typeLimit(tt)}`)
+	);
+
 	const ghostValid = $derived.by(() => {
+		if (selectedTypeExhausted) return false;
 		const ghost = makeGhostTable(cursorPos.x, cursorPos.y);
 		const snap = snapTables(tables);
 		return !tableHasCollision(ghost, undefined, snap);
+	});
+
+	/** Tables that overlap something or stand off the floor — loaded that way, or
+	 *  made so by a size or chair change in the panel. Shown in red, never moved. */
+	const collidingIds = $derived.by(() => {
+		const snap = snapTables(tables);
+		return new Set(snap.filter(t => tableHasCollision(t, t.id, snap)).map(t => t.id));
 	});
 
 	const ghostChairs = $derived(localChairs(makeGhostTable(0, 0)));
@@ -844,6 +798,7 @@
 	]));
 	const totalAssigned    = $derived(assignedIds.size);
 	const totalSeats       = $derived(tables.reduce((s, t) => s + totalChairs(t), 0) + seats.length);
+	const unseatedCount    = $derived(guests.filter(g => !assignedIds.has(g.id)).length);
 
 	// Whole-plan totals. The panel above only ever described the active floor, which
 	// is misleading on a multi-floor venue — show both.
@@ -855,6 +810,49 @@
 	const allZones  = $derived(allFloors.reduce((n, f) => n + (f.zones?.length ?? 0), 0));
 	const allSeats  = $derived(allFloors.reduce(
 		(n, f) => n + (f.tables ?? []).reduce((m, t) => m + totalChairs(t), 0) + (f.seats?.length ?? 0), 0));
+
+	/** Where a guest sits, as the list prints it. */
+	function seatRefOf(guestId: string): string | null {
+		for (const t of tables) { const i = t.assignments.indexOf(guestId); if (i >= 0) return tr.editor.seatRef(t.label, i + 1); }
+		const si = seats.findIndex(s => s.assignment === guestId);
+		if (si >= 0) return tr.editor.chairRef(si + 1);
+		for (let fi = 0; fi < floors.length; fi++) {
+			if (fi === activeFloorIdx) continue;
+			const f = floors[fi];
+			if (f.tables.some(t => t.assignments.includes(guestId)) || (f.seats ?? []).some(s => s.assignment === guestId)) return f.name;
+		}
+		return null;
+	}
+	const guestRows = $derived<GuestRow[]>(guests.map(g => ({ ...g, seatRef: seatRefOf(g.id) })));
+
+	/** The rest of a family that already sits at the selected table and still has free seats. */
+	const groupSuggestion = $derived.by(() => {
+		const T = selectedTable;
+		if (!T || step !== 'guests') return null;
+		const free = T.assignments.map((a, i) => (a ? -1 : i)).filter(i => i >= 0);
+		if (!free.length) return null;
+		const groupsHere = new Set(
+			T.assignments.filter(Boolean).map(id => guests.find(g => g.id === id)?.group?.trim()).filter((x): x is string => !!x)
+		);
+		for (const grp of groupsHere) {
+			const rest = guests.filter(g => g.group?.trim() === grp && !assignedIds.has(g.id));
+			if (rest.length) return { group: grp, guests: rest.slice(0, free.length), total: rest.length, freeSeats: free };
+		}
+		return null;
+	});
+	function seatSuggestion() {
+		const s = groupSuggestion;
+		if (!s || !selectedTable) return;
+		pushUndo();
+		const id = selectedTable.id;
+		tables = tables.map(t => {
+			if (t.id !== id) return t;
+			const a = [...t.assignments];
+			let k = 0;
+			for (const seat of s.freeSeats) { if (k >= s.guests.length) break; a[seat] = s.guests[k++].id; }
+			return { ...t, assignments: a };
+		});
+	}
 
 	const popoverTable = $derived.by(() => {
 		const cp = chairPopover;
@@ -888,16 +886,206 @@
 			.sort((a, b) => a.lastName.localeCompare(b.lastName) || a.firstName.localeCompare(b.firstName));
 	});
 
+	/** Open the assignment popover on a table chair, anchored to the chair itself. */
+	function openSeatPopover(t: TableObj, ci: number) {
+		const p = chairScreenPos(t, ci);
+		selectedId = t.id;
+		chairPopover = { tableId: t.id, chairIdx: ci, x: p.x, y: p.y };
+		guestSearch = '';
+	}
+
 	const patternX = $derived(((panX % zoom) + zoom) % zoom);
 	const patternY = $derived(((panY % zoom) + zoom) % zoom);
 
 	// Ruler tick computation
 	const rulerStep  = $derived(gridSnap || 0.5);
-	const rulerMajor = $derived(!gridSnap || gridSnap < 1 ? 1 : gridSnap);
+	// Numbered ticks at least ~40 px apart, on a multiple of the minor step.
+	const rulerMajor = $derived([1, 2, 5, 10, 20, 50].find(c => c * zoom >= 40 && Math.abs(c / rulerStep - Math.round(c / rulerStep)) < 1e-6) ?? 100);
 	const rulerMinMx = $derived(Math.floor(-panX / zoom / rulerStep) * rulerStep);
 	const rulerMaxMx = $derived(Math.ceil((4000 - panX) / zoom / rulerStep) * rulerStep);
 	const rulerMinMy = $derived(Math.floor(-panY / zoom / rulerStep) * rulerStep);
 	const rulerMaxMy = $derived(Math.ceil((4000 - panY) / zoom / rulerStep) * rulerStep);
+
+	// ─── Steps: tools, labels, progress ───────────────────────────────────────
+	const stepTools = $derived(
+		toolsFor(step, {
+			hasTableTypes: !!tableTypes?.length,
+			tablesFromTypesOnly,
+			allowZones: !zonesLocked,
+			shellEditable: !protectWallsZones
+		}).filter(t => !hiddenTools.includes(t))
+	);
+	// Never leave a tool active that the current step does not offer.
+	$effect(() => { if (!stepTools.includes(tool)) tool = 'select'; });
+
+	function stepLabel(id: StepId): string {
+		switch (id) {
+			case 'room': return tr.editor.stepRoom;
+			case 'walls': return tr.editor.stepWalls;
+			case 'zones': return tr.editor.stepZones;
+			case 'tables': return tr.editor.stepTables;
+			case 'chairs': return tr.editor.stepChairs;
+			case 'guests': return tr.editor.stepGuests;
+			case 'check': return editorMode === 'event' ? tr.editor.stepCheckPrint : tr.editor.stepCheck;
+		}
+	}
+	function stepDone(id: StepId): boolean {
+		switch (id) {
+			case 'room': return roomRects.length > 0;
+			case 'walls': return visited.includes('walls');
+			case 'zones': return visited.includes('zones');
+			case 'tables': return tables.length > 0 || visited.includes('tables');
+			case 'chairs': return visited.includes('chairs');
+			case 'guests': return guests.length > 0 && unseatedCount === 0;
+			case 'check': return visited.includes('check') && saveState === 'saved';
+		}
+	}
+	/** What the progress list says next to each step. */
+	function stepFact(id: StepId): string {
+		switch (id) {
+			case 'room': return bounds ? `${bounds.w.toFixed(1)} × ${bounds.h.toFixed(1)} m · ${roomArea(roomRects).toFixed(1)} m²` : tr.editor.roomNone;
+			case 'walls': return `${walls.length}`;
+			case 'zones': return zones.length ? zones.slice(0, 2).map(z => z.label).filter(Boolean).join(', ') + (zones.length > 2 ? ` +${zones.length - 2}` : '') || `${zones.length}` : '0';
+			case 'tables': return `${tables.length} · ${totalSeats} ${tr.editor.totalSeats.toLowerCase()}`;
+			case 'chairs': return `${seats.length}`;
+			case 'guests': return tr.editor.seatedOf(totalAssigned, guests.length);
+			case 'check': return saveState === 'saved' ? tr.editor.saved : saveState === 'saving' ? tr.editor.saving : saveState === 'dirty' ? tr.editor.unsaved : '';
+		}
+	}
+	const stepItems = $derived<StepItem[]>(steps.map((id, i) => ({
+		id, label: stepLabel(id), index: i + 1,
+		state: id === step ? 'active' : stepDone(id) ? 'done' : 'todo'
+	})));
+	const stepIndex = $derived(steps.indexOf(step));
+	const nextStepId = $derived(stepIndex >= 0 && stepIndex < steps.length - 1 ? steps[stepIndex + 1] : null);
+	const prevStepId = $derived(stepIndex > 0 ? steps[stepIndex - 1] : null);
+
+	function goStep(id: string) {
+		if (!steps.includes(id as StepId)) return;
+		cancelDrawing();
+		boundsStart = null; measureStart = null; measureEnd = null;
+		chairPopover = null; helpOpen = false;
+		partDrag = null; selectedPart = null;
+		if (!visited.includes(step)) visited = [...visited, step];
+		// Moving between steps saves what was done, without waiting for autosave.
+		if (onSave && saveState === 'dirty' && id !== step) onSave();
+		step = id as StepId;
+		tool = 'select';
+	}
+
+	const ICONS: Record<Tool, string> = {
+		select:  'M5 3l14 9-7 1.5L9 20z',
+		bounds:  'M3 3h12v8h6v10H3z',
+		wall:    'M3 5h18M3 12h18M3 19h18M8 5v7M16 12v7',
+		pillar:  'M8 4h8v16H8zM6 4h12M6 20h12',
+		zone:    'M4 6l7-3 9 4v11l-7 3-9-4z',
+		table:   'M3 6h18M3 18h18M8 6v12M16 6v12',
+		chair:   'M7 4v9M7 13h9M16 13v7M7 13v7M6 4h2',
+		eraser:  'M20 20H7L3 16l11-11 6 6M6 17l-3-3',
+		measure: 'M2 2l20 20M2 8V2h6M22 16v6h-6',
+	};
+	function toolName(t: Tool): string {
+		switch (t) {
+			case 'select': return tr.editor.toolSelect;
+			case 'bounds': return tr.editor.toolRoom;
+			case 'wall': return tr.editor.toolWallName;
+			case 'pillar': return tr.editor.toolPillar;
+			case 'zone': return tr.editor.toolZoneName;
+			case 'table': return tr.editor.toolTable;
+			case 'chair': return tr.editor.toolChair;
+			case 'eraser': return tr.editor.toolErase;
+			case 'measure': return tr.editor.toolMeasure;
+		}
+	}
+	function toolHow(t: Tool): string {
+		switch (t) {
+			case 'select': return step === 'room' && !boundsLocked ? tr.editor.instrSelectRoom : tr.editor.toolSelectHow;
+			case 'bounds': return tr.editor.toolRoomHow;
+			case 'wall': return rectDraw ? tr.editor.toolWallHowRect : tr.editor.toolWallHow;
+			case 'pillar': return tr.editor.toolPillarHow;
+			case 'zone': return rectDraw ? tr.editor.toolZoneHowRect : tr.editor.toolZoneHow;
+			case 'table': return tr.editor.toolTableHow;
+			case 'chair': return tr.editor.toolChairHow;
+			case 'eraser': return tr.editor.toolEraseHow;
+			case 'measure': return tr.editor.toolMeasureHow;
+		}
+	}
+	const toolCards = $derived<ToolCard[]>(stepTools.map(t => ({ id: t, name: toolName(t), how: toolHow(t), kbd: TOOL_KEYS[t], icon: ICONS[t] })));
+
+	function pickTool(id: string) {
+		const t = id as Tool;
+		if (!stepTools.includes(t)) return;
+		tool = t;
+		if (t !== 'select') { selectedId = null; selectedPart = null; }
+		if (t !== 'wall' && t !== 'zone') cancelDrawing();
+		rectStart = null; rectMoved = false;
+		if (t !== 'bounds') boundsStart = null;
+		if (t !== 'measure') { measureStart = null; measureEnd = null; }
+		chairPopover = null;
+	}
+
+	/** The one line at the top of the canvas that says what to do now. */
+	const instruction = $derived.by((): string => {
+		if (roomNotice) return roomNotice;
+		if (readOnly) return tr.editor.instrCheck;
+		if (dragGuest) return tr.editor.instrGuests;
+		switch (tool) {
+			case 'measure':
+				return `${measureStart && !measureEnd ? tr.editor.statusMeasureSecond : measureEnd ? tr.editor.statusMeasureNew : tr.editor.statusMeasureFirst} · ${tr.editor.escToCancel}`;
+			case 'bounds':
+				return boundsStart ? tr.editor.instrRoomSecond : roomRects.length ? tr.editor.instrRoomMore : tr.editor.instrRoomFirst;
+			case 'wall':
+			case 'zone': {
+				if (isDrawing) return tr.editor.instrDrawing(drawPts.length);
+				if (rectStart && rectMoved) {
+					const w = Math.abs(cursorPos.x - rectStart.x), h = Math.abs(cursorPos.y - rectStart.y);
+					return tr.editor.instrRectDragging(w.toFixed(1), h.toFixed(1));
+				}
+				if (rectDraw && (tool === 'wall' ? selectedWall : selectedZone)) return tr.editor.instrEditShape;
+				if (rectDraw) return tr.editor.instrRectStart;
+				return tool === 'wall' ? tr.editor.instrWallStart : tr.editor.instrZoneStart;
+			}
+			case 'pillar':
+				return tr.editor.instrPillar;
+			case 'table':
+				if (selectedType && selectedTypeExhausted) return tr.editor.inventoryExhausted(selectedType.name, typeLimit(selectedType));
+				if (tablesFromTypesOnly && !selectedType) return tr.editor.instrTablePick;
+				return ghostValid ? tr.editor.instrTableOk : tr.editor.instrTableBlocked;
+			case 'chair':
+				return tr.editor.instrChair;
+			case 'eraser':
+				return tr.editor.instrEraser;
+			default:
+				if (step === 'guests') return tr.editor.instrGuests;
+				if (selectedTable) return tr.editor.instrSelectedTable;
+				if (selectedWall || selectedZone) return rectDraw ? tr.editor.instrEditShape : tr.editor.instrSelectedPoly;
+				if (step === 'room' && roomRects.length && !boundsLocked) return tr.editor.instrSelectRoom;
+				return tr.editor.instrSelect;
+		}
+	});
+
+	// ─── First-run coach marks ────────────────────────────────────────────────
+	const TIPS_KEY = 'hallify-editor-tips';
+	let tipsSeen = $state<string[]>([]);
+	let tipsLoaded = $state(false);
+	function coachText(id: StepId): string {
+		switch (id) {
+			case 'room': return tr.editor.coachRoom;
+			case 'walls': return tr.editor.coachWalls;
+			case 'zones': return tr.editor.coachZones;
+			case 'tables': return tr.editor.coachTables;
+			case 'chairs': return tr.editor.coachChairs;
+			case 'guests': return tr.editor.coachGuests;
+			case 'check': return tr.editor.coachCheck;
+		}
+	}
+	const coachVisible = $derived(tipsLoaded && !tipsSeen.includes(step));
+	function dismissCoach() {
+		tipsSeen = [...tipsSeen, step];
+		try { localStorage.setItem(TIPS_KEY, JSON.stringify(tipsSeen)); } catch { /* private mode */ }
+	}
+
+	let helpOpen = $state(false);
 
 	// ─── Event handlers ───────────────────────────────────────────────────────
 	function onPointerMove(e: PointerEvent) {
@@ -909,6 +1097,36 @@
 		if (r) { rulerMouseX = e.clientX - r.left; rulerMouseY = e.clientY - r.top; }
 
 		if (isPanning) { panX += e.movementX; panY += e.movementY; snapGuides = []; return; }
+
+		// A wall or zone rectangle being dragged out
+		if (rectStart) {
+			if (!rectMoved && Math.hypot(raw.x - rectStart.x, raw.y - rectStart.y) * zoom > 4) rectMoved = true;
+			return;
+		}
+
+		// A room part being moved or resized
+		if (partDrag) {
+			const dx = raw.x - partDrag.start.x, dy = raw.y - partDrag.start.y;
+			const o = partDrag.orig;
+			let next: BoundsRect;
+			if (partDrag.kind === 'move') {
+				const p = snap({ x: o.x + dx, y: o.y + dy });
+				next = { ...o, x: p.x, y: p.y };
+			} else {
+				// The corner opposite the one being dragged stays put.
+				const left = partDrag.corner === 0 || partDrag.corner === 3;
+				const top = partDrag.corner === 0 || partDrag.corner === 1;
+				const fx = left ? o.x + o.w : o.x, fy = top ? o.y + o.h : o.y;
+				const m = snap({ x: (left ? o.x : o.x + o.w) + dx, y: (top ? o.y : o.y + o.h) + dy });
+				const x0 = Math.min(fx, m.x), x1 = Math.max(fx, m.x), y0 = Math.min(fy, m.y), y1 = Math.max(fy, m.y);
+				next = { x: x0, y: y0, w: Math.max(0.5, x1 - x0), h: Math.max(0.5, y1 - y0) };
+			}
+			const moved = roomRects.map((rr, i) => i === partDrag!.idx ? next : rr);
+			// A drag that would cut the part loose stops at the last joined position.
+			if (partsConnected(moved)) roomRects = moved;
+			else if (!roomNotice) noticeRoom(tr.editor.roomNotJoined);
+			return;
+		}
 
 		// Vertex dragging (reshape polygon)
 		if (isVertexDragging && selectedId) {
@@ -946,11 +1164,12 @@
 			if (!seatClickCandidate) {
 				const sb = seats.find(s => s.id === selectedId)!;
 				const p = snap({ x: elemStart.x + dx, y: elemStart.y + dy });
-				const candidate: SeatObj = { ...sb, x: p.x, y: p.y };
-				// Only move into a clear spot (no walls / tables / chairs / out-of-bounds).
-				if (!seatHasCollision(candidate, selectedId)) {
-					seats = seats.map(s => s.id === selectedId ? candidate : s);
-				}
+				// Only move into a clear spot, sliding along whatever is in the way. A
+				// chair already stuck somewhere it should not be may move anywhere.
+				const id = selectedId;
+				const stuck = seatHasCollision(sb, id);
+				const next = firstClear(sb, p, c => stuck || !seatHasCollision(c, id));
+				if (next) seats = seats.map(s => s.id === selectedId ? next : s);
 			}
 			return;
 		}
@@ -963,10 +1182,12 @@
 			const current = snapTables(tables);
 			const orig = current.find(t => t.id === selectedId);
 			if (orig) {
-				const candidate: TableObj = { ...orig, x: elemSnapped.x, y: elemSnapped.y };
-				if (!tableHasCollision(candidate, selectedId, current)) {
-					tables = tables.map(t => t.id === selectedId ? candidate : t);
-				}
+				// A table already overlapping something would otherwise be frozen in
+				// place — every spot near it collides too. Let it move freely until clear.
+				const id = selectedId;
+				const stuck = tableHasCollision(orig, id, current);
+				const next = firstClear(orig, elemSnapped, c => stuck || !tableHasCollision(c, id, current));
+				if (next) tables = tables.map(t => t.id === selectedId ? next : t);
 			}
 		} else {
 			snapGuides = [];
@@ -980,28 +1201,164 @@
 			const orig = current.find(t => t.id === selectedId);
 			if (orig) {
 				const candidate: TableObj = { ...orig, rotation: newRot };
-				if (!tableHasCollision(candidate, selectedId, current)) {
+				if (tableHasCollision(orig, selectedId, current) || !tableHasCollision(candidate, selectedId, current)) {
 					tables = tables.map(t => t.id === selectedId ? candidate : t);
 				}
 			}
 		}
 	}
 
+	/** Where a dragged object goes: the target if it is clear, else as far as it can
+	 *  get along one axis, so it slides along a wall or a neighbour instead of
+	 *  stopping dead the moment the cursor passes into one. */
+	function firstClear<T extends { x: number; y: number }>(orig: T, to: Point, ok: (c: T) => boolean): T | null {
+		for (const c of [{ ...orig, x: to.x, y: to.y }, { ...orig, x: to.x }, { ...orig, y: to.y }]) {
+			if ((c.x !== orig.x || c.y !== orig.y) && ok(c)) return c;
+		}
+		return null;
+	}
+
+	/** The corner handle of the selected room part under a point, if any (0 tl, 1 tr, 2 br, 3 bl). */
+	function partCornerAt(raw: Point): number {
+		if (selectedPart === null || !roomRects[selectedPart]) return -1;
+		const rr = roomRects[selectedPart];
+		const corners = [{ x: rr.x, y: rr.y }, { x: rr.x + rr.w, y: rr.y }, { x: rr.x + rr.w, y: rr.y + rr.h }, { x: rr.x, y: rr.y + rr.h }];
+		const hitR = 9 / zoom;
+		return corners.findIndex(c => Math.hypot(raw.x - c.x, raw.y - c.y) < hitR);
+	}
+
+	/** The points of the selected wall or zone, when it may be reshaped. */
+	function selectedPolyPoints(): Point[] | null {
+		if (!selectedId) return null;
+		const w = wallsOff ? undefined : walls.find(x => x.id === selectedId);
+		const z = zonesOff ? undefined : zones.find(x => x.id === selectedId);
+		return w?.points ?? z?.points ?? null;
+	}
+	function setSelectedPoints(points: Point[]) {
+		walls = walls.map(w => w.id === selectedId ? { ...w, points } : w);
+		zones = zones.map(z => z.id === selectedId ? { ...z, points } : z);
+	}
+	/** Grab a corner of the selected shape — or, in drag-to-draw mode, put a new corner
+	 *  on the edge under the pointer and grab that, so one press both adds and drags it. */
+	function grabShapeHandle(e: PointerEvent, raw: Point): boolean {
+		const pts = selectedPolyPoints();
+		if (!pts) return false;
+		const startDrag = (idx: number, at: Point) => {
+			isVertexDragging = true; vertexDragIdx = idx; polyDragStart = raw; vertexOrigPos = { ...at };
+			svgEl.setPointerCapture(e.pointerId);
+		};
+		const hitR = 8 / zoom; // vertex handle radius in world coords
+		for (let vi = 0; vi < pts.length; vi++) {
+			if (Math.hypot(raw.x - pts[vi].x, raw.y - pts[vi].y) < hitR) { pushUndo(); startDrag(vi, pts[vi]); return true; }
+		}
+		if (!rectDraw) return false;
+		let best = -1, bestD = 7 / zoom, bestP: Point | null = null;
+		for (let i = 0; i < pts.length; i++) {
+			const a = pts[i], b = pts[(i + 1) % pts.length];
+			const dx = b.x - a.x, dy = b.y - a.y, l2 = dx * dx + dy * dy;
+			if (l2 === 0) continue;
+			const t = Math.max(0, Math.min(1, ((raw.x - a.x) * dx + (raw.y - a.y) * dy) / l2));
+			const q = { x: a.x + t * dx, y: a.y + t * dy };
+			const d = Math.hypot(raw.x - q.x, raw.y - q.y);
+			if (d < bestD) { best = i; bestD = d; bestP = q; }
+		}
+		if (best < 0 || !bestP) return false;
+		pushUndo();
+		const np = [...pts];
+		np.splice(best + 1, 0, bestP);
+		setSelectedPoints(np);
+		startDrag(best + 1, bestP);
+		return true;
+	}
+	/** The shapes the active drawing tool works on. */
+	function toolShapes(): { id: string; points: Point[] }[] {
+		if (tool === 'wall') return wallsOff ? [] : walls;
+		if (tool === 'zone') return zonesOff ? [] : zones;
+		return [];
+	}
+	/** With the Wall or Zone tool, a corner of ANY wall (or zone) can be grabbed and
+	 *  dragged without switching tools; that shape becomes the selected one. */
+	function grabAnyVertex(e: PointerEvent, raw: Point): boolean {
+		const hitR = 8 / zoom;
+		const shapes = toolShapes();
+		for (let si = shapes.length - 1; si >= 0; si--) {
+			const pts = shapes[si].points;
+			for (let vi = 0; vi < pts.length; vi++) {
+				if (Math.hypot(raw.x - pts[vi].x, raw.y - pts[vi].y) < hitR) {
+					pushUndo();
+					selectedId = shapes[si].id;
+					isVertexDragging = true; vertexDragIdx = vi; polyDragStart = raw; vertexOrigPos = { ...pts[vi] };
+					svgEl.setPointerCapture(e.pointerId);
+					return true;
+				}
+			}
+		}
+		return false;
+	}
+
+	/** Finish a dragged-out rectangle: a real drag makes the shape, a click starts corners. */
+	function finishRect() {
+		const a = rectStart!, b = cursorPos;
+		rectStart = null;
+		if (!rectMoved) {
+			const hit = [...toolShapes()].reverse().find(sh => pointInPoly(a, sh.points));
+			if (hit) { selectedId = hit.id; return; }
+			isDrawing = true; drawPts = [a]; return;
+		}
+		rectMoved = false;
+		const x0 = Math.min(a.x, b.x), x1 = Math.max(a.x, b.x), y0 = Math.min(a.y, b.y), y1 = Math.max(a.y, b.y);
+		const min = Math.max(gridSnap || 0, 0.1);
+		if (x1 - x0 < min || y1 - y0 < min) return;
+		pushUndo();
+		const points = [{ x: x0, y: y0 }, { x: x1, y: y0 }, { x: x1, y: y1 }, { x: x0, y: y1 }];
+		const id = crypto.randomUUID();
+		if (tool === 'wall') walls = [...walls, { id, points }];
+		else zones = [...zones, { id, points, color: zoneColor, label: `Zone ${zones.length + 1}` }];
+		// Selected, so its edges take new corners straight away.
+		selectedId = id;
+	}
+
 	function onPointerDown(e: PointerEvent) {
-		if (e.button === 1 || (e.button === 0 && e.altKey)) {
+		if (e.button === 1 || (e.button === 0 && (e.altKey || spaceDown))) {
 			e.preventDefault(); isPanning = true; svgEl.setPointerCapture(e.pointerId); return;
 		}
 		if (e.button !== 0) return;
 		// Close any open popover on canvas click
 		if (chairPopover) { chairPopover = null; guestSearch = ''; return; }
+		if (ctxMenu) { ctxMenu = null; return; }
+		if (helpOpen) helpOpen = false;
 
 		const raw = svgCoords(e), pos = snap(raw);
 
+		if (readOnly) {
+			// Looking only: a click still tells you what you are looking at.
+			selectedId = null;
+			for (let i = tables.length - 1; i >= 0; i--) if (tableHit(tables[i], raw)) { selectedId = tables[i].id; return; }
+			for (let i = zones.length - 1; i >= 0; i--) if (pointInPoly(raw, zones[i].points)) { selectedId = zones[i].id; return; }
+			return;
+		}
+
 		if (tool === 'wall' || tool === 'zone') {
+			if (rectDraw && !isDrawing) {
+				// The selected shape's corners and edges come first: reshape it in place.
+				if (grabShapeHandle(e, raw) || grabAnyVertex(e, raw)) return;
+				rectStart = pos; rectMoved = false;
+				svgEl.setPointerCapture(e.pointerId);
+				return;
+			}
 			if (!isDrawing) { isDrawing = true; drawPts = [pos]; return; }
 			if (nearFirstPoint(pos)) {
 				finishDrawing();
 			} else { drawPts = [...drawPts, pos]; }
+			return;
+		}
+
+		if (tool === 'pillar') {
+			const s = 0.25;
+			pushUndo();
+			walls = [...walls, { id: crypto.randomUUID(), points: [
+				{ x: pos.x - s, y: pos.y - s }, { x: pos.x + s, y: pos.y - s }, { x: pos.x + s, y: pos.y + s }, { x: pos.x - s, y: pos.y + s }
+			] }];
 			return;
 		}
 
@@ -1022,26 +1379,27 @@
 			// In reservation mode only defined admin table types may be placed —
 			// no freeform tables (which would otherwise use the tShape/tWidth fallback).
 			if (tablesFromTypesOnly && !selectedType) return;
-			pushUndo();
+			if (selectedTypeExhausted) return;
 			const st = selectedType;
 			const useShape = st ? st.shape : tShape;
 			const useWidth = st ? Number(st.width) : tWidth;
 			const useHeight = st ? Number(st.height) : tHeight;
 			const useRadius = st ? Number(st.radius) : Math.max(tWidth, tHeight) / 2;
 			const useChairs = st ? Number(st.max_chairs) : tChairs;
+			const sides = newTableSides(st);
 			const t: TableObj = {
 				id: crypto.randomUUID(), x: pos.x, y: pos.y,
 				width: useWidth, height: useHeight, radius: useRadius,
 				shape: useShape, chairs: useChairs, rotation: 0,
 				label: st ? st.name : `T${tables.length + 1}`,
-				chairsTop: tChairsTop, chairsBottom: tChairsBottom,
-				chairsLeft: tChairsLeft, chairsRight: tChairsRight,
+				...sides,
 				chairSpacing: tChairSpacing,
-				assignments: Array(useShape === 'round' ? useChairs : (tChairsTop + tChairsBottom + tChairsLeft + tChairsRight)).fill(null),
+				assignments: Array(useShape === 'round' ? useChairs : (sides.chairsTop + sides.chairsBottom + sides.chairsLeft + sides.chairsRight)).fill(null),
 				typeId: st?.id,
 			};
 			const snap = snapTables(tables);
-			if (!tableHasCollision(t, undefined, snap)) { tables = [...tables, t]; selectedId = t.id; tool = 'select'; }
+			// The tool stays active so the next click places the next table.
+			if (!tableHasCollision(t, undefined, snap)) { pushUndo(); tables = [...tables, t]; }
 			return;
 		}
 
@@ -1051,25 +1409,22 @@
 			if (seatHasCollision(seat)) return;
 			pushUndo();
 			seats = [...seats, seat];
-			selectedId = seat.id;
-			tool = 'select';
 			return;
 		}
 
 		if (tool === 'eraser') {
-			const SR = 0.26; // standalone-seat hit radius (metres)
 			for (let i = seats.length - 1; i >= 0; i--) {
-				if (Math.hypot(raw.x - seats[i].x, raw.y - seats[i].y) <= SR) { pushUndo(); seats = seats.filter((_, j) => j !== i); return; }
+				if (Math.hypot(raw.x - seats[i].x, raw.y - seats[i].y) <= SEAT_R) { pushUndo(); seats = seats.filter((_, j) => j !== i); return; }
 			}
 			for (let i = tables.length - 1; i >= 0; i--) {
 				if (tableHit(tables[i], raw)) { pushUndo(); tables = tables.filter((_, j) => j !== i); return; }
 			}
-			if (!zonesLocked) {
+			if (!zonesOff) {
 				for (let i = zones.length - 1; i >= 0; i--) {
 					if (pointInPoly(raw, zones[i].points)) { pushUndo(); zones = zones.filter((_, j) => j !== i); return; }
 				}
 			}
-			if (!wallsLocked) {
+			if (!wallsOff) {
 				for (let i = walls.length - 1; i >= 0; i--) {
 					if (pointInPoly(raw, walls[i].points)) { pushUndo(); walls = walls.filter((_, j) => j !== i); return; }
 				}
@@ -1086,58 +1441,52 @@
 				const w = Math.abs(pos.x - boundsStart.x);
 				const h = Math.abs(pos.y - boundsStart.y);
 				if (w > 0.5 && h > 0.5) {
-					pushUndo();
-					bounds = { x, y, w, h };
+					// A new part must join the room: overlap it or share a doorway's width of edge.
+					if (partsConnected([...roomRects, { x, y, w, h }])) {
+						pushUndo();
+						roomRects = [...roomRects, { x, y, w, h }];
+					} else noticeRoom(tr.editor.roomNotJoined);
 				}
+				// Stay in the tool: the next rectangle joins this one (an L, a U…).
 				boundsStart = null;
-				tool = 'select';
 			}
 			return;
 		}
 
 		if (tool === 'select') {
-			// Check vertex handles on selected wall/zone first
-			if (selectedId && (!wallsLocked || !zonesLocked)) {
-				const selWall = wallsLocked ? undefined : walls.find(w => w.id === selectedId);
-				const selZone = zonesLocked ? undefined : zones.find(z => z.id === selectedId);
-				const pts = selWall?.points ?? selZone?.points;
-				if (pts) {
-					const hitR = 8 / zoom; // vertex handle radius in world coords
-					for (let vi = 0; vi < pts.length; vi++) {
-						if (Math.hypot(raw.x - pts[vi].x, raw.y - pts[vi].y) < hitR) {
-							pushUndo();
-							isVertexDragging = true;
-							vertexDragIdx = vi;
-							polyDragStart = raw;
-							vertexOrigPos = { ...pts[vi] };
-							svgEl.setPointerCapture(e.pointerId);
-							return;
-						}
-					}
+			// A corner handle of the selected room part: resize.
+			if (!boundsLocked && step === 'room') {
+				const corner = partCornerAt(raw);
+				if (corner >= 0 && selectedPart !== null) {
+					pushUndo();
+					partDrag = { idx: selectedPart, kind: 'resize', corner, start: raw, orig: { ...roomRects[selectedPart] } };
+					svgEl.setPointerCapture(e.pointerId);
+					return;
 				}
 			}
+			// Corners (and, in drag-to-draw mode, edges) of the selected wall or zone first
+			if (grabShapeHandle(e, raw)) return;
 
 			for (let i = tables.length - 1; i >= 0; i--) {
 				const t = tables[i];
 				// Check chair click first (opens popover, no drag)
 				const ci = findClickedChair(t, raw);
 				if (ci >= 0) {
-					selectedId = t.id;
-					const r = svgEl.getBoundingClientRect();
-					chairPopover = { tableId: t.id, chairIdx: ci, x: e.clientX - r.left, y: e.clientY - r.top };
-					guestSearch = '';
+					if (!allowGuests) { selectedId = t.id; selectedPart = null; return; }
+					selectedPart = null;
+					openSeatPopover(t, ci);
 					return;
 				}
 				// Then table body (drag)
 				if (tableBodyHit(t, raw)) {
-					pushUndo(); selectedId = t.id; isDragging = true; dragStart = raw; elemStart = { x: t.x, y: t.y }; return;
+					pushUndo(); selectedId = t.id; selectedPart = null; isDragging = true; dragStart = raw; elemStart = { x: t.x, y: t.y }; return;
 				}
 			}
 			// Zones — select + drag
-			if (!zonesLocked) {
+			if (!zonesOff) {
 				for (let i = zones.length - 1; i >= 0; i--) {
 					if (pointInPoly(raw, zones[i].points)) {
-						pushUndo(); selectedId = zones[i].id;
+						pushUndo(); selectedId = zones[i].id; selectedPart = null;
 						isPolyDragging = true; polyDragStart = raw;
 						polyOrigPoints = zones[i].points.map(p => ({ ...p }));
 						svgEl.setPointerCapture(e.pointerId);
@@ -1146,10 +1495,10 @@
 				}
 			}
 			// Walls — select + drag
-			if (!wallsLocked) {
+			if (!wallsOff) {
 				for (let i = walls.length - 1; i >= 0; i--) {
 					if (pointInPoly(raw, walls[i].points)) {
-						pushUndo(); selectedId = walls[i].id;
+						pushUndo(); selectedId = walls[i].id; selectedPart = null;
 						isPolyDragging = true; polyDragStart = raw;
 						polyOrigPoints = walls[i].points.map(p => ({ ...p }));
 						svgEl.setPointerCapture(e.pointerId);
@@ -1157,27 +1506,233 @@
 					}
 				}
 			}
-			selectedId = null;
+			// Room parts — in the room step, the floor itself can be picked up.
+			if (!boundsLocked && step === 'room') {
+				for (let i = roomRects.length - 1; i >= 0; i--) {
+					const rr = roomRects[i];
+					if (raw.x >= rr.x && raw.x <= rr.x + rr.w && raw.y >= rr.y && raw.y <= rr.y + rr.h) {
+						pushUndo();
+						selectedId = null; selectedPart = i;
+						partDrag = { idx: i, kind: 'move', corner: -1, start: raw, orig: { ...rr } };
+						svgEl.setPointerCapture(e.pointerId);
+						return;
+					}
+				}
+			}
+			selectedId = null; selectedPart = null;
 		}
 	}
 
 	function onPointerUp(e: PointerEvent) {
+		if (rectStart) finishRect();
 		// A press on a seat that never moved → open its assignment popover.
 		if (seatClickCandidate) {
 			const c = seatClickCandidate; seatClickCandidate = null;
-			chairPopover = { seatId: c.id, x: c.x, y: c.y };
-			guestSearch = '';
+			if (allowGuests) { chairPopover = { seatId: c.id, x: c.x, y: c.y }; guestSearch = ''; }
 		}
 		isPanning = isDragging = isRotating = isPolyDragging = isVertexDragging = false;
 		vertexDragIdx = -1;
+		partDrag = null;
 		svgEl?.releasePointerCapture(e.pointerId);
 	}
 
+	// ─── Right-click menu ─────────────────────────────────────────────────────
+	type CtxItem = { label: string; run: () => void; danger?: boolean; disabled?: boolean; kbd?: string };
+	let ctxMenu = $state<{ x: number; y: number; title: string; items: CtxItem[] } | null>(null);
+
+	function removeVertex(id: string, vi: number) {
+		const sh = walls.find(w => w.id === id) ?? zones.find(z => z.id === id);
+		if (!sh || sh.points.length <= 3) return;
+		pushUndo();
+		const points = sh.points.filter((_, i) => i !== vi);
+		walls = walls.map(w => w.id === id ? { ...w, points } : w);
+		zones = zones.map(z => z.id === id ? { ...z, points } : z);
+	}
+	function insertVertex(id: string, edge: number, at: Point) {
+		const sh = walls.find(w => w.id === id) ?? zones.find(z => z.id === id);
+		if (!sh) return;
+		pushUndo();
+		const points = [...sh.points];
+		points.splice(edge + 1, 0, snap(at));
+		walls = walls.map(w => w.id === id ? { ...w, points } : w);
+		zones = zones.map(z => z.id === id ? { ...z, points } : z);
+		selectedId = id;
+	}
+	function duplicateShape(id: string) {
+		const off = (pts: Point[]) => pts.map(q => ({ x: q.x + 1, y: q.y + 1 }));
+		const w = walls.find(x => x.id === id), z = zones.find(x => x.id === id);
+		pushUndo();
+		const nid = crypto.randomUUID();
+		if (w) walls = [...walls, { ...w, id: nid, points: off(w.points) }];
+		if (z) zones = [...zones, { ...z, id: nid, points: off(z.points), label: z.label ? `${z.label} 2` : z.label }];
+		selectedId = nid;
+	}
+	function removeShape(id: string) {
+		pushUndo();
+		walls = walls.filter(w => w.id !== id);
+		zones = zones.filter(z => z.id !== id);
+		if (selectedId === id) selectedId = null;
+	}
+	/** A copy of a table next to it, wherever the first clear spot is. */
+	function duplicateTable(t: TableObj): boolean {
+		const current = snapTables(tables);
+		const step = Math.max(Number(t.width), Number(t.radius) * 2, 1) + 1;
+		for (const [dx, dy] of [[step, 0], [0, step], [-step, 0], [0, -step], [step, step], [-step, step], [step, -step], [-step, -step]]) {
+			const c: TableObj = { ...t, id: crypto.randomUUID(), x: snap({ x: Number(t.x) + dx, y: 0 }).x, y: snap({ x: 0, y: Number(t.y) + dy }).y,
+				label: `T${tables.length + 1}`, assignments: Array(totalChairs(t)).fill(null) };
+			if (!tableHasCollision(c, undefined, current)) { pushUndo(); tables = [...tables, c]; selectedId = c.id; return true; }
+		}
+		return false;
+	}
+	function rotateTable(id: string, by: number) {
+		pushUndo();
+		tables = tables.map(t => t.id === id ? { ...t, rotation: ((Number(t.rotation) + by + 540) % 360) - 180 } : t);
+	}
+
+	/** What is under a world point, most specific first. */
+	function ctxItemsAt(raw: Point): { title: string; items: CtxItem[] } | null {
+		const hitR = 8 / zoom;
+		// While drawing a polygon, the menu is about the drawing.
+		if (isDrawing) return { title: tr.editor.ctxDrawing, items: [
+			{ label: tr.editor.closeShape, kbd: 'Enter', disabled: drawPts.length < 3, run: finishDrawing },
+			{ label: tr.editor.ctxUndoCorner, disabled: drawPts.length < 2, run: () => { drawPts = drawPts.slice(0, -1); } },
+			{ label: tr.common.cancel, kbd: 'Esc', run: cancelDrawing },
+		] };
+		if (readOnly) return { title: tr.editor.readOnlyStep, items: [{ label: tr.editor.fitRoom, kbd: '⇧1', run: fitToRoom }] };
+
+		const shapes: { id: string; points: Point[]; kind: 'wall' | 'zone' }[] = [
+			...(zonesOff ? [] : zones.map(z => ({ id: z.id, points: z.points, kind: 'zone' as const }))),
+			...(wallsOff ? [] : walls.map(w => ({ id: w.id, points: w.points, kind: 'wall' as const }))),
+		];
+		const shapeItems = (sh: { id: string; kind: 'wall' | 'zone' }): CtxItem[] => [
+			{ label: tr.editor.ctxDuplicate, run: () => duplicateShape(sh.id) },
+			{ label: sh.kind === 'wall' ? tr.editor.deleteWall : tr.editor.deleteZone, danger: true, kbd: 'Del', run: () => removeShape(sh.id) },
+		];
+		// A corner — the selected shape's first, then any.
+		const ordered = [...shapes].sort((a, b) => (a.id === selectedId ? -1 : b.id === selectedId ? 1 : 0));
+		for (const sh of ordered) {
+			const vi = sh.points.findIndex(q => Math.hypot(raw.x - q.x, raw.y - q.y) < hitR);
+			if (vi >= 0) {
+				selectedId = sh.id;
+				return { title: tr.editor.ctxCorner(vi + 1, sh.points.length), items: [
+					{ label: tr.editor.ctxDeleteCorner, danger: true, disabled: sh.points.length <= 3, run: () => removeVertex(sh.id, vi) },
+					...shapeItems(sh),
+				] };
+			}
+		}
+		// A standalone chair
+		for (let i = seats.length - 1; i >= 0; i--) {
+			const st = seats[i];
+			if (Math.hypot(raw.x - st.x, raw.y - st.y) > SEAT_R) continue;
+			selectedId = st.id;
+			const items: CtxItem[] = [];
+			if (allowGuests) {
+				items.push({ label: tr.editor.assign, run: () => { chairPopover = { seatId: st.id, x: wx(st.x), y: wy(st.y) }; guestSearch = ''; } });
+				if (st.assignment) items.push({ label: tr.editor.ctxClearSeat, run: () => clearSeat({ seatId: st.id }) });
+			}
+			items.push({ label: tr.editor.ctxRotate90, run: () => { pushUndo(); seats = seats.map(x => x.id === st.id ? { ...x, rotation: (Number(x.rotation) + 90) % 360 } : x); } });
+			items.push({ label: tr.editor.ctxDeleteChair, danger: true, kbd: 'Del', run: () => { pushUndo(); seats = seats.filter(x => x.id !== st.id); selectedId = null; } });
+			return { title: tr.editor.chairRef(i + 1), items };
+		}
+		// A table chair, then the table itself
+		for (let i = tables.length - 1; i >= 0; i--) {
+			const t = tables[i];
+			const ci = allowGuests ? findClickedChair(t, raw) : -1;
+			const onBody = tableBodyHit(t, raw);
+			if (ci < 0 && !onBody) continue;
+			selectedId = t.id;
+			const items: CtxItem[] = [];
+			if (ci >= 0) {
+				items.push({ label: tr.editor.assign, run: () => openSeatPopover(t, ci) });
+				if (t.assignments[ci]) items.push({ label: tr.editor.ctxClearSeat, run: () => clearSeat({ tableId: t.id, chairIdx: ci }) });
+			}
+			const tt = t.typeId ? tableTypes?.find(x => x.id === t.typeId) : null;
+			items.push(
+				{ label: tr.editor.ctxRotate90, run: () => rotateTable(t.id, 90) },
+				{ label: tr.editor.ctxDuplicate, disabled: !!tt && typeLeft(tt) <= 0, run: () => { duplicateTable(t); } },
+			);
+			if (allowGuests && t.assignments.some(Boolean)) items.push({ label: tr.editor.clearSeats, run: () => clearTableSeats(t.id) });
+			items.push({ label: tr.editor.deleteTable, danger: true, kbd: 'Del', run: () => { pushUndo(); tables = tables.filter(x => x.id !== t.id); selectedId = null; } });
+			return { title: ci >= 0 ? tr.editor.seatRef(t.label, ci + 1) : t.label, items };
+		}
+		// An edge of a shape: add a corner there
+		for (const sh of ordered) {
+			for (let i = 0; i < sh.points.length; i++) {
+				const a = sh.points[i], b = sh.points[(i + 1) % sh.points.length];
+				const dx = b.x - a.x, dy = b.y - a.y, l2 = dx * dx + dy * dy;
+				if (!l2) continue;
+				const u = Math.max(0, Math.min(1, ((raw.x - a.x) * dx + (raw.y - a.y) * dy) / l2));
+				const q = { x: a.x + u * dx, y: a.y + u * dy };
+				if (Math.hypot(raw.x - q.x, raw.y - q.y) > 7 / zoom) continue;
+				selectedId = sh.id;
+				return { title: sh.kind === 'wall' ? tr.editor.wall : (zones.find(z => z.id === sh.id)?.label || tr.editor.zoneOptions), items: [
+					{ label: tr.editor.ctxAddCorner, run: () => insertVertex(sh.id, i, q) },
+					...shapeItems(sh),
+				] };
+			}
+		}
+		// Inside a zone or a wall
+		for (const sh of ordered) {
+			if (!pointInPoly(raw, sh.points)) continue;
+			selectedId = sh.id;
+			return { title: sh.kind === 'wall' ? tr.editor.wall : (zones.find(z => z.id === sh.id)?.label || tr.editor.zoneOptions), items: shapeItems(sh) };
+		}
+		// A part of the room
+		if (!boundsLocked) {
+			for (let i = roomRects.length - 1; i >= 0; i--) {
+				const r = roomRects[i];
+				if (raw.x < r.x || raw.x > r.x + r.w || raw.y < r.y || raw.y > r.y + r.h) continue;
+				if (step !== 'room') break;
+				selectedId = null; selectedPart = i;
+				return { title: tr.editor.roomPart(i + 1), items: [
+					{ label: tr.editor.ctxDuplicate, run: () => { pushUndo(); roomRects = [...roomRects, { ...r, x: r.x + r.w }]; } },
+					{ label: tr.editor.removePart, danger: true, disabled: !partsConnected(roomRects.filter((_, j) => j !== i)), run: () => { removeRoomPart(i); } },
+				] };
+			}
+		}
+		// Empty canvas: the view, and what the current tool can do here
+		const items: CtxItem[] = [];
+		if (tool === 'pillar') items.push({ label: tr.editor.ctxPillarHere, run: () => { pushUndo(); const c = snap(raw), h = 0.25; walls = [...walls, { id: crypto.randomUUID(), points: [{ x: c.x - h, y: c.y - h }, { x: c.x + h, y: c.y - h }, { x: c.x + h, y: c.y + h }, { x: c.x - h, y: c.y + h }] }]; } });
+		if (tool === 'chair') items.push({ label: tr.editor.ctxChairHere, run: () => { const st: SeatObj = { id: crypto.randomUUID(), ...snap(raw), rotation: 0, assignment: null }; if (!seatHasCollision(st)) { pushUndo(); seats = [...seats, st]; } } });
+		if (tool !== 'select') items.push({ label: tr.editor.ctxBackToSelect, kbd: 'V', run: () => pickTool('select') });
+		items.push({ label: tr.editor.fitRoom, kbd: '⇧1', run: fitToRoom });
+		items.push({ label: tr.editor.ctxMeasureFrom, run: () => { pickTool('measure'); measureStart = snap(raw); measureEnd = null; } });
+		selectedId = null;
+		return { title: tr.editor.ctxCanvas, items };
+	}
+
+	function onContextMenu(e: MouseEvent) {
+		e.preventDefault();
+		chairPopover = null; helpOpen = false;
+		const r = svgEl.getBoundingClientRect();
+		const found = ctxItemsAt(svgCoords(e));
+		if (!found) { ctxMenu = null; return; }
+		// Keep the menu inside the canvas.
+		const w = 230, h = 40 + found.items.length * 32;
+		const x = Math.min(e.clientX - r.left, r.width - w - 8);
+		const y = Math.min(e.clientY - r.top, r.height - h - 8);
+		ctxMenu = { x: Math.max(8, x), y: Math.max(8, y), ...found };
+	}
+	function runCtx(item: CtxItem) {
+		if (item.disabled) return;
+		ctxMenu = null;
+		item.run();
+	}
+
 	function onDblClick(e: MouseEvent) {
-		if ((tool === 'wall' || tool === 'zone') && isDrawing && drawPts.length >= 3) finishDrawing();
+		if ((tool === 'wall' || tool === 'zone') && isDrawing && drawPts.length >= 3) { finishDrawing(); return; }
+		// Double-clicking a corner of the selected shape removes it (a shape keeps three).
+		const pts = selectedPolyPoints();
+		if (!pts || pts.length <= 3) return;
+		const raw = svgCoords(e);
+		const vi = pts.findIndex(p => Math.hypot(raw.x - p.x, raw.y - p.y) < 8 / zoom);
+		if (vi < 0) return;
+		pushUndo();
+		setSelectedPoints(pts.filter((_, i) => i !== vi));
 	}
 
 	function finishDrawing() {
+		if (drawPts.length < 3) return;
 		pushUndo();
 		if (tool === 'wall') walls = [...walls, { id: crypto.randomUUID(), points: [...drawPts] }];
 		else zones = [...zones, { id: crypto.randomUUID(), points: [...drawPts], color: zoneColor, label: `Zone ${zones.length + 1}` }];
@@ -1187,6 +1742,7 @@
 	function cancelDrawing() { drawPts = []; isDrawing = false; }
 
 	function onWheel(e: WheelEvent) {
+		ctxMenu = null;
 		e.preventDefault();
 		const r = svgEl.getBoundingClientRect();
 		const cx = e.clientX - r.left, cy = e.clientY - r.top;
@@ -1201,31 +1757,98 @@
 		svgEl.setPointerCapture(e.pointerId);
 	}
 
+	// ─── Guests dragged from the list onto a chair ────────────────────────────
+	/** The chair (table chair or standalone seat) under a screen point, with a generous radius. */
+	function chairAt(clientX: number, clientY: number): SeatTarget | null {
+		const r = svgEl?.getBoundingClientRect();
+		if (!r || clientX < r.left || clientX > r.right || clientY < r.top || clientY > r.bottom) return null;
+		const p = { x: sx(clientX - r.left), y: sy(clientY - r.top) };
+		for (let i = tables.length - 1; i >= 0; i--) {
+			const ci = findClickedChair(tables[i], p, 0.34);
+			if (ci >= 0) return { tableId: tables[i].id, chairIdx: ci };
+		}
+		for (let i = seats.length - 1; i >= 0; i--) {
+			if (Math.hypot(p.x - seats[i].x, p.y - seats[i].y) <= 0.34) return { seatId: seats[i].id };
+		}
+		return null;
+	}
+	function startGuestDrag(e: PointerEvent, id: string) {
+		if (e.button !== 0) return;
+		e.preventDefault();
+		dragGuest = { id, x: e.clientX, y: e.clientY };
+		window.addEventListener('pointermove', onGuestDragMove);
+		window.addEventListener('pointerup', onGuestDragEnd, { once: true });
+	}
+	function onGuestDragMove(e: PointerEvent) {
+		if (!dragGuest) return;
+		dragGuest = { ...dragGuest, x: e.clientX, y: e.clientY };
+		dragTarget = chairAt(e.clientX, e.clientY);
+	}
+	function onGuestDragEnd(e: PointerEvent) {
+		window.removeEventListener('pointermove', onGuestDragMove);
+		const target = chairAt(e.clientX, e.clientY);
+		if (target && dragGuest) {
+			assignGuestTo(dragGuest.id, target);
+			if (target.tableId) selectedId = target.tableId;
+		}
+		dragGuest = null; dragTarget = null;
+	}
+	const dragGuestRecord = $derived(dragGuest ? guests.find(g => g.id === dragGuest!.id) ?? null : null);
+
+	// ─── Keyboard ─────────────────────────────────────────────────────────────
+	function deleteSelection() {
+		if (selectedPart !== null && !boundsLocked) {
+			removeRoomPart(selectedPart);
+			return;
+		}
+		if (!selectedId) return;
+		pushUndo();
+		tables = tables.filter(t => t.id !== selectedId);
+		if (!wallsOff) walls = walls.filter(w => w.id !== selectedId);
+		if (!zonesOff) zones = zones.filter(z => z.id !== selectedId);
+		seats = seats.filter(s => s.id !== selectedId);
+		selectedId = null;
+	}
+
+	function isTyping(e: KeyboardEvent): boolean {
+		const el = e.target as HTMLElement | null;
+		return !!el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable);
+	}
+
 	function onKeyDown(e: KeyboardEvent) {
 		// Don't run canvas shortcuts (Delete/Backspace removes a table, etc.) while
 		// the user is typing in a field — let the input handle the key normally.
-		const el = e.target as HTMLElement | null;
-		if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable)) {
-			return;
-		}
+		if (isTyping(e)) return;
+		if (e.key === ' ' && !e.repeat) { spaceDown = true; e.preventDefault(); return; }
+		if (e.key === ' ') { e.preventDefault(); return; }
 		if (e.key === 'Escape') {
+			if (ctxMenu) { ctxMenu = null; return; }
+			if (helpOpen) { helpOpen = false; return; }
 			if (chairPopover) { chairPopover = null; guestSearch = ''; return; }
+			if (renamingIdx !== null) { renamingIdx = null; return; }
+			if (confirmRemoveIdx !== null) { confirmRemoveIdx = null; return; }
 			if (measureStart || measureEnd) { measureStart = null; measureEnd = null; return; }
 			if (boundsStart) { boundsStart = null; return; }
-			if (isDrawing) cancelDrawing(); else selectedId = null;
+			if (rectStart) { rectStart = null; rectMoved = false; return; }
+			if (isDrawing) { cancelDrawing(); return; }
+			if (tool !== 'select') { tool = 'select'; return; }
+			selectedId = null; selectedPart = null;
+			return;
 		}
-		if (e.key === 'Enter' && isDrawing && drawPts.length >= 3) finishDrawing();
-		if ((e.key === 'Delete' || e.key === 'Backspace') && selectedId && !isDrawing && !chairPopover) {
-			pushUndo();
-			tables = tables.filter(t => t.id !== selectedId);
-			walls  = walls.filter(w => w.id !== selectedId);
-			zones  = zones.filter(z => z.id !== selectedId);
-			seats  = seats.filter(s => s.id !== selectedId);
-			selectedId = null;
-		}
+		if (e.key === 'Enter' && isDrawing && drawPts.length >= 3) { finishDrawing(); return; }
+		if ((e.key === 'Delete' || e.key === 'Backspace') && !isDrawing && !chairPopover && !readOnly) { deleteSelection(); return; }
 		// Undo / Redo
-		if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) { e.preventDefault(); undo(); }
-		if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) { e.preventDefault(); redo(); }
+		if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z' && !e.shiftKey) { e.preventDefault(); undo(); return; }
+		if ((e.ctrlKey || e.metaKey) && (e.key.toLowerCase() === 'y' || (e.key.toLowerCase() === 'z' && e.shiftKey))) { e.preventDefault(); redo(); return; }
+		if (e.ctrlKey || e.metaKey || e.altKey) return;
+		if (e.key === '1' && e.shiftKey) { fitToRoom(); return; }
+		if (e.key.toLowerCase() === 'd' && !e.shiftKey) { showDims = !showDims; return; }
+		// Single-key tools, only the ones this step offers.
+		const t = toolForKey(e.key);
+		if (t && !readOnly && stepTools.includes(t)) { pickTool(t); }
+	}
+	function onKeyUp(e: KeyboardEvent) {
+		if (e.key === ' ') spaceDown = false;
 	}
 
 	// ─── Props panel helpers ──────────────────────────────────────────────────
@@ -1261,24 +1884,12 @@
 	function updateZone(patch: Partial<ZoneObj>) {
 		zones = zones.map(z => z.id === selectedId ? { ...z, ...patch } : z);
 	}
+	function updateSeat(patch: Partial<SeatObj>) {
+		seats = seats.map(s => s.id === selectedId ? { ...s, ...patch } : s);
+	}
 
 	// ─── Constants ────────────────────────────────────────────────────────────
 	const ZONE_PRESETS = ['#a78bfa','#22d3ee','#34d399','#fb923c','#f472b6','#facc15','#60a5fa','#f87171'];
-
-	const TOOL_LABELS: Record<Tool, string> = $derived({
-		select: tr.editor.toolGrab, wall: tr.editor.toolWall, zone: tr.editor.toolZone, table: tr.editor.toolTable, chair: tr.editor.toolChair, eraser: tr.editor.toolEraser,
-		bounds: tr.editor.toolBounds, measure: tr.editor.toolMeasure,
-	});
-	const ICONS: Record<Tool, string> = {
-		select: 'M5 3l14 9-7 1.5L9 20z',
-		wall:   'M3 5h18M3 12h18M3 19h18',
-		zone:   'M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z',
-		table:  'M3 6h18M3 18h18M8 6v12M16 6v12',
-		chair:  'M7 4v9M7 13h9M16 13v7M7 13v7M6 4h2',
-		eraser: 'M20 20H7L3 16l11-11 6 6M6 17l-3-3',
-		bounds: 'M3 3h18v18H3zM7 3v18M3 7h18',
-		measure: 'M2 2l20 20M2 8V2h6M22 16v6h-6',
-	};
 
 	// Word-wrap a zone label to roughly fit the zone's width (SVG text has no
 	// auto-wrap). Falls back to hard-breaking a single over-long word.
@@ -1302,144 +1913,139 @@
 		return out.length ? out : [text];
 	}
 
+	// ─── Measurements ─────────────────────────────────────────────────────────
+	function polyAreaM2(pts: Point[]): number {
+		return Math.abs(pts.reduce((a, p, i) => { const q = pts[(i + 1) % pts.length]; return a + p.x * q.y - q.x * p.y; }, 0) / 2);
+	}
+	/** Edge labels for a closed shape: the longest edges first, short ones left out. */
+	function edgeDims(pts: Point[], max = 12, min = 1): { x: number; y: number; len: number }[] {
+		if (pts.length < 2) return [];
+		const cx = pts.reduce((a, p) => a + p.x, 0) / pts.length, cy = pts.reduce((a, p) => a + p.y, 0) / pts.length;
+		const out = pts.map((p, i) => {
+			const q = pts[(i + 1) % pts.length];
+			const len = Math.hypot(q.x - p.x, q.y - p.y);
+			const mx = (p.x + q.x) / 2, my = (p.y + q.y) / 2;
+			// Nudge the label away from the shape's middle, so it sits just outside the edge.
+			const dx = mx - cx, dy = my - cy, d = Math.hypot(dx, dy) || 1;
+			return { x: mx + (dx / d) * (14 / zoom), y: my + (dy / d) * (14 / zoom), len };
+		}).filter(e => e.len >= min);
+		return out.sort((a, b) => b.len - a.len).slice(0, max);
+	}
+	const roomPerimeter = $derived(roomEdges.reduce((a, [p, q]) => a + Math.hypot(q.x - p.x, q.y - p.y), 0));
+	const zonesArea = $derived(zones.reduce((a, z) => a + polyAreaM2(z.points), 0));
+
 	function closeSnapDrop(e: MouseEvent) {
 		if (!(e.target as HTMLElement).closest('.custom-select')) snapDropOpen = false;
 	}
 
+	function setRectDraw(on: boolean) {
+		rectDraw = on; rectStart = null; rectMoved = false; cancelDrawing();
+		try { localStorage.setItem(RECT_KEY, on ? '1' : '0'); } catch { /* private mode */ }
+	}
+
+	const zoomPercent = $derived(Math.round((zoom / 60) * 100));
+	const saveStateText = $derived(saveState === 'saved' ? tr.editor.saved : saveState === 'saving' ? tr.editor.saving : saveState === 'dirty' ? tr.editor.unsaved : '');
+
 	onMount(() => {
+		uiStore.setSidebarRail(true);
+		try { tipsSeen = JSON.parse(localStorage.getItem(TIPS_KEY) ?? '[]'); } catch { tipsSeen = []; }
+		try { const v = localStorage.getItem(RECT_KEY); if (v !== null) rectDraw = v === '1'; } catch { /* private mode */ }
+		tipsLoaded = true;
 		window.addEventListener('keydown', onKeyDown);
+		window.addEventListener('keyup', onKeyUp);
 		window.addEventListener('click', closeSnapDrop, true);
 		return () => {
+			uiStore.setSidebarRail(false);
 			window.removeEventListener('keydown', onKeyDown);
+			window.removeEventListener('keyup', onKeyUp);
 			window.removeEventListener('click', closeSnapDrop, true);
+			window.removeEventListener('pointermove', onGuestDragMove);
 		};
 	});
 </script>
 
-<!-- ─── Layout ─────────────────────────────────────────────────────────────── -->
-<div class="app">
-	<!-- Header -->
-	<header>
-		<div class="header-controls">
-			<div class="ctrl">
-				<label for="zoom-sl">{tr.editor.zoom}</label>
-				<input id="zoom-sl" type="range" min="15" max="200" bind:value={zoom} style="width:90px"/>
-				<span class="val">{Math.round(zoom)} {tr.editor.pxPerM}</span>
-			</div>
-			<div class="ctrl">
-				<label>{tr.editor.snap}</label>
-				<div class="custom-select" role="listbox" tabindex="0"
-					onclick={(e) => { e.stopPropagation(); snapDropOpen = !snapDropOpen; }}
-					onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); snapDropOpen = !snapDropOpen; } }}>
-					<span class="custom-select-value">{gridSnap === 0 ? tr.editor.snapOff : `${gridSnap} m`}</span>
-					<svg class="custom-select-chevron" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
-					{#if snapDropOpen}
-						<div class="custom-select-dropdown">
-							{#each [0, 0.25, 0.5, 1, 2] as val}
-								<button class="custom-select-option" class:selected={gridSnap === val}
-									onclick={(e) => { e.stopPropagation(); gridSnap = val; snapDropOpen = false; }}>
-									{val === 0 ? tr.editor.snapOff : `${val} m`}
-								</button>
-							{/each}
-						</div>
+<!-- ─── Floor tabs and help, at the right end of the step strip ──────────── -->
+{#snippet stripRight()}
+	<div class="floors" role="tablist" aria-label={tr.hallAdmin.floors}>
+		{#each floors as floor, i (floor.id)}
+			{#if renamingIdx === i}
+				<!-- svelte-ignore a11y_autofocus -->
+				<input class="floor-rename" type="text" bind:value={renameValue} aria-label={tr.editor.floorName} autofocus
+					onkeydown={(e) => { if (e.key === 'Enter') commitRename(); else if (e.key === 'Escape') renamingIdx = null; }}
+					onblur={commitRename} />
+			{:else}
+				<button type="button" class="floor-tab" class:active={i === activeFloorIdx} role="tab" aria-selected={i === activeFloorIdx}
+					title={i === activeFloorIdx && !lockFloors ? tr.editor.renameFloor : floor.name}
+					onclick={() => { if (i !== activeFloorIdx) loadFloor(i); else startRename(i); }}>
+					{floor.name}
+					{#if i === activeFloorIdx && !lockFloors}
+						<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4z"/></svg>
 					{/if}
-				</div>
-			</div>
-			<button class="snap-toggle" class:active={snapToElements}
-				onclick={() => snapToElements = !snapToElements}
-				title={snapToElements ? tr.editor.elementSnappingOn : tr.editor.elementSnappingOff}>
-				<svg width="16" height="16" viewBox="0 0 24 24" fill="none"
-					stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-					<path d="M6 2v4M6 18v4M18 2v4M18 18v4M2 6h4M18 6h4M2 18h4M18 18h4"/>
-					<rect x="6" y="6" width="12" height="12" rx="1"/>
-				</svg>
-				{tr.editor.snap}
-			</button>
-			<span class="hint-text">{tr.editor.panHint}</span>
-
-			<!-- Floor tabs -->
-			<div class="floor-tabs">
-				{#each floors as floor, i}
-					<button class="floor-tab" class:active={i === activeFloorIdx}
-						onclick={() => { if (i !== activeFloorIdx) loadFloor(i); }}
-						ondblclick={() => renameFloor(i)}>
-						{floor.name}
-					</button>
-				{/each}
-				{#if !lockFloors}
-					<button class="floor-tab floor-tab-add" onclick={addFloor} title={tr.editor.addFloor}>+</button>
-					{#if floors.length > 1}
-						<button class="floor-tab floor-tab-del" onclick={() => removeFloor(activeFloorIdx)} title={tr.editor.removeFloor}>✕</button>
-					{/if}
-				{/if}
-			</div>
-		</div>
-	</header>
-
-	<div class="body">
-		<!-- Left toolbar -->
-		<nav class="toolbar">
-			{#each (['select','wall','zone','table','chair','eraser','bounds','measure'] as Tool[]) as t}
-				{#if !hiddenTools.includes(t)}
-					<button class="tool-btn" class:active={tool === t}
-						onclick={() => { tool = t; if (t !== 'select') selectedId = null; if (t !== 'wall' && t !== 'zone') cancelDrawing(); if (t !== 'bounds') boundsStart = null; }}>
-						<svg width="18" height="18" viewBox="0 0 24 24" fill="none"
-							stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-							<path d={ICONS[t]}/>
-						</svg>
-						{TOOL_LABELS[t]}
-					</button>
-				{/if}
-			{/each}
-
-			<div class="sep"></div>
-
-			<!-- Undo / Redo -->
-			<button class="tool-btn" onclick={undo} disabled={undoStack.length === 0} title={tr.editor.undoTitle}>
-				<svg width="18" height="18" viewBox="0 0 24 24" fill="none"
-					stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-					<polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 105.64-8.36L1 10"/>
-				</svg>
-				{tr.editor.undo}
-			</button>
-			<button class="tool-btn" onclick={redo} disabled={redoStack.length === 0} title={tr.editor.redoTitle}>
-				<svg width="18" height="18" viewBox="0 0 24 24" fill="none"
-					stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-					<polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-5.64-8.36L23 10"/>
-				</svg>
-				{tr.editor.redo}
-			</button>
-
-			{#if isDrawing}
-				<div class="sep"></div>
-				<button class="tool-btn finish" onclick={finishDrawing}>
-					<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
-						<polyline points="20 6 9 17 4 12"/>
-					</svg>
-					{tr.editor.closeShape}
-				</button>
-				<button class="tool-btn cancel" onclick={cancelDrawing}>
-					<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
-						<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-					</svg>
-					{tr.common.cancel}
 				</button>
 			{/if}
-		</nav>
+		{/each}
+		{#if !lockFloors}
+			<button type="button" class="floor-tab floor-tab-add" onclick={addFloor} title={tr.editor.addFloor} aria-label={tr.editor.addFloor}>+</button>
+			{#if floors.length > 1}
+				{#if confirmRemoveIdx === activeFloorIdx}
+					<span class="floor-confirm" role="alertdialog">
+						{tr.editor.removeFloorConfirm(floors[activeFloorIdx].name)}
+						<button type="button" class="fc-yes" onclick={() => removeFloor(activeFloorIdx)}>{tr.editor.confirmRemove}</button>
+						<button type="button" class="fc-no" onclick={() => confirmRemoveIdx = null}>{tr.common.cancel}</button>
+					</span>
+				{:else}
+					<button type="button" class="floor-tab floor-tab-del" onclick={() => confirmRemoveIdx = activeFloorIdx} title={tr.editor.removeFloor} aria-label={tr.editor.removeFloor}>✕</button>
+				{/if}
+			{/if}
+		{/if}
+	</div>
+	<button type="button" class="help-btn" class:on={helpOpen} onclick={() => helpOpen = !helpOpen} aria-label={tr.editor.help} aria-expanded={helpOpen} title={tr.editor.help}>?</button>
+{/snippet}
+
+<!-- ─── Layout ─────────────────────────────────────────────────────────────── -->
+<div class="app">
+	<StepStrip steps={stepItems} onPick={goStep}
+		note={editorMode === 'room' ? tr.editor.stepsNoteRoom : tr.editor.stepsNoteLocked}
+		right={stripRight} />
+
+	<div class="body">
+		<!-- Left column: the step's tools, or the guest list in the guests step -->
+		{#if step === 'guests' && allowGuests}
+			<GuestList guests={guestRows} {existingGroups} draggingId={dragGuest?.id ?? null} {importMessage}
+				onAdd={addGuest} onRemove={removeGuest} onNote={updateGuestNote} onImport={importGuests}
+				onDragStart={startGuestDrag} onAutoSeat={autoSeatRest} onClearAll={clearAllAssignments} />
+		{:else}
+			<ToolCards title={tr.editor.stepOf(stepIndex + 1, steps.length) + ' · ' + stepLabel(step)}
+				tools={toolCards} active={tool} onPick={pickTool}
+				canUndo={undoStack.length > 0} canRedo={redoStack.length > 0} onUndo={undo} onRedo={redo}
+				undoLabel={tr.editor.undo} redoLabel={tr.editor.redo}>
+				{#if step === 'tables' && tablesFromTypesOnly && !(tableTypes && tableTypes.length)}
+					<p class="tool-note">{tr.editor.tablesNeedTypes}</p>
+				{:else if step === 'walls'}
+					<label class="mode-switch"><input type="checkbox" checked={rectDraw} onchange={(e) => setRectDraw((e.target as HTMLInputElement).checked)} />{tr.editor.rectDrawMode}</label>
+					<p class="tool-note">{tr.editor.wallsOptional}</p>
+				{:else if step === 'zones'}
+					<label class="mode-switch"><input type="checkbox" checked={rectDraw} onchange={(e) => setRectDraw((e.target as HTMLInputElement).checked)} />{tr.editor.rectDrawMode}</label>
+				{:else if step === 'check'}
+					<p class="tool-note">{tr.editor.instrCheck}</p>
+				{/if}
+			</ToolCards>
+		{/if}
 
 		<!-- Canvas -->
 		<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-		<main class="canvas-wrap" role="application">
+		<main class="canvas-wrap" role="application" class:rulers={showRulers}>
 			<!-- svelte-ignore a11y_no_static_element_interactions -->
-			<svg bind:this={svgEl} class="map-svg"
-				class:c-cross={tool === 'wall' || tool === 'zone' || tool === 'table' || tool === 'chair' || tool === 'bounds' || tool === 'measure'}
+			<svg bind:this={svgEl} class="map-svg" data-zoom={zoom.toFixed(3)} data-panx={panX.toFixed(1)} data-pany={panY.toFixed(1)}
+				class:c-cross={!readOnly && (tool === 'wall' || tool === 'zone' || tool === 'table' || tool === 'chair' || tool === 'bounds' || tool === 'measure' || tool === 'pillar')}
 				class:c-cell={tool === 'eraser'}
+				class:c-grab={spaceDown || isPanning}
 				onpointermove={onPointerMove} onpointerdown={onPointerDown}
-				onpointerup={onPointerUp} ondblclick={onDblClick} onwheel={onWheel}
+				onpointerup={onPointerUp} ondblclick={onDblClick} onwheel={onWheel} oncontextmenu={onContextMenu}
 				style="touch-action:none">
 				<defs>
-					<pattern id="sg" width={ws(gridSnap)} height={ws(gridSnap)} patternUnits="userSpaceOnUse">
-						<path d={`M ${ws(gridSnap)} 0 L 0 0 0 ${ws(gridSnap)}`}
+					<pattern id="sg" width={ws(gridSnap || 0.5)} height={ws(gridSnap || 0.5)} patternUnits="userSpaceOnUse">
+						<path d={`M ${ws(gridSnap || 0.5)} 0 L 0 0 0 ${ws(gridSnap || 0.5)}`}
 							fill="none" stroke="var(--editor-grid)" stroke-width="0.5"/>
 					</pattern>
 					<pattern id="mg" width={zoom} height={zoom} patternUnits="userSpaceOnUse"
@@ -1457,20 +2063,16 @@
 				<!-- ── Ghost outline of floor below ── -->
 				{#if activeFloorIdx > 0}
 					{@const below = floors[activeFloorIdx - 1]}
-					<!-- Ghost bounds -->
-					{#if below.bounds}
-						<rect x={wx(below.bounds.x)} y={wy(below.bounds.y)}
-							width={ws(below.bounds.w)} height={ws(below.bounds.h)}
-							fill="none" stroke="rgba(43,52,98,0.15)" stroke-width="1.5" stroke-dasharray="6,4"
+					{#each roomOutline(roomParts(below)) as [a, b]}
+						<line x1={wx(a.x)} y1={wy(a.y)} x2={wx(b.x)} y2={wy(b.y)}
+							stroke="rgba(43,52,98,0.15)" stroke-width="1.5" stroke-dasharray="6,4"
 							pointer-events="none"/>
-					{/if}
-					<!-- Ghost zones -->
+					{/each}
 					{#each below.zones as zone}
 						<polygon points={zone.points.map(p => `${wx(p.x)},${wy(p.y)}`).join(' ')}
 							fill={zone.color} fill-opacity="0.06" stroke={zone.color} stroke-opacity="0.15"
 							stroke-width="1" stroke-dasharray="4,3" pointer-events="none"/>
 					{/each}
-					<!-- Ghost walls -->
 					{#each below.walls as wall}
 						<polygon points={wall.points.map(p => `${wx(p.x)},${wy(p.y)}`).join(' ')}
 							fill="rgba(43,52,98,0.06)" stroke="rgba(43,52,98,0.15)"
@@ -1478,23 +2080,43 @@
 					{/each}
 				{/if}
 
-				<!-- ── Bounds mask (darken area outside) ── -->
-				{#if bounds}
+				<!-- ── Room: dim what lies outside, outline the joined shape ── -->
+				{#if roomRects.length}
 					<defs>
 						<mask id="bounds-mask">
 							<rect width="100%" height="100%" fill="white"/>
-							<rect x={wx(bounds.x)} y={wy(bounds.y)}
-								width={ws(bounds.w)} height={ws(bounds.h)} fill="black"/>
+							{#each roomRects as r}
+								<rect x={wx(r.x)} y={wy(r.y)} width={ws(r.w)} height={ws(r.h)} fill="black"/>
+							{/each}
 						</mask>
 					</defs>
 					<rect width="100%" height="100%" fill="rgba(30,37,71,0.35)" mask="url(#bounds-mask)"/>
-					<rect x={wx(bounds.x)} y={wy(bounds.y)}
-						width={ws(bounds.w)} height={ws(bounds.h)}
-						fill="none" stroke="#3b82f6" stroke-width="2" stroke-dasharray="8,4"
-						pointer-events="none"/>
+					{#each roomEdges as [a, b]}
+						<line x1={wx(a.x)} y1={wy(a.y)} x2={wx(b.x)} y2={wy(b.y)}
+							stroke="#3b82f6" stroke-width="2" stroke-dasharray="8,4" stroke-linecap="square"
+							pointer-events="none"/>
+					{/each}
+					<!-- While composing or editing the room, show where each part is. -->
+					{#if step === 'room' && roomRects.length > 1}
+						{#each roomRects as r, ri}
+							<rect x={wx(r.x)} y={wy(r.y)} width={ws(r.w)} height={ws(r.h)}
+								fill={hoverPart === ri ? 'rgba(239,68,68,0.12)' : 'none'}
+								stroke="rgba(59,130,246,0.35)" stroke-width="1" stroke-dasharray="2,3"
+								pointer-events="none"/>
+						{/each}
+					{/if}
+					<!-- The selected part: accent outline and four corner handles. -->
+					{#if step === 'room' && selectedPart !== null && roomRects[selectedPart] && !boundsLocked}
+						{@const r = roomRects[selectedPart]}
+						<rect x={wx(r.x)} y={wy(r.y)} width={ws(r.w)} height={ws(r.h)}
+							fill="none" stroke="var(--accent)" stroke-width="2.5" pointer-events="none"/>
+						{#each [[r.x, r.y], [r.x + r.w, r.y], [r.x + r.w, r.y + r.h], [r.x, r.y + r.h]] as [cx, cy]}
+							<circle cx={wx(cx)} cy={wy(cy)} r="7" fill="white" stroke="var(--accent)" stroke-width="2" style="cursor:nwse-resize" pointer-events="auto"/>
+						{/each}
+					{/if}
 				{/if}
 
-				<!-- ── Bounds drawing preview ── -->
+				<!-- ── Room rectangle preview ── -->
 				{#if boundsStart}
 					{@const bx = Math.min(boundsStart.x, cursorPos.x)}
 					{@const by = Math.min(boundsStart.y, cursorPos.y)}
@@ -1503,6 +2125,9 @@
 					<rect x={wx(bx)} y={wy(by)} width={ws(bw)} height={ws(bh)}
 						fill="rgba(59,130,246,0.1)" stroke="#3b82f6" stroke-width="2"
 						stroke-dasharray="6,3" pointer-events="none"/>
+					<text x={wx(bx + bw / 2)} y={wy(by + bh / 2)} text-anchor="middle" dominant-baseline="middle"
+						font-size="12" font-weight="600" fill="var(--accent-ink)" pointer-events="none"
+						style="paint-order:stroke" stroke="var(--bg-panel)" stroke-width="3">{bw.toFixed(1)} × {bh.toFixed(1)} m</text>
 				{/if}
 
 				<!-- ── Zones ── -->
@@ -1511,9 +2136,9 @@
 					{@const sel = zone.id === selectedId}
 					<polygon points={pts} fill={zone.color} fill-opacity={sel ? 0.5 : 0.28}
 						stroke={zone.color} stroke-width={sel ? 2.5 : 1.5} stroke-opacity="0.7"
-						style={tool === 'select' && !zonesLocked ? 'cursor:move' : ''}
+						style={tool === 'select' && !zonesOff && !readOnly ? 'cursor:move' : ''}
 						pointer-events={tool === 'select' || tool === 'eraser' ? 'auto' : 'none'}/>
-					{#if sel && !zonesLocked}
+					{#if sel && !zonesOff && !readOnly}
 						{#each zone.points as p, vi}
 							<circle cx={wx(p.x)} cy={wy(p.y)} r="6"
 								fill={vertexDragIdx === vi && isVertexDragging ? zone.color : 'white'}
@@ -1529,9 +2154,9 @@
 					{@const sel = wall.id === selectedId}
 					<polygon points={pts} fill="var(--editor-wall)" stroke={sel ? 'var(--accent)' : 'none'}
 						stroke-width={sel ? 3 : 0}
-						style={tool === 'select' && !wallsLocked ? 'cursor:move' : ''}
+						style={tool === 'select' && !wallsOff && !readOnly ? 'cursor:move' : ''}
 						pointer-events={tool === 'select' || tool === 'eraser' ? 'auto' : 'none'}/>
-					{#if sel && !wallsLocked}
+					{#if sel && !wallsOff && !readOnly}
 						{#each wall.points as p, vi}
 							<circle cx={wx(p.x)} cy={wy(p.y)} r="6"
 								fill={vertexDragIdx === vi && isVertexDragging ? 'var(--accent-hover)' : 'var(--accent)'}
@@ -1540,6 +2165,53 @@
 						{/each}
 					{/if}
 				{/each}
+
+				<!-- ── Measurements overlay ── -->
+				{#if dimsOn}
+					{#if bounds}
+						<!-- Overall size: dimension lines above and to the left of the room -->
+						{@const top = wy(bounds.y) - 26}
+						{@const left = wx(bounds.x) - 26}
+						<g class="dim-line" pointer-events="none">
+							<line x1={wx(bounds.x)} y1={top} x2={wx(bounds.x + bounds.w)} y2={top}/>
+							<line x1={wx(bounds.x)} y1={top - 5} x2={wx(bounds.x)} y2={top + 5}/>
+							<line x1={wx(bounds.x + bounds.w)} y1={top - 5} x2={wx(bounds.x + bounds.w)} y2={top + 5}/>
+							<line x1={left} y1={wy(bounds.y)} x2={left} y2={wy(bounds.y + bounds.h)}/>
+							<line x1={left - 5} y1={wy(bounds.y)} x2={left + 5} y2={wy(bounds.y)}/>
+							<line x1={left - 5} y1={wy(bounds.y + bounds.h)} x2={left + 5} y2={wy(bounds.y + bounds.h)}/>
+						</g>
+						<text x={wx(bounds.x + bounds.w / 2)} y={top - 7} text-anchor="middle" class="dim-label" pointer-events="none">{bounds.w.toFixed(2)} m</text>
+						<text x={left - 7} y={wy(bounds.y + bounds.h / 2)} text-anchor="middle" class="dim-label"
+							transform={`rotate(-90 ${left - 7} ${wy(bounds.y + bounds.h / 2)})`} pointer-events="none">{bounds.h.toFixed(2)} m</text>
+						<!-- Each stretch of an L- or U-shaped outline -->
+						{#if roomRects.length > 1}
+							{#each roomEdges as [a, b]}
+								{@const len = Math.hypot(b.x - a.x, b.y - a.y)}
+								{#if len >= 1}
+									<text x={wx((a.x + b.x) / 2)} y={wy((a.y + b.y) / 2) + (a.y === b.y ? -6 : 4)} text-anchor="middle" class="dim-label dim-edge dim-room" pointer-events="none">{len.toFixed(2)} m</text>
+								{/if}
+							{/each}
+						{/if}
+					{/if}
+					{#each walls as wall}
+						{#each edgeDims(wall.points, wall.points.length > 12 ? 8 : 12) as d}
+							<text x={wx(d.x)} y={wy(d.y)} text-anchor="middle" dominant-baseline="middle" class="dim-label dim-edge" pointer-events="none">{d.len.toFixed(2)}</text>
+						{/each}
+					{/each}
+					{#each zones as zone}
+						{@const xs = zone.points.map(p => p.x)}
+						{@const ys = zone.points.map(p => p.y)}
+						<text x={wx(xs.reduce((a, v) => a + v, 0) / xs.length)} y={wy(ys.reduce((a, v) => a + v, 0) / ys.length) + 18}
+							text-anchor="middle" class="dim-label dim-edge" pointer-events="none">{polyAreaM2(zone.points).toFixed(1)} m² · {(Math.max(...xs) - Math.min(...xs)).toFixed(1)} × {(Math.max(...ys) - Math.min(...ys)).toFixed(1)} m</text>
+						{#each edgeDims(zone.points, 8) as d}
+							<text x={wx(d.x)} y={wy(d.y)} text-anchor="middle" dominant-baseline="middle" class="dim-label dim-edge dim-zone" pointer-events="none">{d.len.toFixed(2)}</text>
+						{/each}
+					{/each}
+					{#each tables as t}
+						<text x={wx(Number(t.x))} y={wy(Number(t.y)) + ws(t.shape === 'round' ? Number(t.radius) : Number(t.height) / 2) + 26}
+							text-anchor="middle" class="dim-label dim-edge" pointer-events="none">{t.shape === 'round' ? `⌀ ${(Number(t.radius) * 2).toFixed(1)}` : `${Number(t.width).toFixed(1)} × ${Number(t.height).toFixed(1)}`} m</text>
+					{/each}
+				{/if}
 
 				<!-- ── Zone labels (drawn ON TOP of walls so they're never hidden; word-wrapped to the zone width) ── -->
 				{#each zones as zone}
@@ -1564,16 +2236,20 @@
 				{#each tables as table}
 					{@const chairs = localChairs(table)}
 					{@const sel = table.id === selectedId}
+					{@const clash = collidingIds.has(table.id)}
 					{@const rotH  = table.shape === 'rect' ? table.height/2 : table.radius}
 					<!-- svelte-ignore a11y_no_static_element_interactions -->
 					<g transform={`translate(${wx(table.x)},${wy(table.y)}) rotate(${table.rotation})`}
 						class="table-g"
 						onpointerdown={(e) => {
-							if (e.button !== 0) return;
+							if (e.button !== 0 || spaceDown || e.altKey) return;
 							e.stopPropagation();
-							if (tool === 'eraser') { tables = tables.filter(t => t.id !== table.id); return; }
+							if (chairPopover) { chairPopover = null; guestSearch = ''; return; }
+							if (readOnly) { selectedId = table.id; return; }
+							if (tool === 'eraser') { pushUndo(); tables = tables.filter(t => t.id !== table.id); return; }
 							if (tool === 'select') {
-								selectedId = table.id; isDragging = true;
+								pushUndo();
+								selectedId = table.id; selectedPart = null; isDragging = true;
 								dragStart = svgCoords(e); elemStart = { x: table.x, y: table.y };
 							}
 						}}>
@@ -1582,12 +2258,12 @@
 						{#if table.shape === 'rect'}
 							<rect x={-ws(table.width/2)} y={-ws(table.height/2)}
 								width={ws(table.width)} height={ws(table.height)} rx={ws(0.06)}
-								fill="#92400e" stroke={sel ? 'var(--accent)' : '#78350f'}
-								stroke-width={sel ? 3 : 1.5}/>
+								fill={clash ? '#7f1d1d' : '#92400e'} stroke={clash ? '#ef4444' : sel ? 'var(--accent)' : '#78350f'}
+								stroke-width={sel || clash ? 3 : 1.5}/>
 						{:else}
 							<circle cx={0} cy={0} r={ws(table.radius)}
-								fill="#92400e" stroke={sel ? 'var(--accent)' : '#78350f'}
-								stroke-width={sel ? 3 : 1.5}/>
+								fill={clash ? '#7f1d1d' : '#92400e'} stroke={clash ? '#ef4444' : sel ? 'var(--accent)' : '#78350f'}
+								stroke-width={sel || clash ? 3 : 1.5}/>
 						{/if}
 
 						<!-- Label -->
@@ -1602,17 +2278,23 @@
 						{#each chairs as ch, ci}
 							{@const gId = table.assignments[ci] ?? null}
 							{@const g   = gId ? guests.find(x => x.id === gId) : null}
+							{@const drop = !!dragTarget && dragTarget.tableId === table.id && dragTarget.chairIdx === ci}
 							<!-- svelte-ignore a11y_no_static_element_interactions -->
 							<g transform={`translate(${ws(ch.x)},${ws(ch.y)}) rotate(${ch.rot})`}
-								style="cursor:{tool==='select'?'pointer':'inherit'}"
+								style="cursor:{tool==='select' && allowGuests && !readOnly ? 'pointer' : 'inherit'}"
 								onpointerdown={(e) => {
-									if (e.button !== 0 || tool !== 'select') return;
+									if (e.button !== 0 || tool !== 'select' || spaceDown || e.altKey) return;
 									e.stopPropagation();
-									selectedId = table.id;
+									if (chairPopover) { chairPopover = null; guestSearch = ''; return; }
+									selectedId = table.id; selectedPart = null;
+									if (!allowGuests || readOnly) return;
 									const r = svgEl.getBoundingClientRect();
 									chairPopover = { tableId: table.id, chairIdx: ci, x: e.clientX-r.left, y: e.clientY-r.top };
 									guestSearch = '';
 								}}>
+								{#if drop}
+									<circle r={ws(0.36)} fill="none" stroke="var(--accent)" stroke-width="3"/>
+								{/if}
 								<!-- Chair back bar -->
 								<rect x={-ws(0.21)} y={-ws(0.21)} width={ws(0.42)} height={ws(0.09)}
 									rx={ws(0.04)} fill={g ? '#15803d' : '#78350f'}/>
@@ -1620,19 +2302,25 @@
 								<rect x={-ws(0.21)} y={-ws(0.12)} width={ws(0.42)} height={ws(0.33)}
 									rx={ws(0.05)} fill={g ? '#16a34a' : '#a16207'}
 									stroke={g ? '#14532d' : '#78350f'} stroke-width="1"/>
-								<!-- Initials (only if assigned + zoomed in enough) -->
-								{#if g && zoom >= 55}
+								<!-- Initials, or the seat number, when zoomed in enough to read -->
+								{#if g && showNames && zoom >= 45}
 									<text x={0} y={ws(0.09)} text-anchor="middle" dominant-baseline="middle"
 										font-size={Math.max(6, ws(0.18))} font-weight="650"
 										fill="white" pointer-events="none">
-										{g.firstName[0]}{g.lastName[0]}
+										{g.firstName[0] ?? ''}{g.lastName[0] ?? ''}
+									</text>
+								{:else if showSeatNumbers && zoom >= 36}
+									<text x={0} y={ws(0.09)} text-anchor="middle" dominant-baseline="middle"
+										font-size={Math.max(6, ws(0.17))} font-weight="650"
+										fill={g ? 'white' : 'rgba(255,250,240,0.95)'} pointer-events="none">
+										{ci + 1}
 									</text>
 								{/if}
 							</g>
 						{/each}
 
 						<!-- Rotation handle -->
-						{#if sel}
+						{#if sel && !readOnly}
 							<line x1={0} y1={-ws(rotH)} x2={0} y2={-ws(rotH+0.65)}
 								stroke="var(--accent)" stroke-width="1.5" stroke-dasharray="3,2" pointer-events="none"/>
 							<circle cx={0} cy={-ws(rotH+0.65)} r={6}
@@ -1644,18 +2332,21 @@
 				{/each}
 
 				<!-- ── Standalone chairs ── -->
-				{#each seats as seat}
+				{#each seats as seat, si}
 					{@const sg = seat.assignment ? guests.find(x => x.id === seat.assignment) : null}
 					{@const ssel = selectedId === seat.id}
+					{@const drop = !!dragTarget && dragTarget.seatId === seat.id}
 					<!-- svelte-ignore a11y_no_static_element_interactions -->
 					<g transform={`translate(${wx(seat.x)},${wy(seat.y)}) rotate(${seat.rotation})`}
-						style="cursor:{tool==='select'?'pointer':tool==='eraser'?'inherit':'inherit'}"
+						style="cursor:{tool==='select' && !readOnly ? 'pointer' : 'inherit'}"
 						onpointerdown={(e) => {
-							if (e.button !== 0) return;
+							if (e.button !== 0 || spaceDown || e.altKey) return;
 							e.stopPropagation();
+							if (chairPopover) { chairPopover = null; guestSearch = ''; return; }
+							if (readOnly) { selectedId = seat.id; return; }
 							if (tool === 'eraser') { pushUndo(); seats = seats.filter(s => s.id !== seat.id); return; }
 							if (tool === 'select') {
-								selectedId = seat.id;
+								selectedId = seat.id; selectedPart = null;
 								isDragging = true;
 								dragStart = svgCoords(e);
 								elemStart = { x: seat.x, y: seat.y };
@@ -1663,7 +2354,7 @@
 								seatClickCandidate = { id: seat.id, x: e.clientX - r.left, y: e.clientY - r.top };
 							}
 						}}>
-						{#if ssel}
+						{#if ssel || drop}
 							<circle cx={0} cy={0} r={ws(0.32)} fill="none" stroke="var(--accent)" stroke-width="2.5"/>
 						{/if}
 						<!-- Chair back bar -->
@@ -1673,15 +2364,58 @@
 						<rect x={-ws(0.21)} y={-ws(0.15)} width={ws(0.42)} height={ws(0.36)}
 							rx={ws(0.05)} fill={sg ? '#16a34a' : '#94a3b8'}
 							stroke={sg ? '#14532d' : '#475569'} stroke-width="1"/>
-						{#if sg && zoom >= 55}
+						{#if sg && showNames && zoom >= 45}
 							<text x={0} y={ws(0.05)} text-anchor="middle" dominant-baseline="middle"
 								font-size={Math.max(6, ws(0.18))} font-weight="650"
 								fill="white" pointer-events="none">
-								{sg.firstName[0]}{sg.lastName[0]}
+								{sg.firstName[0] ?? ''}{sg.lastName[0] ?? ''}
+							</text>
+						{:else if showSeatNumbers && zoom >= 36}
+							<text x={0} y={ws(0.05)} text-anchor="middle" dominant-baseline="middle"
+								font-size={Math.max(6, ws(0.17))} font-weight="650"
+								fill="white" pointer-events="none">
+								{si + 1}
 							</text>
 						{/if}
 					</g>
 				{/each}
+
+				<!-- ── Rectangle being dragged out ── -->
+				{#if rectStart && rectMoved}
+					{@const rx = Math.min(rectStart.x, cursorPos.x)}
+					{@const ry = Math.min(rectStart.y, cursorPos.y)}
+					{@const rw = Math.abs(cursorPos.x - rectStart.x)}
+					{@const rh = Math.abs(cursorPos.y - rectStart.y)}
+					<rect x={wx(rx)} y={wy(ry)} width={ws(rw)} height={ws(rh)}
+						fill={tool === 'wall' ? 'rgba(43,52,98,0.35)' : `${zoneColor}55`}
+						stroke={tool === 'wall' ? '#2b3462' : zoneColor} stroke-width="2" stroke-dasharray="6,3" pointer-events="none"/>
+					<text x={wx(rx + rw / 2)} y={wy(ry + rh / 2)} text-anchor="middle" dominant-baseline="middle"
+						font-size="12" font-weight="600" fill="var(--accent-ink)" pointer-events="none"
+						style="paint-order:stroke" stroke="var(--bg-panel)" stroke-width="3">{rw.toFixed(1)} × {rh.toFixed(1)} m</text>
+				{/if}
+
+				<!-- ── Draggable corners of every wall / zone while its tool is active ── -->
+				{#if rectDraw && !readOnly && !isDrawing && (tool === 'wall' || tool === 'zone')}
+					{#each toolShapes() as sh (sh.id)}
+						{#if sh.id !== selectedId}
+							{#each sh.points as p}
+								<circle cx={wx(p.x)} cy={wy(p.y)} r="4" fill="var(--bg-panel)" stroke="var(--accent)" stroke-width="1.5" opacity="0.8" pointer-events="none"/>
+							{/each}
+						{/if}
+					{/each}
+				{/if}
+
+				<!-- ── Where a click adds a corner: the middle of each edge of the selected shape ── -->
+				{#if rectDraw && !readOnly && !isDrawing && (tool === 'select' || tool === 'wall' || tool === 'zone')}
+					{@const pts = (selectedWall && !wallsOff ? selectedWall.points : selectedZone && !zonesOff ? selectedZone.points : null)}
+					{#if pts}
+						{#each pts as p, i}
+							{@const q = pts[(i + 1) % pts.length]}
+							<circle cx={wx((p.x + q.x) / 2)} cy={wy((p.y + q.y) / 2)} r="4"
+								fill="var(--bg-panel)" stroke="var(--accent)" stroke-width="1.5" stroke-dasharray="2,1.5" pointer-events="none"/>
+						{/each}
+					{/if}
+				{/if}
 
 				<!-- ── Drawing preview ── -->
 				{#if isDrawing && drawPts.length > 0}
@@ -1704,8 +2438,14 @@
 					{/each}
 				{/if}
 
+				<!-- ── Pillar ghost ── -->
+				{#if tool === 'pillar' && !readOnly}
+					<rect x={wx(cursorPos.x - 0.25)} y={wy(cursorPos.y - 0.25)} width={ws(0.5)} height={ws(0.5)}
+						fill="rgba(43,52,98,0.35)" stroke="#2b3462" stroke-width="1.5" stroke-dasharray="4,3" pointer-events="none"/>
+				{/if}
+
 				<!-- ── Table ghost ── -->
-				{#if tool === 'table'}
+				{#if tool === 'table' && !readOnly && (!tablesFromTypesOnly || selectedType)}
 					<g transform={`translate(${wx(cursorPos.x)},${wy(cursorPos.y)})`} opacity="0.65" pointer-events="none">
 						{#if ghostShape === 'rect'}
 							<rect x={-ws(ghostW/2)} y={-ws(ghostH/2)} width={ws(ghostW)} height={ws(ghostH)}
@@ -1723,8 +2463,14 @@
 					</g>
 				{/if}
 
+				<!-- ── Chair ghost ── -->
+				{#if tool === 'chair' && !readOnly}
+					<rect x={wx(cursorPos.x - 0.21)} y={wy(cursorPos.y - 0.21)} width={ws(0.42)} height={ws(0.42)} rx={ws(0.05)}
+						fill="#94a3b8" opacity="0.6" stroke="#475569" stroke-dasharray="3,2" pointer-events="none"/>
+				{/if}
+
 				<!-- ── Cursor guidelines (full canvas hairlines) ── -->
-				{#if tool !== 'select' && tool !== 'eraser'}
+				{#if !readOnly && tool !== 'select' && tool !== 'eraser'}
 					<line x1={0} y1={wy(cursorPos.y)} x2="100%" y2={wy(cursorPos.y)}
 						stroke="color-mix(in srgb, var(--accent) 25%, transparent)" stroke-width="1" stroke-dasharray="4,4" pointer-events="none"/>
 					<line x1={wx(cursorPos.x)} y1={0} x2={wx(cursorPos.x)} y2="100%"
@@ -1741,6 +2487,33 @@
 							stroke="#22d3ee" stroke-width="1" stroke-dasharray="4,4" pointer-events="none"/>
 					{/if}
 				{/each}
+
+				<!-- ── Live dimensions while a room part is moved or resized ── -->
+				{#if partDrag && roomRects[partDrag.idx]}
+					{@const r = roomRects[partDrag.idx]}
+					<text x={wx(r.x + r.w / 2)} y={wy(r.y + r.h / 2)} text-anchor="middle" dominant-baseline="middle"
+						class="dim-label" pointer-events="none">{r.w.toFixed(1)} × {r.h.toFixed(1)} m</text>
+					<text x={wx(r.x + r.w / 2)} y={wy(r.y) - 8} text-anchor="middle" class="dim-label dim-edge" pointer-events="none">{r.w.toFixed(1)} m</text>
+					<text x={wx(r.x) + 8} y={wy(r.y + r.h / 2)} text-anchor="start" dominant-baseline="middle" class="dim-label dim-edge" pointer-events="none">{r.h.toFixed(1)} m</text>
+				{/if}
+
+				<!-- ── Live dimensions while a corner of a wall or zone is dragged ── -->
+				{#if isVertexDragging && vertexDragIdx >= 0}
+					{@const pts = (walls.find(w => w.id === selectedId) ?? zones.find(z => z.id === selectedId))?.points}
+					{#if pts && pts[vertexDragIdx]}
+						{@const n = pts.length}
+						{@const v = pts[vertexDragIdx]}
+						{@const xs = pts.map(q => q.x)}
+						{@const ys = pts.map(q => q.y)}
+						{@const bw = Math.max(...xs) - Math.min(...xs)}
+						{@const bh = Math.max(...ys) - Math.min(...ys)}
+						<text x={wx((Math.max(...xs) + Math.min(...xs)) / 2)} y={wy((Math.max(...ys) + Math.min(...ys)) / 2)} text-anchor="middle" dominant-baseline="middle"
+							class="dim-label" pointer-events="none">{bw.toFixed(1)} × {bh.toFixed(1)} m</text>
+						{#each [pts[(vertexDragIdx - 1 + n) % n], pts[(vertexDragIdx + 1) % n]] as q}
+							<text x={wx((v.x + q.x) / 2)} y={wy((v.y + q.y) / 2) - 8} text-anchor="middle" class="dim-label dim-edge" pointer-events="none">{Math.hypot(v.x - q.x, v.y - q.y).toFixed(2)} m</text>
+						{/each}
+					{/if}
+				{/if}
 
 				<!-- ── Measure tool ── -->
 				{#if measureStart && !measureEnd && tool === 'measure'}
@@ -1775,41 +2548,117 @@
 				{/if}
 			</svg>
 
-			<!-- ── Edge rulers ── -->
-			<div class="ruler-corner"></div>
-			<div class="ruler-top">
-				{#each { length: Math.max(0, Math.round((rulerMaxMx - rulerMinMx) / rulerStep) + 1) } as _, i}
-					{@const m = rulerMinMx + i * rulerStep}
-					{@const px = m * zoom + panX - 20}
-					{@const isMajor = Math.abs(m - Math.round(m / rulerMajor) * rulerMajor) < 0.001}
-					{#if px >= 0 && px < 4000}
-						{#if isMajor}
-							<div class="ruler-tick ruler-tick-major" style="left:{px}px">
-								<span class="ruler-label">{Math.round(m)}</span>
-							</div>
-						{:else}
-							<div class="ruler-tick ruler-tick-minor" style="left:{px}px"></div>
+			<!-- ── Edge rulers (optional) ── -->
+			{#if showRulers}
+				<div class="ruler-corner"></div>
+				<div class="ruler-top">
+					{#each { length: Math.max(0, Math.round((rulerMaxMx - rulerMinMx) / rulerStep) + 1) } as _, i}
+						{@const m = rulerMinMx + i * rulerStep}
+						{@const px = m * zoom + panX - 20}
+						{@const isMajor = Math.abs(m - Math.round(m / rulerMajor) * rulerMajor) < 0.001}
+						{#if px >= 0 && px < 4000}
+							{#if isMajor}
+								<div class="ruler-tick ruler-tick-major" style="left:{px}px">
+									<span class="ruler-label">{Math.round(m)}</span>
+								</div>
+							{:else}
+								<div class="ruler-tick ruler-tick-minor" style="left:{px}px"></div>
+							{/if}
 						{/if}
-					{/if}
-				{/each}
-				<div class="ruler-cursor-h" style="left:{rulerMouseX - 20}px"></div>
+					{/each}
+					<div class="ruler-cursor-h" style="left:{rulerMouseX - 20}px"></div>
+				</div>
+				<div class="ruler-left">
+					{#each { length: Math.max(0, Math.round((rulerMaxMy - rulerMinMy) / rulerStep) + 1) } as _, i}
+						{@const m = rulerMinMy + i * rulerStep}
+						{@const py = m * zoom + panY - 20}
+						{@const isMajor = Math.abs(m - Math.round(m / rulerMajor) * rulerMajor) < 0.001}
+						{#if py >= 0 && py < 4000}
+							{#if isMajor}
+								<div class="ruler-tick-v ruler-tick-major-v" style="top:{py}px">
+									<span class="ruler-label-v">{Math.round(m)}</span>
+								</div>
+							{:else}
+								<div class="ruler-tick-v ruler-tick-minor-v" style="top:{py}px"></div>
+							{/if}
+						{/if}
+					{/each}
+					<div class="ruler-cursor-v" style="top:{rulerMouseY - 20}px"></div>
+				</div>
+			{/if}
+
+			<!-- ── Instruction bar: what to do now, with the actions that finish it ── -->
+			<div class="instr" role="status" aria-live="polite">
+				<span class="instr-dot" class:busy={isDrawing || !!boundsStart || !!measureStart}></span>
+				<span class="instr-text">{instruction}</span>
+				{#if isDrawing}
+					<button type="button" class="instr-btn ok" onclick={finishDrawing} disabled={drawPts.length < 3}>{tr.editor.closeShape}</button>
+					<button type="button" class="instr-btn" onclick={cancelDrawing}>{tr.common.cancel}</button>
+				{:else if boundsStart}
+					<button type="button" class="instr-btn" onclick={() => boundsStart = null}>{tr.common.cancel}</button>
+				{:else if measureStart || measureEnd}
+					<button type="button" class="instr-btn" onclick={() => { measureStart = null; measureEnd = null; }}>{tr.editor.clear}</button>
+				{/if}
 			</div>
-			<div class="ruler-left">
-				{#each { length: Math.max(0, Math.round((rulerMaxMy - rulerMinMy) / rulerStep) + 1) } as _, i}
-					{@const m = rulerMinMy + i * rulerStep}
-					{@const py = m * zoom + panY - 20}
-					{@const isMajor = Math.abs(m - Math.round(m / rulerMajor) * rulerMajor) < 0.001}
-					{#if py >= 0 && py < 4000}
-						{#if isMajor}
-							<div class="ruler-tick-v ruler-tick-major-v" style="top:{py}px">
-								<span class="ruler-label-v">{Math.round(m)}</span>
-							</div>
-						{:else}
-							<div class="ruler-tick-v ruler-tick-minor-v" style="top:{py}px"></div>
-						{/if}
+
+			<!-- ── First-run tip for this step ── -->
+			{#if coachVisible}
+				<div class="coach-pos">
+					<CoachMark title={stepLabel(step)} text={coachText(step)} dismissLabel={tr.editor.gotIt} onDismiss={dismissCoach} />
+				</div>
+			{/if}
+
+			<!-- ── Legend while seating ── -->
+			{#if step === 'guests' && allowGuests}
+				<div class="legend" aria-hidden="true">
+					<span><i style="background:#16a34a"></i>{tr.editor.legendSeated}</span>
+					<span><i style="background:#a16207"></i>{tr.editor.legendFree}</span>
+					<span><i class="ring"></i>{tr.editor.legendSelected}</span>
+				</div>
+			{/if}
+
+			<!-- ── Status strip: grid, snapping, toggles, cursor ── -->
+			<div class="status-strip">
+				<div class="custom-select" role="listbox" tabindex="0" aria-label={tr.editor.snap}
+					onclick={(e) => { e.stopPropagation(); snapDropOpen = !snapDropOpen; }}
+					onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); snapDropOpen = !snapDropOpen; } }}>
+					<span class="custom-select-value">{gridSnap === 0 ? tr.editor.gridOff : tr.editor.gridLabel(gridSnap)}</span>
+					<svg class="custom-select-chevron" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
+					{#if snapDropOpen}
+						<div class="custom-select-dropdown">
+							{#each [0, 0.25, 0.5, 1, 2] as val}
+								<button type="button" class="custom-select-option" class:selected={gridSnap === val}
+									onclick={(e) => { e.stopPropagation(); gridSnap = val; snapDropOpen = false; }}>
+									{val === 0 ? tr.editor.gridOff : tr.editor.gridLabel(val)}
+								</button>
+							{/each}
+						</div>
 					{/if}
-				{/each}
-				<div class="ruler-cursor-v" style="top:{rulerMouseY - 20}px"></div>
+				</div>
+				<button type="button" class="toggle" class:on={snapToElements} onclick={() => snapToElements = !snapToElements} aria-pressed={snapToElements}>
+					<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+					{tr.editor.snapObjects}
+				</button>
+				<button type="button" class="toggle" class:on={showRulers} onclick={() => showRulers = !showRulers} aria-pressed={showRulers}>{tr.editor.rulers}</button>
+				<button type="button" class="toggle" class:on={dimsOn} disabled={step === 'check'} onclick={() => showDims = !showDims} aria-pressed={dimsOn} title="{tr.editor.measurements} (D)">{tr.editor.measurements}</button>
+				{#if allowGuests || tables.length}
+					<button type="button" class="toggle" class:on={showSeatNumbers} onclick={() => showSeatNumbers = !showSeatNumbers} aria-pressed={showSeatNumbers}>{tr.editor.seatNumbers}</button>
+				{/if}
+				{#if allowGuests}
+					<button type="button" class="toggle" class:on={showNames} onclick={() => showNames = !showNames} aria-pressed={showNames}>{tr.editor.namesOnChairs}</button>
+				{/if}
+				<span class="coords">{cursorPos.x.toFixed(2)} m · {cursorPos.y.toFixed(2)} m</span>
+				{#if collidingIds.size > 0}
+					<span class="status-warn">{tr.editor.tablesClash(collidingIds.size)}</span>
+				{/if}
+			</div>
+
+			<!-- ── Zoom ── -->
+			<div class="zoom" role="group" aria-label={tr.editor.zoom}>
+				<button type="button" onclick={() => zoomBy(1 / 1.2)} aria-label={tr.editor.zoomOut}>−</button>
+				<button type="button" class="pct" onclick={() => { zoom = 60; }} title="100%">{zoomPercent}%</button>
+				<button type="button" onclick={() => zoomBy(1.2)} aria-label={tr.editor.zoomIn}>+</button>
+				<button type="button" class="fit" onclick={fitToRoom} title="{tr.editor.fitRoom} (Shift+1)">{tr.editor.fitRoom}</button>
 			</div>
 
 			<!-- Chair assignment popover -->
@@ -1822,33 +2671,35 @@
 					<div class="pop-header">
 						<span>
 							{#if popoverTable && chairPopover.chairIdx != null}
-								{popoverTable.label} · {tr.editor.seat} {chairPopover.chairIdx + 1}
+								{tr.editor.seatRef(popoverTable.label, chairPopover.chairIdx + 1)}
 							{:else if popoverSeat}
-								{tr.editor.chair}
+								{tr.editor.chairRef(seats.indexOf(popoverSeat) + 1)}
 							{/if}
 						</span>
-						<button class="pop-close" onclick={() => { chairPopover = null; guestSearch = ''; }}>✕</button>
+						<button type="button" class="pop-close" onclick={() => { chairPopover = null; guestSearch = ''; }} aria-label={tr.common.cancel}>✕</button>
 					</div>
 					{#if popoverChairGuest}
 						<div class="pop-assigned">
 							<span class="pop-name">{popoverChairGuest.firstName} {popoverChairGuest.lastName}</span>
 							{#if popoverChairGuest.group}<span class="pop-group">{popoverChairGuest.group}</span>{/if}
-							<button class="pop-clear" onclick={clearChairAssignment}>{tr.editor.remove}</button>
+							<button type="button" class="pop-clear" onclick={clearChairAssignment}>{tr.editor.remove}</button>
 						</div>
 						{#if popoverChairGuest.note}
 							<div class="pop-note">
-								<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+								<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
 								<span>{popoverChairGuest.note}</span>
 							</div>
 						{/if}
 					{:else}
 						<div class="pop-empty">{tr.editor.unassigned}</div>
 					{/if}
-					<input class="pop-search" type="text" placeholder={tr.editor.searchGuests} bind:value={guestSearch} />
+					<!-- svelte-ignore a11y_autofocus -->
+					<input class="pop-search" type="text" placeholder={tr.editor.searchGuests} bind:value={guestSearch} autofocus
+						onkeydown={(e) => { if (e.key === 'Enter' && filteredPopoverGuests[0]) { const g = filteredPopoverGuests[0]; popoverCurrentId === g.id ? clearChairAssignment() : assignGuest(g.id); } }} />
 					<div class="pop-list">
 						{#each filteredPopoverGuests as g}
 							{@const isCurrent = popoverCurrentId === g.id}
-							<button class="pop-guest" class:current={isCurrent}
+							<button type="button" class="pop-guest" class:current={isCurrent}
 								onclick={() => isCurrent ? clearChairAssignment() : assignGuest(g.id)}>
 								<span class="pop-gname">{g.lastName}, {g.firstName}</span>
 								{#if g.group}<span class="pop-ggroup">{g.group}</span>{/if}
@@ -1861,88 +2712,193 @@
 				</div>
 			{/if}
 
-			<!-- Status bar -->
-			<div class="status-bar">
-				<span>
-					{#if tool === 'measure'}
-						{measureStart && !measureEnd ? tr.editor.statusMeasureSecond : measureEnd ? tr.editor.statusMeasureNew : tr.editor.statusMeasureFirst} · {tr.editor.escToCancel}
-					{:else if tool === 'bounds'}
-						{boundsStart ? tr.editor.statusBoundsSecond : tr.editor.statusBoundsFirst} · {tr.editor.escToCancel}
-					{:else if isDrawing}
-						● {tr.editor.statusDrawing} {tool} — {drawPts.length} {tr.editor.pts} · {tr.editor.statusDrawingHint}
-					{:else if tool === 'table'}
-						{tr.editor.statusPlaceTable} · {ghostValid ? tr.editor.validPosition : tr.editor.blockedByWall}
-					{:else if tool === 'select' && selectedTable}
-						{selectedTable.label} · {tr.editor.statusSelectedTable}
-					{:else}
-						{TOOL_LABELS[tool]}
-					{/if}
-				</span>
-				<span class="status-coords">
-					{cursorPos.x.toFixed(2)} m, {cursorPos.y.toFixed(2)} m · {tr.editor.snap} {gridSnap} m
-				</span>
-			</div>
+			<!-- Right-click menu -->
+			{#if ctxMenu}
+				<div class="overlay" role="presentation" onpointerdown={() => ctxMenu = null} oncontextmenu={(e) => { e.preventDefault(); ctxMenu = null; }}></div>
+				<div class="ctx-menu" role="menu" aria-label={ctxMenu.title} style="left:{ctxMenu.x}px; top:{ctxMenu.y}px">
+					<div class="ctx-title">{ctxMenu.title}</div>
+					{#each ctxMenu.items as item}
+						<button type="button" role="menuitem" class="ctx-item" class:danger={item.danger} disabled={item.disabled} onclick={() => runCtx(item)}>
+							<span>{item.label}</span>
+							{#if item.kbd}<kbd>{item.kbd}</kbd>{/if}
+						</button>
+					{/each}
+				</div>
+			{/if}
+
+			<!-- Help: every shortcut, in one place -->
+			{#if helpOpen}
+				<div class="help-pop" role="dialog" aria-label={tr.editor.help}>
+					<div class="help-head"><b>{tr.editor.shortcuts}</b><button type="button" class="pop-close" onclick={() => helpOpen = false} aria-label={tr.common.cancel}>✕</button></div>
+					<dl>
+						{#each toolCards as c}
+							<div><dt><kbd>{c.kbd}</kbd></dt><dd>{c.name}</dd></div>
+						{/each}
+						<div><dt><kbd>Enter</kbd></dt><dd>{tr.editor.kbdClose}</dd></div>
+						<div><dt><kbd>Esc</kbd></dt><dd>{tr.editor.kbdCancel}</dd></div>
+						<div><dt><kbd>Delete</kbd></dt><dd>{tr.editor.kbdDelete}</dd></div>
+						<div><dt><kbd>Ctrl</kbd>+<kbd>Z</kbd> / <kbd>Y</kbd></dt><dd>{tr.editor.undo} / {tr.editor.redo}</dd></div>
+						<div><dt><kbd>Shift</kbd>+<kbd>1</kbd></dt><dd>{tr.editor.kbdFit}</dd></div>
+					</dl>
+					<p>{tr.editor.kbdPan}</p>
+				</div>
+			{/if}
 		</main>
 
-		<!-- Right panel -->
+		<!-- Right panel: progress, then what the step needs -->
 		<aside class="panel">
-			<!-- Tabs -->
-			<div class="tabs">
-				<button class="tab" class:active={activeTab==='props'} onclick={() => activeTab='props'}>{tr.editor.properties}</button>
-				{#if allowGuests}
-					<button class="tab" class:active={activeTab==='guests'} onclick={() => activeTab='guests'}>
-						{tr.editor.guests}
-						{#if guests.length > 0}
-							<span class="tab-badge">{totalAssigned}/{guests.length}</span>
-						{/if}
-					</button>
-				{/if}
-			</div>
-
-			<!-- ── Properties tab ── -->
-			{#if activeTab === 'props'}
-
-				<!-- Table inventory selector (when types provided) -->
-				{#if tableTypes && tableTypes.length > 0 && tool === 'table' && !selectedTable}
-					<section>
-						<div class="sec-title">{tr.editor.inventory}</div>
-						<div class="inventory-list">
-							{#each tableTypes as tt}
-								<button class="inventory-item" class:active={selectedTypeId === tt.id}
-									onclick={() => { selectedTypeId = tt.id; }}>
-									<div class="inv-preview">
-										{#if tt.shape === 'round'}
-											<svg viewBox="0 0 40 40"><circle cx="20" cy="20" r="14" fill="#92400e" opacity="0.8"/></svg>
-										{:else}
-											<svg viewBox="0 0 40 40"><rect x="4" y="10" width="32" height="20" rx="3" fill="#92400e" opacity="0.8"/></svg>
-										{/if}
-									</div>
-									<div class="inv-info">
-										<span class="inv-name">{tt.name}</span>
-										<span class="inv-detail">
-											{tt.shape === 'round' ? tr.editor.shapeRound : tr.editor.shapeRect}
-											· {tt.max_chairs} {tr.editor.chairsWord}
-										</span>
-									</div>
+			<div class="panel-scroll">
+				<section>
+					<div class="sec-title">{tr.editor.progress}</div>
+					<ol class="progress">
+						{#each stepItems as s (s.id)}
+							<li class={s.state}>
+								<button type="button" onclick={() => goStep(s.id)}>
+									<i>{s.state === 'done' ? '✓' : s.index}</i>
+									<span><b>{s.label}</b><em>{stepFact(s.id as StepId)}</em></span>
 								</button>
-							{/each}
-						</div>
-						{#if selectedType}
-							<div class="inv-selected-info">
-								{selectedType.shape === 'round' ? `r=${selectedType.radius}m` : `${selectedType.width}×${selectedType.height}m`}
-								· {selectedType.max_chairs} {tr.editor.chairsWord}
-							</div>
+							</li>
+						{/each}
+					</ol>
+				</section>
+
+				<!-- ── Room step ── -->
+				{#if step === 'room'}
+					<section>
+						<div class="sec-title">{tr.editor.roomParts}</div>
+						{#if roomRects.length}
+							<ul class="room-parts">
+								{#each roomRects as r, ri}
+									<li class:on={selectedPart === ri} onmouseenter={() => hoverPart = ri} onmouseleave={() => hoverPart = null}>
+										<button type="button" class="part-pick" onclick={() => { selectedPart = ri; selectedId = null; tool = 'select'; }}>
+											{tr.editor.roomPart(ri + 1)} · {r.w.toFixed(1)} × {r.h.toFixed(1)} m
+										</button>
+										{#if !boundsLocked}
+											<button type="button" class="part-del" title={tr.editor.removePart} aria-label={tr.editor.removePart}
+												onclick={() => removeRoomPart(ri)}>×</button>
+										{/if}
+									</li>
+								{/each}
+							</ul>
+							<div class="stat"><span>{tr.editor.roomArea}</span><b>{roomArea(roomRects).toFixed(1)} m²</b></div>
+							{#if !partsConnected(roomRects)}<p class="warn-text">{tr.editor.roomDisconnected}</p>{/if}
+							{#if tool === 'bounds'}<p class="help-text">{tr.editor.boundsAddHint}</p>{/if}
+							{#if !boundsLocked}
+								<button type="button" class="btn-del" onclick={() => { pushUndo(); roomRects = []; selectedPart = null; }}>{tr.editor.removeRoom}</button>
+							{/if}
+						{:else}
+							<p class="help-text">{tr.editor.boundsHelp}</p>
 						{/if}
 					</section>
 				{/if}
 
-				<!-- Table config (new table or selected) -->
-				{#if (tool === 'table' && !(tableTypes && tableTypes.length > 0)) || selectedTable}
+				<!-- ── Walls step ── -->
+				{#if step === 'walls'}
+					{#if isDrawing && tool === 'wall'}
+						<section>
+							<div class="sec-title">{tr.editor.wallDrawing}</div>
+							<div class="stat"><span>{tr.editor.corners}</span><b>{drawPts.length}</b></div>
+							{#if drawPts.length >= 2}
+								{@const a = drawPts[drawPts.length - 2]}
+								{@const b = drawPts[drawPts.length - 1]}
+								<div class="stat"><span>{tr.editor.lastEdge}</span><b>{Math.hypot(b.x - a.x, b.y - a.y).toFixed(2)} m</b></div>
+							{/if}
+						</section>
+					{:else if selectedWall}
+						<section>
+							<div class="sec-title">{tr.editor.wall}</div>
+							<div class="stat"><span>{tr.editor.vertices}</span><b>{selectedWall.points.length}</b></div>
+							<p class="help-text">{tr.editor.wallHelp}</p>
+							{#if !wallsOff}
+								<button type="button" class="btn-del" onclick={() => { pushUndo(); walls=walls.filter(w=>w.id!==selectedId); selectedId=null; }}>{tr.editor.deleteWall}</button>
+							{/if}
+						</section>
+					{:else}
+						<section>
+							<div class="sec-title">{tr.editor.stepWalls}</div>
+							<p class="help-text">{tr.editor.wallsOptional}</p>
+						</section>
+					{/if}
+				{/if}
+
+				<!-- ── Zone options: the zones step, or a zone in the chairs step ── -->
+				{#if (step === 'zones' || step === 'chairs') && (tool === 'zone' || selectedZone)}
+					{@const Z = selectedZone}
+					<section>
+						<div class="sec-title">{Z ? Z.label || tr.editor.zoneOptions : tr.editor.zoneNew}</div>
+						{#if Z}
+							<div class="field">
+								<label for="z-lbl">{tr.common.name}</label>
+								<input id="z-lbl" type="text" value={Z.label}
+									oninput={(e) => updateZone({ label: (e.target as HTMLInputElement).value })}/>
+							</div>
+						{/if}
+						<div class="field">
+							<label for="z-col">{tr.editor.colour}</label>
+							<div class="swatches">
+								{#each ZONE_PRESETS as c}
+									<button type="button" class="swatch" class:on={(Z?.color ?? zoneColor)===c}
+										style="background:{c}" aria-label="{tr.editor.setColour} {c}"
+										onclick={() => { if(Z) updateZone({color:c}); else zoneColor=c; }}></button>
+								{/each}
+								<input id="z-col" type="color" value={Z?.color ?? zoneColor}
+									oninput={(e) => { const v=(e.target as HTMLInputElement).value; if(Z) updateZone({color:v}); else zoneColor=v; }}
+									title={tr.editor.custom}/>
+							</div>
+						</div>
+						{#if Z && !zonesOff}
+							<button type="button" class="btn-del" onclick={() => { pushUndo(); zones=zones.filter(z=>z.id!==selectedId); selectedId=null; }}>{tr.editor.deleteZone}</button>
+						{/if}
+					</section>
+				{:else if step === 'zones' && !selectedZone}
+					<section>
+						<div class="sec-title">{tr.editor.stepZones}</div>
+						<p class="help-text">{tr.editor.toolZoneHow}</p>
+						{#if zones.length}
+							<ul class="obj-list">
+								{#each zones as z}
+									<li><button type="button" class:on={selectedId === z.id} onclick={() => { selectedId = z.id; tool = 'select'; }}><i style="background:{z.color}"></i>{z.label || tr.editor.zoneOptions}</button></li>
+								{/each}
+							</ul>
+						{/if}
+					</section>
+				{/if}
+
+				<!-- ── Tables: inventory while placing, properties when one is selected ── -->
+				{#if step === 'tables' && tableTypes && tableTypes.length > 0 && tool === 'table' && !selectedTable}
+					<section>
+						<div class="sec-title">{tr.editor.inventory}</div>
+						<div class="inventory-list">
+							{#each tableTypes as tt}
+								{@const left = typeLeft(tt)}
+								<button type="button" class="inventory-item" class:active={selectedTypeId === tt.id} class:spent={left <= 0}
+									onclick={() => { selectedTypeId = tt.id; }}>
+									<div class="inv-preview">
+										{#if tt.shape === 'round'}
+											<svg viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="14" fill="#92400e" opacity="0.8"/></svg>
+										{:else}
+											<svg viewBox="0 0 40 40" aria-hidden="true"><rect x="4" y="10" width="32" height="20" rx="3" fill="#92400e" opacity="0.8"/></svg>
+										{/if}
+									</div>
+									<div class="inv-info">
+										<span class="inv-name">{tt.name}</span>
+										<span class="inv-detail">{tr.editor.tableTypeFacts(tt.shape === 'round' ? `⌀ ${(Number(tt.radius) * 2).toFixed(1)} m` : `${tt.width} × ${tt.height} m`, Number(tt.max_chairs))}</span>
+										{#if Number.isFinite(left)}
+											<span class="inv-stock" class:none={left <= 0}>{tr.editor.inventoryLeft(Math.max(0, left), typeLimit(tt))}</span>
+										{/if}
+									</div>
+								</button>
+							{/each}
+						</div>
+					</section>
+				{/if}
+
+				{#if (step === 'tables' || step === 'chairs') && ((tool === 'table' && !(tableTypes && tableTypes.length > 0)) || selectedTable)}
 					{@const T = selectedTable}
 					{@const isInventoryTable = T?.typeId && tableTypes?.find(tt => tt.id === T.typeId)}
 					{@const maxChairs = isInventoryTable ? Number((tableTypes?.find(tt => tt.id === T?.typeId))?.max_chairs ?? 999) : 999}
 					<section>
-						<div class="sec-title">{T ? T.label : tr.editor.newTable}</div>
+						<div class="sec-title">{T ? T.label : tr.editor.freeformTable}</div>
 
 						{#if T}
 							<div class="field">
@@ -1990,7 +2946,7 @@
 							{/if}
 						{:else if isInventoryTable && T}
 							<div class="inv-locked-info">
-								{T.shape === 'round' ? `r=${T.radius}m` : `${T.width}×${T.height}m`}
+								{T.shape === 'round' ? `⌀ ${(Number(T.radius) * 2).toFixed(1)} m` : `${T.width} × ${T.height} m`}
 								· {tr.editor.inventoryType}
 							</div>
 						{/if}
@@ -2057,263 +3013,308 @@
 									value={T.rotation}
 									oninput={(e) => updateTable({ rotation: +((e.target as HTMLInputElement).value) })}/>
 							</div>
-
-							<!-- Seat assignments summary -->
-							{@const assigned = T.assignments.filter(Boolean).length}
-							<div class="seat-summary">
-								<span>{assigned}/{totalChairs(T)} {tr.editor.seatsAssigned}</span>
-								<div class="seat-dots">
-									{#each T.assignments as a}
-										<span class="dot" class:filled={!!a}></span>
-									{/each}
-								</div>
+							<div class="field">
+								<label for="t-note">{tr.editor.tableNote}</label>
+								<input id="t-note" type="text" value={T.note ?? ''} placeholder={tr.editor.tableNotePlaceholder}
+									oninput={(e) => updateTable({ note: (e.target as HTMLInputElement).value || undefined })}/>
 							</div>
-
-							<button class="btn-del" onclick={() => { tables=tables.filter(t=>t.id!==selectedId); selectedId=null; }}>
+							{#if allowGuests}
+								{@const assigned = T.assignments.filter(Boolean).length}
+								<div class="seat-summary">
+									<span>{assigned}/{totalChairs(T)} {tr.editor.seatsAssigned}</span>
+									<div class="seat-dots">
+										{#each T.assignments as a}
+											<span class="dot" class:filled={!!a}></span>
+										{/each}
+									</div>
+								</div>
+							{/if}
+							<button type="button" class="btn-del" onclick={() => { pushUndo(); tables=tables.filter(t=>t.id!==selectedId); selectedId=null; }}>
 								{tr.editor.deleteTable}
 							</button>
 						{/if}
 					</section>
 				{/if}
 
-				<!-- Zone config -->
-				{#if tool === 'zone' || selectedZone}
-					{@const Z = selectedZone}
+				<!-- ── A standalone chair ── -->
+				{#if (step === 'chairs' || step === 'tables') && selectedSeat}
 					<section>
-						<div class="sec-title">{Z ? Z.label : tr.editor.zoneOptions}</div>
-						{#if Z}
-							<div class="field">
-								<label for="z-lbl">{tr.common.name}</label>
-								<input id="z-lbl" type="text" value={Z.label}
-									oninput={(e) => updateZone({ label: (e.target as HTMLInputElement).value })}/>
-							</div>
-						{/if}
+						<div class="sec-title">{tr.editor.chairRef(seats.indexOf(selectedSeat) + 1)}</div>
 						<div class="field">
-							<label for="z-col">{tr.editor.colour}</label>
-							<div class="swatches">
-								{#each ZONE_PRESETS as c}
-									<button class="swatch" class:on={(Z?.color ?? zoneColor)===c}
-										style="background:{c}" aria-label="{tr.editor.setColour} {c}"
-										onclick={() => { if(Z) updateZone({color:c}); else zoneColor=c; }}></button>
+							<label for="s-rot">{tr.editor.rotation}</label>
+							<input id="s-rot" type="number" min="-180" max="180" step="5" value={selectedSeat.rotation}
+								oninput={(e) => updateSeat({ rotation: +((e.target as HTMLInputElement).value) })}/>
+						</div>
+						<button type="button" class="btn-del" onclick={() => { pushUndo(); seats = seats.filter(s => s.id !== selectedId); selectedId = null; }}>{tr.editor.remove}</button>
+					</section>
+				{/if}
+
+				<!-- ── Guests step: the selected table's seats ── -->
+				{#if step === 'guests' && allowGuests}
+					{#if selectedTable}
+						{@const T = selectedTable}
+						{@const free = T.assignments.filter(a => !a).length}
+						<section>
+							<div class="sec-title-row">
+								<span class="sec-title" style="margin-bottom:0">{T.label}</span>
+								<span class="muted">{T.assignments.length - free}/{T.assignments.length} · {free} {tr.editor.seatEmpty.toLowerCase()}</span>
+							</div>
+							<ol class="seats">
+								{#each T.assignments as a, i}
+									{@const g = a ? guests.find(x => x.id === a) : null}
+									<li class:empty={!g} class:drop={!!dragTarget && dragTarget.tableId === T.id && dragTarget.chairIdx === i}>
+										<i>{i + 1}</i>
+										{#if g}
+											<span class="nm">{g.firstName} {g.lastName}{#if g.group}<em> · {g.group}</em>{/if}</span>
+											<button type="button" class="x" onclick={() => clearSeat({ tableId: T.id, chairIdx: i })} aria-label="{tr.editor.remove}: {g.firstName} {g.lastName}">×</button>
+										{:else}
+											<span class="nm muted">{tr.editor.seatEmpty}</span>
+											<button type="button" class="assign" onclick={() => openSeatPopover(T, i)}>{tr.editor.assign}</button>
+										{/if}
+									</li>
 								{/each}
-								<input id="z-col" type="color" value={Z?.color ?? zoneColor}
-									oninput={(e) => { const v=(e.target as HTMLInputElement).value; if(Z) updateZone({color:v}); else zoneColor=v; }}
-									title={tr.editor.custom}/>
-							</div>
-						</div>
-						{#if Z}
-							<button class="btn-del" onclick={() => { zones=zones.filter(z=>z.id!==selectedId); selectedId=null; }}>
-								{tr.editor.deleteZone}
-							</button>
-						{/if}
-					</section>
-				{/if}
-
-				<!-- Bounds config -->
-				{#if !boundsLocked && (tool === 'bounds' || bounds) && tool !== 'table'}
-					<section>
-						<div class="sec-title">{tr.editor.floorPlanBounds}</div>
-						{#if bounds}
-							<div class="bounds-info">
-								<div class="field-row">
-									<div class="field">
-										<label>{tr.editor.boundsX}</label>
-										<span class="val">{bounds.x.toFixed(1)} m</span>
-									</div>
-									<div class="field">
-										<label>{tr.editor.boundsY}</label>
-										<span class="val">{bounds.y.toFixed(1)} m</span>
-									</div>
+							</ol>
+							{#if groupSuggestion}
+								<div class="suggest">
+									<p>{tr.editor.suggestGroup(groupSuggestion.group, groupSuggestion.total)}</p>
+									<div class="row"><button type="button" class="btn-sm" onclick={seatSuggestion}>{tr.editor.seatThemHere}</button></div>
 								</div>
-								<div class="field-row">
-									<div class="field">
-										<label>{tr.editor.width}</label>
-										<span class="val">{bounds.w.toFixed(1)} m</span>
-									</div>
-									<div class="field">
-										<label>{tr.editor.height}</label>
-										<span class="val">{bounds.h.toFixed(1)} m</span>
-									</div>
-								</div>
+							{/if}
+							<div class="field" style="margin-top:8px">
+								<label for="g-note">{tr.editor.tableNote}</label>
+								<input id="g-note" type="text" value={T.note ?? ''} placeholder={tr.editor.tableNotePlaceholder}
+									oninput={(e) => updateTable({ note: (e.target as HTMLInputElement).value || undefined })}/>
 							</div>
-							<button class="btn-del" onclick={() => { bounds = null; }}>
-								{tr.editor.removeBounds}
-							</button>
-						{:else}
-							<p style="font-size:12px;color:var(--text-muted);line-height:1.5">
-								{tr.editor.boundsHelp}
-							</p>
-						{/if}
-					</section>
-				{/if}
-
-				<!-- Wall selected -->
-				{#if selectedWall}
-					<section>
-						<div class="sec-title">{tr.editor.wall}</div>
-						<div class="stat"><span>{tr.editor.vertices}</span><b>{selectedWall.points.length}</b></div>
-						<p style="font-size:11px;color:var(--text-muted);line-height:1.4;margin:4px 0 8px">
-							{tr.editor.wallHelp}
-						</p>
-						<button class="btn-del" onclick={() => { walls=walls.filter(w=>w.id!==selectedId); selectedId=null; }}>
-							{tr.editor.deleteWall}
-						</button>
-					</section>
-				{/if}
-
-				<!-- Nothing selected tips -->
-				{#if !selectedTable && !selectedWall && !selectedZone && tool==='select'}
-					<section>
-						<div class="sec-title">{tr.editor.tips}</div>
-						<ul class="tips">
-							<li>{tr.editor.tipAssign}</li>
-							<li>{tr.editor.tipRotatePre}<b style="color:var(--accent-ink)">{tr.editor.tipRotateHandle}</b>{tr.editor.tipRotatePost}</li>
-							<li><kbd>Delete</kbd> {tr.editor.tipDelete}</li>
-							<li><kbd>Enter</kbd> {tr.editor.tipEnter}</li>
-							<li><kbd>Esc</kbd> {tr.editor.tipEsc}</li>
-						</ul>
-					</section>
-				{/if}
-
-				<!-- Summary always visible -->
-				<section class="summary">
-					<div class="sec-title">{tr.editor.summary}</div>
-					<div class="stat"><span>{tr.editor.tables}</span><b>{tables.length}</b></div>
-					<div class="stat"><span>{tr.editor.totalSeats}</span><b>{totalSeats}</b></div>
-					<div class="stat"><span>{tr.editor.assigned}</span><b>{totalAssigned}/{guests.length} {tr.editor.guestsWord}</b></div>
-					<div class="stat"><span>{tr.editor.walls}</span><b>{walls.length}</b></div>
-					<div class="stat"><span>{tr.editor.zones}</span><b>{zones.length}</b></div>
-					{#if floors.length > 1}
-						<div class="stat stat-total">
-							<span>{tr.editor.allFloors}</span>
-							<b>{allTables} · {allSeats} · {allWalls} · {allZones}</b>
-						</div>
+							<div class="row">
+								<button type="button" class="btn-sm" onclick={() => clearTableSeats(T.id)} disabled={free === T.assignments.length}>{tr.editor.clearSeats}</button>
+							</div>
+						</section>
+					{:else if selectedSeat}
+						{@const sg = selectedSeat.assignment ? guests.find(x => x.id === selectedSeat.assignment) : null}
+						<section>
+							<div class="sec-title">{tr.editor.chairRef(seats.indexOf(selectedSeat) + 1)}</div>
+							{#if sg}
+								<div class="stat"><span>{sg.firstName} {sg.lastName}</span><button type="button" class="btn-sm" onclick={() => clearSeat({ seatId: selectedSeat.id })}>{tr.editor.remove}</button></div>
+							{:else}
+								<div class="stat"><span class="muted">{tr.editor.seatEmpty}</span><button type="button" class="btn-sm" onclick={() => { const r = { seatId: selectedSeat.id }; chairPopover = { ...r, x: wx(selectedSeat.x), y: wy(selectedSeat.y) }; guestSearch = ''; }}>{tr.editor.assign}</button></div>
+							{/if}
+						</section>
+					{:else}
+						<section>
+							<div class="sec-title">{tr.editor.seatsTitle}</div>
+							<p class="help-text">{guests.length ? tr.editor.selectTableForSeats : tr.editor.guestsEmpty}</p>
+							{#if unseatedCount > 0}<p class="warn-text">{tr.editor.unseatedWarn(unseatedCount)}</p>{/if}
+						</section>
 					{/if}
-				</section>
-			{/if}
+				{/if}
 
-			<!-- ── Guests tab ── -->
-			{#if activeTab === 'guests'}
-				<section>
-					<div class="sec-title">{tr.editor.addGuest}</div>
-					<div class="field-row">
-						<div class="field">
-							<label for="g-first">{tr.users.firstName}</label>
-							<input id="g-first" type="text" bind:value={newFirst} placeholder={tr.editor.firstNamePlaceholder}
-								onkeydown={(e) => e.key==='Enter' && addGuest()}/>
-						</div>
-						<div class="field">
-							<label for="g-last">{tr.users.lastName}</label>
-							<input id="g-last" type="text" bind:value={newLast} placeholder={tr.editor.lastNamePlaceholder}
-								onkeydown={(e) => e.key==='Enter' && addGuest()}/>
-						</div>
-					</div>
-					<div class="field gf-combo">
-						<label for="g-grp">{tr.editor.groupFamily}</label>
-						<input id="g-grp" type="text" bind:value={newGroup} placeholder={tr.editor.groupPlaceholder} autocomplete="off"
-							onfocus={() => groupDropOpen = true}
-							oninput={() => groupDropOpen = true}
-							onblur={() => setTimeout(() => groupDropOpen = false, 120)}
-							onkeydown={(e) => { if (e.key === 'Enter') { groupDropOpen = false; addGuest(); } else if (e.key === 'Escape') groupDropOpen = false; }}/>
-						{#if groupDropOpen && groupSuggestions.length > 0}
-							<div class="gf-suggest">
-								{#each groupSuggestions as grp}
-									<button type="button" class="gf-suggest-item" onmousedown={(e) => { e.preventDefault(); newGroup = grp; groupDropOpen = false; }}>
-										{grp}
-									</button>
-								{/each}
+				<!-- ── Check step: totals, warnings, save ── -->
+				{#if step === 'check'}
+					<section>
+						<div class="sec-title">{tr.editor.summary}</div>
+						{#if bounds}
+							<div class="stat"><span>{tr.editor.stepRoom}</span><b>{bounds.w.toFixed(2)} × {bounds.h.toFixed(2)} m</b></div>
+							<div class="stat"><span>{tr.editor.roomArea}</span><b>{roomArea(roomRects).toFixed(1)} m²</b></div>
+							<div class="stat"><span>{tr.editor.perimeter}</span><b>{roomPerimeter.toFixed(1)} m</b></div>
+						{/if}
+						{#each zones as z}
+							<div class="stat"><span>· {z.label || tr.editor.zoneOptions}</span><b>{polyAreaM2(z.points).toFixed(1)} m²</b></div>
+						{/each}
+						{#if zones.length && roomRects.length}
+							<div class="stat"><span>{tr.editor.freeFloor}</span><b>{Math.max(0, roomArea(roomRects) - zonesArea).toFixed(1)} m²</b></div>
+						{/if}
+						<div class="stat"><span>{tr.editor.walls}</span><b>{walls.length}</b></div>
+						<div class="stat"><span>{tr.editor.zones}</span><b>{zones.length}</b></div>
+						<div class="stat"><span>{tr.editor.tables}</span><b>{tables.length}</b></div>
+						<div class="stat"><span>{tr.editor.chairsCount}</span><b>{seats.length}</b></div>
+						<div class="stat"><span>{tr.editor.totalSeats}</span><b>{totalSeats}</b></div>
+						{#if allowGuests}<div class="stat"><span>{tr.editor.assigned}</span><b>{totalAssigned}/{guests.length} {tr.editor.guestsWord}</b></div>{/if}
+						{#if floors.length > 1}
+							<div class="stat stat-total"><span>{tr.editor.allFloors}</span><b>{allTables} · {allSeats} · {allWalls} · {allZones}</b></div>
+						{/if}
+					</section>
+					{#if !partsConnected(roomRects)}<section><p class="warn-text">{tr.editor.roomDisconnected}</p></section>{/if}
+					{#if collidingIds.size > 0 || stockOverages.length > 0 || (allowGuests && unseatedCount > 0)}
+						<section>
+							{#if collidingIds.size > 0}<p class="warn-text">{tr.editor.tablesClash(collidingIds.size)}</p>{/if}
+							{#if stockOverages.length > 0}<p class="warn-text">{tr.serverErrors.tableInventoryExceeded(stockOverages.join(', '))}</p>{/if}
+							{#if allowGuests && unseatedCount > 0}<p class="warn-text">{tr.editor.unseatedWarn(unseatedCount)}</p>{/if}
+						</section>
+					{/if}
+					<section>
+						{#if saveStateText}<div class="stat"><span>{tr.common.save}</span><b class="save-{saveState}">{saveStateText}</b></div>{/if}
+						{#if printHref}
+							<div class="row" style="flex-direction:column;align-items:stretch;gap:6px">
+								<a class="btn-sm" style="text-align:center" href={printHref} target="_blank" rel="noopener">{tr.editor.printPlan}</a>
 							</div>
 						{/if}
-					</div>
-					<button class="btn-add" onclick={addGuest}>{tr.editor.addGuest}</button>
-				</section>
-
-				{#if guests.length > 0}
-					<section>
-						<div class="sec-title-row">
-							<span class="sec-title" style="margin-bottom:0">{tr.editor.guestList}</span>
-							<div class="guest-actions">
-								<button class="btn-sm" onclick={autoAssign} title={tr.editor.autoSeatTitle}>
-									✦ {tr.editor.autoSeat}
-								</button>
-								<button class="btn-sm btn-sm-danger" onclick={clearAllAssignments} title={tr.editor.clearAllTitle}>
-									{tr.editor.clear}
-								</button>
-							</div>
-						</div>
-						<div class="stat" style="margin:6px 0 8px">
-							<span>{tr.editor.seated}</span>
-							<b>{totalAssigned} / {guests.length}</b>
-						</div>
-						<div class="guest-list">
-							{#each guests.slice().sort((a,b)=>a.lastName.localeCompare(b.lastName)||a.firstName.localeCompare(b.firstName)) as g}
-								{@const seated = assignedIds.has(g.id)}
-								{@const seat = seated
-									? (() => { for (const t of tables) { const i=t.assignments.indexOf(g.id); if(i>=0) return `${t.label} #${i+1}`; } return ''; })()
-									: null}
-								<div class="guest-row" class:seated>
-									<div class="guest-info">
-										<span class="guest-name">{g.lastName}, {g.firstName}</span>
-										{#if g.group}<span class="guest-grp">{g.group}</span>{/if}
-										{#if seat}<span class="guest-seat">{seat}</span>{/if}
-										{#if g.note && noteEditId !== g.id}<span class="guest-note" title={g.note}>
-											<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="13" y2="17"/></svg>
-											{g.note}
-										</span>{/if}
-									</div>
-									<div class="guest-row-actions">
-										<button class="btn-icon" class:active={noteEditId === g.id || !!g.note}
-											onclick={() => noteEditId = noteEditId === g.id ? null : g.id}
-											title={g.note ? tr.editor.editNote : tr.editor.addNote} aria-label={tr.editor.note}>
-											<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4z"/></svg>
-										</button>
-										<button class="btn-icon" onclick={() => removeGuest(g.id)} title={tr.editor.removeGuest}>✕</button>
-									</div>
-								</div>
-								{#if noteEditId === g.id}
-									<div class="guest-note-edit">
-										<textarea
-											placeholder={tr.editor.notePlaceholder}
-											value={g.note ?? ''}
-											oninput={(e) => updateGuestNote(g.id, e.currentTarget.value)}
-											onkeydown={(e) => { if (e.key === 'Escape') noteEditId = null; }}
-											rows="2"></textarea>
-									</div>
-								{/if}
-							{/each}
-						</div>
 					</section>
 				{/if}
-			{/if}
+
+				<!-- ── Counts, always ── -->
+				{#if step !== 'check'}
+					<section class="summary">
+						<div class="sec-title">{tr.editor.onThisFloor}</div>
+						<div class="stat"><span>{tr.editor.walls}</span><b>{walls.length}</b></div>
+						<div class="stat"><span>{tr.editor.zones}</span><b>{zones.length}</b></div>
+						{#if editorMode !== 'room'}
+							<div class="stat"><span>{tr.editor.tables}</span><b>{tables.length}</b></div>
+							<div class="stat"><span>{tr.editor.totalSeats}</span><b>{totalSeats}</b></div>
+						{/if}
+						{#if allowGuests}<div class="stat"><span>{tr.editor.assigned}</span><b>{totalAssigned}/{guests.length}</b></div>{/if}
+						{#if floors.length > 1}
+							<div class="stat stat-total"><span>{tr.editor.allFloors}</span><b>{allTables} · {allSeats} · {allWalls} · {allZones}</b></div>
+						{/if}
+					</section>
+				{/if}
+			</div>
+
+			<div class="panel-nav">
+				{#if prevStepId}
+					<button type="button" class="nav-prev" onclick={() => goStep(prevStepId!)} aria-label={tr.editor.prevStep}>
+						<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polyline points="15 18 9 12 15 6"/></svg>
+					</button>
+				{/if}
+				{#if nextStepId}
+					<button type="button" class="nav-next" onclick={() => goStep(nextStepId!)}>
+						{tr.editor.nextStep(stepLabel(nextStepId))}
+						<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polyline points="9 6 15 12 9 18"/></svg>
+					</button>
+				{:else if onSave}
+					<button type="button" class="nav-next" onclick={onSave} disabled={saveState === 'saving'}>{saveLabel ?? tr.common.save}</button>
+				{/if}
+			</div>
 		</aside>
 	</div>
+
+	<!-- The guest being dragged follows the pointer -->
+	{#if dragGuest && dragGuestRecord}
+		<div class="drag-chip" style="left:{dragGuest.x + 14}px; top:{dragGuest.y + 14}px" aria-hidden="true">
+			<i>{dragGuestRecord.firstName[0] ?? ''}{dragGuestRecord.lastName[0] ?? ''}</i>
+			{dragGuestRecord.firstName} {dragGuestRecord.lastName}
+			{#if dragTarget}<span>→</span>{/if}
+		</div>
+	{/if}
 </div>
 
 <!-- ─── Styles ──────────────────────────────────────────────────────────────── -->
 <style>
-.app { display:flex; flex-direction:column; height:100vh; overflow:hidden; }
+.app { display:flex; flex-direction:column; height:100%; min-height:0; overflow:hidden; background:var(--bg-base); position:relative; }
 
-/* ── Header ── */
-header {
-	display:flex; align-items:center; gap:20px; padding:0 16px; height:44px;
-	background:var(--bg-panel); border-bottom:1px solid var(--border);
-	flex-shrink:0; box-shadow:var(--shadow-xs); z-index:20;
+/* ── Floors and help, inside the step strip ── */
+.floors { display:flex; align-items:center; gap:3px; flex-shrink:0; }
+.floor-tab {
+	display:inline-flex; align-items:center; gap:6px; height:30px; padding:0 10px; border-radius:var(--radius);
+	border:1px solid transparent; background:transparent; font-size:12.5px; font-weight:500; color:var(--text-muted);
+	cursor:pointer; font-family:inherit; white-space:nowrap;
 }
-.header-controls { display:flex; align-items:center; gap:16px; flex:1; }
+.floor-tab:hover { background:var(--bg-hover); color:var(--text-base); }
+.floor-tab.active { background:var(--accent-dim); color:var(--accent-ink); border-color:color-mix(in srgb, var(--accent) 45%, transparent); font-weight:600; }
+.floor-tab-add { font-size:16px; padding:0 9px; }
+.floor-tab-del { font-size:11px; padding:0 8px; }
+.floor-tab-del:hover { background:var(--danger-dim); color:var(--danger); }
+.floor-rename {
+	height:30px; width:140px; padding:0 8px; border:1px solid var(--accent); border-radius:var(--radius);
+	background:var(--bg-panel); color:var(--text-base); font:inherit; font-size:12.5px; outline:none;
+	box-shadow:0 0 0 3px var(--accent-dim);
+}
+.floor-confirm { display:inline-flex; align-items:center; gap:6px; font-size:12px; color:var(--text-base); background:var(--warning-dim); padding:4px 8px; border-radius:var(--radius); white-space:nowrap; }
+.fc-yes, .fc-no { height:24px; padding:0 8px; border-radius:var(--radius-sm); font:inherit; font-size:12px; font-weight:600; cursor:pointer; border:1px solid transparent; }
+.fc-yes { background:var(--danger); color:var(--on-danger); }
+.fc-no { background:transparent; color:var(--text-muted); }
+.help-btn {
+	width:30px; height:30px; border-radius:50%; border:1px solid var(--border); background:var(--bg-panel);
+	color:var(--text-muted); font-weight:700; font-size:13px; cursor:pointer; font-family:inherit; margin-left:6px; flex-shrink:0;
+}
+.help-btn:hover, .help-btn.on { border-color:var(--accent); color:var(--accent-ink); }
 
-/* ── Custom Select ── */
+/* ── Body ── */
+.body { display:flex; flex:1; min-height:0; overflow:hidden; }
+.tool-note { font-size:11.5px; line-height:1.45; color:var(--text-muted); padding:6px 10px 0; margin:0; }
+
+/* ── Canvas ── */
+.canvas-wrap { flex:1; position:relative; overflow:hidden; display:flex; flex-direction:column; min-width:0; }
+.map-svg { flex:1; display:block; width:100%; height:100%; user-select:none; }
+.c-cross { cursor:crosshair; }
+.c-cell  { cursor:cell; }
+.c-grab  { cursor:grab; }
+
+/* ── Instruction bar ── */
+.instr {
+	position:absolute; left:50%; transform:translateX(-50%); top:12px; z-index:30;
+	display:flex; align-items:center; gap:10px; max-width:calc(100% - 32px); box-sizing:border-box;
+	height:38px; padding:0 8px 0 14px; border-radius:var(--radius-xl);
+	background:var(--text-base); color:var(--bg-panel); font-size:13px; box-shadow:var(--shadow);
+	white-space:nowrap; pointer-events:auto;
+}
+.instr-text { overflow:hidden; text-overflow:ellipsis; }
+.instr-dot { width:8px; height:8px; border-radius:50%; background:var(--accent); flex-shrink:0; opacity:.55; }
+.instr-dot.busy { opacity:1; animation:pulse 1.2s infinite; }
+@keyframes pulse { 0%,100% { transform:scale(1); } 50% { transform:scale(1.5); } }
+.instr-btn {
+	height:26px; padding:0 10px; border-radius:var(--radius); border:1px solid rgba(255,255,255,.25);
+	background:rgba(255,255,255,.1); color:inherit; font:inherit; font-size:12px; font-weight:600; cursor:pointer;
+}
+.instr-btn:hover:not(:disabled) { background:rgba(255,255,255,.22); }
+.instr-btn:disabled { opacity:.45; cursor:default; }
+.instr-btn.ok { background:var(--success); border-color:var(--success); color:var(--on-success); }
+
+.dim-label { font-size:12px; font-weight:650; fill:var(--text-base); paint-order:stroke; stroke:var(--bg-panel); stroke-width:4px; stroke-linejoin:round; font-variant-numeric:tabular-nums; }
+.dim-edge { font-size:11px; font-weight:600; }
+.dim-room { fill:#2f5f9e; }
+.dim-zone { font-size:10px; }
+.dim-line line { stroke:var(--text-muted); stroke-width:1; }
+.toggle:disabled { cursor:default; opacity:1; }
+.coach-pos { position:absolute; left:16px; top:66px; z-index:31; }
+/* With rulers on, the overlays move clear of them. */
+.canvas-wrap.rulers .instr { top:30px; }
+.canvas-wrap.rulers .legend { top:30px; }
+.canvas-wrap.rulers .coach-pos { left:34px; top:84px; }
+.canvas-wrap.rulers .status-strip { left:30px; }
+.mode-switch { display:flex; align-items:center; gap:8px; margin:8px 10px 0; padding:8px 10px; border-radius:var(--radius); background:var(--bg-panel2); font-size:12px; font-weight:500; color:var(--text-base); cursor:pointer; }
+.mode-switch input { accent-color:var(--accent); margin:0; }
+
+.legend { position:absolute; right:16px; top:14px; z-index:20; display:flex; gap:12px; font-size:11px; color:var(--text-muted); background:color-mix(in srgb, var(--bg-panel) 85%, transparent); padding:6px 10px; border-radius:var(--radius); border:1px solid var(--border); }
+.legend span { display:inline-flex; align-items:center; gap:6px; }
+.legend i { width:12px; height:12px; border-radius:3px; display:inline-block; }
+.legend i.ring { background:none; border:2px solid var(--accent); border-radius:50%; box-sizing:border-box; }
+
+/* ── Status strip (bottom-left) and zoom (bottom-right) ── */
+.status-strip {
+	position:absolute; left:12px; bottom:12px; z-index:20; display:flex; align-items:center; gap:6px; flex-wrap:wrap;
+	max-width:calc(100% - 260px); font-size:12px; color:var(--text-muted);
+}
+.toggle {
+	height:28px; padding:0 9px; border-radius:var(--radius); border:1px solid var(--border); background:var(--bg-panel);
+	color:var(--text-muted); font:inherit; font-size:12px; font-weight:500; cursor:pointer; display:inline-flex; align-items:center; gap:5px; white-space:nowrap;
+}
+.toggle:hover { border-color:var(--accent); color:var(--text-base); }
+.toggle.on { background:var(--accent-dim); border-color:color-mix(in srgb, var(--accent) 45%, transparent); color:var(--accent-ink); }
+.toggle:not(.on) svg { display:none; }
+.coords { font-variant-numeric:tabular-nums; background:color-mix(in srgb, var(--bg-panel) 85%, transparent); padding:4px 8px; border-radius:var(--radius); }
+.status-warn { color:var(--danger); font-weight:600; background:var(--danger-dim); padding:4px 8px; border-radius:var(--radius); }
+.zoom {
+	position:absolute; right:12px; bottom:12px; z-index:20; display:flex; gap:2px; padding:3px;
+	background:var(--bg-panel); border:1px solid var(--border); border-radius:var(--radius-lg); box-shadow:var(--shadow-sm);
+}
+.zoom button { height:28px; min-width:28px; padding:0 8px; border:0; border-radius:var(--radius); background:transparent; color:var(--text-base); font:inherit; font-size:12px; font-weight:500; cursor:pointer; }
+.zoom button:hover { background:var(--bg-hover); }
+.zoom .pct { min-width:48px; font-variant-numeric:tabular-nums; color:var(--text-muted); }
+.zoom .fit { color:var(--accent-ink); font-weight:600; }
+
+/* ── Custom select (grid step) ── */
 .custom-select {
-	position:relative; display:inline-flex; align-items:center; gap:4px;
-	padding:4px 8px; min-width:72px; border-radius:var(--radius-sm);
+	position:relative; display:inline-flex; align-items:center; gap:4px; height:28px; box-sizing:border-box;
+	padding:0 8px; min-width:92px; border-radius:var(--radius);
 	border:1px solid var(--border); background:var(--bg-panel);
 	font-size:12px; color:var(--text-base); cursor:pointer;
 	user-select:none; transition:border-color 0.15s;
 }
 .custom-select:hover { border-color:var(--accent); }
-.custom-select-value { flex:1; }
+.custom-select-value { flex:1; white-space:nowrap; }
 .custom-select-chevron { flex-shrink:0; color:var(--text-muted); }
 .custom-select-dropdown {
-	position:absolute; top:calc(100% + 4px); left:0; right:0;
+	position:absolute; bottom:calc(100% + 4px); left:0; right:0;
 	background:var(--bg-panel); border:1px solid var(--border);
 	border-radius:var(--radius); padding:4px; box-shadow:var(--shadow);
 	z-index:50;
@@ -2325,54 +3326,13 @@ header {
 }
 .custom-select-option:hover { background:var(--bg-panel2); }
 .custom-select-option.selected { color:var(--accent-ink); font-weight:600; }
-.ctrl { display:flex; align-items:center; gap:7px; font-size:12px; }
-.val { font-size:11px; color:var(--accent-ink); min-width:52px; font-variant-numeric:tabular-nums; }
-.hint-text { font-size:11px; color:var(--text-muted); margin-left:8px; }
-
-/* ── Body ── */
-.body { display:flex; flex:1; overflow:hidden; }
-
-/* ── Toolbar ── */
-.toolbar {
-	display:flex; flex-direction:column; gap:1px; padding:8px 6px;
-	background:var(--bg-panel); border-right:1px solid var(--border);
-	width:140px; flex-shrink:0; overflow-y:auto;
-}
-.tool-btn {
-	display:flex; align-items:center; gap:9px; padding:9px 10px;
-	width:100%; border-radius:var(--radius); color:var(--text-muted);
-	font-size:12px; font-weight:500; transition:background 0.15s, color 0.15s;
-	text-align:left;
-}
-.tool-btn:hover:not(:disabled) { background:var(--bg-panel2); color:var(--text-base); }
-.tool-btn.active { background:var(--accent-dim); color:var(--accent-ink); font-weight:600; }
-.tool-btn:disabled { opacity:0.3; cursor:default; }
-.sep { height:1px; background:var(--border); margin:6px 4px; }
-.finish { color:var(--success); }
-.finish:hover { background:var(--success-dim); }
-.cancel { color:var(--danger); }
-.cancel:hover { background:var(--danger-dim); }
-
-/* ── Canvas ── */
-.canvas-wrap { flex:1; position:relative; overflow:hidden; display:flex; flex-direction:column; }
-.map-svg { flex:1; display:block; width:100%; user-select:none; }
-.c-cross { cursor:crosshair; }
-.c-cell  { cursor:cell; }
-
-/* ── Status bar ── */
-.status-bar {
-	display:flex; justify-content:space-between; align-items:center;
-	padding:3px 12px; background:var(--bg-panel); border-top:1px solid var(--border);
-	font-size:11px; color:var(--text-muted); height:26px; flex-shrink:0;
-}
-.status-coords { font-variant-numeric:tabular-nums; }
 
 /* ── Chair popover ── */
 .overlay { position:absolute; inset:0; z-index:40; }
 .chair-popover {
 	position:absolute; z-index:50; background:var(--bg-panel);
 	border:1px solid var(--border); border-radius:var(--radius-lg);
-	box-shadow:var(--shadow); width:240px;
+	box-shadow:var(--shadow); width:250px;
 	overflow:hidden;
 }
 .pop-header {
@@ -2380,7 +3340,7 @@ header {
 	padding:10px 12px 8px; font-size:12px; font-weight:600; color:var(--text-base);
 	letter-spacing:-.03em; border-bottom:1px solid var(--border);
 }
-.pop-close { color:var(--text-muted); font-size:14px; line-height:1; padding:2px 4px; border-radius:var(--radius-sm); }
+.pop-close { color:var(--text-muted); font-size:14px; line-height:1; padding:2px 4px; border-radius:var(--radius-sm); border:0; background:none; cursor:pointer; font-family:inherit; }
 .pop-close:hover { background:var(--bg-panel2); color:var(--text-base); }
 .pop-assigned {
 	display:flex; align-items:center; gap:6px; padding:8px 12px;
@@ -2388,7 +3348,7 @@ header {
 }
 .pop-name { font-size:12px; font-weight:600; color:var(--success); flex:1; }
 .pop-group { font-size:10px; color:var(--text-muted); background:var(--bg-panel2); padding:1px 5px; border-radius:var(--radius-sm); }
-.pop-clear { font-size:11px; color:var(--danger); padding:3px 8px; border-radius:var(--radius-sm); background:var(--danger-dim); }
+.pop-clear { font-size:11px; color:var(--danger); padding:3px 8px; border-radius:var(--radius-sm); background:var(--danger-dim); border:0; cursor:pointer; font-family:inherit; }
 .pop-clear:hover { background:color-mix(in srgb, var(--danger) 15%, transparent); }
 .pop-note {
 	display:flex; align-items:flex-start; gap:6px; padding:6px 10px;
@@ -2398,14 +3358,14 @@ header {
 .pop-note svg { flex-shrink:0; margin-top:1px; }
 .pop-empty { padding:8px 12px; font-size:12px; color:var(--text-muted); border-bottom:1px solid var(--border); }
 .pop-search {
-	display:block; width:100%; padding:8px 12px; border:none; border-bottom:1px solid var(--border);
-	background:var(--bg-panel2); font-size:12px; outline:none; border-radius:0;
+	display:block; width:100%; box-sizing:border-box; padding:8px 12px; border:none; border-bottom:1px solid var(--border);
+	background:var(--bg-panel2); color:var(--text-base); font:inherit; font-size:12px; outline:none; border-radius:0;
 }
 .pop-search:focus { background:var(--bg-hover); }
 .pop-list { max-height:200px; overflow-y:auto; }
 .pop-guest {
 	display:flex; align-items:center; gap:6px; padding:8px 12px; width:100%;
-	font-size:12px; text-align:left; border-bottom:1px solid var(--border);
+	font-size:12px; text-align:left; border:0; border-bottom:1px solid var(--border); background:none; cursor:pointer; font-family:inherit;
 	transition:background 0.15s;
 }
 .pop-guest:hover { background:var(--bg-panel2); }
@@ -2414,249 +3374,192 @@ header {
 .pop-ggroup { font-size:10px; color:var(--text-muted); background:var(--bg-panel2); padding:1px 5px; border-radius:var(--radius-sm); }
 .pop-check { color:var(--accent-ink); font-weight:650; }
 
+/* ── Help ── */
+.ctx-menu {
+	position:absolute; z-index:55; min-width:200px; max-width:260px; padding:4px; background:var(--bg-panel);
+	border:1px solid var(--border); border-radius:var(--radius-lg); box-shadow:var(--shadow);
+}
+.ctx-title { padding:6px 10px 5px; font-size:11px; font-weight:650; letter-spacing:.04em; color:var(--text-muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; border-bottom:1px solid var(--border-subtle); margin-bottom:3px; }
+.ctx-item {
+	display:flex; align-items:center; justify-content:space-between; gap:12px; width:100%; height:30px; padding:0 10px;
+	border:0; border-radius:var(--radius); background:none; color:var(--text-base); font:inherit; font-size:12.5px; text-align:left; cursor:pointer;
+}
+.ctx-item:hover:not(:disabled) { background:var(--bg-hover); }
+.ctx-item.danger { color:var(--danger); }
+.ctx-item.danger:hover:not(:disabled) { background:var(--danger-dim); }
+.ctx-item:disabled { opacity:.4; cursor:default; }
+.help-pop {
+	position:absolute; right:16px; top:60px; z-index:45; width:300px; background:var(--bg-panel); border:1px solid var(--border);
+	border-radius:var(--radius-lg); box-shadow:var(--shadow); padding:10px 12px 12px; font-size:12px; color:var(--text-base);
+}
+.help-head { display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; }
+.help-head b { font-size:13px; }
+.help-pop dl { margin:0; display:flex; flex-direction:column; gap:5px; }
+.help-pop dl > div { display:flex; gap:10px; align-items:center; }
+.help-pop dt { min-width:92px; display:flex; gap:3px; align-items:center; color:var(--text-muted); }
+.help-pop dd { margin:0; }
+.help-pop p { margin:10px 0 0; color:var(--text-muted); line-height:1.4; }
+kbd {
+	font-family:inherit; font-size:10.5px; font-weight:600; color:var(--text-muted); padding:0 5px; line-height:1.6;
+	border:1px solid var(--border); border-bottom-width:2px; border-radius:var(--radius-sm); background:var(--bg-panel2); display:inline-block;
+}
+
 /* ── Right panel ── */
 .panel {
-	width:228px; background:var(--bg-panel); border-left:1px solid var(--border);
-	flex-shrink:0; display:flex; flex-direction:column; overflow:hidden;
+	width:300px; background:var(--bg-panel); border-left:1px solid var(--border);
+	flex-shrink:0; display:flex; flex-direction:column; overflow:hidden; min-height:0;
 }
-.tabs { display:flex; border-bottom:1px solid var(--border); flex-shrink:0; }
-.tab {
-	flex:1; padding:9px 0; font-size:12px; font-weight:500; color:var(--text-muted);
-	border-bottom:2px solid transparent; transition:color 0.15s, border-color 0.15s;
-}
-.tab:hover { color:var(--text-base); }
-.tab.active { color:var(--accent-ink); border-bottom-color:var(--accent); font-weight:600; }
-.tab-badge {
-	display:inline-block; background:var(--accent-dim); color:var(--accent-ink);
-	font-size:9px; padding:1px 5px; border-radius: 3px; margin-left:4px; font-weight:650;
-}
-/* panel scroll area */
-.panel > :not(.tabs) { overflow-y:auto; flex:1; }
-
-section { padding:12px; border-bottom:1px solid var(--border); }
-/* Eyebrow — the uppercase overline motif of the paper language. */
+.panel-scroll { flex:1; overflow-y:auto; min-height:0; display:flex; flex-direction:column; }
+section { padding:12px 14px; border-bottom:1px solid var(--border-subtle); }
 .sec-title {
-	font-size:10px; font-weight:650; text-transform:uppercase; letter-spacing:0.13em;
-	color:var(--text-muted); margin-bottom:10px;
+	font-size:11px; font-weight:650; letter-spacing:.06em; text-transform:uppercase; color:var(--text-muted); margin-bottom:8px;
 }
-.sec-title-row { display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; }
+.sec-title-row { display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; }
+.muted { color:var(--text-muted); font-size:12px; }
+.help-text { font-size:12px; color:var(--text-muted); line-height:1.5; margin:0 0 6px; }
+.warn-text { font-size:12px; color:var(--warning); font-weight:600; line-height:1.45; margin:0 0 4px; }
+.row { display:flex; gap:6px; align-items:center; }
 .field { display:flex; flex-direction:column; gap:4px; margin-bottom:9px; }
+.field label { font-size:11.5px; font-weight:500; color:var(--text-muted); }
+.field input[type="text"], .field input[type="number"], .field select {
+	height:30px; border:1px solid var(--border); border-radius:var(--radius); padding:0 9px; font:inherit; font-size:12.5px;
+	background:var(--bg-panel); color:var(--text-base); width:100%; box-sizing:border-box;
+}
+.field input:focus, .field select:focus { outline:none; border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-dim); }
 .field-row { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+.val { font-size:11px; color:var(--accent-ink); min-width:44px; font-variant-numeric:tabular-nums; }
 
-/* Group/family combobox */
-.gf-combo { position:relative; }
-.gf-suggest {
-	position:absolute; top:100%; left:0; right:0; z-index:30; margin-top:3px;
-	background:var(--bg-panel); border:1px solid var(--border); border-radius:var(--radius);
-	box-shadow:var(--shadow); overflow:hidden auto; max-height:158px;
-}
-.gf-suggest-item {
-	display:block; width:100%; text-align:left; padding:7px 10px; font-size:12px;
-	color:var(--text-base); background:none; border:none; cursor:pointer; font-family:inherit;
-}
-.gf-suggest-item:hover { background:var(--bg-panel2); }
-.toggle-row { flex-direction:row; justify-content:space-between; align-items:center; }
-.toggle {
-	padding:3px 10px; border-radius:var(--radius-lg); font-size:11px; font-weight:600;
-	background:var(--bg-panel2); border:1px solid var(--border); color:var(--text-muted);
-	transition:background 0.15s, border-color 0.15s, color 0.15s;
-}
-.toggle.on { background:var(--accent-dim); border-color:var(--accent); color:var(--accent-ink); }
+/* Progress list */
+.progress { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:2px; }
+.progress button { display:flex; gap:10px; align-items:flex-start; width:100%; padding:6px 6px; border-radius:var(--radius); border:0; background:none; text-align:left; cursor:pointer; font-family:inherit; color:var(--text-base); }
+.progress button:hover { background:var(--bg-hover); }
+.progress li.active button { background:var(--accent-dim); }
+.progress i { width:18px; height:18px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; font-style:normal; font-size:10px; font-weight:700; flex-shrink:0; margin-top:1px; background:var(--bg-panel2); color:var(--text-subtle); }
+.progress li.done i { background:var(--success-dim); color:var(--success); }
+.progress li.active i { background:var(--accent); color:var(--accent-contrast); }
+.progress span { display:flex; flex-direction:column; gap:1px; min-width:0; }
+.progress b { font-size:12.5px; font-weight:600; }
+.progress li.active b { color:var(--accent-ink); }
+.progress em { font-style:normal; font-size:11.5px; color:var(--text-muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 
+/* Object lists */
+.obj-list { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:2px; }
+.obj-list button { display:flex; align-items:center; gap:8px; width:100%; height:28px; padding:0 6px; border-radius:var(--radius-sm); border:0; background:none; font:inherit; font-size:12.5px; color:var(--text-base); text-align:left; cursor:pointer; }
+.obj-list button:hover { background:var(--bg-hover); }
+.obj-list button.on { background:var(--accent-dim); color:var(--accent-ink); font-weight:600; }
+.obj-list i { width:12px; height:12px; border-radius:3px; display:inline-block; flex-shrink:0; }
+.room-parts { list-style:none; margin:0 0 6px; padding:0; display:flex; flex-direction:column; gap:3px; }
+.room-parts li { display:flex; align-items:center; gap:4px; border-radius:var(--radius-sm); }
+.room-parts li.on .part-pick { background:var(--accent-dim); color:var(--accent-ink); font-weight:600; }
+.part-pick { flex:1; text-align:left; height:28px; padding:0 8px; border:0; border-radius:var(--radius-sm); background:none; font:inherit; font-size:12px; color:var(--text-base); cursor:pointer; }
+.part-pick:hover { background:var(--bg-hover); }
+.part-del { font-size:14px; line-height:1; color:var(--text-muted); padding:3px 7px; border:0; background:none; border-radius:var(--radius-sm); cursor:pointer; font-family:inherit; }
+.part-del:hover { color:var(--danger); background:var(--danger-dim); }
+
+/* Seats of the selected table */
+.seats { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; }
+.seats li { display:flex; align-items:center; gap:8px; height:32px; font-size:12.5px; border-radius:var(--radius-sm); padding:0 4px; }
+.seats li.drop { background:var(--accent-dim); }
+.seats i { width:20px; height:20px; border-radius:50%; background:var(--success); color:var(--on-success); display:inline-flex; align-items:center; justify-content:center; font-style:normal; font-size:10px; font-weight:700; flex-shrink:0; }
+.seats li.empty i { background:var(--bg-panel2); color:var(--text-muted); }
+.seats .nm { flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.seats .nm em { font-style:normal; color:var(--text-muted); font-size:11px; }
+.seats .x { font-size:15px; line-height:1; color:var(--text-subtle); padding:2px 6px; border:0; background:none; border-radius:var(--radius-sm); cursor:pointer; font-family:inherit; }
+.seats .x:hover { background:var(--danger-dim); color:var(--danger); }
+.seats .assign { height:24px; padding:0 8px; font:inherit; font-size:11px; font-weight:600; border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--bg-panel); color:var(--accent-ink); cursor:pointer; }
+.seats .assign:hover { border-color:var(--accent); }
+.suggest { margin-top:8px; padding:8px 10px; border-radius:var(--radius); background:var(--warning-dim); }
+.suggest p { margin:0 0 6px; font-size:12px; line-height:1.4; color:var(--text-base); }
+
+/* Swatches, dots, stats, buttons (carried over) */
 .swatches { display:flex; flex-wrap:wrap; gap:5px; align-items:center; margin-top:4px; }
-.swatch {
-	width:20px; height:20px; border-radius:50%; border:2px solid transparent;
-	cursor:pointer; transition:transform 0.2s, border-color 0.15s;
-}
+.swatch { width:22px; height:22px; border-radius:50%; border:2px solid transparent; cursor:pointer; transition:transform .1s; padding:0; }
 .swatch:hover { transform:scale(1.15); }
 .swatch.on { border-color:var(--text-base); transform:scale(1.15); }
-input[type="color"] {
-	width:22px; height:22px; border-radius:50%; border:1px solid var(--border);
-	padding:1px; cursor:pointer; background:none;
-}
-
+.swatches input[type="color"] { width:26px; height:26px; border:1px solid var(--border); border-radius:50%; padding:0; background:none; cursor:pointer; }
 .seat-summary { margin:4px 0 8px; }
-.stat-total { border-top:1px solid var(--border); margin-top:6px; padding-top:6px; opacity:.85; }
 .seat-summary span { font-size:11px; color:var(--text-muted); }
 .seat-dots { display:flex; flex-wrap:wrap; gap:3px; margin-top:5px; }
-.dot {
-	width:8px; height:8px; border-radius:50%;
-	background:var(--border);
-}
-.dot.filled { background:var(--accent); }
-
-.stat { display:flex; justify-content:space-between; align-items:center; font-size:12px; color:var(--text-muted); padding:3px 0; }
-.stat b { color:var(--text-base); font-weight:600; }
-.summary { margin-top:auto; }
-
+.dot { width:9px; height:9px; border-radius:50%; background:var(--bg-panel2); border:1px solid var(--border); }
+.dot.filled { background:var(--accent); border-color:var(--accent); }
+.stat { display:flex; justify-content:space-between; align-items:center; font-size:12px; color:var(--text-muted); padding:3px 0; gap:8px; }
+.stat b { color:var(--text-base); font-weight:600; text-align:right; }
+.stat b.save-saved { color:var(--success); }
+.stat b.save-dirty { color:var(--warning); }
+.stat-total { border-top:1px solid var(--border); margin-top:6px; padding-top:6px; opacity:.85; }
+.summary { margin-top:auto; border-bottom:0; }
 .btn-del {
-	width:100%; padding:7px; border-radius:var(--radius-sm); background:var(--danger-dim);
-	color:var(--danger); font-size:12px; font-weight:600; transition:background 0.15s; margin-top:4px;
+	width:100%; margin-top:6px; padding:7px 10px; border-radius:var(--radius); font-size:12px; font-weight:600;
+	background:var(--danger-dim); color:var(--danger); border:0; cursor:pointer; font-family:inherit;
 }
 .btn-del:hover { background:color-mix(in srgb, var(--danger) 15%, transparent); }
-
-/* The section's primary action — accent fill, ink-on-accent text, signature lift. */
 .btn-add {
-	width:100%; padding:8px; border-radius:var(--radius-sm); background:var(--accent);
-	color:var(--accent-contrast); font-size:12px; font-weight:650;
-	transition:transform 0.2s, background 0.2s;
+	width:100%; padding:9px 10px; border-radius:var(--radius); font-size:13px; font-weight:600;
+	background:var(--accent); color:var(--accent-contrast); border:0; cursor:pointer; font-family:inherit; transition:background .15s;
 }
-.btn-add:hover { background:var(--accent-hover); transform:translateY(-2px); }
-.btn-add:active { transform:translateY(0); }
-
-.guest-actions { display:flex; gap:5px; }
+.btn-add:hover:not(:disabled) { background:var(--accent-hover); }
+.btn-add:disabled { opacity:.5; cursor:default; }
 .btn-sm {
-	padding:4px 9px; border-radius:var(--radius-sm); font-size:11px; font-weight:600;
-	background:var(--accent-dim); color:var(--accent-ink); transition:background 0.15s;
+	height:28px; padding:0 10px; border-radius:var(--radius); font-size:12px; font-weight:600; text-decoration:none; display:inline-flex; align-items:center; justify-content:center;
+	background:var(--accent-dim); color:var(--accent-ink); border:0; cursor:pointer; font-family:inherit;
 }
-.btn-sm:hover { background:color-mix(in srgb, var(--accent) 22%, transparent); }
-.btn-sm-danger { background:var(--danger-dim); color:var(--danger); }
-.btn-sm-danger:hover { background:color-mix(in srgb, var(--danger) 15%, transparent); }
+.btn-sm:hover:not(:disabled) { background:color-mix(in srgb, var(--accent) 22%, transparent); text-decoration:none; }
+.btn-sm:disabled { opacity:.5; cursor:default; }
 
-.guest-list { display:flex; flex-direction:column; max-height:340px; overflow-y:auto; margin-top:4px; }
-.guest-row {
-	display:flex; align-items:center; gap:6px; padding:7px 0;
-	border-bottom:1px solid var(--border);
-}
-.guest-row:last-child { border-bottom:none; }
-.guest-info { display:flex; flex-direction:column; gap:2px; flex:1; min-width:0; }
-.guest-name { font-size:12px; color:var(--text-base); font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.guest-grp  { font-size:10px; color:var(--text-muted); }
-.guest-seat { font-size:10px; color:var(--accent-ink); font-weight:600; }
-.guest-note {
-	display:inline-flex; align-items:center; gap:4px; font-size:10px; line-height:1.3;
-	color:var(--warning); max-width:100%;
-}
-.guest-note svg { flex-shrink:0; }
-.guest-row.seated .guest-name { color:var(--accent-ink); }
-.guest-row-actions { display:flex; align-items:center; gap:2px; flex-shrink:0; }
-.btn-icon { font-size:11px; color:var(--text-muted); padding:3px 5px; border-radius:var(--radius-sm); flex-shrink:0; }
-.btn-icon:hover { background:var(--danger-dim); color:var(--danger); }
-.btn-icon.active { color:var(--accent-ink); }
-.btn-icon.active:hover { background:var(--accent-dim); color:var(--accent-ink); }
-.guest-note-edit { padding:0 0 8px; }
-.guest-note-edit textarea {
-	width:100%; resize:vertical; font:inherit; font-size:11px; line-height:1.4;
-	padding:6px 8px; border:1px solid var(--border); border-radius:var(--radius-sm);
-	background:var(--bg-panel2); color:var(--text-base);
-}
-.guest-note-edit textarea:focus { outline:none; border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-dim); }
-
-.tips { list-style:none; display:flex; flex-direction:column; gap:6px; }
-.tips li { font-size:11px; color:var(--text-muted); line-height:1.5; }
-kbd {
-	display:inline-block; padding:1px 5px; border-radius:var(--radius-sm);
-	background:var(--bg-panel2); border:1px solid var(--border);
-	font-size:10px; font-family:monospace;
-}
-
-:global(.table-g) { cursor:move; }
-:global(.wall-poly, .zone-poly) { cursor:pointer; }
-
-/* Inventory */
-.inventory-list { display:flex; flex-direction:column; gap:4px; margin-top:6px; }
+.inventory-list { display:flex; flex-direction:column; gap:4px; margin-top:2px; }
 .inventory-item {
-	display:flex; align-items:center; gap:10px; padding:8px 10px; border-radius:var(--radius);
-	background:var(--bg-panel2); border:1px solid var(--border); text-align:left;
-	cursor:pointer; transition:border-color 0.15s, background 0.15s;
+	display:flex; align-items:center; gap:10px; padding:7px 8px; border:1px solid var(--border); border-radius:var(--radius);
+	background:var(--bg-panel); text-align:left; cursor:pointer; font-family:inherit; width:100%; box-sizing:border-box;
 }
 .inventory-item:hover { border-color:var(--accent); }
 .inventory-item.active { border-color:var(--accent); background:var(--accent-dim); }
 .inv-preview { width:36px; height:36px; flex-shrink:0; }
 .inv-preview svg { width:100%; height:100%; }
-.inv-info { display:flex; flex-direction:column; gap:2px; }
+.inv-info { display:flex; flex-direction:column; gap:2px; min-width:0; }
 .inv-name { font-size:12px; font-weight:600; letter-spacing:-.03em; color:var(--text-base); }
-.inv-detail { font-size:10px; color:var(--text-muted); }
-.inv-selected-info {
-	margin-top:8px; padding:8px 10px; border-radius:var(--radius-sm); background:var(--accent-dim);
-	font-size:11px; color:var(--accent-ink); font-weight:500; text-align:center;
-}
-.chair-limit-hint {
-	font-size:11px; color:var(--accent-ink); font-weight:600; margin-bottom:6px;
-	text-align:right;
-}
-.inv-locked-info {
-	margin-bottom:8px; padding:6px 10px; border-radius:var(--radius-sm); background:var(--bg-panel2);
-	font-size:11px; color:var(--text-muted); text-align:center; border:1px solid var(--border);
-}
+.inv-detail { font-size:10.5px; color:var(--text-muted); }
+.inv-stock { font-size:10px; font-weight:600; color:var(--accent-ink); }
+.inv-stock.none { color:var(--danger); }
+.inventory-item.spent .inv-preview { opacity:.4; }
+.chair-limit-hint { font-size:11px; color:var(--text-muted); margin:0 0 6px; }
+.inv-locked-info { font-size:11.5px; color:var(--text-muted); background:var(--bg-panel2); padding:6px 8px; border-radius:var(--radius-sm); margin-bottom:9px; text-align:center; }
 
-/* ── Snap toggle ── */
-.snap-toggle {
-	display:flex; align-items:center; gap:5px; padding:4px 10px; border-radius:var(--radius-sm);
-	font-size:11px; font-weight:600; color:var(--text-muted);
-	background:var(--bg-panel2); border:1px solid var(--border);
-	transition:background 0.15s, border-color 0.15s, color 0.15s; cursor:pointer;
+/* Step navigation */
+.panel-nav { display:flex; gap:6px; padding:10px 14px; border-top:1px solid var(--border); background:var(--bg-panel); flex-shrink:0; }
+.nav-prev { width:36px; height:36px; border-radius:var(--radius); border:1px solid var(--border); background:var(--bg-panel); color:var(--text-muted); cursor:pointer; display:inline-flex; align-items:center; justify-content:center; flex-shrink:0; }
+.nav-prev:hover { border-color:var(--accent); color:var(--accent-ink); }
+.nav-next {
+	flex:1; height:36px; border-radius:var(--radius); border:1px solid var(--accent); background:var(--accent); color:var(--accent-contrast);
+	font:inherit; font-size:13px; font-weight:600; cursor:pointer; display:inline-flex; align-items:center; justify-content:center; gap:6px;
 }
-.snap-toggle:hover { border-color:var(--accent); color:var(--text-base); }
-.snap-toggle.active { background:var(--accent-dim); border-color:var(--accent); color:var(--accent-ink); }
+.nav-next:hover:not(:disabled) { background:var(--accent-hover); }
+.nav-next:disabled { opacity:.5; cursor:default; }
 
-/* ── Floor tabs ── */
-.floor-tabs {
-	display:flex; align-items:center; gap:2px; margin-left:auto;
+/* Drag chip */
+.drag-chip {
+	position:fixed; z-index:200; pointer-events:none; display:flex; align-items:center; gap:8px; padding:6px 10px 6px 6px;
+	border-radius:var(--radius-xl); background:var(--bg-panel); border:1px solid var(--accent); box-shadow:var(--shadow); font-size:12.5px; color:var(--text-base);
 }
-.floor-tab {
-	padding:4px 12px; border-radius:var(--radius-sm); font-size:11px; font-weight:500;
-	color:var(--text-muted); background:transparent; border:1px solid transparent;
-	cursor:pointer; transition:background 0.15s, border-color 0.15s, color 0.15s;
-}
-.floor-tab:hover { background:var(--bg-panel2); color:var(--text-base); }
-.floor-tab.active {
-	background:var(--accent-dim); color:var(--accent-ink); font-weight:600;
-	border-color:var(--accent);
-}
-.floor-tab-add {
-	font-size:14px; font-weight:650; padding:2px 8px; color:var(--accent-ink);
-}
-.floor-tab-add:hover { background:var(--accent-dim); }
-.floor-tab-del {
-	font-size:12px; color:var(--danger); padding:2px 8px; margin-left:auto;
-}
-.floor-tab-del:hover { background:var(--danger-dim); }
+.drag-chip i { width:22px; height:22px; border-radius:50%; background:var(--accent-dim); color:var(--accent-ink); display:inline-flex; align-items:center; justify-content:center; font-style:normal; font-size:10px; font-weight:700; }
+.drag-chip span { color:var(--accent-ink); font-weight:700; }
 
-/* ── Edge rulers ── */
-.ruler-corner {
-	position:absolute; top:0; left:0; width:20px; height:20px; z-index:12;
-	background:var(--bg-panel); border-right:1px solid var(--border); border-bottom:1px solid var(--border);
-}
-.ruler-top {
-	position:absolute; top:0; left:20px; right:0; height:20px; z-index:11;
-	background:var(--bg-panel); border-bottom:1px solid var(--border); overflow:hidden;
-	pointer-events:none;
-}
-.ruler-left {
-	position:absolute; top:20px; left:0; bottom:26px; width:20px; z-index:11;
-	background:var(--bg-panel); border-right:1px solid var(--border); overflow:hidden;
-	pointer-events:none;
-}
-.ruler-tick {
-	position:absolute; bottom:0; width:1px; background:var(--editor-tick);
-}
+/* ── Rulers (optional) ── */
+.ruler-corner { position:absolute; left:0; top:0; width:20px; height:20px; background:var(--bg-panel); border-right:1px solid var(--border); border-bottom:1px solid var(--border); z-index:15; }
+.ruler-top { position:absolute; left:20px; right:0; top:0; height:20px; background:var(--bg-panel); border-bottom:1px solid var(--border); overflow:hidden; z-index:14; pointer-events:none; }
+.ruler-left { position:absolute; left:0; top:20px; bottom:0; width:20px; background:var(--bg-panel); border-right:1px solid var(--border); overflow:hidden; z-index:14; pointer-events:none; }
+.ruler-tick { position:absolute; bottom:0; width:1px; background:var(--editor-tick); }
 .ruler-tick-major { height:10px; }
 .ruler-tick-minor { height:5px; background:var(--editor-tick-minor); }
-.ruler-label {
-	position:absolute; left:3px; top:-1px; font-size:8px; font-family:monospace;
-	color:var(--editor-label); white-space:nowrap; line-height:1;
-}
-.ruler-tick-v {
-	position:absolute; right:0; height:1px; background:var(--editor-tick);
-}
-.ruler-tick-major-v { width:10px; }
+.ruler-label { position:absolute; left:3px; top:-14px; font-size:9px; color:var(--editor-label); font-variant-numeric:tabular-nums; white-space:nowrap; }
+.ruler-tick-v { position:absolute; right:0; height:1px; background:var(--editor-tick); }
+.ruler-tick-major-v { width:6px; }
 .ruler-tick-minor-v { width:5px; background:var(--editor-tick-minor); }
-.ruler-label-v {
-	position:absolute; right:12px; top:-4px; font-size:8px; font-family:monospace;
-	color:var(--editor-label); white-space:nowrap; line-height:1;
-}
-.ruler-cursor-h {
-	position:absolute; top:0; bottom:0; width:1px; background:var(--accent); opacity:0.6;
-	pointer-events:none;
-}
-.ruler-cursor-v {
-	position:absolute; left:0; right:0; height:1px; background:var(--accent); opacity:0.6;
-	pointer-events:none;
-}
+.ruler-label-v { position:absolute; right:7px; top:1px; font-size:9px; line-height:1; white-space:nowrap; color:var(--editor-label); font-variant-numeric:tabular-nums; }
+.ruler-cursor-h { position:absolute; top:0; bottom:0; width:1px; background:var(--accent); opacity:.7; }
+.ruler-cursor-v { position:absolute; left:0; right:0; height:1px; background:var(--accent); opacity:.7; }
 
-@media (prefers-reduced-motion: reduce) {
-	.btn-add:hover { transform:none; }
-	.swatch:hover:not(.on) { transform:none; }
+@media (max-width: 1280px) {
+	.panel { width:264px; }
+	.legend { display:none; }
 }
 </style>

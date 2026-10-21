@@ -80,6 +80,42 @@ export async function createCheckoutSession(opts: {
   return session.url!;
 }
 
+/** AI credit packs on sale. 100 credits = 1 EUR, no volume discount. */
+export const AI_CREDIT_PACKS = [500, 1000, 2500] as const;
+
+/** One-off Checkout for a pack of AI credits. The credits are added by the webhook
+ *  on `checkout.session.completed`, keyed on the session id, never by the redirect. */
+export async function createAiTopupSession(opts: {
+  orgId: string;
+  userId: string;
+  credits: number;
+  stripeCustomerId: string | null;
+  userEmail: string;
+}): Promise<string> {
+  if (!(AI_CREDIT_PACKS as readonly number[]).includes(opts.credits)) throw new Error('Unknown credit pack');
+  const params: Stripe.Checkout.SessionCreateParams = {
+    mode: 'payment',
+    line_items: [{
+      quantity: 1,
+      price_data: {
+        currency: 'eur',
+        unit_amount: opts.credits, // 100 credits = 100 cents
+        product_data: {
+          name: `Hallify AI credits × ${opts.credits}`,
+          description: 'Credits for the Hallify AI assistant. They never expire.',
+        },
+      },
+    }],
+    success_url: `${appUrl()}/app/manage/settings/ai?topup=1`,
+    cancel_url: `${appUrl()}/app/manage/settings/ai`,
+    metadata: { orgId: opts.orgId, kind: 'ai_credits', credits: String(opts.credits), userId: opts.userId },
+  };
+  if (opts.stripeCustomerId) params.customer = opts.stripeCustomerId;
+  else params.customer_email = opts.userEmail;
+  const session = await getStripe().checkout.sessions.create(params);
+  return session.url!;
+}
+
 /** Create a Stripe Billing Portal session for managing an existing subscription. */
 export async function createPortalSession(stripeCustomerId: string, returnPath = '/app/billing'): Promise<string> {
   const session = await getStripe().billingPortal.sessions.create({

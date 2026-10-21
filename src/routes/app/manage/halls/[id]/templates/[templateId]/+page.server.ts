@@ -5,6 +5,7 @@ import { serializeEventTypes } from '$lib/eventTypes';
 import { st } from '$lib/i18n-server';
 import type { Actions, PageServerLoad } from './$types';
 import { requireOrgPermission } from '$lib/server/access';
+import { tableInventoryError } from '$lib/server/table-inventory';
 
 export const load: PageServerLoad = async ({ locals, params }) => {
 	await requireOrgPermission(locals, 'templates.manage');
@@ -53,6 +54,8 @@ export const actions: Actions = {
 		if (!(await assertOwned(locals.db, params.templateId, params.id, orgId))) {
 			return fail(404, { error: st(locals.locale).serverErrors.templateNotFound });
 		}
+		const overStock = await tableInventoryError(locals.db, params.id, layoutJson, locals.locale);
+		if (overStock) return fail(400, { error: overStock });
 
 		await dbRun(locals.db,
 			'UPDATE floorplan_templates SET layout_json = ? WHERE id = ? AND hall_id = ?',

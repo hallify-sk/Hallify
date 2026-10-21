@@ -11,6 +11,15 @@ import { OPERATOR } from '$lib/legal';
 import { requireOrgPermission } from '$lib/server/access';
 import { parseCoordinates } from '$lib/venue-location';
 import { geocodeAddress } from '$lib/server/geocode';
+import { blockingReservations, cancelHallReservations, hallIsUnused } from '$lib/server/hall-archive';
+import { BUILT_IN_AMENITIES } from '$lib/server/hall-profile';
+import {
+	addHallBlock, removeHallBlock, addTableType, updateTableType, removeTableType,
+	addHallExtra, updateHallExtra, removeHallExtra, type TableTypeInput, type ExtraInput
+} from '$lib/server/ops/hall-ops';
+
+/** The note sent to every client when a hall's bookings are cancelled together. */
+const MAX_CANCEL_NOTE = 2000;
 
 const clamp = (n: number, lo: number, hi: number, dflt: number) =>
 	Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : dflt;
@@ -24,12 +33,6 @@ interface OrgAmenityRow {
 	label_en: string | null;
 }
 
-/** The ten amenities the app translates itself. Anything else a hall claims must be
- *  one of the organisation's own rows — a client can post any string it likes. */
-const BUILT_IN_AMENITIES = [
-	'parking', 'catering', 'av', 'wifi', 'ac',
-	'accessible', 'outdoor', 'stage', 'dancefloor', 'bar'
-] as const;
 
 /** One organisation cannot be allowed to grow this table without bound. */
 const MAX_CUSTOM_AMENITIES = 40;
@@ -76,25 +79,27 @@ async function coordinatesForSave(
 	return chosen;
 }
 
-type ParsedTableType = {
-	name: string; shape: 'rect' | 'round';
-	width: number; height: number; radius: number;
-	maxChairs: number; amount: number; color: string;
-};
+/** The table-type dialog's fields; bounds are applied by normalizeTableType. */
+function tableTypeFromForm(data: FormData): Partial<TableTypeInput> {
+	return {
+		name: String(data.get('name') ?? ''),
+		shape: String(data.get('shape') ?? 'rect') === 'round' ? 'round' : 'rect',
+		width: Number(data.get('width') ?? 2),
+		height: Number(data.get('height') ?? 1),
+		radius: Number(data.get('radius') ?? 1),
+		maxChairs: Number(data.get('maxChairs') ?? 8),
+		amount: Number(data.get('amount') ?? 0),
+		color: String(data.get('color') ?? '#92400e')
+	};
+}
 
-// Parse + validate + clamp a table-type form payload (shared by add & update).
-function parseTableType(data: FormData, locale: 'sk' | 'en'): ParsedTableType | { error: string } {
-	const name = String(data.get('name') ?? '').trim();
-	if (!name) return { error: st(locale).serverErrors.nameRequired };
-	const shape = String(data.get('shape') ?? 'rect') === 'round' ? 'round' : 'rect';
-	const width = clamp(Number(data.get('width') ?? 2), 0.5, 10, 2);
-	const height = clamp(Number(data.get('height') ?? 1), 0.5, 10, 1);
-	const radius = clamp(Number(data.get('radius') ?? 1), 0.3, 5, 1);
-	const maxChairs = Math.round(clamp(Number(data.get('maxChairs') ?? 8), 1, 40, 8));
-	const amount = Math.round(clamp(Number(data.get('amount') ?? 0), 0, 200, 0));
-	let color = String(data.get('color') ?? '#92400e').trim();
-	if (!/^#[0-9a-fA-F]{6}$/.test(color)) color = '#92400e';
-	return { name, shape, width, height, radius, maxChairs, amount, color };
+function extraFromForm(data: FormData): ExtraInput {
+	return {
+		name: String(data.get('name') ?? ''),
+		description: String(data.get('description') ?? '') || null,
+		priceEur: Number(data.get('price')) || 0,
+		pricing: String(data.get('pricing') ?? 'fixed') === 'per_guest' ? 'per_guest' : 'fixed'
+	};
 }
 
 export const load: PageServerLoad = async ({ params, locals }) => {
@@ -160,7 +165,11 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		// Table arrives with migration 0008; absent is simply "never requested".
 	}
 
-	return { hall, templates, blocks, tableTypes, reservations, extras, plan, orgAmenities, floorplanRequest };
+	// What stands between this hall and being retired (see $lib/server/hall-archive).
+	const blocking = hall.archived_at ? [] : await blockingReservations(locals.db, hall.id);
+	const unused = await hallIsUnused(locals.db, hall.id);
+
+	return { hall, templates, blocks, tableTypes, reservations, extras, plan, orgAmenities, floorplanRequest, blocking, unused };
 };
 
 /** The hall in the URL must belong to the acting organization. Every action below
@@ -200,6 +209,8 @@ export const actions: Actions = {
 		const autoApprove = data.get('autoApprove') === 'on';
 		const minCancelDays = Number(data.get('minCancelDays') ?? 0);
 		if (!name) return fail(400, { infoError: st(locals.locale).serverErrors.nameRequired });
+		// An archived hall stays closed whatever the form says; restoring it is the way back.
+		const archived = await dbFirst<{ archived_at: string | null }>(locals.db, 'SELECT archived_at FROM halls WHERE id = ? AND org_id = ?', params.id, org.id);
 		await dbRun(
 			locals.db,
 			`UPDATE halls SET
@@ -211,7 +222,7 @@ export const actions: Actions = {
 				min_cancel_days=?
 			WHERE id=? AND org_id=?`,
 			name, description || null, maxPeople, color,
-			allowReservations ? 1 : 0, customLayouts ? 1 : 0,
+			allowReservations && !archived?.archived_at ? 1 : 0, customLayouts ? 1 : 0,
 			forceLayouts ? 1 : 0, allowFeedback ? 1 : 0,
 			minDaysAdvance, address || null, coordinates.latitude, coordinates.longitude,
 			preReservationText || null, autoApprove ? 1 : 0,
@@ -272,38 +283,22 @@ export const actions: Actions = {
 
 	addBlock: async ({ request, params, locals }) => {
 		const org = await requireOrgPermission(locals, 'halls.manage');
-		await assertHallInOrg(locals.db, params.id, org.id);
 		const data = await request.formData();
-		const blockType = String(data.get('blockType') ?? '') as 'date_range' | 'weekly';
-		const dateFrom = String(data.get('dateFrom') ?? '') || null;
-		const dateTo = String(data.get('dateTo') ?? '') || null;
 		const daysRaw = data.getAll('days').map(Number);
-		const days = daysRaw.length > 0 ? daysRaw : null;
-		const reason = String(data.get('reason') ?? '').trim() || null;
-
-		if (blockType === 'date_range' && (!dateFrom || !dateTo)) {
-			return fail(400, { blockError: st(locals.locale).serverErrors.dateRangeRequiresBothDates });
-		}
-		if (blockType === 'weekly' && (!days || days.length === 0)) {
-			return fail(400, { blockError: st(locals.locale).serverErrors.weeklyBlockRequiresDay });
-		}
-
-		const id = crypto.randomUUID();
-		await dbRun(
-			locals.db,
-			'INSERT INTO hall_blocks (id, hall_id, block_type, date_from, date_to, days_of_week, reason) VALUES (?, ?, ?, ?, ?, ?, ?)',
-			id, params.id, blockType, dateFrom, dateTo, toJson(days), reason
-		);
+		const res = await addHallBlock(locals.db, org.id, params.id, {
+			type: String(data.get('blockType') ?? '') === 'weekly' ? 'weekly' : 'date_range',
+			dateFrom: String(data.get('dateFrom') ?? '') || null,
+			dateTo: String(data.get('dateTo') ?? '') || null,
+			days: daysRaw.length ? daysRaw : null,
+			reason: String(data.get('reason') ?? '').trim() || null
+		}, locals.locale);
+		if (!res.ok) return fail(res.status, { blockError: res.error });
 		return { blockSuccess: true };
 	},
 
 	deleteBlock: async ({ request, locals }) => {
 		const org = await requireOrgPermission(locals, 'halls.manage');
-		const data = await request.formData();
-		const id = String(data.get('id') ?? '');
-		await dbRun(locals.db,
-			'DELETE FROM hall_blocks WHERE id = ? AND hall_id IN (SELECT id FROM halls WHERE org_id = ?)',
-			id, org.id);
+		await removeHallBlock(locals.db, org.id, String((await request.formData()).get('id') ?? ''));
 		return { success: true };
 	},
 
@@ -323,90 +318,57 @@ export const actions: Actions = {
 
 	addTableType: async ({ request, params, locals }) => {
 		const org = await requireOrgPermission(locals, 'halls.manage');
-		await assertHallInOrg(locals.db, params.id, org.id);
-		const tt = parseTableType(await request.formData(), locals.locale);
-		if ('error' in tt) return fail(400, { tableTypeError: tt.error });
-
-		const id = crypto.randomUUID();
-		await dbRun(
-			locals.db,
-			'INSERT INTO table_types (id, hall_id, name, shape, width, height, radius, max_chairs, amount, color) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-			id, params.id, tt.name, tt.shape, tt.width, tt.height, tt.radius, tt.maxChairs, tt.amount, tt.color
-		);
+		const res = await addTableType(locals.db, org.id, params.id, tableTypeFromForm(await request.formData()), locals.locale);
+		if (!res.ok) return fail(res.status, { tableTypeError: res.error });
 		return { tableTypeSuccess: true };
 	},
 
 	updateTableType: async ({ request, params, locals }) => {
 		const org = await requireOrgPermission(locals, 'halls.manage');
-		await assertHallInOrg(locals.db, params.id, org.id);
 		const data = await request.formData();
 		const id = String(data.get('id') ?? '');
 		if (!id) return fail(400, { tableTypeError: st(locals.locale).serverErrors.missingTableType });
-		const tt = parseTableType(data, locals.locale);
-		if ('error' in tt) return fail(400, { tableTypeError: tt.error });
-
-		await dbRun(
-			locals.db,
-			`UPDATE table_types SET name=?, shape=?, width=?, height=?, radius=?, max_chairs=?, amount=?, color=?
-			 WHERE id=? AND hall_id=?`,
-			tt.name, tt.shape, tt.width, tt.height, tt.radius, tt.maxChairs, tt.amount, tt.color, id, params.id
-		);
+		const res = await updateTableType(locals.db, org.id, params.id, id, tableTypeFromForm(data), locals.locale);
+		if (!res.ok && res.status === 400) return fail(400, { tableTypeError: res.error });
 		return { tableTypeSuccess: true };
 	},
 
 	deleteTableType: async ({ request, params, locals }) => {
 		const org = await requireOrgPermission(locals, 'halls.manage');
-		await assertHallInOrg(locals.db, params.id, org.id);
-		const data = await request.formData();
-		const id = String(data.get('id') ?? '');
-		await dbRun(locals.db, 'DELETE FROM table_types WHERE id=? AND hall_id=?', id, params.id);
+		await removeTableType(locals.db, org.id, params.id, String((await request.formData()).get('id') ?? ''));
 		return { success: true };
 	},
 
 	// ─── Extras (bookable add-ons) ──────────────────────────────────────────
+
+	// ─── Extras (bookable add-ons) ──────────────────────────────────────────
 	addExtra: async ({ request, params, locals }) => {
 		const org = await requireOrgPermission(locals, 'halls.manage');
-		await assertHallInOrg(locals.db, params.id, org.id);
-		const data = await request.formData();
-		const name = String(data.get('name') ?? '').trim();
-		const description = String(data.get('description') ?? '').trim() || null;
-		const pricing = String(data.get('pricing') ?? 'fixed') === 'per_guest' ? 'per_guest' : 'fixed';
-		const priceCents = Math.max(0, Math.round((Number(data.get('price')) || 0) * 100));
-		if (!name) return fail(400, { extraError: st(locals.locale).serverErrors.nameRequired });
-		if (!(await canAddExtra(locals.db, params.id, locals.currentOrg!.subscription.plan))) {
-			const limit = getPlan(locals.currentOrg!.subscription.plan).limits.maxExtrasPerHall;
-			return fail(403, { extraError: `Your plan allows ${limit} extra${limit === 1 ? '' : 's'} per hall. Upgrade to add more.` });
-		}
-		await dbRun(locals.db,
-			'INSERT INTO hall_extras (id, hall_id, name, description, price_cents, pricing) VALUES (?, ?, ?, ?, ?, ?)',
-			crypto.randomUUID(), params.id, name, description, priceCents, pricing);
+		const res = await addHallExtra(locals.db, org.id, org.subscription.plan, params.id, extraFromForm(await request.formData()), locals.locale);
+		if (!res.ok) return fail(res.status, { extraError: res.error });
 		return { extraSuccess: true };
 	},
 
 	updateExtra: async ({ request, params, locals }) => {
 		const org = await requireOrgPermission(locals, 'halls.manage');
-		await assertHallInOrg(locals.db, params.id, org.id);
 		const data = await request.formData();
 		const id = String(data.get('id') ?? '');
-		const name = String(data.get('name') ?? '').trim();
-		const description = String(data.get('description') ?? '').trim() || null;
-		const pricing = String(data.get('pricing') ?? 'fixed') === 'per_guest' ? 'per_guest' : 'fixed';
-		const priceCents = Math.max(0, Math.round((Number(data.get('price')) || 0) * 100));
-		if (!id || !name) return fail(400, { extraError: st(locals.locale).serverErrors.nameRequired });
-		await dbRun(locals.db,
-			'UPDATE hall_extras SET name=?, description=?, price_cents=?, pricing=? WHERE id=? AND hall_id=?',
-			name, description, priceCents, pricing, id, params.id);
+		if (!id) return fail(400, { extraError: st(locals.locale).serverErrors.nameRequired });
+		const res = await updateHallExtra(locals.db, org.id, id, extraFromForm(data), locals.locale);
+		if (!res.ok && res.status === 400) return fail(400, { extraError: res.error });
 		return { extraSuccess: true };
 	},
 
-	deleteExtra: async ({ request, params, locals }) => {
+	deleteExtra: async ({ request, locals }) => {
 		const org = await requireOrgPermission(locals, 'halls.manage');
-		await assertHallInOrg(locals.db, params.id, org.id);
-		const data = await request.formData();
-		const id = String(data.get('id') ?? '');
-		await dbRun(locals.db, 'DELETE FROM hall_extras WHERE id=? AND hall_id=?', id, params.id);
+		await removeHallExtra(locals.db, org.id, String((await request.formData()).get('id') ?? ''));
 		return { extraSuccess: true };
 	},
+
+	// ─── Custom amenities (organisation-wide) ───────────────────────────────
+	// Built-in amenities are translated keys. One an operator invents has no key to
+	// translate, so it carries its own label per locale — and only one of the two is
+	// required: writing "Vírivka" should not oblige anybody to also write "Hot tub".
 
 	// ─── Custom amenities (organisation-wide) ───────────────────────────────
 	// Built-in amenities are translated keys. One an operator invents has no key to
@@ -548,9 +510,12 @@ export const actions: Actions = {
 
 		// A hall suspended by a plan downgrade cannot be made public until the owner
 		// reactivates it (which re-checks the active-hall limit).
-		const locked = await dbFirst<{ plan_locked: number }>(locals.db, 'SELECT plan_locked FROM halls WHERE id = ? AND org_id = ?', params.id, locals.currentOrg!.id);
+		const locked = await dbFirst<{ plan_locked: number; archived_at: string | null }>(locals.db, 'SELECT plan_locked, archived_at FROM halls WHERE id = ? AND org_id = ?', params.id, locals.currentOrg!.id);
 		if (locked?.plan_locked && isPublic) {
 			return fail(403, { profileError: st(locals.locale).serverErrors.hallSuspendedByPlan });
+		}
+		if (locked?.archived_at && isPublic) {
+			return fail(403, { profileError: st(locals.locale).serverErrors.hallArchived });
 		}
 
 		await dbRun(
@@ -611,6 +576,88 @@ export const actions: Actions = {
 		}
 		await dbRun(locals.db, 'UPDATE halls SET plan_locked = 0 WHERE id = ? AND org_id = ?', params.id, orgId);
 		return { reactivated: true };
+	},
+
+	// ─── Retiring a hall (see $lib/server/hall-archive) ───────────────────────
+
+	/** Cancel every live upcoming booking at once, with one note to all the clients. */
+	cancelAllReservations: async ({ request, params, locals }) => {
+		const org = await requireOrgPermission(locals, 'halls.manage');
+		const hall = await dbFirst<{ id: string; name: string }>(locals.db,
+			'SELECT id, name FROM halls WHERE id = ? AND org_id = ?', params.id, org.id);
+		if (!hall) error(404, 'Not found');
+		const data = await request.formData();
+		const message = String(data.get('message') ?? '').trim().slice(0, MAX_CANCEL_NOTE);
+		const { cancelled } = await cancelHallReservations(locals.db, {
+			orgId: org.id,
+			hallId: hall.id,
+			hallName: hall.name,
+			actor: { id: locals.user!.id, name: `${locals.user!.first_name} ${locals.user!.last_name}` },
+			message,
+		});
+		return { bulkCancelled: cancelled };
+	},
+
+	/** Archive: unlisted, closed to bookings, off the plan's hall count, history kept.
+	 *  Refused while any live upcoming booking remains — those are cancelled first. */
+	archive: async ({ request, params, locals }) => {
+		const org = await requireOrgPermission(locals, 'halls.manage');
+		const hall = await dbFirst<{ id: string; name: string; archived_at: string | null }>(locals.db,
+			'SELECT id, name, archived_at FROM halls WHERE id = ? AND org_id = ?', params.id, org.id);
+		if (!hall) error(404, 'Not found');
+		if (hall.archived_at) return { archived: true };
+		const data = await request.formData();
+		if (String(data.get('confirmName') ?? '').trim() !== hall.name.trim()) {
+			return fail(400, { archiveError: st(locals.locale).serverErrors.hallNameMismatch });
+		}
+		// Checked again here, not only on the page: a booking can land between the
+		// operator loading it and pressing the button.
+		const blocking = await blockingReservations(locals.db, hall.id);
+		if (blocking.length > 0) {
+			return fail(409, { archiveError: st(locals.locale).serverErrors.hallHasUpcomingReservations(blocking.length) });
+		}
+		await dbRun(locals.db,
+			`UPDATE halls SET archived_at = datetime('now'), is_public = 0, allow_reservations = 0
+			  WHERE id = ? AND org_id = ?`,
+			hall.id, org.id);
+		return { archived: true };
+	},
+
+	/** Bring an archived hall back. It returns unlisted and closed, the state a new
+	 *  hall starts in, so nothing goes public until the operator says so. A hall that
+	 *  would count toward the plan needs room under its limit. */
+	restore: async ({ params, locals }) => {
+		const org = await requireOrgPermission(locals, 'halls.manage');
+		const hall = await dbFirst<{ plan_locked: number; archived_at: string | null }>(locals.db,
+			'SELECT plan_locked, archived_at FROM halls WHERE id = ? AND org_id = ?', params.id, org.id);
+		if (!hall) error(404, 'Not found');
+		if (!hall.archived_at) return { restored: true };
+		if (!hall.plan_locked && !(await canAddHall(locals.db, org.id, org.subscription.plan))) {
+			const limit = getPlan(org.subscription.plan).limits.maxHalls;
+			return fail(403, { archiveError: st(locals.locale).serverErrors.hallLimitReached.replace('{limit}', String(limit)) });
+		}
+		await dbRun(locals.db, 'UPDATE halls SET archived_at = NULL WHERE id = ? AND org_id = ?', params.id, org.id);
+		return { restored: true };
+	},
+
+	/** Permanent deletion, only for a hall nobody has ever booked (one created by
+	 *  mistake). Anything with history is archived instead. */
+	deleteHall: async ({ request, params, locals }) => {
+		const org = await requireOrgPermission(locals, 'halls.manage');
+		const hall = await dbFirst<{ id: string; name: string }>(locals.db,
+			'SELECT id, name FROM halls WHERE id = ? AND org_id = ?', params.id, org.id);
+		if (!hall) error(404, 'Not found');
+		const data = await request.formData();
+		if (String(data.get('confirmName') ?? '').trim() !== hall.name.trim()) {
+			return fail(400, { archiveError: st(locals.locale).serverErrors.hallNameMismatch });
+		}
+		if (!(await hallIsUnused(locals.db, hall.id))) {
+			return fail(409, { archiveError: st(locals.locale).serverErrors.hallHasHistory });
+		}
+		// Its own rows (table types, templates, blocks, extras, holds) go with it by
+		// ON DELETE CASCADE, which D1 enforces.
+		await dbRun(locals.db, 'DELETE FROM halls WHERE id = ? AND org_id = ?', hall.id, org.id);
+		redirect(303, '/app/manage/halls');
 	},
 
 	/** Ask Hallify to survey the venue and draw the plan.

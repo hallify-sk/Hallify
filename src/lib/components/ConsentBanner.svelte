@@ -6,11 +6,15 @@
     CONSENT_ALL, CONSENT_NONE, consentUi, type ConsentState,
   } from '$lib/analytics';
 
+  import type { AnalyticsContainer } from '$lib/analytics';
   interface Props {
-    /** GTM container for this surface, or null when analytics is not configured. */
-    containerId: string | null;
+    /** GTM containers on this page (none when analytics is not configured). */
+    containers: AnalyticsContainer[];
+    /** A venue's own site, where Hallify measures too and the visitor must be told. */
+    onVenueSite?: boolean;
   }
-  const { containerId }: Props = $props();
+  const { containers, onVenueSite = false }: Props = $props();
+  const hallifyMeasures = $derived(onVenueSite && containers.some((c) => c.owner === 'platform'));
 
   let open = $state(false);
   /** Collapsed = first visit (Accept all / Reject all). Expanded = per-category. */
@@ -20,11 +24,11 @@
 
   onMount(() => {
     // Consent Mode defaults first; GTM only loads if something was already accepted.
-    initAnalytics(containerId);
+    initAnalytics(containers);
     const stored = readConsent();
     if (stored) { analytics = stored.analytics; marketing = stored.marketing; }
     // Nothing to consent to when no container is configured — don't nag.
-    if (containerId && stored === null) open = true;
+    if (containers.length && stored === null) open = true;
   });
 
   // Reopening from the footer link. Withdrawal has to be as reachable as granting.
@@ -39,7 +43,7 @@
   });
 
   function apply(state: ConsentState) {
-    setConsent(state, containerId);
+    setConsent(state, containers);
     open = false;
     showDetail = false;
   }
@@ -51,6 +55,7 @@
       <div class="consent-head">
         <h2>{t.consent.title}</h2>
         <p>{t.consent.body} <a href="/privacy">{t.consent.privacyLink}</a></p>
+        {#if hallifyMeasures}<p class="consent-hallify">{t.consent.hallifyOnVenue}</p>{/if}
       </div>
 
       {#if showDetail}
@@ -153,4 +158,5 @@
     .btn-link { margin-right: 0; width: 100%; text-align: left; }
     .btn-ghost, .btn-accept { flex: 1; }
   }
+  .consent-hallify { margin-top: 6px; font-size: 12px; opacity: .85; }
 </style>

@@ -14,6 +14,7 @@ export interface TableObj {
 	chairSpacing: number;
 	assignments: (string | null)[];
 	typeId?: string;
+	note?: string;       // a note for staff ("one high chair"), shown in the seating editor
 	chairsOnShortSide?: boolean; // legacy compat
 }
 export interface Guest {
@@ -35,7 +36,11 @@ export interface FloorData {
 	zones: ZoneObj[];
 	tables: TableObj[];
 	seats?: SeatObj[];     // standalone chairs (optional for legacy compat)
+	/** The room's bounding box. With `boundsParts` it frames them; without, it IS the room. */
 	bounds: BoundsRect | null;
+	/** A room made of several rectangles (an L, a U…), joined into one shape. Absent
+	 *  when the room is a single rectangle. See floorplan-geometry.ts. */
+	boundsParts?: BoundsRect[];
 }
 
 export interface MultiFloorState {
@@ -97,6 +102,7 @@ export function migrateToMultiFloor(raw: unknown): MultiFloorState {
 			tables: (Array.isArray(obj.tables) ? obj.tables as TableObj[] : []).map(migrateChairCounts),
 			seats: Array.isArray(obj.seats) ? obj.seats as SeatObj[] : [],
 			bounds: (obj.bounds as BoundsRect) ?? null,
+			...(Array.isArray(obj.boundsParts) ? { boundsParts: obj.boundsParts as BoundsRect[] } : {}),
 		}],
 		guests: Array.isArray(obj.guests) ? obj.guests as Guest[] : [],
 	};

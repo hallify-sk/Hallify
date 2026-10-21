@@ -6,6 +6,7 @@ import { parseEventTypes } from '$lib/eventTypes';
 import { countSeats } from '$lib/floorplan-types';
 import { st } from '$lib/i18n-server';
 import { hasEventStarted } from '$lib/reservationStatus';
+import { tableInventoryError } from '$lib/server/table-inventory';
 import type { Actions, PageServerLoad } from './$types';
 
 // The booking client may edit the seating layout once the event is approved — but only
@@ -58,13 +59,15 @@ export const actions: Actions = {
 		const layoutJson = String(data.get('layoutJson') ?? '');
 		if (!layoutJson) return fail(400, { error: st(locals.locale).serverErrors.noLayoutData });
 
-		const reservation = await dbFirst<{ status: string; event_date: string; start_time: string | null; hall_floorplan_json: unknown }>(locals.db,
-			'SELECT r.status, r.event_date, r.start_time, h.floorplan_json AS hall_floorplan_json FROM reservations r JOIN halls h ON h.id = r.hall_id WHERE r.id = ? AND r.user_id = ? AND r.org_id = ?',
+		const reservation = await dbFirst<{ status: string; hall_id: string; event_date: string; start_time: string | null; hall_floorplan_json: unknown }>(locals.db,
+			'SELECT r.status, r.hall_id, r.event_date, r.start_time, h.floorplan_json AS hall_floorplan_json FROM reservations r JOIN halls h ON h.id = r.hall_id WHERE r.id = ? AND r.user_id = ? AND r.org_id = ?',
 			params.id, locals.user.id, orgId
 		);
 		if (!reservation) return fail(404, { error: st(locals.locale).serverErrors.notFound });
 		if (!CLIENT_EDITABLE.has(reservation.status) || hasEventStarted(reservation.event_date, reservation.start_time)) return fail(403, { error: st(locals.locale).serverErrors.eventNoLongerEditable });
 		if (!reservation.hall_floorplan_json) return fail(400, { error: st(locals.locale).serverErrors.hallNoFloorPlan });
+		const overStock = await tableInventoryError(locals.db, reservation.hall_id, layoutJson, locals.locale);
+		if (overStock) return fail(400, { error: overStock });
 
 		await dbRun(locals.db, 'UPDATE reservations SET layout_json = ? WHERE id = ? AND user_id = ? AND org_id = ?',
 			layoutJson, params.id, locals.user.id, orgId);
