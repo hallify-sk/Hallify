@@ -1,9 +1,10 @@
 import { readPlatformSetting } from '$lib/server/platform-settings';
+import { CREDITS_PER_EUR } from '$lib/ai-credits';
 
 /**
  * What the assistant costs, from OpenAI's tokens to our credits.
  *
- *   100 credits = 1 EUR, so 1 credit = 1 euro cent, and balances are kept in
+ *   10 credits = 1 EUR (CREDITS_PER_EUR), so 1 credit = 10 euro cents; balances are kept in
  *   milli-credits (mc). A charge is OpenAI's real cost × the platform markup,
  *   converted to euros and rounded UP to the next milli-credit.
  *
@@ -79,9 +80,9 @@ export function costUsdMicro(model: string, u: Usage): number {
 	return Math.ceil(fresh * p.input + u.cached_tokens * p.cachedInput + u.output_tokens * p.output);
 }
 
-/** µUSD → milli-credits: × EUR/USD × markup × (100 credits/EUR × 1000 mc / 1e6 µ). */
+/** µUSD → milli-credits: × EUR/USD × markup × (CREDITS_PER_EUR × 1000 mc / 1e6 µ). */
 export function toMilliCredits(usdMicro: number, s: AiPlatformSettings): number {
-	return Math.ceil(usdMicro * s.usdToEur * s.markup * 0.1);
+	return Math.ceil((usdMicro * s.usdToEur * s.markup * CREDITS_PER_EUR) / 1000);
 }
 
 /** The most a single model call could cost: every input token uncached and the

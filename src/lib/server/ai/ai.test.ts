@@ -54,9 +54,9 @@ describe('pricing', () => {
 		expect(costUsdMicro('gpt-6.1-sol', { input_tokens: 1000, cached_tokens: 0, output_tokens: 100 })).toBe(3000);
 		expect(costUsdMicro('gpt-6.1-sol', { input_tokens: 1000, cached_tokens: 1000, output_tokens: 0 })).toBe(100);
 	});
-	it('converts to milli-credits: 1 EUR = 100 credits = 100,000 mc, marked up and rounded up', () => {
-		// $1 = 1e6 µUSD → 0.92 EUR × 3 = 2.76 EUR = 276 credits = 276,000 mc
-		expect(toMilliCredits(1_000_000, DEFAULT_AI)).toBe(276_000);
+	it('converts to milli-credits: 1 EUR = 10 credits = 10,000 mc, marked up and rounded up', () => {
+		// $1 = 1e6 µUSD → 0.92 EUR × 3 = 2.76 EUR = 27.6 credits = 27,600 mc
+		expect(toMilliCredits(1_000_000, DEFAULT_AI)).toBe(27_600);
 		expect(toMilliCredits(1, DEFAULT_AI)).toBe(1); // never rounds a real cost to free
 	});
 });

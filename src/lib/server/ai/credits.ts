@@ -131,8 +131,8 @@ export async function getAccount(db: Db, org: OrgContext, now = new Date()): Pro
 	return acc;
 }
 
-/** Below this nothing starts: not enough left for even a short answer. */
-export const MIN_TURN_MC = 500;
+/** Below this nothing starts: not enough left for even a short answer (half a cent). */
+export const MIN_TURN_MC = 50;
 
 /**
  * Reserve credits before a model call: the worst case, or whatever is left if

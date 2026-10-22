@@ -1,5 +1,15 @@
 // Hallify i18n — Slovak (default) + English
 
+/** "2 kredity", "5 kreditov", "1,5 kreditu": Slovak agrees the noun with the number.
+ *  Takes the number already formatted for display (a decimal comma counts). */
+function skKredit(n: number | string): string {
+	const v = typeof n === 'number' ? n : Number(String(n).replace(/\s/g, '').replace(',', '.'));
+	if (!Number.isInteger(v)) return `${n} kreditu`;
+	if (v === 1) return `${n} kredit`;
+	if (v >= 2 && v <= 4) return `${n} kredity`;
+	return `${n} kreditov`;
+}
+
 export const sk = {
 	nav: {
 		home: 'Domov',
@@ -2258,7 +2268,7 @@ export const sk = {
 		attach: "Pripojiť súbor",
 		removeAttachment: "Odstrániť súbor",
 		uploading: "Nahráva sa…",
-		balance: (c: string) => `${c} kreditov`,
+		balance: (c: string) => skKredit(c),
 		balanceTitle: "Zostatok AI kreditov",
 		widgetOpen: "Otvoriť AI asistenta",
 		widgetClose: "Zavrieť asistenta",
@@ -2414,19 +2424,19 @@ export const sk = {
 		},
 		settingsTab: "AI asistent",
 		settingsTitle: "AI asistent",
-		settingsHint: "Kredity sa míňajú podľa skutočnej náročnosti požiadaviek. 100 kreditov = 1 €.",
+		settingsHint: "Kredity sa míňajú podľa skutočnej náročnosti požiadaviek. 10 kreditov = 1 €.",
 		enabledLabel: "Zapnúť AI asistenta",
 		enabledHint: "Správy a súbory sa spracúvajú cez OpenAI. Vypnutím sa asistent nedá použiť, história konverzácií zostane.",
 		enabledBy: (who: string, when: string) => `Zapol(a) ${who}, ${when}`,
 		balanceLabel: "Zostatok",
 		allowanceLabel: "Mesačný príspevok",
-		allowanceValue: (n: number) => `${n} kreditov`,
+		allowanceValue: (n: number) => skKredit(n),
 		renewsLabel: "Obnoví sa",
 		spentLabel: "Minuté v tomto období",
 		purchasedLabel: "Dokúpené (neprepadajú)",
 		buyTitle: "Dokúpiť kredity",
 		buyHint: "Dokúpené kredity neprepadajú a míňajú sa až po mesačnom príspevku.",
-		buyPack: (credits: number, eur: string) => `${credits} kreditov · ${eur}`,
+		buyPack: (credits: number, eur: string) => `${skKredit(credits)} · ${eur}`,
 		buyOwnerOnly: "Kredity môže dokúpiť niekto s oprávnením spravovať fakturáciu.",
 		topupDone: "Platba prijatá. Kredity sa pripíšu o chvíľu.",
 		usageTitle: "Pohyby kreditov",
@@ -5064,7 +5074,7 @@ export const en: typeof sk = {
 		attach: "Attach a file",
 		removeAttachment: "Remove file",
 		uploading: "Uploading…",
-		balance: (c: string) => `${c} credits`,
+		balance: (c: string) => `${c} credit${c === '1' ? '' : 's'}`,
 		balanceTitle: "AI credit balance",
 		widgetOpen: "Open the AI assistant",
 		widgetClose: "Close the assistant",
@@ -5220,13 +5230,13 @@ export const en: typeof sk = {
 		},
 		settingsTab: "AI assistant",
 		settingsTitle: "AI assistant",
-		settingsHint: "Credits are spent according to what each request actually takes. 100 credits = €1.",
+		settingsHint: "Credits are spent according to what each request actually takes. 10 credits = €1.",
 		enabledLabel: "Turn on the AI assistant",
 		enabledHint: "Messages and files are processed by OpenAI. Turning it off stops all use; conversation history is kept.",
 		enabledBy: (who: string, when: string) => `Turned on by ${who}, ${when}`,
 		balanceLabel: "Balance",
 		allowanceLabel: "Monthly allowance",
-		allowanceValue: (n: number) => `${n} credits`,
+		allowanceValue: (n: number) => `${n} credit${n === 1 ? '' : 's'}`,
 		renewsLabel: "Renews",
 		spentLabel: "Spent this period",
 		purchasedLabel: "Purchased (never expire)",

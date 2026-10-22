@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { CREDITS_PER_EUR } from '$lib/ai-credits';
   import { enhance } from '$app/forms';
   import { t, getLocale } from '$lib/i18n.svelte';
   import type { PageData } from './$types';
@@ -7,7 +8,7 @@
 
   const dateLocale = $derived(getLocale() === 'en' ? 'en-GB' : 'sk-SK');
   const credits = (mc: number) =>
-    new Intl.NumberFormat(dateLocale, { maximumFractionDigits: 1 }).format(Math.round(mc / (data.mc / 10)) / 10);
+    new Intl.NumberFormat(dateLocale, { maximumFractionDigits: 2 }).format(Math.round(mc / (data.mc / 100)) / 100);
   const fmtDate = (d: string | null, withTime = false) =>
     d
       ? new Date(d.includes('T') ? d : `${d.replace(' ', 'T')}Z`).toLocaleString(dateLocale, {
@@ -15,7 +16,7 @@
         })
       : '—';
   const eur = (credits: number) =>
-    new Intl.NumberFormat(dateLocale, { style: 'currency', currency: 'EUR' }).format(credits / 100);
+    new Intl.NumberFormat(dateLocale, { style: 'currency', currency: 'EUR' }).format(credits / CREDITS_PER_EUR);
   type KindKey = keyof typeof t.ai.ledgerKinds;
   const kindLabel = (k: string) => (k in t.ai.ledgerKinds ? t.ai.ledgerKinds[k as KindKey] : k);
 

@@ -87,7 +87,7 @@
   <section class="section">
     <div class="section-head">
       <h2>AI assistant</h2>
-      <p>Model, markup and exchange rate for every organisation's credits (100 credits = €1).
+      <p>Model, markup and exchange rate for every organisation's credits (10 credits = €1).
         Charge = OpenAI cost × markup, in euros.</p>
     </div>
     {#if !data.aiConfigured}
@@ -110,7 +110,7 @@
           <!-- Fixed in code (AI_MODEL), not a setting: one model, one reasoning effort. -->
           <p class="fixed-model">
             <code>{data.model.id}</code> · {data.model.effort} reasoning<br />
-            <span>${data.model.input} in / ${data.model.output} out per 1M · ≈{data.model.turnCredits.toFixed(1)} credits a turn</span>
+            <span>${data.model.input} in / ${data.model.output} out per 1M · ≈{data.model.turnCredits.toFixed(2)} credits a turn</span>
           </p>
         </div>
         <div class="field">

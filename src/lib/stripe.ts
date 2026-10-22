@@ -80,8 +80,8 @@ export async function createCheckoutSession(opts: {
   return session.url!;
 }
 
-/** AI credit packs on sale. 100 credits = 1 EUR, no volume discount. */
-export const AI_CREDIT_PACKS = [500, 1000, 2500] as const;
+export { AI_CREDIT_PACKS } from './ai-credits';
+import { AI_CREDIT_PACKS, CENTS_PER_CREDIT } from './ai-credits';
 
 /** One-off Checkout for a pack of AI credits. The credits are added by the webhook
  *  on `checkout.session.completed`, keyed on the session id, never by the redirect. */
@@ -99,7 +99,7 @@ export async function createAiTopupSession(opts: {
       quantity: 1,
       price_data: {
         currency: 'eur',
-        unit_amount: opts.credits, // 100 credits = 100 cents
+        unit_amount: opts.credits * CENTS_PER_CREDIT,
         product_data: {
           name: `Hallify AI credits × ${opts.credits}`,
           description: 'Credits for the Hallify AI assistant. They never expire.',
