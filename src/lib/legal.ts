@@ -56,7 +56,7 @@ export const SLA = {
 } as const;
 
 /** Last substantive revision. Bump when the text changes. */
-export const LEGAL_UPDATED = '2026-10-17';
+export const LEGAL_UPDATED = '2026-10-23';
 
 export interface LegalBlock {
   /** A paragraph, or a bulleted list. */
@@ -365,6 +365,8 @@ const privacySk: LegalDoc = {
         { list: [
           'Pri údajoch o používateľoch Hallify (zamestnanci organizácií, ich účty, fakturácia) sme prevádzkovateľom my.',
           'Pri údajoch o hosťoch, ktoré do služby vloží organizácia, je prevádzkovateľom organizácia (sála) a my sme sprostredkovateľom — spracúvame ich len podľa jej pokynov. Podrobnosti upravuje Zmluva o spracúvaní osobných údajov.',
+          'Pri analytike návštev verejných stránok priestorov — aj na ich vlastnej doméne — sme samostatným prevádzkovateľom my. Meriame ňou, koľko návštev a rezervácií Hallify jednotlivým priestorom prináša (oprávnený záujem na vyhodnotení a zlepšovaní služby), a to len s vaším súhlasom s analytickými cookies.',
+          'Ak má priestor na svojej stránke aj vlastnú analytiku, jej prevádzkovateľom je priestor, nie my.',
         ] },
         { p: 'Ak ste hosť a chcete uplatniť svoje práva k údajom o rezervácii, obráťte sa najprv na organizáciu, ktorá podujatie organizuje. Radi jej pomôžeme.' },
       ],
@@ -411,7 +413,8 @@ const privacySk: LegalDoc = {
           'hallify-consent — vaša voľba ohľadom analytických cookies, platnosť 1 rok.',
         ] },
         { p: 'Analytické cookies (len s vaším súhlasom): používame Google Tag Manager a Google Analytics, aby sme videli, ako sa služba používa a kde sa používatelia strácajú. Bez vášho súhlasu sa nenačítajú vôbec — nejde len o ich vypnutie, skript sa vôbec nespustí. Súhlas môžete kedykoľvek zmeniť alebo odvolať cez odkaz „Nastavenia cookies“ v pätičke stránky — rovnako jednoducho, ako ste ho udelili.' },
-        { p: 'Analytické a marketingové cookies sú samostatné kategórie — môžete povoliť len jednu z nich. Do analytiky neposielame e-maily, mená ani obsah rezervácií — len pseudonymné identifikátory a údaje ako typ účtu, rola a plán.' },
+        { p: 'Na verejných stránkach priestorov sa môžu načítať dva kontajnery: náš a vlastný kontajner priestoru. Lišta súhlasu na to upozorňuje a vaša voľba platí pre oba. Ktorýkoľvek z nich môže bežať cez serverový kontajner (server-side Google Tag Manager) na doméne jeho prevádzkovateľa — údaje potom najprv prijme tento server a ten rozhodne, čo postúpi spoločnosti Google.' },
+        { p: 'Analytické a marketingové cookies sú samostatné kategórie — môžete povoliť len jednu z nich. Do analytiky neposielame e-maily, mená ani obsah rezervácií — len pseudonymné identifikátory a údaje ako typ účtu, rola a plán, a pri návšteve stránky priestoru aj identifikátor priestoru a to, či návšteva prišla z Hallify.' },
       ],
     },
     {
@@ -423,6 +426,7 @@ const privacySk: LegalDoc = {
           'Stripe, Inc. / Stripe Payments Europe — spracovanie platieb a fakturácia. Údaje o platobnej karte prijíma priamo Stripe; my ich nevidíme ani neuchovávame.',
           'Brevo (Sendinblue SAS) — odosielanie transakčných e-mailov.',
           'Google Ireland Limited — Google Tag Manager a Google Analytics, len ak ste udelili súhlas s analytickými cookies.',
+          'OpenAI, L.L.C. — AI asistent, len ak ho organizácia používa. Posielame mu obsah, s ktorým asistent práve pracuje (napr. údaje o sále alebo rezervácii); OpenAI ho podľa svojich podmienok pre API nepoužíva na trénovanie modelov.',
         ] },
         { p: 'Prenos mimo EÚ/EHP prebieha na základe štandardných zmluvných doložiek alebo iného vhodného právneho mechanizmu. Údaje inak neposkytujeme tretím osobám, s výnimkou zákonnej povinnosti.' },
       ],
@@ -489,6 +493,8 @@ const privacyEn: LegalDoc = {
         { list: [
           'For data about Hallify users (venue staff, their accounts, billing) we are the controller.',
           'For data about guests that an organization enters, the organization (the venue) is the controller and we are the processor — we handle it only on their instructions. The Data Processing Agreement sets out the detail.',
+          'For analytics of visits to venues’ public pages — including on a venue’s own domain — we are an independent controller. We use it to measure how many visits and bookings Hallify brings each venue (our legitimate interest in evaluating and improving the service), and only with your consent to analytics cookies.',
+          'Where a venue also runs its own analytics on its site, the venue, not Hallify, is the controller for it.',
         ] },
         { p: 'If you are a guest and want to exercise your rights over reservation data, contact the organization running the event first. We will assist them.' },
       ],
@@ -535,7 +541,8 @@ const privacyEn: LegalDoc = {
           'hallify-consent — your choice about analytics cookies, 1 year.',
         ] },
         { p: 'Analytics cookies (only with your consent): we use Google Tag Manager and Google Analytics to understand how the service is used and where people get stuck. Without your consent they are not loaded at all — the script never runs, rather than merely being disabled. You can change or withdraw consent at any time via the “Cookie settings” link in the page footer — as easily as you gave it.' },
-        { p: 'Analytics and marketing are separate categories — you can allow one without the other. We never send emails, names or reservation content to analytics — only pseudonymous identifiers and attributes such as account type, role and plan.' },
+        { p: 'On venues’ public pages two containers may load: ours and the venue’s own. The consent banner says so, and your choice applies to both. Either may run through a server container (server-side Google Tag Manager) on its owner’s domain — the data then reaches that server first, and it decides what is passed on to Google.' },
+        { p: 'Analytics and marketing are separate categories — you can allow one without the other. We never send emails, names or reservation content to analytics — only pseudonymous identifiers and attributes such as account type, role and plan, and on a venue’s page the venue’s identifier and whether the visit came from Hallify.' },
       ],
     },
     {
@@ -547,6 +554,7 @@ const privacyEn: LegalDoc = {
           'Stripe, Inc. / Stripe Payments Europe — payment processing and invoicing. Card details go directly to Stripe; we never see or store them.',
           'Brevo (Sendinblue SAS) — transactional email delivery.',
           'Google Ireland Limited — Google Tag Manager and Google Analytics, only where analytics consent has been given.',
+          'OpenAI, L.L.C. — the AI assistant, only where an organization uses it. It receives the content the assistant is working with (for example hall or reservation details); under its API terms OpenAI does not use it to train models.',
         ] },
         { p: 'Any transfer outside the EU/EEA relies on Standard Contractual Clauses or another valid mechanism. We do not otherwise disclose data to third parties except where legally required.' },
       ],
@@ -618,7 +626,8 @@ const dpaSk: LegalDoc = {
       heading: '2. Predmet, trvanie a povaha spracúvania',
       blocks: [
         { p: 'Predmetom je spracúvanie osobných údajov výlučne na účel poskytovania služby Hallify — správy sál, rezervácií, zasadacích poriadkov a súvisiacej komunikácie.' },
-        { p: 'Spracúvanie trvá po dobu trvania zmluvného vzťahu a končí zrušením organizácie podľa článku 9 nižšie.' },
+        { p: 'Spracúvanie trvá po dobu trvania zmluvného vzťahu a končí zrušením organizácie podľa článku 10 nižšie.' },
+        { p: 'Mimo rozsahu tejto zmluvy je analytika návštev verejných stránok prevádzkovateľa (aj na jeho vlastnej doméne), ktorú sprostredkovateľ vykonáva na vlastný účel — vyhodnotenie, koľko návštev a rezervácií služba prevádzkovateľovi prináša. Pri nej je sprostredkovateľ samostatným prevádzkovateľom, spracúva len pseudonymné údaje a len so súhlasom návštevníka. Analytika, ktorú si prevádzkovateľ na svojich stránkach zapne sám (vlastný kontajner Google Tag Manager), je jeho vlastným spracúvaním.' },
       ],
     },
     {
@@ -677,6 +686,7 @@ const dpaSk: LegalDoc = {
           'Stripe, Inc. / Stripe Payments Europe, Ltd. — spracovanie platieb a fakturácia.',
           'Brevo (Sendinblue SAS) — odosielanie transakčných e-mailov.',
           'Google Ireland Limited — Google Tag Manager a Google Analytics, len ak ste udelili súhlas s analytickými cookies.',
+          'OpenAI, L.L.C. — AI asistent, len ak ho organizácia používa. Posielame mu obsah, s ktorým asistent práve pracuje (napr. údaje o sále alebo rezervácii); OpenAI ho podľa svojich podmienok pre API nepoužíva na trénovanie modelov.',
         ] },
         { p: 'O zamýšľanej zmene alebo pridaní ďalšieho sprostredkovateľa informuje sprostredkovateľ vopred; prevádzkovateľ môže voči zmene v primeranej lehote namietať, pričom v takom prípade môže zmluvný vzťah ukončiť. Sprostredkovateľ ukladá ďalším sprostredkovateľom rovnaké povinnosti, aké vyplývajú z tejto zmluvy, a zodpovedá za ich plnenie.' },
       ],
@@ -739,6 +749,7 @@ const dpaEn: LegalDoc = {
       blocks: [
         { p: 'The subject matter is the processing of personal data solely to provide the Hallify service — managing halls, reservations, seating layouts and related communication.' },
         { p: 'Processing lasts for the duration of the contractual relationship and ends when the organization is closed, as described in section 10 below.' },
+        { p: 'Outside the scope of this agreement is the analytics of visits to the Controller’s public pages (including on its own domain) that the Processor carries out for its own purpose — measuring how many visits and bookings the Service brings the Controller. For it the Processor is an independent controller, processes only pseudonymous data, and only with the visitor’s consent. Analytics the Controller turns on for its own pages (its own Google Tag Manager container) is the Controller’s own processing.' },
       ],
     },
     {
@@ -797,6 +808,7 @@ const dpaEn: LegalDoc = {
           'Stripe, Inc. / Stripe Payments Europe, Ltd. — payment processing and invoicing.',
           'Brevo (Sendinblue SAS) — transactional email delivery.',
           'Google Ireland Limited — Google Tag Manager and Google Analytics, only where analytics consent has been given.',
+          'OpenAI, L.L.C. — the AI assistant, only where an organization uses it. It receives the content the assistant is working with (for example hall or reservation details); under its API terms OpenAI does not use it to train models.',
         ] },
         { p: 'The Processor will give advance notice of any intended change or addition, and the Controller may object within a reasonable period, in which case it may terminate the contract. The Processor imposes on each sub-processor the same obligations as in this agreement and remains liable for their performance.' },
       ],
