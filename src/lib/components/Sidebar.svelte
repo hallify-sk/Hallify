@@ -9,6 +9,7 @@
   import { uiStore } from '$lib/stores/ui.svelte';
   import { afterNavigate } from '$app/navigation';
   import { consoleNav } from '$lib/console-nav';
+  import { orgRoleLabel } from '$lib/role-label';
 
   interface OrgOption { id: string; name: string; slug: string; role: string; }
 
@@ -45,7 +46,7 @@
   );
 
   const userRoleLabel = $derived(
-    currentOrg?.role ?? (isPlatformAdmin ? 'platform admin' : '')
+    currentOrg?.role ? orgRoleLabel(currentOrg.role, t) : isPlatformAdmin ? t.platformOrgs.platformAdmin : ''
   );
 
   let userMenuOpen = $state(false);
@@ -54,11 +55,11 @@
   // all three, so a per-theme accent dot would say nothing. Warm's page colour is
   // a near-twin of slate's and indistinguishable at 9px, so warm shows the most
   // saturated tone of its own paper ramp (its --border value) instead.
-  const THEMES = [
-    { id: 'slate', label: 'Slate', dot: '#f9f9f7' },
-    { id: 'dark',  label: 'Dark',  dot: '#181c1a' },
-    { id: 'warm',  label: 'Warm',  dot: '#e5ddd2' },
-  ] as const;
+  const THEMES = $derived([
+    { id: 'slate', label: t.settingsPages.themeSlate, dot: '#f9f9f7' },
+    { id: 'dark',  label: t.settingsPages.themeDark,  dot: '#181c1a' },
+    { id: 'warm',  label: t.settingsPages.themeWarm,  dot: '#e5ddd2' },
+  ] as const);
 
   function setTheme(id: string) {
     themeStore.set(id);

@@ -2,7 +2,8 @@
   import { enhance } from '$app/forms';
   import { t, getLocale } from '$lib/i18n.svelte';
   import { confirmFirst } from '$lib/forms';
-  import { formatDateTime } from '$lib/format';
+  import { formatDateTime, localeTag } from '$lib/format';
+  import { planName } from '$lib/plans';
   import type { PageData, ActionData } from './$types';
 
   let { data, form }: { data: PageData; form: ActionData } = $props();
@@ -14,7 +15,7 @@
   const PLAN_IDS = ['free', 'starter', 'professional', 'enterprise'] as const;
 
   function money(cents: number, currency: string) {
-    return new Intl.NumberFormat('en-GB', { style: 'currency', currency: (currency || 'eur').toUpperCase() }).format(cents / 100);
+    return new Intl.NumberFormat(localeTag(getLocale()), { style: 'currency', currency: (currency || 'eur').toUpperCase() }).format(cents / 100);
   }
   function fmtDate(d: string | number) {
     const date = typeof d === 'number' ? new Date(d * 1000) : new Date(/^\d{4}-\d{2}-\d{2} /.test(d) ? d.replace(' ', 'T') + 'Z' : d);
@@ -68,9 +69,9 @@
     <div class="row-list">
       <div class="row-item kv">
         <span>{t.platformOrgs.currentPlan}</span>
-        <b><span class="badge badge-{currentPlan}">{currentPlan}</span></b>
+        <b><span class="badge badge-{currentPlan}">{planName(currentPlan)}</span></b>
       </div>
-      <div class="row-item kv"><span>{t.platformOrgs.statusLabel}</span><b>{data.sub?.status ?? 'free'}</b></div>
+      <div class="row-item kv"><span>{t.platformOrgs.statusLabel}</span><b>{data.sub?.status ? ((t.accountPages.statusLabels as Record<string, string>)[data.sub.status] ?? data.sub.status) : '—'}</b></div>
       {#if data.sub?.current_period_end}
         <div class="row-item kv"><span>{t.platformOrgs.renewsEnds}</span><b>{fmtDate(data.sub.current_period_end)}</b></div>
       {/if}
@@ -124,7 +125,7 @@
     </form>
 
     <form method="POST" action="?/setPartner" use:enhance class="plan-form">
-      <label for="partner">Partner Hallify</label>
+      <label for="partner">{t.platformOrgs.partnerLabel}</label>
       <div class="plan-row">
         <label style="display:flex;align-items:center;gap:10px;font-size:12px"><input id="partner" name="partner" type="checkbox" checked={!!data.org.is_hallify_partner} />{getLocale() === 'en' ? 'Eligible for featured venues' : 'Zaradiť medzi partnerov vo výbere priestorov'}</label>
         <button type="submit" class="btn-action">{t.platformOrgs.save}</button>
@@ -219,7 +220,7 @@
           <div role="row" class="row-item">
             <span role="cell" class="mono">{inv.number ?? inv.id}</span>
             <span role="cell">{fmtDate(inv.created)}</span>
-            <span role="cell"><span class="ist ist-{inv.status}">{inv.status ?? '—'}</span></span>
+            <span role="cell"><span class="ist ist-{inv.status}">{inv.status ? ((t.platformOrgs.invoiceStatus as Record<string, string>)[inv.status] ?? inv.status) : '—'}</span></span>
             <span role="cell" class="r">{money(inv.amount_paid || inv.amount_due, inv.currency)}</span>
             <span role="cell" class="r">
               {#if inv.hosted_invoice_url}<a href={inv.hosted_invoice_url} target="_blank" rel="noopener" class="link">{t.platformOrgs.view}</a>{/if}

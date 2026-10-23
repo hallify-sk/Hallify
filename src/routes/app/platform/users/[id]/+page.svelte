@@ -3,6 +3,7 @@
   import { planName } from '$lib/plans';
   import { t, getLocale } from '$lib/i18n.svelte';
   import { formatDate } from '$lib/format';
+  import { orgRoleLabel } from '$lib/role-label';
   import type { PageData, ActionData } from './$types';
   let { data, form }: { data: PageData; form: ActionData } = $props();
 
@@ -91,7 +92,7 @@
           <li class="row-item">
             <a href="/app/platform/orgs/{m.org_id}" class="org-name">{m.name}</a>
             <span class="org-meta">
-              <span class="role role-{m.role}">{m.role}</span>
+              <span class="role role-{m.role}">{orgRoleLabel(m.role, t)}</span>
               <span class="plan-badge plan-{m.plan ?? 'free'}">{planName(m.plan)}</span>
               <span class="muted">{m.slug}</span>
             </span>

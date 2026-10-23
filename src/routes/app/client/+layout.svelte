@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { t } from '$lib/i18n.svelte';
 	import type { LayoutData } from './$types';
 
 	interface Props { data: LayoutData; children: import('svelte').Snippet; }
@@ -16,13 +17,13 @@
 			<span>Hallify</span>
 		</a>
 		<nav class="nav">
-			<a href="/app/halls">Browse halls</a>
-			<a href="/app/client/reservations">My reservations</a>
+			<a href="/app/halls">{t.clientArea.browseHalls}</a>
+			<a href="/app/client/reservations">{t.clientArea.myReservations}</a>
 		</nav>
 		<div class="user-menu">
-			<a href="/app/profile" class="avatar" title="Profile">{initials}</a>
+			<a href="/app/profile" class="avatar" title={t.nav.profile}>{initials}</a>
 			<form action="/app/logout" method="POST">
-				<button type="submit" class="logout-btn">Sign out</button>
+				<button type="submit" class="logout-btn">{t.nav.signOut}</button>
 			</form>
 		</div>
 	</header>

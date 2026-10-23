@@ -1,18 +1,13 @@
 <script lang="ts">
 	import { reveal } from '$lib/reveal';
+	import { t, getLocale } from '$lib/i18n.svelte';
+	import { statusLabel } from '$lib/reservationStatus';
+	import { formatDate as fmtLocaleDate } from '$lib/format';
 	import type { PageData } from './$types';
 
 	interface Props { data: PageData; }
 	const { data }: Props = $props();
 
-	const STATUS_LABEL: Record<string, string> = {
-		pending: 'Pending',
-		waiting_payment: 'Awaiting payment',
-		approved: 'Approved',
-		planned: 'Planned',
-		completed: 'Completed',
-		cancelled: 'Cancelled',
-	};
 	const STATUS_CLASS: Record<string, string> = {
 		pending: 'badge-warning',
 		waiting_payment: 'badge-warning',
@@ -23,17 +18,17 @@
 	};
 
 	function fmtDate(d: Date | string) {
-		return new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+		return fmtLocaleDate(typeof d === 'string' ? d.slice(0, 10) : d, getLocale());
 	}
 </script>
 
-<svelte:head><title>My reservations – Hallify</title></svelte:head>
+<svelte:head><title>{t.clientArea.myReservations} – Hallify</title></svelte:head>
 
 <div class="page">
 	<section class="section section--lead section--flush">
 		<div class="section-head section-head--row">
-			<h1>My reservations</h1>
-			<a href="/app/halls" class="browse-link">Browse halls →</a>
+			<h1>{t.clientArea.myReservations}</h1>
+			<a href="/app/halls" class="browse-link">{t.clientArea.browseHalls} →</a>
 		</div>
 	</section>
 
@@ -43,7 +38,7 @@
 				<span class="icon-tile" aria-hidden="true">
 					<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
 				</span>
-				<p>No reservations yet. <a href="/app/halls">Browse halls</a> to make your first booking.</p>
+				<p>{t.clientArea.noReservationsPre} <a href="/app/halls">{t.clientArea.browseHalls}</a> {t.clientArea.noReservationsPost}</p>
 			</div>
 		{:else}
 			<div class="row-list list">
@@ -54,7 +49,7 @@
 								<div class="card-title">{r.title}</div>
 								<div class="card-sub">{r.hall_name} · {r.org_name}</div>
 							</div>
-							<span class="badge {STATUS_CLASS[r.status] ?? 'badge-muted'}">{STATUS_LABEL[r.status] ?? r.status}</span>
+							<span class="badge {STATUS_CLASS[r.status] ?? 'badge-muted'}">{statusLabel(r.status, getLocale())}</span>
 						</div>
 						<div class="card-meta">
 							<span class="meta-item">

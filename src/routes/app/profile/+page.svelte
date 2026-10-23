@@ -2,12 +2,18 @@
 	import { enhance } from '$app/forms';
 	import { t, getLocale } from '$lib/i18n.svelte';
 	import { formatDate } from '$lib/format';
+	import { orgRoleLabel } from '$lib/role-label';
 	import type { PageData, ActionData } from './$types';
 
 	interface Props { data: PageData; form: ActionData; }
 	const { data, form }: Props = $props();
 
 	const profile = $derived(data.profile);
+	// The role that means something to the user: theirs in the current organisation.
+	// The platform-wide 'user' role ('Používateľ') said nothing; it shows only for admins.
+	const roleText = $derived(
+		data.currentOrg?.role ? orgRoleLabel(data.currentOrg.role, t) : profile.role === 'admin' ? t.users.admin : ''
+	);
 
 	// Changing the sign-in email asks for the current password, so the field appears
 	// as soon as the address differs from the saved one (and stays after a refusal).
@@ -109,10 +115,12 @@
 			<h3>{t.profile.accountInfo}</h3>
 		</div>
 		<div class="row-list">
+			{#if roleText}
 			<div class="row-item">
 				<span class="info-label">{t.users.role}</span>
-				<span class="info-value role-badge">{profile.role === 'admin' ? t.users.admin : t.users.user}</span>
+				<span class="info-value role-badge">{roleText}</span>
 			</div>
+			{/if}
 			<div class="row-item">
 				<span class="info-label">{t.users.registered}</span>
 				<span class="info-value">{formatDate(profile.created_at, getLocale())}</span>

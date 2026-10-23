@@ -2,7 +2,7 @@
 	import { onMount, untrack } from 'svelte';
 	import { t as tr, getLocale } from '$lib/i18n.svelte';
 	import { formatNumber } from '$lib/format';
-	import { migrateToMultiFloor } from '$lib/floorplan-types';
+	import { migrateToMultiFloor, floorDisplayName, zoneDisplayLabel } from '$lib/floorplan-types';
 	import {
 		CHAIR_R, SEAT_R, localChairs, totalChairs, defaultChairSides, tableHitbox, seatHitbox, hitboxesOverlap,
 		hitboxHitsWall, hitboxInRoom, pointInPoly, roomParts, withRoom, partsBBox, partsConnected, rectCovered, roomOutline, roomArea,
@@ -23,6 +23,9 @@
 
 	/** A measurement with fixed decimals in the viewer's style (25,1 m in Slovak, not 25.1 m). */
 	const num = (n: number, digits: number) => formatNumber(n, getLocale(), digits);
+	/** Stored default names ('Floor 2', 'Zone 3') in the viewer's language. */
+	const floorLabel = (name: string | undefined, i: number) => floorDisplayName(name, i, tr.editor.floorDefault);
+	const zoneLabel = (name: string | undefined) => zoneDisplayLabel(name, tr.editor.zoneDefault);
 	// ─── Props ────────────────────────────────────────────────────────────────
 	interface TableType {
 		id: string; name: string; shape: 'rect' | 'round';
@@ -161,7 +164,7 @@
 	const zonesOff = $derived(zonesLocked || !(step === 'zones' || step === 'chairs'));
 
 	// ─── Multi-floor state ────────────────────────────────────────────────────
-	let floors = $state<FloorData[]>([{ id: crypto.randomUUID(), name: 'Floor 1', walls: [], zones: [], tables: [], bounds: null }]);
+	let floors = $state<FloorData[]>([{ id: crypto.randomUUID(), name: tr.editor.floorDefault(1), walls: [], zones: [], tables: [], bounds: null }]);
 	let activeFloorIdx = $state(0);
 
 	// Working copy of active floor (all mutations use these, synced on floor switch)
@@ -328,7 +331,7 @@
 		pushUndo();
 		saveCurrentFloor();
 		const newFloor: FloorData = {
-			id: crypto.randomUUID(), name: `Floor ${floors.length + 1}`,
+			id: crypto.randomUUID(), name: tr.editor.floorDefault(floors.length + 1),
 			walls: [], zones: [], tables: [], seats: [], bounds: null,
 		};
 		floors = [...floors, newFloor];
@@ -357,7 +360,7 @@
 	let confirmRemoveIdx = $state<number | null>(null);
 	function startRename(idx: number) {
 		if (lockFloors) return;
-		renamingIdx = idx; renameValue = floors[idx].name;
+		renamingIdx = idx; renameValue = floorLabel(floors[idx].name, idx);
 	}
 	function commitRename() {
 		if (renamingIdx === null) return;
@@ -1012,7 +1015,7 @@
 		switch (id) {
 			case 'room': return bounds ? `${num(bounds.w, 1)} × ${num(bounds.h, 1)} m · ${num(roomArea(roomRects), 1)} m²` : tr.editor.roomNone;
 			case 'walls': return `${walls.length}`;
-			case 'zones': return zones.length ? zones.slice(0, 2).map(z => z.label).filter(Boolean).join(', ') + (zones.length > 2 ? ` +${zones.length - 2}` : '') || `${zones.length}` : '0';
+			case 'zones': return zones.length ? zones.slice(0, 2).map(z => zoneLabel(z.label)).filter(Boolean).join(', ') + (zones.length > 2 ? ` +${zones.length - 2}` : '') || `${zones.length}` : '0';
 			case 'tables': return `${tables.length} ${tr.units.tables(tables.length)} · ${totalSeats} ${tr.units.seats(totalSeats)}`;
 			case 'chairs': return `${seats.length}`;
 			case 'guests': return tr.editor.seatedOf(totalAssigned, guests.length);
@@ -1384,7 +1387,7 @@
 		const points = [{ x: x0, y: y0 }, { x: x1, y: y0 }, { x: x1, y: y1 }, { x: x0, y: y1 }];
 		const id = crypto.randomUUID();
 		if (tool === 'wall') walls = [...walls, { id, points }];
-		else zones = [...zones, { id, points, color: zoneColor, label: `Zone ${zones.length + 1}` }];
+		else zones = [...zones, { id, points, color: zoneColor, label: tr.editor.zoneDefault(zones.length + 1) }];
 		// Selected, so its edges take new corners straight away.
 		selectedId = id;
 	}
@@ -1813,7 +1816,7 @@
 		if (drawPts.length < 3) return;
 		pushUndo();
 		if (tool === 'wall') walls = [...walls, { id: crypto.randomUUID(), points: [...drawPts] }];
-		else zones = [...zones, { id: crypto.randomUUID(), points: [...drawPts], color: zoneColor, label: `Zone ${zones.length + 1}` }];
+		else zones = [...zones, { id: crypto.randomUUID(), points: [...drawPts], color: zoneColor, label: tr.editor.zoneDefault(zones.length + 1) }];
 		drawPts = []; isDrawing = false;
 	}
 
@@ -2139,9 +2142,9 @@
 					onblur={commitRename} />
 			{:else}
 				<button type="button" class="floor-tab" class:active={i === activeFloorIdx} role="tab" aria-selected={i === activeFloorIdx}
-					title={i === activeFloorIdx && !lockFloors ? tr.editor.renameFloor : floor.name}
+					title={i === activeFloorIdx && !lockFloors ? tr.editor.renameFloor : floorLabel(floor.name, i)}
 					onclick={() => { if (i !== activeFloorIdx) loadFloor(i); else startRename(i); }}>
-					{floor.name}
+					{floorLabel(floor.name, i)}
 					{#if i === activeFloorIdx && !lockFloors}
 						<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4z"/></svg>
 					{/if}
@@ -2153,7 +2156,7 @@
 			{#if floors.length > 1}
 				{#if confirmRemoveIdx === activeFloorIdx}
 					<span class="floor-confirm" role="alertdialog">
-						{tr.editor.removeFloorConfirm(floors[activeFloorIdx].name)}
+						{tr.editor.removeFloorConfirm(floorLabel(floors[activeFloorIdx].name, activeFloorIdx))}
 						<button type="button" class="fc-yes" onclick={() => removeFloor(activeFloorIdx)}>{tr.editor.confirmRemove}</button>
 						<button type="button" class="fc-no" onclick={() => confirmRemoveIdx = null}>{tr.common.cancel}</button>
 					</span>
@@ -2174,9 +2177,9 @@
 			<b>{tr.editor.smallScreenTitle}</b>
 			<p>{tr.editor.smallScreenText}</p>
 		</div>
-		{#each allFloors as f (f.id)}
+		{#each allFloors as f, fi (f.id)}
 			<section class="narrow-floor">
-				{#if allFloors.length > 1}<h3>{f.name}</h3>{/if}
+				{#if allFloors.length > 1}<h3>{floorLabel(f.name, fi)}</h3>{/if}
 				<FloorplanPrint floor={f} {guests} numbers={tableNums} />
 			</section>
 		{/each}
@@ -2393,7 +2396,7 @@
 						{@const cx = xs.reduce((s, v) => s + v, 0) / xs.length}
 						{@const cy = ys.reduce((s, v) => s + v, 0) / ys.length}
 						{@const widthPx = (Math.max(...xs) - Math.min(...xs)) * zoom}
-						{@const lines = wrapLabel(zone.label, Math.max(4, Math.floor((widthPx - 8) / 7)))}
+						{@const lines = wrapLabel(zoneLabel(zone.label), Math.max(4, Math.floor((widthPx - 8) / 7)))}
 						<text x={wx(cx)} y={wy(cy)} text-anchor="middle" dominant-baseline="middle"
 							font-size="12" font-weight="600" fill={zone.color} pointer-events="none"
 							style="paint-order:stroke" stroke="rgba(255,255,255,0.85)" stroke-width="3">
@@ -3032,11 +3035,11 @@
 				{#if (step === 'zones' || step === 'chairs') && (tool === 'zone' || (selectedZone && zoneEditable(selectedZone.id)))}
 					{@const Z = selectedZone && zoneEditable(selectedZone.id) ? selectedZone : null}
 					<section>
-						<div class="sec-title">{Z ? Z.label || tr.editor.zoneOptions : tr.editor.zoneNew}</div>
+						<div class="sec-title">{Z ? zoneLabel(Z.label) || tr.editor.zoneOptions : tr.editor.zoneNew}</div>
 						{#if Z}
 							<div class="field">
 								<label for="z-lbl">{tr.common.name}</label>
-								<input id="z-lbl" type="text" value={Z.label}
+								<input id="z-lbl" type="text" value={zoneLabel(Z.label)}
 									oninput={(e) => updateZone({ label: (e.target as HTMLInputElement).value })}/>
 							</div>
 						{/if}
@@ -3064,7 +3067,7 @@
 						{#if zones.length}
 							<ul class="obj-list">
 								{#each zones as z}
-									<li><button type="button" class:on={selectedId === z.id} onclick={() => { selectedId = z.id; tool = 'select'; }}><i style="background:{z.color}"></i>{z.label || tr.editor.zoneOptions}</button></li>
+									<li><button type="button" class:on={selectedId === z.id} onclick={() => { selectedId = z.id; tool = 'select'; }}><i style="background:{z.color}"></i>{zoneLabel(z.label) || tr.editor.zoneOptions}</button></li>
 								{/each}
 							</ul>
 						{/if}

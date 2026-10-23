@@ -1,5 +1,6 @@
 <script lang="ts">
-	import type { FloorData, TableObj, Guest, Point } from '$lib/floorplan-types';
+	import { zoneDisplayLabel, type FloorData, type TableObj, type Guest, type Point } from '$lib/floorplan-types';
+	import { t as tr } from '$lib/i18n.svelte';
 	import { roomOutlinePath, roomParts } from '$lib/floorplan-geometry';
 
 	interface Props {
@@ -126,7 +127,7 @@
 		{#if z.label && z.points.length}
 			{@const at = zoneLabel(z.points)}
 			<text x={at.x} y={at.y} text-anchor="middle" dominant-baseline="central"
-				font-size={at.size} font-weight="600" fill="var(--text-muted)" letter-spacing="0.02">{z.label}</text>
+				font-size={at.size} font-weight="600" fill="var(--text-muted)" letter-spacing="0.02">{zoneDisplayLabel(z.label, tr.editor.zoneDefault)}</text>
 		{/if}
 	{/each}
 	<!-- walls (closed filled polygons, matching the editor) -->

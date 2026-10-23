@@ -5,7 +5,7 @@
  * Shared by the staff and the client manifest, and by the CSV export, so all three
  * name a table the same way.
  */
-import type { FloorData, Guest, MultiFloorState } from './floorplan-types';
+import { floorDisplayName, type FloorData, type Guest, type MultiFloorState } from './floorplan-types';
 import { tableNumbers, tableTag } from './floorplan-layout';
 
 export interface ManifestSeatView { idx: number; guest: Guest | null }
@@ -51,6 +51,6 @@ export function manifestFloors(layout: MultiFloorState, floorName: (i: number) =
 		for (const t of f.tables ?? []) for (const a of t.assignments ?? []) if (a) seatedIds.add(a);
 		for (const s of f.seats ?? []) if (s.assignment) seatedIds.add(s.assignment);
 		const totalSeats = (f.tables ?? []).reduce((n, t) => n + (t.assignments ?? []).length, 0) + (f.seats?.length ?? 0);
-		return { name: f.name || floorName(fi), idx: fi, floor: f, tables, standalone, seatedCount: seatedIds.size, totalSeats };
+		return { name: floorDisplayName(f.name, fi, (n) => floorName(n - 1)), idx: fi, floor: f, tables, standalone, seatedCount: seatedIds.size, totalSeats };
 	});
 }

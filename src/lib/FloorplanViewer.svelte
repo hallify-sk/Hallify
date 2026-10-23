@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { RSVP_ENABLED } from '$lib/features';
-	import { migrateToMultiFloor } from '$lib/floorplan-types';
+	import { migrateToMultiFloor, floorDisplayName, zoneDisplayLabel } from '$lib/floorplan-types';
 	import { roomOutlinePath, roomParts } from '$lib/floorplan-geometry';
 	import type { FloorData, MultiFloorState, WallObj, ZoneObj, TableObj, Guest, Point, TableShape } from '$lib/floorplan-types';
 
@@ -93,7 +93,7 @@
 	// ─── Load layout ──────────────────────────────────────────────────────────
 	$effect(() => {
 		if (!layoutJson) {
-			floors = [{ id: crypto.randomUUID(), name: 'Floor 1', walls: [], zones: [], tables: [], bounds: null }];
+			floors = [{ id: crypto.randomUUID(), name: tr.editor.floorDefault(1), walls: [], zones: [], tables: [], bounds: null }];
 			guests = [];
 			activeFloorIdx = 0;
 			walls = []; zones = []; tables = [];
@@ -401,7 +401,7 @@
 				{#each floors as floor, i}
 					<button class="floor-tab" class:active={i === activeFloorIdx}
 						onclick={() => switchFloor(i)}>
-						{floor.name}
+						{floorDisplayName(floor.name, i, tr.editor.floorDefault)}
 					</button>
 				{/each}
 			</div>
@@ -484,7 +484,7 @@
 					{@const cx = z.points.reduce((s,p) => s+p.x,0)/z.points.length}
 					{@const cy = z.points.reduce((s,p) => s+p.y,0)/z.points.length}
 					<text x={wx(cx)} y={wy(cy)} text-anchor="middle" dominant-baseline="middle"
-						font-size="11" fill={z.color} font-weight="600" pointer-events="none">{z.label}</text>
+						font-size="11" fill={z.color} font-weight="600" pointer-events="none">{zoneDisplayLabel(z.label, tr.editor.zoneDefault)}</text>
 				{/if}
 			{/each}
 

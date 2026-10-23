@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { OrgContext } from '../../app.d';
   import { t } from '$lib/i18n.svelte';
+  import { orgRoleLabel } from '$lib/role-label';
   import { afterNavigate } from '$app/navigation';
 
   interface OrgOption {
@@ -96,7 +97,7 @@
                 <span class="org-option-name">{org.name}</span>
                 <!-- The slug tells apart organisations that share a name. -->
                 <span class="org-option-meta">
-                  <span class="org-option-role" class:viewas={org.role === 'view as'}>{org.role}</span>
+                  <span class="org-option-role" class:viewas={org.role === 'view as'}>{org.role === 'view as' ? t.platformOrgs.viewAs : orgRoleLabel(org.role, t)}</span>
                   {#if org.slug}<span class="org-option-slug">· {org.slug}</span>{/if}
                 </span>
               </div>

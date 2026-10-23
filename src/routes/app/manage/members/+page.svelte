@@ -3,6 +3,7 @@
   import { confirmFirst } from '$lib/forms';
   import { formatDate } from '$lib/format';
   import { getLocale, t } from '$lib/i18n.svelte';
+  import { roleDisplayName } from '$lib/role-label';
   import { ELEVATED, PERMISSION_GROUPS, type Permission } from '$lib/permissions';
   import type { PageData, ActionData } from './$types';
   let { data, form }: { data: PageData; form: ActionData } = $props();
@@ -114,7 +115,7 @@
               {#if role}
                 <span class="role-chip">
                   <span class="role-dot" style="background:{roleColor(role.color)}"></span>
-                  {role.name}
+                  {roleDisplayName(role.name, t)}
                   {#if role.isDefault}<span class="role-def">{t.peopleArea.defaultRole}</span>{/if}
                 </span>
               {/if}
@@ -222,7 +223,7 @@
                         disabled={!role.assignable}
                       />
                       <span class="role-dot" style="background:{roleColor(role.color)}"></span>
-                      <span class="role-pick-name">{role.name}</span>
+                      <span class="role-pick-name">{roleDisplayName(role.name, t)}</span>
                       {#if !role.assignable}
                         <span class="lock" title={t.peopleArea.errors.roleOutranksYou}>
                           <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="11" width="16" height="10" rx="1"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>

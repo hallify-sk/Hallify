@@ -2,6 +2,7 @@
   import { planName } from '$lib/plans';
   import { t, getLocale } from '$lib/i18n.svelte';
   import { formatDate } from '$lib/format';
+  import { statusLabel } from '$lib/reservationStatus';
   import type { PageData } from './$types';
   let { data }: { data: PageData } = $props();
   const s = $derived(data.stats);
@@ -152,7 +153,7 @@
         <div class="row-list">
           {#each data.plans as p}
             <div class="row-item mini-row">
-              <span class="badge badge-{p.plan}">{p.plan}</span>
+              <span class="badge badge-{p.plan}">{planName(p.plan)}</span>
               <span class="num">{p.count}</span>
             </div>
           {/each}
@@ -163,7 +164,7 @@
         <div class="row-list">
           {#each data.reservationStatus as r}
             <div class="row-item mini-row">
-              <span class="muted">{r.status}</span>
+              <span class="muted">{statusLabel(r.status, getLocale())}</span>
               <span class="num">{r.count}</span>
             </div>
           {/each}

@@ -1,18 +1,12 @@
 <script lang="ts">
 	import { reveal } from '$lib/reveal';
+	import { t, getLocale } from '$lib/i18n.svelte';
+	import { statusLabel } from '$lib/reservationStatus';
+	import { formatDate as fmtLocaleDate } from '$lib/format';
 	import type { PageData } from './$types';
 
 	interface Props { data: PageData; }
 	const { data }: Props = $props();
-
-	const STATUS_LABEL: Record<string, string> = {
-		pending: 'Pending',
-		waiting_payment: 'Awaiting payment',
-		approved: 'Approved',
-		planned: 'Planned',
-		completed: 'Completed',
-		cancelled: 'Cancelled',
-	};
 
 	const STATUS_CLASS: Record<string, string> = {
 		pending: 'badge-warning',
@@ -24,21 +18,21 @@
 	};
 
 	function fmtDate(d: Date | string) {
-		return new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+		return fmtLocaleDate(typeof d === 'string' ? d.slice(0, 10) : d, getLocale());
 	}
 </script>
 
-<svelte:head><title>Dashboard – Hallify</title></svelte:head>
+<svelte:head><title>{t.nav.dashboard} – Hallify</title></svelte:head>
 
 <div class="page">
 
 	<section class="section section--lead section--flush">
 		<div class="section-head greeting">
-			<h1>Welcome back, {data.user.first_name}!</h1>
+			<h1>{t.clientArea.welcome(data.user.first_name)}</h1>
 			{#if data.upcomingCount > 0}
-				<p>You have <strong>{data.upcomingCount}</strong> upcoming reservation{data.upcomingCount > 1 ? 's' : ''}.</p>
+				<p>{t.clientArea.upcomingPre} <strong>{data.upcomingCount}</strong> {t.clientArea.upcomingWord(data.upcomingCount)}.</p>
 			{:else}
-				<p>No upcoming reservations. Find a hall and book one!</p>
+				<p>{t.clientArea.noUpcoming}</p>
 			{/if}
 		</div>
 
@@ -55,8 +49,8 @@
 				</svg>
 			</span>
 			<div>
-				<strong>Browse halls</strong>
-				<span>Discover and book the perfect venue</span>
+				<strong>{t.clientArea.browseHalls}</strong>
+				<span>{t.clientArea.browseHallsSub}</span>
 			</div>
 			<span class="cta-arrow">→</span>
 		</a>
@@ -65,8 +59,8 @@
 	{#if data.reservations.length > 0}
 		<section class="section" use:reveal>
 			<div class="section-head section-head--row">
-				<h2>My reservations</h2>
-				<a href="/app/client/reservations">View all →</a>
+				<h2>{t.clientArea.myReservations}</h2>
+				<a href="/app/client/reservations">{t.clientArea.viewAll} →</a>
 			</div>
 			<div class="row-list reservation-list">
 				{#each data.reservations as r}
@@ -76,7 +70,7 @@
 							<span class="res-hall">{r.hall_name} · {r.org_name}</span>
 						</div>
 						<span class="res-date">{fmtDate(r.event_date)}</span>
-						<span class="badge {STATUS_CLASS[r.status] ?? 'badge-muted'}">{STATUS_LABEL[r.status] ?? r.status}</span>
+						<span class="badge {STATUS_CLASS[r.status] ?? 'badge-muted'}">{statusLabel(r.status, getLocale())}</span>
 					</div>
 				{/each}
 			</div>
@@ -87,7 +81,7 @@
 				<span class="icon-tile" aria-hidden="true">
 					<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
 				</span>
-				<p>You haven't made any reservations yet.</p>
+				<p>{t.clientArea.noReservations}</p>
 			</div>
 		</section>
 	{/if}

@@ -7,7 +7,7 @@
 	import FloorplanPrint from '$lib/FloorplanPrint.svelte';
 	import { tableNumbers, tableTag } from '$lib/floorplan-layout';
 	import { roomArea, roomParts, totalChairs } from '$lib/floorplan-geometry';
-	import type { MultiFloorState } from '$lib/floorplan-types';
+	import { floorDisplayName, zoneDisplayLabel, type MultiFloorState } from '$lib/floorplan-types';
 	import { t, getLocale } from '$lib/i18n.svelte';
 
 	interface Props {
@@ -30,10 +30,10 @@
 		}));
 		return {
 			f,
-			name: f.name || `${t.manifest.csvFloor} ${i + 1}`,
+			name: floorDisplayName(f.name, i, t.editor.floorDefault),
 			size: f.bounds ? `${num(Number(f.bounds.w))} × ${num(Number(f.bounds.h))} m` : null,
 			area: parts.length ? `${num(roomArea(parts))} m²` : null,
-			zones: (f.zones ?? []).map((z) => z.label).filter(Boolean),
+			zones: (f.zones ?? []).map((z) => zoneDisplayLabel(z.label, t.editor.zoneDefault)).filter(Boolean),
 			tables,
 			seats: tables.reduce((n, tb) => n + tb.seats, 0) + (f.seats?.length ?? 0)
 		};

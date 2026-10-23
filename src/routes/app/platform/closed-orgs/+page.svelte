@@ -3,6 +3,8 @@
   import { planName } from '$lib/plans';
   import { t, getLocale } from '$lib/i18n.svelte';
   import { formatDate } from '$lib/format';
+  import { orgRoleLabel } from '$lib/role-label';
+  import { statusLabel } from '$lib/reservationStatus';
   let { data }: { data: PageData } = $props();
 
   let openId = $state<string | null>(null);
@@ -64,7 +66,7 @@
                   <div class="row-list sub-rows member-rows" role="table">
                     <div role="row" class="row-item row-head"><span role="columnheader">{t.platformMisc.colName}</span><span role="columnheader">{t.platformMisc.colEmail}</span><span role="columnheader">{t.platformMisc.colRole}</span><span role="columnheader">{t.platformMisc.colJoined}</span></div>
                     {#each o.snapshot.members as m}
-                      <div role="row" class="row-item"><span role="cell">{m.first_name} {m.last_name}</span><span role="cell" class="muted">{m.email}</span><span role="cell" class="muted">{m.role}</span><span role="cell" class="muted">{fmt(m.joined_at)}</span></div>
+                      <div role="row" class="row-item"><span role="cell">{m.first_name} {m.last_name}</span><span role="cell" class="muted">{m.email}</span><span role="cell" class="muted">{orgRoleLabel(m.role, t)}</span><span role="cell" class="muted">{fmt(m.joined_at)}</span></div>
                     {/each}
                   </div>
                 {:else}<p class="muted small">{t.platformMisc.noMembersRecorded}</p>{/if}
@@ -74,7 +76,7 @@
                   <div class="row-list sub-rows reservation-rows" role="table">
                     <div role="row" class="row-item row-head"><span role="columnheader">{t.platformMisc.colTitle}</span><span role="columnheader">{t.platformMisc.colDate}</span><span role="columnheader">{t.platformMisc.colHall}</span><span role="columnheader">{t.platformMisc.colGuests}</span><span role="columnheader">{t.platformMisc.colStatus}</span></div>
                     {#each o.snapshot.reservations as r}
-                      <div role="row" class="row-item"><span role="cell">{r.title}</span><span role="cell" class="muted">{fmt(r.event_date)}</span><span role="cell" class="muted">{r.hall_name ?? '—'}</span><span role="cell" class="muted">{r.num_guests ?? '—'}</span><span role="cell" class="muted">{r.status}</span></div>
+                      <div role="row" class="row-item"><span role="cell">{r.title}</span><span role="cell" class="muted">{fmt(r.event_date)}</span><span role="cell" class="muted">{r.hall_name ?? '—'}</span><span role="cell" class="muted">{r.num_guests ?? '—'}</span><span role="cell" class="muted">{statusLabel(r.status, getLocale())}</span></div>
                     {/each}
                   </div>
                 {:else}<p class="muted small">{t.platformMisc.noReservationsRecorded}</p>{/if}

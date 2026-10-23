@@ -70,6 +70,22 @@ export function migrateChairCounts(t: TableObj): TableObj {
 	return { ...t, chairsTop: 0, chairsBottom: 0, chairsLeft: Math.ceil(n / 2), chairsRight: n - Math.ceil(n / 2) };
 }
 
+/** Floors and zones drawn before their default names were translated are stored as
+ *  'Floor 2' / 'Zone 3'. Show such a default in the viewer's language (`label(2)`);
+ *  a name someone typed is kept as it is. */
+export function floorDisplayName(name: string | null | undefined, index: number, label: (n: number) => string): string {
+	const s = (name ?? '').trim();
+	if (!s) return label(index + 1);
+	const m = /^Floor (\d+)$/.exec(s);
+	return m ? label(Number(m[1])) : s;
+}
+
+export function zoneDisplayLabel(name: string | null | undefined, label: (n: number) => string): string {
+	const s = name ?? '';
+	const m = /^Zone (\d+)$/.exec(s.trim());
+	return m ? label(Number(m[1])) : s;
+}
+
 /** Convert any floorplan JSON (legacy or multi-floor) into MultiFloorState.
  *  Accepts either a parsed object or a raw JSON string (DB columns are often
  *  passed straight through without `fromJson`). */

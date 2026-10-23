@@ -7,6 +7,7 @@ import { escapeHtml, renderLayout, renderTemplate } from '$lib/server/email-layo
 import { isUserLocale, orgDefaultLocale, recipientLocale, storedLocaleForEmail } from '$lib/server/user-locale';
 import { statusLabel } from '$lib/reservationStatus';
 import { formatDate } from '$lib/format';
+import { st } from '$lib/i18n-server';
 import { orgPublicBaseUrl } from '$lib/orgUrl';
 
 // Email is sent platform-wide via the Brevo transactional HTTP API
@@ -777,8 +778,8 @@ export const sendTestEmail = inBackground(async function sendTestEmail(
 	return {
 		ok: false,
 		error: health.lastError
-			? `${health.lastError} — check the BREVO_API_KEY secret and that hallify.sk is an authenticated sender in Brevo.`
-			: 'Check the BREVO_API_KEY secret and that hallify.sk is an authenticated sender in Brevo.',
+			? `${health.lastError} — ${st(locale).platformMisc.testEmailCheckBrevo}`
+			: st(locale).platformMisc.testEmailCheckBrevo,
 	};
 });
 

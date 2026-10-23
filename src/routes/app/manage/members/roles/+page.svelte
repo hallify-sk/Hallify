@@ -2,6 +2,7 @@
 	import { enhance } from '$app/forms';
 	import type { SubmitFunction } from '@sveltejs/kit';
 	import { t } from '$lib/i18n.svelte';
+	import { roleDisplayName } from '$lib/role-label';
 	import { ELEVATED, PERMISSION_GROUPS, PERMISSIONS, sameRoleName, type Permission } from '$lib/permissions';
 	import type { PageData, ActionData } from './$types';
 
@@ -148,7 +149,7 @@
 
 					<div class="r-info">
 						<div class="r-name-row">
-							<span class="r-name">{role.name}</span>
+							<span class="r-name">{roleDisplayName(role.name, t)}</span>
 							{#if role.isDefault}
 								<span class="pill pill--default" title={t.rolesAdmin.defaultRoleHint}>
 									{t.rolesAdmin.defaultRole}

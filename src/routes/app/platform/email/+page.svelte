@@ -41,7 +41,7 @@
 	const previewDoc = (k: string) => `<!doctype html><meta charset="utf-8"><body style="font-family:system-ui,sans-serif;font-size:14px;color:#202322;padding:12px;margin:0">${previewTemplate(drafts[k] ?? '')}</body>`;
 </script>
 
-<svelte:head><title>Email – Platform – Hallify</title></svelte:head>
+<svelte:head><title>{t.platformMisc.emailTitle} – {t.platformOrgs.platformAdmin} – Hallify</title></svelte:head>
 
 <div class="wrap page">
 	<section class="section section--lead">
@@ -178,7 +178,7 @@
 							<span role="cell"><span class="tpl-badge">{e.template ?? '-'}</span></span>
 							<span role="cell">
 								<span class="dot" class:dot-ok={e.status === 'sent'} class:dot-bad={e.status === 'failed'}></span>
-								<span class="status-txt" title={e.error ?? ''}>{e.status}</span>
+								<span class="status-txt" title={e.error ?? ''}>{(t.platformMisc.emailStatus as Record<string, string>)[e.status] ?? e.status}</span>
 							</span>
 							<span role="cell" class="td-date">{fmtDate(e.created_at)}</span>
 						</div>

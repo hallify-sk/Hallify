@@ -3,6 +3,7 @@
   import { confirmFirst } from '$lib/forms';
   import { formatDate } from '$lib/format';
   import { getLocale, t } from '$lib/i18n.svelte';
+  import { roleDisplayName } from '$lib/role-label';
   import type { PageData, ActionData } from './$types';
   let { data, form }: { data: PageData; form: ActionData } = $props();
 
@@ -134,7 +135,7 @@
               <label class="role-pick">
                 <input type="checkbox" name="role_ids" value={role.id} />
                 <span class="role-dot" style="background:{roleColor(role.color)}"></span>
-                <span>{role.name}</span>
+                <span>{roleDisplayName(role.name, t)}</span>
               </label>
             {/each}
           </div>
@@ -179,7 +180,7 @@
                 {#if role}
                   <span class="role-chip">
                     <span class="role-dot" style="background:{roleColor(role.color)}"></span>
-                    {role.name}
+                    {roleDisplayName(role.name, t)}
                   </span>
                 {/if}
               {/each}

@@ -278,11 +278,11 @@
 			{#if !isAuthPage && data.currentOrg?.impersonated}
 				<div class="imp-banner">
 					<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-					<span>Viewing <strong>{data.currentOrg.name}</strong> as platform admin</span>
+					<span>{t.platformOrgs.viewingAsPre} <strong>{data.currentOrg.name}</strong> {t.platformOrgs.viewingAsPost}</span>
 					<form method="POST" action="/app/org/switch" class="imp-exit-form">
 						<input type="hidden" name="org_id" value="" />
 						<input type="hidden" name="return_to" value="/app/platform/orgs" />
-						<button type="submit" class="imp-exit">Exit</button>
+						<button type="submit" class="imp-exit">{t.platformOrgs.exitViewAs}</button>
 					</form>
 				</div>
 			{/if}

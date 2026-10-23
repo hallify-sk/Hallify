@@ -18,20 +18,20 @@ export const POST: RequestHandler = async (event) => {
 		RATE_LIMITS.upload
 	);
 	if (!rl.ok) {
-		error(429, `Too many uploads. Try again in ${rl.retryAfterMinutes} min.`);
+		error(429, st(event.locals.locale).imageDialog.tooManyUploads(rl.retryAfterMinutes));
 	}
 
 	const r2 = event.platform!.env.R2;
 	if (!r2) {
-		error(503, 'Image upload is not configured. R2 binding is missing.');
+		error(503, st(event.locals.locale).imageDialog.uploadUnavailable);
 	}
 
 	const formData = await event.request.formData();
 	const file = formData.get('file');
 
-	if (!(file instanceof File)) error(400, 'No file provided.');
-	if (!ALLOWED_TYPES.includes(file.type)) error(400, 'Only JPEG, PNG, WebP, and GIF images are allowed.');
-	if (file.size > MAX_SIZE) error(400, 'File exceeds 8 MB limit.');
+	if (!(file instanceof File)) error(400, st(event.locals.locale).imageDialog.noFile);
+	if (!ALLOWED_TYPES.includes(file.type)) error(400, st(event.locals.locale).imageDialog.onlyImageTypes);
+	if (file.size > MAX_SIZE) error(400, st(event.locals.locale).imageDialog.fileTooLarge(MAX_SIZE / 1024 / 1024));
 
 	// The declared type is only the browser's (or a script's) word for it. What is
 	// stored, and the Content-Type it is served with, come from the bytes.

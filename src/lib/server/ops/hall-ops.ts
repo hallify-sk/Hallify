@@ -78,7 +78,7 @@ export async function addHallExtra(db: Db, orgId: string, plan: PlanId, hallId: 
 	if (!n.name) return { ok: false, status: 400, error: e.nameRequired };
 	if (!(await canAddExtra(db, hallId, plan))) {
 		const limit = getPlan(plan).limits.maxExtrasPerHall;
-		return { ok: false, status: 403, error: `Your plan allows ${limit} extra${limit === 1 ? '' : 's'} per hall. Upgrade to add more.` };
+		return { ok: false, status: 403, error: e.extrasLimit(limit) };
 	}
 	const id = crypto.randomUUID();
 	await dbRun(db, 'INSERT INTO hall_extras (id, hall_id, name, description, price_cents, pricing) VALUES (?, ?, ?, ?, ?, ?)',
