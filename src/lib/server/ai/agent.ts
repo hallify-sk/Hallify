@@ -263,6 +263,9 @@ export async function runTurn(
 	await appendItem(db, threadId, userItem, { role: 'user', text: shown });
 
 	const ctx = { locals, org, userId: user.id, threadId, r2: opts.r2, budget: { pagesRead: 0, refusedHosts: new Set<string>() } };
+	// Every model call of this question is charged under one turn id, so the credit
+	// activity shows the question once, linked to its conversation.
+	const turnId = crypto.randomUUID();
 	const actions: ClientAction[] = [];
 
 	for (let step = 0; step < MAX_STEPS; step++) {
@@ -299,7 +302,7 @@ export async function runTurn(
 			mc: toMilliCredits(usd, platform), userId: user.id,
 			feature: res.webSearches ? `chat+search:${res.webSearches}` : 'chat', model: platform.model,
 			inputTokens: res.usage.input_tokens, cachedTokens: res.usage.cached_tokens,
-			outputTokens: res.usage.output_tokens, costUsdMicro: usd
+			outputTokens: res.usage.output_tokens, costUsdMicro: usd, threadId, turnId
 		});
 
 		for (const item of res.output) {

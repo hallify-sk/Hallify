@@ -78,14 +78,17 @@ async function ledger(
 	db: Db,
 	row: { orgId: string; kind: 'grant' | 'purchase' | 'charge' | 'adjust'; amountMc: number; userId?: string | null;
 		feature?: string | null; model?: string | null; inputTokens?: number; cachedTokens?: number;
-		outputTokens?: number; costUsdMicro?: number; ref?: string | null }
+		outputTokens?: number; costUsdMicro?: number; ref?: string | null; threadId?: string | null; turnId?: string | null }
 ) {
+	// thread_id / turn_id (migration 0015a) are only written when there is something to
+	// write, so grants and purchases keep working on a database that lacks them.
+	const turn = row.threadId || row.turnId;
 	await dbRun(db,
-		`INSERT INTO ai_ledger (id, org_id, kind, amount_mc, user_id, feature, model, input_tokens, cached_tokens, output_tokens, cost_usd_micro, ref)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		`INSERT INTO ai_ledger (id, org_id, kind, amount_mc, user_id, feature, model, input_tokens, cached_tokens, output_tokens, cost_usd_micro, ref${turn ? ', thread_id, turn_id' : ''})
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?${turn ? ', ?, ?' : ''})`,
 		crypto.randomUUID(), row.orgId, row.kind, row.amountMc, row.userId ?? null, row.feature ?? null,
 		row.model ?? null, row.inputTokens ?? null, row.cachedTokens ?? null, row.outputTokens ?? null,
-		row.costUsdMicro ?? null, row.ref ?? null);
+		row.costUsdMicro ?? null, row.ref ?? null, ...(turn ? [row.threadId ?? null, row.turnId ?? null] : []));
 }
 
 /**
@@ -166,13 +169,16 @@ export async function settle(
 	orgId: string,
 	heldMc: number,
 	charge: { mc: number; userId: string; feature: string; model: string; inputTokens: number;
-		cachedTokens: number; outputTokens: number; costUsdMicro: number }
+		cachedTokens: number; outputTokens: number; costUsdMicro: number;
+		/** The conversation and the question this call served, for the activity list. */
+		threadId?: string | null; turnId?: string | null }
 ): Promise<void> {
 	await dbRun(db, 'UPDATE ai_accounts SET balance_mc = balance_mc + ? WHERE org_id = ?', heldMc - charge.mc, orgId);
 	await ledger(db, {
 		orgId, kind: 'charge', amountMc: -charge.mc, userId: charge.userId, feature: charge.feature,
 		model: charge.model, inputTokens: charge.inputTokens, cachedTokens: charge.cachedTokens,
-		outputTokens: charge.outputTokens, costUsdMicro: charge.costUsdMicro
+		outputTokens: charge.outputTokens, costUsdMicro: charge.costUsdMicro,
+		threadId: charge.threadId, turnId: charge.turnId
 	});
 }
 
@@ -215,6 +221,46 @@ export async function recentLedger(db: Db, orgId: string, limit = 50): Promise<L
 		   FROM ai_ledger l LEFT JOIN users u ON u.id = l.user_id
 		  WHERE l.org_id = ? ORDER BY l.created_at DESC LIMIT ?`,
 		orgId, limit);
+}
+
+export interface ActivityRow {
+	id: string; kind: string; amount_mc: number; feature: string | null; created_at: string;
+	user_id: string | null; user_name: string | null;
+	/** Model calls in this row: one question can take several. */
+	calls: number;
+	thread_id: string | null; thread_title: string | null; thread_user_id: string | null;
+}
+
+/** A ledger timestamp bound for comparisons with `created_at` (SQLite's 'YYYY-MM-DD HH:MM:SS'). */
+const sqlTime = (iso: string) => iso.replace('T', ' ').replace(/\.\d+Z$|Z$/, '');
+
+/**
+ * Credit activity for the settings page: one row per question (all the model calls
+ * that answered it), plus grants, purchases and expiries. `since` limits it to the
+ * current period, so the period's own grant cannot scroll out of view behind 50
+ * single model calls, as it used to.
+ */
+export async function ledgerActivity(db: Db, orgId: string, opts: { since?: string | null; limit?: number } = {}): Promise<ActivityRow[]> {
+	const limit = opts.limit ?? 200;
+	const since = opts.since ? sqlTime(opts.since) : null;
+	try {
+		return await dbAll<ActivityRow>(db,
+			`SELECT MIN(l.id) AS id, l.kind, SUM(l.amount_mc) AS amount_mc, MAX(l.feature) AS feature,
+			        MAX(l.created_at) AS created_at, COUNT(*) AS calls, l.user_id,
+			        NULLIF(TRIM(COALESCE(u.first_name, '') || ' ' || COALESCE(u.last_name, '')), '') AS user_name,
+			        l.thread_id, t.title AS thread_title, t.user_id AS thread_user_id
+			   FROM ai_ledger l
+			   LEFT JOIN users u ON u.id = l.user_id
+			   LEFT JOIN ai_threads t ON t.id = l.thread_id
+			  WHERE l.org_id = ?${since ? ' AND l.created_at >= ?' : ''}
+			  GROUP BY COALESCE(l.turn_id, l.id)
+			  ORDER BY created_at DESC LIMIT ?`,
+			...(since ? [orgId, since, limit] : [orgId, limit]));
+	} catch {
+		// Before migration 0015a: one row per call, as before.
+		const rows = await recentLedger(db, orgId, limit);
+		return rows.map((r) => ({ ...r, user_id: null, calls: 1, thread_id: null, thread_title: null, thread_user_id: null }));
+	}
 }
 
 /** Credits spent in the current period, for the settings page. */

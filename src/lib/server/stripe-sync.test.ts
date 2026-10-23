@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { DatabaseSync } from 'node:sqlite';
-import { readFileSync, readdirSync } from 'node:fs';
+import type { DatabaseSync } from 'node:sqlite';
 import type Stripe from 'stripe';
+import { migratedDatabase, d1 } from './sqlite-d1.testutil';
 
 vi.mock('$env/dynamic/private', () => ({ env: { APP_URL: 'https://hallify.test' } }));
 
@@ -14,30 +14,12 @@ const open: DatabaseSync[] = [];
 afterEach(() => { for (const d of open.splice(0)) d.close(); });
 
 function database() {
-	const sqlite = new DatabaseSync(':memory:');
+	const sqlite = migratedDatabase();
 	open.push(sqlite);
-	sqlite.exec('PRAGMA foreign_keys = ON');
-	const dir = new URL('../../../migrations/', import.meta.url);
-	for (const f of readdirSync(dir).filter((f) => f.endsWith('.sql')).sort()) {
-		sqlite.exec(readFileSync(new URL(f, dir), 'utf8'));
-	}
 	sqlite.exec(`INSERT INTO users (id, email, password_hash, first_name, last_name) VALUES ('u1', 'owner@example.com', 'x', 'Olga', 'Owner')`);
 	sqlite.exec(`INSERT INTO organizations (id, name, slug) VALUES ('org', 'Kaštieľ', 'kastiel')`);
 	sqlite.exec(`INSERT INTO organization_members (id, org_id, user_id, role) VALUES ('m1', 'org', 'u1', 'owner')`);
 	return sqlite;
-}
-
-function d1(sqlite: DatabaseSync): App.Locals['db'] {
-	const stmt = (sql: string, values: unknown[] = []) => ({
-		bind: (...args: unknown[]) => stmt(sql, args),
-		first: async () => (sqlite.prepare(sql).get(...(values as never[])) as unknown) ?? null,
-		all: async () => ({ results: sqlite.prepare(sql).all(...(values as never[])) }),
-		run: async () => {
-			const r = sqlite.prepare(sql).run(...(values as never[]));
-			return { meta: { changes: Number(r.changes) } };
-		}
-	});
-	return { prepare: (sql: string) => stmt(sql) } as unknown as App.Locals['db'];
 }
 
 function sub(over: Partial<Record<string, unknown>> = {}, amount: number | null = 2999): Stripe.Subscription {

@@ -227,10 +227,11 @@ export const saas = {
       currency: 'EUR', value: price ?? 0,
       items: [{ item_id: plan, item_name: `Hallify ${plan}`, price: price ?? 0, quantity: 1 }],
     }),
-  /** Returned from Stripe successfully. */
-  upgradeCompleted: (plan: string, price: number | null) =>
+  /** Returned from Stripe successfully. Pass the Checkout session id as the
+   *  transaction id so GA4 counts a reloaded success page once. */
+  upgradeCompleted: (plan: string, price: number | null, transactionId?: string) =>
     track('purchase', {
-      transaction_id: `sub-${plan}-${Date.now()}`,
+      transaction_id: transactionId ?? `sub-${plan}-${Date.now()}`,
       currency: 'EUR', value: price ?? 0,
       items: [{ item_id: plan, item_name: `Hallify ${plan}`, price: price ?? 0, quantity: 1 }],
     }),

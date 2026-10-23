@@ -2,9 +2,22 @@
   import { CREDITS_PER_EUR } from '$lib/ai-credits';
   import { enhance } from '$app/forms';
   import { t, getLocale } from '$lib/i18n.svelte';
-  import type { PageData } from './$types';
+  import type { SubmitFunction } from '@sveltejs/kit';
+  import type { ActionData, PageData } from './$types';
 
-  const { data }: { data: PageData } = $props();
+  const { data, form }: { data: PageData; form: ActionData } = $props();
+
+  // Enhanced so the redirect to Stripe Checkout is a script navigation: a plain form
+  // POST answered with a 303 to checkout.stripe.com was blocked by the CSP's
+  // form-action in Chrome and Edge. A refusal from Stripe comes back as a message.
+  let buying = $state<number | null>(null);
+  const buy = (credits: number): SubmitFunction => () => {
+    buying = credits;
+    return async ({ update }) => {
+      await update(); // the redirect to Stripe never returns from here
+      buying = null;
+    };
+  };
 
   const dateLocale = $derived(getLocale() === 'en' ? 'en-GB' : 'sk-SK');
   const credits = (mc: number) =>
@@ -31,7 +44,8 @@
     <p>{t.ai.settingsHint}</p>
   </div>
 
-  {#if data.topupDone}<p class="alert-success topup">{t.ai.topupDone}</p>{/if}
+  {#if data.topup === 'paid'}<p class="alert-success topup">{t.ai.topupDone}</p>{/if}
+  {#if data.topup === 'pending'}<p class="alert-warning topup">{t.ai.topupPending}</p>{/if}
 
   <form method="POST" action="?/toggle" bind:this={toggleForm} use:enhance={() => async ({ update }) => update({ reset: false })}>
     <label class="toggle-row">
@@ -64,11 +78,12 @@
     <p>{t.ai.buyHint}</p>
   </div>
   {#if data.canBuy}
+    {#if form && 'message' in form && form.message}<p class="alert-error topup" role="alert">{form.message}</p>{/if}
     <div class="packs">
       {#each data.packs as p (p)}
-        <form method="POST" action="?/buy">
+        <form method="POST" action="?/buy" use:enhance={buy(p)}>
           <input type="hidden" name="credits" value={p} />
-          <button type="submit" class="btn-outline">{t.ai.buyPack(p, eur(p))}</button>
+          <button type="submit" class="btn-outline" disabled={buying !== null}>{t.ai.buyPack(p, eur(p))}</button>
         </form>
       {/each}
     </div>
@@ -80,20 +95,40 @@
 <section class="section">
   <div class="section-head">
     <h2>{t.ai.usageTitle}</h2>
+    {#if !data.history}<p>{t.ai.usageLeadPeriod}</p>{/if}
   </div>
   {#if data.ledger.length === 0}
     <p class="muted">{t.ai.noUsage}</p>
   {:else}
     <div class="row-list">
       {#each data.ledger as l (l.id)}
+        {@const own = l.thread_id && l.thread_user_id === data.userId}
+        <!-- A question's title is shown only to the person who asked it: conversations
+             are private to their author, and the link opens only for them. -->
         <div class="row-item ledger-row">
           <span class="muted nowrap">{fmtDate(l.created_at, true)}</span>
-          <span>{kindLabel(l.kind)}{#if l.user_name}<span class="muted">{' · '}{l.user_name}</span>{/if}</span>
+          <span class="what">
+            {#if l.kind === 'charge' && l.thread_id}
+              {own && l.thread_title ? t.ai.usageQuestion(l.thread_title) : t.ai.usageQuestionUntitled}
+            {:else}
+              {kindLabel(l.kind)}
+            {/if}
+            {#if l.user_name}<span class="muted">{' · '}{l.user_name}</span>{/if}
+            {#if l.calls > 1}<span class="muted">{' · '}{t.ai.usageCalls(l.calls)}</span>{/if}
+            {#if own}<a class="thread-link" href="/app/manage/assistant?t={l.thread_id}">{t.ai.usageOpenThread}</a>{/if}
+          </span>
           <span class="amt" class:neg={l.amount_mc < 0}>{l.amount_mc > 0 ? '+' : '−'}{credits(Math.abs(l.amount_mc))}</span>
         </div>
       {/each}
     </div>
   {/if}
+  <p class="history-link">
+    {#if data.history}
+      <a href="?">{t.ai.usageShowPeriod}</a>
+    {:else}
+      <a href="?history=1">{t.ai.usageShowOlder}</a>
+    {/if}
+  </p>
 </section>
 
 <style>
@@ -128,6 +163,10 @@
 
   .ledger-row { display: grid; grid-template-columns: 170px minmax(0, 1fr) auto; gap: 12px; font-size: 13px; }
   .amt { font-variant-numeric: tabular-nums; font-weight: 600; color: var(--success); }
+  .what { min-width: 0; overflow-wrap: anywhere; }
+  .thread-link { margin-left: 8px; font-size: 12px; color: var(--accent-ink); white-space: nowrap; }
+  .history-link { margin: 14px 0 0; font-size: 12.5px; }
+  .history-link a { color: var(--accent-ink); }
   .amt.neg { color: var(--text-base); }
   @media (max-width: 640px) {
     .ledger-row { grid-template-columns: minmax(0, 1fr) auto; }

@@ -6,12 +6,19 @@
   import type { PageData } from './$types';
   let { data }: { data: PageData } = $props();
 
-  onMount(() => saas.upgradeCompleted(data.planName ?? 'unknown', null));
-
   interface Piece { left: number; delay: number; duration: number; color: string; rot: number; size: number; round: boolean; }
   let confetti = $state<Piece[]>([]);
 
   onMount(() => {
+    // Only a payment Stripe confirmed is celebrated, and counted once per Checkout
+    // session: reloading the page used to send another purchase every time.
+    if (data.state !== 'paid') return;
+    let seen = false;
+    const key = `hallify-purchase-${data.sessionId}`;
+    try { seen = localStorage.getItem(key) === '1'; localStorage.setItem(key, '1'); } catch { /* storage blocked */ }
+    if (seen) return;
+    saas.upgradeCompleted(data.planId ?? 'unknown', data.value, data.sessionId ?? undefined);
+
     playSound('order');
     const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     if (reduce) return;
@@ -26,9 +33,15 @@
       round: Math.random() > 0.5,
     }));
   });
+
+  const title = $derived(
+    data.state === 'paid' ? t.accountExtra.paymentSuccessTitle
+    : data.state === 'pending' ? t.accountExtra.paymentPendingTitle
+    : t.accountExtra.paymentUnknownTitle
+  );
 </script>
 
-<svelte:head><title>{t.accountExtra.paymentSuccessTitle} – Hallify</title></svelte:head>
+<svelte:head><title>{title} – Hallify</title></svelte:head>
 
 <div class="success-page">
   <div class="confetti" aria-hidden="true">
@@ -43,22 +56,28 @@
 
   <div class="wrap">
     <section class="section section--lead success-panel">
-      <div class="check-wrap">
-        <span class="ring"></span>
-        <span class="ring ring-2"></span>
-        <div class="check">
-          <svg viewBox="0 0 52 52" width="48" height="48" fill="none" stroke="currentColor" stroke-width="5" stroke-linecap="round" stroke-linejoin="round">
-            <path class="check-path" d="M14 27l8 8 16-18" />
-          </svg>
+      {#if data.state === 'paid'}
+        <div class="check-wrap">
+          <span class="ring"></span>
+          <span class="ring ring-2"></span>
+          <div class="check">
+            <svg viewBox="0 0 52 52" width="48" height="48" fill="none" stroke="currentColor" stroke-width="5" stroke-linecap="round" stroke-linejoin="round">
+              <path class="check-path" d="M14 27l8 8 16-18" />
+            </svg>
+          </div>
         </div>
-      </div>
+      {/if}
 
-      <h1>{t.accountExtra.paymentSuccessTitle}</h1>
+      <h1>{title}</h1>
       <p class="sub">
-        {#if data.planName}
+        {#if data.state === 'paid' && data.planName}
           {data.orgName ?? t.accountExtra.yourOrganization} {t.accountExtra.nowOnPlanPrefix} <strong>{data.planName}</strong> {t.accountExtra.nowOnPlanSuffix}
-        {:else}
+        {:else if data.state === 'paid'}
           {t.accountExtra.subscriptionActive}
+        {:else if data.state === 'pending'}
+          {t.accountExtra.paymentPendingBody}
+        {:else}
+          {t.accountExtra.paymentUnknownBody}
         {/if}
       </p>
 
