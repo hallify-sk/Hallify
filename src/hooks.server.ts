@@ -202,11 +202,10 @@ function autoCompletePastEvents(db: D1Database) {
 }
 
 // ── Housekeeping: reap expired sessions, tokens, invites and counters ────────
-// adapter-cloudflare only emits a `fetch` handler, so a Cron Trigger (which needs a
-// `scheduled` export) isn't available without a second Worker. Instead this runs
-// opportunistically off request traffic, at most once an hour per isolate, inside
-// waitUntil so it never adds latency to the response. /api/cron/cleanup exists for
-// running it explicitly.
+// The hourly Cron Trigger runs this through /api/cron/cleanup (worker.js adds the
+// `scheduled` handler). This opportunistic run off request traffic stays as a fallback
+// for when CRON_SECRET is not set: at most once an hour per isolate, inside waitUntil
+// so it never adds latency to the response.
 const CLEANUP_INTERVAL = 60 * 60 * 1000;
 let lastCleanup = 0;
 
@@ -214,7 +213,7 @@ function housekeeping(db: D1Database, ctx: { waitUntil?: (p: Promise<unknown>) =
   const now = Date.now();
   if (now - lastCleanup < CLEANUP_INTERVAL) return;
   lastCleanup = now;
-  // Event reminders ride on the same hourly tick: there is no Cron Trigger.
+  // Event reminders ride on the same hourly tick.
   const job = Promise.all([
     runCleanup(db).catch(() => []),
     sendEventReminders(db).catch(() => 0),
