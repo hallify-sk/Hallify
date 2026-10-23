@@ -56,10 +56,11 @@ export interface PasswordReset {
 	user_id: string;
 }
 
-/** Which accounts a reset page may serve: the apex serves Hallify accounts (no org),
- *  a venue site serves only its own clients. A token mailed by one is never redeemable
- *  on the other. */
-export type ResetScope = { kind: 'apex' } | { kind: 'client'; orgId: string };
+/** Which accounts a reset page may serve: the apex serves Hallify accounts (no org);
+ *  `client` only one venue's own clients; `venue` (a venue site since D4) its own
+ *  clients and Hallify accounts, whose password signs people in on every venue site.
+ *  A client token mailed by one venue is never redeemable on another's site. */
+export type ResetScope = { kind: 'apex' } | { kind: 'client'; orgId: string } | { kind: 'venue'; orgId: string };
 
 /**
  * The reset row a token names within `scope`, used or not, or null.
@@ -74,7 +75,10 @@ export async function findPasswordResetRow(
 	scope: ResetScope
 ): Promise<(PasswordReset & { expires_at: string; used: number }) | null> {
 	if (!token || token.length > 128) return null;
-	const scopeSql = scope.kind === 'apex' ? 'u.org_id IS NULL' : "u.org_id = ? AND u.account_type = 'client'";
+	const scopeSql =
+		scope.kind === 'apex' ? 'u.org_id IS NULL'
+		: scope.kind === 'client' ? "u.org_id = ? AND u.account_type = 'client'"
+		: "((u.org_id = ? AND u.account_type = 'client') OR u.org_id IS NULL)";
 	return dbFirst<PasswordReset & { expires_at: string; used: number }>(
 		db,
 		`SELECT pr.id, pr.user_id, pr.expires_at, pr.used
@@ -85,7 +89,7 @@ export async function findPasswordResetRow(
 		  LIMIT 1`,
 		await hashToken(token),
 		token,
-		...(scope.kind === 'client' ? [scope.orgId] : [])
+		...(scope.kind === 'apex' ? [] : [scope.orgId])
 	);
 }
 
@@ -122,11 +126,13 @@ export async function completePasswordReset(db: D1Database, reset: PasswordReset
 }
 
 /** Sign an account out everywhere, or everywhere but `keepSessionId` (the device that
- *  just changed the password stays signed in). */
+ *  just changed the password stays signed in). "Everywhere" includes the venue sites:
+ *  the client rows linked to a Hallify account are opened by its password (D4). */
 export async function endSessions(db: D1Database, userId: string, keepSessionId?: string): Promise<void> {
+	const whose = '(user_id = ? OR user_id IN (SELECT id FROM users WHERE account_id = ?))';
 	if (keepSessionId) {
-		await dbRun(db, 'DELETE FROM sessions WHERE user_id = ? AND id != ?', userId, keepSessionId);
+		await dbRun(db, `DELETE FROM sessions WHERE ${whose} AND id != ?`, userId, userId, keepSessionId);
 	} else {
-		await dbRun(db, 'DELETE FROM sessions WHERE user_id = ?', userId);
+		await dbRun(db, `DELETE FROM sessions WHERE ${whose}`, userId, userId);
 	}
 }

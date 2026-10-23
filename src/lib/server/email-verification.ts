@@ -97,11 +97,27 @@ export async function verifyEmailToken(db: D1Database, token: string, now = Date
 	const claimed = await dbRun(db, 'UPDATE email_verifications SET used_at = ? WHERE id = ? AND used_at IS NULL', new Date(now).toISOString(), row.id);
 	if ((claimed.meta?.changes ?? 0) === 0) return { status: 'verified', userId: user.id, email: user.email, claimed: 0 };
 
-	const at = user.email_verified_at ?? new Date(now).toISOString();
-	await markVerified(db, user.id, at);
-	let joined = 0;
-	if (user.org_id === null) joined = await claimClientRows(db, { ...user, email_verified_at: at });
+	const joined = await mailboxProven(db, user.id, now);
 	return { status: 'verified', userId: user.id, email: user.email, claimed: joined };
+}
+
+/**
+ * A link mailed to the account's current address was opened (a verification link,
+ * or a password reset): the address is the person's. It counts as verified, and for a
+ * Hallify account every old, unlinked venue account with that address is joined to it.
+ * Returns how many were joined.
+ */
+export async function mailboxProven(db: D1Database, userId: string, now = Date.now()): Promise<number> {
+	const user = await dbFirst<HallifyAccount & { org_id: string | null }>(
+		db,
+		`SELECT id, email, password_hash, first_name, last_name, email_verified_at, locale, is_platform_admin, org_id
+		   FROM users WHERE id = ? AND deleted_at IS NULL`,
+		userId
+	);
+	if (!user) return 0;
+	const at = user.email_verified_at ?? new Date(now).toISOString();
+	if (!user.email_verified_at) await markVerified(db, user.id, at);
+	return user.org_id === null ? claimClientRows(db, { ...user, email_verified_at: at }) : 0;
 }
 
 /** A changed address is unverified until its own link is opened. */
@@ -113,8 +129,9 @@ export async function markEmailChanged(
 	await dbRun(db, 'UPDATE users SET email = ?, first_name = ?, last_name = ?, email_verified_at = NULL WHERE id = ?',
 		fields.email, fields.firstName, fields.lastName, accountId);
 	await syncLinkedRows(db, accountId, { ...fields, emailVerifiedAt: null });
-	// Links mailed to the old address must not verify the new one.
+	// Links mailed to the old address must not verify the new one, nor reset its password.
 	await dbRun(db, 'UPDATE email_verifications SET used_at = datetime(\'now\') WHERE user_id = ? AND used_at IS NULL', accountId);
+	await dbRun(db, 'UPDATE password_resets SET used = 1 WHERE user_id = ? AND used = 0', accountId);
 }
 
 /** The verification email, separate from sending so it can be tested. */

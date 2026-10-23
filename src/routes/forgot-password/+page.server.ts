@@ -7,8 +7,10 @@ import { createPasswordReset } from '$lib/server/account';
 import { st } from '$lib/i18n-server';
 import { rateLimit, rateLimitKey, tooManyAttemptsMessage, RATE_LIMITS } from '$lib/rateLimit';
 import { venueIdentity } from '$lib/site/brand.server';
+import { findHallifyAccount } from '$lib/server/identity';
 
-/** Password recovery for CLIENT accounts, on their own org's bubble.
+/** Password recovery on a venue's site: the Hallify account (D4), or a client account
+ *  of this venue from before accounts were shared.
  *
  *  Clients previously had no recovery path at all: /app/forgot-password matches only
  *  `org_id IS NULL` (org/platform users), and hooks redirects every /app/* request on
@@ -50,9 +52,11 @@ export const actions: Actions = {
     }
 
     // Always report success — never reveal whether the address has an account here.
-    const user = await dbFirst<Pick<UserRow, 'id'>>(
+    // A Hallify account is what signs people in on every venue site (D4), so it is the
+    // one reset when the address has it; otherwise this venue's own, older account.
+    const user = (await findHallifyAccount(locals.db, email)) ?? await dbFirst<Pick<UserRow, 'id'>>(
       locals.db,
-      "SELECT id FROM users WHERE email = ? AND org_id = ? AND account_type = 'client'",
+      "SELECT id FROM users WHERE email = ? AND org_id = ? AND account_type = 'client' AND account_id IS NULL AND deleted_at IS NULL",
       email, orgId
     );
 

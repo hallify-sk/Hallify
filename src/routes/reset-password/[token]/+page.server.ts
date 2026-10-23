@@ -2,6 +2,7 @@ import type { PageServerLoad, Actions } from './$types';
 import { fail, redirect } from '@sveltejs/kit';
 import { completePasswordReset, findPasswordResetRow } from '$lib/server/account';
 import { sendPasswordChangedNotice } from '$lib/server/account-emails';
+import { mailboxProven } from '$lib/server/email-verification';
 import { dbFirst } from '$lib/db/index';
 import { st } from '$lib/i18n-server';
 import bcrypt from 'bcryptjs';
@@ -15,7 +16,8 @@ import { venueIdentity } from '$lib/site/brand.server';
  *  be redeemable on another's domain. */
 async function loadReset(db: App.Locals['db'], token: string, orgId: string) {
   // Looked up by the token's hash (tokens are no longer stored as mailed).
-  return findPasswordResetRow(db, token, { kind: 'client', orgId });
+  // Since D4 a venue site also resets the Hallify account, whose password signs in here.
+  return findPasswordResetRow(db, token, { kind: 'venue', orgId });
 }
 
 export const load: PageServerLoad = async ({ params, locals }) => {
@@ -62,6 +64,9 @@ export const actions: Actions = {
     if (!(await completePasswordReset(locals.db, reset, hash))) {
       return fail(400, { error: st(locals.locale).serverErrors.invalidOrExpiredResetLink });
     }
+    // The link reached the address, so it is confirmed (D11), and old venue accounts
+    // with the same address join the Hallify account (D4).
+    await mailboxProven(locals.db, reset.user_id);
     // Under the venue's name: the client knows the venue, not Hallify.
     const account = await dbFirst<{ email: string }>(locals.db, 'SELECT email FROM users WHERE id = ?', reset.user_id);
     if (account) sendPasswordChangedNotice(locals.db, locals.locale, account.email, locals.domainOrg.name).catch(() => {});

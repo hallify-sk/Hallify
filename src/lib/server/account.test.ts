@@ -11,7 +11,7 @@ import {
 import { d1, sqliteWithSchema } from './test-d1';
 
 function setup() {
-	const sqlite = sqliteWithSchema();
+	const sqlite = sqliteWithSchema(['0030_identity.sql']);
 	sqlite.exec(`
 		INSERT INTO organizations (id, name, slug) VALUES ('org', 'Venue', 'venue');
 		INSERT INTO users (id, email, password_hash, first_name, last_name) VALUES ('owner', 'o@x.sk', 'old', 'O', 'W');
@@ -63,6 +63,15 @@ describe('password resets', () => {
 		expect(await findPasswordReset(db, clientToken, { kind: 'client', orgId: 'org' })).toMatchObject({ user_id: 'client' });
 	});
 
+	it('serves Hallify accounts and its own clients on a venue site (D4), never another venue\'s', async () => {
+		const { db } = setup();
+		const accountToken = await createPasswordReset(db, 'owner');
+		const clientToken = await createPasswordReset(db, 'client');
+		expect(await findPasswordReset(db, accountToken, { kind: 'venue', orgId: 'other' })).toMatchObject({ user_id: 'owner' });
+		expect(await findPasswordReset(db, clientToken, { kind: 'venue', orgId: 'org' })).toMatchObject({ user_id: 'client' });
+		expect(await findPasswordReset(db, clientToken, { kind: 'venue', orgId: 'other' })).toBeNull();
+	});
+
 	it('refuses an expired link', async () => {
 		const { db } = setup();
 		const token = await createPasswordReset(db, 'owner', Date.now() - 2 * 60 * 60 * 1000);
@@ -88,5 +97,17 @@ describe('password resets', () => {
 		const { sqlite, db } = setup();
 		await endSessions(db, 'owner', 's1');
 		expect(sqlite.prepare("SELECT id FROM sessions WHERE user_id = 'owner'").all()).toEqual([{ id: 's1' }]);
+	});
+
+	it('also signs out the venue-site rows linked to a Hallify account', async () => {
+		const { sqlite, db } = setup();
+		sqlite.exec(`
+			INSERT INTO users (id, email, password_hash, first_name, last_name, account_type, org_id, account_id)
+			  VALUES ('linked', 'o@x.sk', '!linked', 'O', 'W', 'client', 'org', 'owner');
+			INSERT INTO sessions (id, user_id, expires_at) VALUES ('s3', 'linked', '2999-01-01T00:00:00.000Z');
+			INSERT INTO sessions (id, user_id, expires_at) VALUES ('s4', 'client', '2999-01-01T00:00:00.000Z');
+		`);
+		await endSessions(db, 'owner', 's1');
+		expect(sqlite.prepare('SELECT id FROM sessions ORDER BY id').all()).toEqual([{ id: 's1' }, { id: 's4' }]);
 	});
 });
