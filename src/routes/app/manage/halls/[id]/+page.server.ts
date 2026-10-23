@@ -287,7 +287,7 @@ export const actions: Actions = {
 			'SELECT floorplan_json FROM halls WHERE id = ? AND org_id = ?', params.id, org.id);
 		await dbRun(locals.db, 'UPDATE halls SET floorplan_json=? WHERE id=? AND org_id=?', floorplanJson, params.id, org.id);
 		// The new room goes under the hall's templates and upcoming events.
-		const sync = await syncHallLayouts(locals.db, params.id, previous?.floorplan_json ?? null, floorplanJson);
+		const sync = await syncHallLayouts(locals.db, params.id, previous?.floorplan_json ?? null, floorplanJson, { orgId: org.id, actorId: locals.user?.id ?? null });
 		return { floorplanSuccess: true, sync };
 	},
 

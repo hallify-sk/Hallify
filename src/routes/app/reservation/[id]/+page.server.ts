@@ -23,6 +23,7 @@ import { loadFeedback } from '$lib/server/feedback';
 import { reservationClientKey } from '$lib/server/clients';
 import { clientUrlId } from '$lib/clients';
 import { prepareLayoutSave, refreshLayoutProblems } from '$lib/server/layout-sync';
+import { notifyPayment } from '$lib/server/notification-centre';
 import { followsHallPlan, parseProblems } from '$lib/floorplan-sync';
 
 // The organization's preferred default language — used to localize emails to the
@@ -404,6 +405,23 @@ export const actions: Actions = {
 			reservationId: params.id, orgId: ctx.orgId, actorId: ctx.user.id,
 			actorName: `${ctx.user.first_name} ${ctx.user.last_name}`.trim(), kind: 'edited', note: 'payment',
 		});
+		// The rest of the team sees money coming in (D12); taking a mark back is not news.
+		if (received) {
+			const r = await dbFirst<{ title: string; event_date: string; hall_name: string | null; client: string | null }>(locals.db,
+				`SELECT r.title, r.event_date, h.name AS hall_name,
+				        -- The client: the booking's account when it is a client's, else the name staff typed.
+				        COALESCE(CASE WHEN u.account_type = 'client' THEN NULLIF(TRIM(COALESCE(u.first_name, '') || ' ' || COALESCE(u.last_name, '')), '') END,
+				                 NULLIF(TRIM(r.customer_name), '')) AS client
+				   FROM reservations r JOIN halls h ON h.id = r.hall_id LEFT JOIN users u ON u.id = r.user_id
+				  WHERE r.id = ? AND r.org_id = ?`, params.id, ctx.orgId).catch(() => null);
+			if (r) {
+				await notifyPayment(locals.db, {
+					orgId: ctx.orgId, reservationId: params.id, title: r.title, hall: r.hall_name ?? undefined,
+					date: r.event_date, client: r.client ?? undefined,
+					status: which === 'full' ? 'paid' : 'deposit_received', actorId: ctx.user.id,
+				});
+			}
+		}
 		return { paymentMarked: true };
 	},
 

@@ -175,7 +175,7 @@ export async function applyProposal(
 			JSON.stringify(state), hall.id, org.id, hall.floorplan_json);
 		if (write.meta.changes !== 1) return stale();
 		// The new room goes under the hall's templates and upcoming events too.
-		await syncHallLayouts(locals.db, hall.id, hall.floorplan_json, JSON.stringify(state));
+		await syncHallLayouts(locals.db, hall.id, hall.floorplan_json, JSON.stringify(state), { orgId: org.id, actorId: locals.user?.id ?? null });
 		await dbRun(locals.db, 'UPDATE ai_proposals SET result = ? WHERE id = ?', toJson({ saved: true }), id);
 		return { ok: true, floorplan: true, hallId: hall.id };
 	}

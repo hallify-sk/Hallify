@@ -9,7 +9,7 @@ import { noteMonthUsage, recordTurnedAway } from '$lib/server/cap-notices';
 import { keepAlive } from '$lib/server/background';
 import { dispatchWebhooks } from '$lib/notifications';
 import { notifyGuestMessage, notifyGuestCancel, notifyGuestEdit, notifyClientEdited, notifyClientCancelled, reservationChanges } from '$lib/email';
-import { notifyOrg } from '$lib/server/notification-centre';
+import { notifyFeedback, notifyOrg } from '$lib/server/notification-centre';
 import { excerpt } from '$lib/notification-centre';
 import {
 	assertCanBook, getTakenDates, getHeldDatesByOthers, getUnavailableDates, getFullMonths,
@@ -336,6 +336,10 @@ export const actions: Actions = {
 		await saveFeedback(locals.db, {
 			reservationId: reservation.id, orgId, hallId: reservation.hall_id, userId: locals.user.id,
 			rating: parsed.values.rating, comment: parsed.values.comment,
+		});
+		await notifyFeedback(locals.db, {
+			orgId, reservationId: reservation.id, title: reservation.title, rating: parsed.values.rating,
+			client: `${locals.user.first_name} ${locals.user.last_name}`.trim(), actorId: locals.user.id,
 		});
 		return { feedbackSaved: true };
 	},

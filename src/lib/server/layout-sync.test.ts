@@ -87,6 +87,35 @@ describe('syncHallLayouts', () => {
 		expect(s.template('tpl').layout_problems).toBeNull();
 	});
 
+	it('tells the team when a save leaves layouts worse, once, and not when it fixes them (D12)', async () => {
+		const s = setup();
+		s.tpl('tpl', layout());
+		s.ev('soon', inDays(10));
+		const rows = () => s.sqlite.prepare(
+			`SELECT kind, link, actor_id, params FROM org_notifications WHERE org_id = 'o1' ORDER BY created_at`).all() as
+			{ kind: string; link: string; actor_id: string | null; params: string }[];
+		const notify = { orgId: 'o1', actorId: 'u1' };
+		const broken = JSON.stringify(hallPlan([pillar(3, 3.8)]));
+
+		// Without a notify context (a sync that is not a person's save) nothing is written.
+		await syncHallLayouts(s.db, 'h1', s.before, s.before);
+		expect(rows()).toHaveLength(0);
+
+		await syncHallLayouts(s.db, 'h1', s.before, broken, notify);
+		expect(rows()).toHaveLength(1);
+		expect(rows()[0]).toMatchObject({ kind: 'layout.problems', link: '/app/manage/halls/h1', actor_id: 'u1' });
+		expect(JSON.parse(rows()[0].params)).toMatchObject({ hall: 'One', templates: 1, events: 1 });
+
+		// An autosave of the same plan adds nothing new: no second ring.
+		const before = rows();
+		await syncHallLayouts(s.db, 'h1', broken, broken, notify);
+		expect(rows()).toEqual(before);
+
+		// Fixing it is not news either.
+		await syncHallLayouts(s.db, 'h1', broken, s.before, notify);
+		expect(rows()).toEqual(before);
+	});
+
 	it('never fails the hall save it follows', async () => {
 		const broken = { prepare: () => { throw new Error('db down'); } } as unknown as Parameters<typeof syncHallLayouts>[0];
 		expect(await syncHallLayouts(broken, 'h1', null, '{}')).toEqual({ templates: [], events: [], failed: true });

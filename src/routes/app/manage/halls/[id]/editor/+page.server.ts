@@ -54,7 +54,7 @@ export const actions: Actions = {
 				floorplanJson, params.id, orgId, draft.baseJson);
 			if (write.meta.changes !== 1) return fail(409, { error: st(locals.locale).ai.draftStale });
 			await recordSavedDraft(locals.db, orgId, proposalId, floorplanJson);
-			const sync = await syncHallLayouts(locals.db, params.id, draft.baseJson, floorplanJson);
+			const sync = await syncHallLayouts(locals.db, params.id, draft.baseJson, floorplanJson, { orgId, actorId: locals.user?.id ?? null });
 			return { success: true, draftSaved: true, sync };
 		}
 
@@ -81,7 +81,7 @@ export const actions: Actions = {
 		}
 		// The new room goes under every template and upcoming event; what that leaves
 		// wrong is listed for the person who changed it.
-		const sync = await syncHallLayouts(locals.db, params.id, current.floorplan_json, floorplanJson);
+		const sync = await syncHallLayouts(locals.db, params.id, current.floorplan_json, floorplanJson, { orgId, actorId: locals.user?.id ?? null });
 		return { success: true, version: await layoutVersion(floorplanJson), sync };
 	}
 };

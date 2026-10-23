@@ -10,9 +10,10 @@
 import type { D1Database } from '@cloudflare/workers-types';
 import { dbAll, dbFirst, dbRun } from '$lib/db/index';
 import {
-	applyHallGeometry, followsHallPlan, hasLayout, layoutProblems, problemsColumn, roomKey,
+	applyHallGeometry, followsHallPlan, hasLayout, layoutProblems, parseProblems, problemsColumn, roomKey,
 	UPCOMING_STATUSES, type HallSyncReport, type LayoutProblem
 } from '$lib/floorplan-sync';
+import { notifyLayoutProblems } from '$lib/server/notification-centre';
 
 interface TemplateSyncRow { id: string; name: string; layout_json: string | null; layout_problems: string | null }
 interface EventSyncRow {
@@ -31,19 +32,35 @@ const BATCH = 50;
  * and events that have problems now, whatever caused them.
  */
 export async function syncHallLayouts(
-	db: D1Database, hallId: string, previousJson: string | null, nextJson: string
+	db: D1Database, hallId: string, previousJson: string | null, nextJson: string,
+	/** Who saved the plan, to tell the rest of the team in the notification centre
+	 *  (D12) when this save made a template or an event worse. */
+	notify?: { orgId: string; actorId: string | null }
 ): Promise<HallSyncReport> {
 	// The hall's plan is saved by now; a failure here must not turn that save into an
 	// error (the layouts follow at the next save, or when they are next opened).
+	let report: HallSyncReport, worse: boolean;
 	try {
-		return await syncAll(db, hallId, previousJson, nextJson);
+		({ report, worse } = await syncAll(db, hallId, previousJson, nextJson));
 	} catch (e) {
 		console.error('layout-sync: hall', hallId, e);
 		return { templates: [], events: [], failed: true };
 	}
+	// Only when the save added problems: autosaves of a plan that still leaves the same
+	// tables in a wall would otherwise ring everyone's bell again and again.
+	if (notify && worse) {
+		const hall = await dbFirst<{ name: string }>(db, 'SELECT name FROM halls WHERE id = ? AND org_id = ?', hallId, notify.orgId).catch(() => null);
+		if (hall) {
+			await notifyLayoutProblems(db, {
+				orgId: notify.orgId, hallId, hall: hall.name, actorId: notify.actorId,
+				templates: report.templates.length, events: report.events.length,
+			});
+		}
+	}
+	return report;
 }
 
-async function syncAll(db: D1Database, hallId: string, previousJson: string | null, nextJson: string): Promise<HallSyncReport> {
+async function syncAll(db: D1Database, hallId: string, previousJson: string | null, nextJson: string): Promise<{ report: HallSyncReport; worse: boolean }> {
 	const templates = await dbAll<TemplateSyncRow>(db,
 		'SELECT id, name, layout_json, layout_problems FROM floorplan_templates WHERE hall_id = ? ORDER BY name',
 		hallId);
@@ -56,6 +73,8 @@ async function syncAll(db: D1Database, hallId: string, previousJson: string | nu
 
 	const writes: ReturnType<D1Database['prepare']>[] = [];
 	const report: HallSyncReport = { templates: [], events: [] };
+	// Whether any layout has more problems than it had before this save.
+	let worse = false;
 
 	for (const tm of templates) {
 		if (!hasLayout(tm.layout_json)) continue;
@@ -66,6 +85,7 @@ async function syncAll(db: D1Database, hallId: string, previousJson: string | nu
 			writes.push(db.prepare('UPDATE floorplan_templates SET layout_json = ?, layout_problems = ? WHERE id = ? AND layout_json IS ?')
 				.bind(json, column, tm.id, tm.layout_json));
 		}
+		if (problems.length > parseProblems(tm.layout_problems).length) worse = true;
 		if (problems.length) report.templates.push({ id: tm.id, name: tm.name, problems: problems.length });
 	}
 	for (const ev of events) {
@@ -78,11 +98,12 @@ async function syncAll(db: D1Database, hallId: string, previousJson: string | nu
 			writes.push(db.prepare('UPDATE reservations SET layout_json = ?, layout_problems = ? WHERE id = ? AND layout_json IS ?')
 				.bind(json, column, ev.id, ev.layout_json));
 		}
+		if (problems.length > parseProblems(ev.layout_problems).length) worse = true;
 		if (problems.length) report.events.push({ id: ev.id, title: ev.title, event_date: ev.event_date, problems: problems.length });
 	}
 
 	for (let i = 0; i < writes.length; i += BATCH) await db.batch(writes.slice(i, i + BATCH));
-	return report;
+	return { report, worse };
 }
 
 function synced(layoutJson: string | null, hallJson: string, previousJson: string | null) {
