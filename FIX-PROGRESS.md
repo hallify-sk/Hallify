@@ -22,4 +22,5 @@ Branch: `fix/editors`
 | I3 | done | Tables carry a stable `num` (assigned on load and on placement/duplication, `tableNumbers` in floorplan-layout.ts); canvas shows T3 + label, seat chips "T3 · miesto 2", manifest/CSV/print use the same numbers. |
 | M13 | done | Printable hall floor plan (`/app/manage/halls/[id]/editor/print`) and template (`…/templates/[templateId]/print`) via `PlanPrintDoc`, linked from the editors' check step; manifest prints zone labels on the plan, table notes (list + roster rows). Root layout renders these print routes without the app shell (one-line change in src/routes/+layout.svelte). |
 | B67 | done | Below 760 px the editor shows a read-only plan per floor with a "needs a bigger screen" note instead of a 0-px canvas; editor toolbars wrap. |
+| I23 | done | Pillar size and square/round options (round = 24-gon wall); width/depth fields for a selected axis-aligned wall (thickness); live length of the side being drawn; measurement labels placed by priority without overlapping (`label-layout.ts`). |
 | I24 | done | Re-import skips guests already on the list (name + group) and says who; export headers localised, `;` for Slovak. |

@@ -5,6 +5,7 @@
 	import {
 		CHAIR_R, SEAT_R, localChairs, totalChairs, defaultChairSides, tableHitbox, seatHitbox, hitboxesOverlap,
 		hitboxHitsWall, hitboxInRoom, pointInPoly, roomParts, withRoom, partsBBox, partsConnected, rectCovered, roomOutline, roomArea,
+		pillarPoints, axisRect, rectPoints,
 		countTablesByType, type Hitbox
 	} from '$lib/floorplan-geometry';
 	import type { FloorData, MultiFloorState, WallObj, ZoneObj, TableObj, SeatObj, Guest, BoundsRect, Point, TableShape } from '$lib/floorplan-types';
@@ -17,6 +18,7 @@
 	import GuestList, { type GuestRow } from '$lib/editor/GuestList.svelte';
 	import CoachMark from '$lib/editor/CoachMark.svelte';
 	import FloorplanPrint from '$lib/FloorplanPrint.svelte';
+	import { labelBox, placeLabels, type LabelBox } from '$lib/editor/label-layout';
 
 	// ─── Props ────────────────────────────────────────────────────────────────
 	interface TableType {
@@ -186,6 +188,24 @@
 
 	// Zone config
 	let zoneColor = $state('#a78bfa');
+
+	// Pillar config: its size across, and square or round.
+	let pillarSize  = $state(0.5);
+	let pillarRound = $state(false);
+	function pillarAt(c: Point): WallObj {
+		return { id: crypto.randomUUID(), points: pillarPoints(c, pillarSize, pillarRound) };
+	}
+
+	/** Type a rectangular wall's size (its thickness is the shorter side). The top
+	 *  left corner stays put. */
+	function setWallSize(id: string, patch: { w?: number; h?: number }) {
+		const w = walls.find(x => x.id === id);
+		const r = w ? axisRect(w.points) : null;
+		if (!r) return;
+		const next = { ...r, ...patch };
+		if (!(next.w > 0.01) || !(next.h > 0.01)) return;
+		walls = walls.map(x => x.id === id ? { ...x, points: rectPoints(next) } : x);
+	}
 
 	// The room: one or more rectangles joined into one shape (two make an L, three
 	// a U). `bounds` is their bounding box; `roomEdges` the outline tables may not cross.
@@ -1402,11 +1422,8 @@
 		}
 
 		if (tool === 'pillar') {
-			const s = 0.25;
 			pushUndo();
-			walls = [...walls, { id: crypto.randomUUID(), points: [
-				{ x: pos.x - s, y: pos.y - s }, { x: pos.x + s, y: pos.y - s }, { x: pos.x + s, y: pos.y + s }, { x: pos.x - s, y: pos.y + s }
-			] }];
+			walls = [...walls, pillarAt(pos)];
 			return;
 		}
 
@@ -1750,7 +1767,7 @@
 		}
 		// Empty canvas: the view, and what the current tool can do here
 		const items: CtxItem[] = [];
-		if (tool === 'pillar') items.push({ label: tr.editor.ctxPillarHere, run: () => { pushUndo(); const c = snap(raw), h = 0.25; walls = [...walls, { id: crypto.randomUUID(), points: [{ x: c.x - h, y: c.y - h }, { x: c.x + h, y: c.y - h }, { x: c.x + h, y: c.y + h }, { x: c.x - h, y: c.y + h }] }]; } });
+		if (tool === 'pillar') items.push({ label: tr.editor.ctxPillarHere, run: () => { pushUndo(); walls = [...walls, pillarAt(snap(raw))]; } });
 		if (tool === 'chair') items.push({ label: tr.editor.ctxChairHere, run: () => { const st: SeatObj = { id: crypto.randomUUID(), ...snap(raw), rotation: 0, assignment: null }; if (!seatHasCollision(st)) { pushUndo(); seats = [...seats, st]; } } });
 		if (tool !== 'select') items.push({ label: tr.editor.ctxBackToSelect, kbd: 'V', run: () => pickTool('select') });
 		items.push({ label: tr.editor.fitRoom, kbd: '⇧1', run: fitToRoom });
@@ -2015,6 +2032,52 @@
 		}).filter(e => e.len >= min);
 		return out.sort((a, b) => b.len - a.len).slice(0, max);
 	}
+	/** The measurement labels (screen pixels), most telling first; one that would cover
+	 *  another is left out rather than printed on top of it. */
+	type DimLabel = { x: number; y: number; text: string; size: number; cls: string };
+	const dimLabels = $derived.by((): DimLabel[] => {
+		if (!dimsOn) return [];
+		const out: DimLabel[] = [];
+		const reserved: LabelBox[] = [];
+		if (bounds) {
+			// The overall width above the room and height left of it are always shown.
+			const top = wy(bounds.y) - 26, left = wx(bounds.x) - 26;
+			reserved.push(labelBox({ x: wx(bounds.x + bounds.w / 2), y: top - 11, text: `${bounds.w.toFixed(2)} m`, size: 12 }));
+			const hb = labelBox({ x: 0, y: 0, text: `${bounds.h.toFixed(2)} m`, size: 12 });
+			const cy = wy(bounds.y + bounds.h / 2), half = (hb.x1 - hb.x0) / 2;
+			reserved.push({ x0: left - 18, y0: cy - half, x1: left, y1: cy + half });
+			// Each stretch of an L- or U-shaped outline
+			if (roomRects.length > 1) {
+				for (const [a, b] of roomEdges) {
+					const len = Math.hypot(b.x - a.x, b.y - a.y);
+					if (len >= 1) out.push({ x: wx((a.x + b.x) / 2), y: wy((a.y + b.y) / 2) + (a.y === b.y ? -10 : 0), text: `${len.toFixed(2)} m`, size: 11, cls: 'dim-label dim-edge dim-room' });
+				}
+			}
+		}
+		for (const wall of walls) {
+			for (const d of edgeDims(wall.points, wall.points.length > 12 ? 8 : 12)) out.push({ x: wx(d.x), y: wy(d.y), text: d.len.toFixed(2), size: 11, cls: 'dim-label dim-edge' });
+		}
+		for (const zone of zones) {
+			const xs = zone.points.map(p => p.x), ys = zone.points.map(p => p.y);
+			out.push({
+				x: wx(xs.reduce((a, v) => a + v, 0) / xs.length), y: wy(ys.reduce((a, v) => a + v, 0) / ys.length) + 14,
+				text: `${polyAreaM2(zone.points).toFixed(1)} m² · ${(Math.max(...xs) - Math.min(...xs)).toFixed(1)} × ${(Math.max(...ys) - Math.min(...ys)).toFixed(1)} m`,
+				size: 11, cls: 'dim-label dim-edge'
+			});
+		}
+		for (const zone of zones) {
+			for (const d of edgeDims(zone.points, 8)) out.push({ x: wx(d.x), y: wy(d.y), text: d.len.toFixed(2), size: 10, cls: 'dim-label dim-edge dim-zone' });
+		}
+		for (const t of tables) {
+			out.push({
+				x: wx(Number(t.x)), y: wy(Number(t.y)) + ws(t.shape === 'round' ? Number(t.radius) : Number(t.height) / 2) + 22,
+				text: `${t.shape === 'round' ? `⌀ ${(Number(t.radius) * 2).toFixed(1)}` : `${Number(t.width).toFixed(1)} × ${Number(t.height).toFixed(1)}`} m`,
+				size: 11, cls: 'dim-label dim-edge'
+			});
+		}
+		return placeLabels(out, reserved);
+	});
+
 	const roomPerimeter = $derived(roomEdges.reduce((a, [p, q]) => a + Math.hypot(q.x - p.x, q.y - p.y), 0));
 	const zonesArea = $derived(zones.reduce((a, z) => a + polyAreaM2(z.points), 0));
 
@@ -2137,6 +2200,20 @@
 					<!-- Only staff can define table types; a client is told who can help. -->
 					<p class="tool-note">{audience === 'client' ? tr.editor.tablesNeedTypesClient : tr.editor.tablesNeedTypes}</p>
 				{:else if step === 'walls'}
+					{#if tool === 'pillar'}
+						<!-- The next pillar: how big, and square or round. -->
+						<div class="tool-opts">
+							<label class="opt-field">
+								<span>{tr.editor.pillarSize}</span>
+								<input type="number" min="0.1" max="3" step="0.05" value={pillarSize}
+									oninput={(e) => { const el = e.target as HTMLInputElement; const v = Math.min(3, Math.max(0.1, +el.value || 0.5)); pillarSize = v; }} />
+							</label>
+							<div class="seg" role="group" aria-label={tr.editor.shape}>
+								<button type="button" class:on={!pillarRound} aria-pressed={!pillarRound} onclick={() => pillarRound = false}>{tr.editor.pillarSquare}</button>
+								<button type="button" class:on={pillarRound} aria-pressed={pillarRound} onclick={() => pillarRound = true}>{tr.editor.round}</button>
+							</div>
+						</div>
+					{/if}
 					<label class="mode-switch"><input type="checkbox" checked={rectDraw} onchange={(e) => setRectDraw((e.target as HTMLInputElement).checked)} />{tr.editor.rectDrawMode}</label>
 					<p class="tool-note">{tr.editor.wallsOptional}</p>
 				{:else if step === 'zones'}
@@ -2298,33 +2375,10 @@
 						<text x={wx(bounds.x + bounds.w / 2)} y={top - 7} text-anchor="middle" class="dim-label" pointer-events="none">{bounds.w.toFixed(2)} m</text>
 						<text x={left - 7} y={wy(bounds.y + bounds.h / 2)} text-anchor="middle" class="dim-label"
 							transform={`rotate(-90 ${left - 7} ${wy(bounds.y + bounds.h / 2)})`} pointer-events="none">{bounds.h.toFixed(2)} m</text>
-						<!-- Each stretch of an L- or U-shaped outline -->
-						{#if roomRects.length > 1}
-							{#each roomEdges as [a, b]}
-								{@const len = Math.hypot(b.x - a.x, b.y - a.y)}
-								{#if len >= 1}
-									<text x={wx((a.x + b.x) / 2)} y={wy((a.y + b.y) / 2) + (a.y === b.y ? -6 : 4)} text-anchor="middle" class="dim-label dim-edge dim-room" pointer-events="none">{len.toFixed(2)} m</text>
-								{/if}
-							{/each}
-						{/if}
 					{/if}
-					{#each walls as wall}
-						{#each edgeDims(wall.points, wall.points.length > 12 ? 8 : 12) as d}
-							<text x={wx(d.x)} y={wy(d.y)} text-anchor="middle" dominant-baseline="middle" class="dim-label dim-edge" pointer-events="none">{d.len.toFixed(2)}</text>
-						{/each}
-					{/each}
-					{#each zones as zone}
-						{@const xs = zone.points.map(p => p.x)}
-						{@const ys = zone.points.map(p => p.y)}
-						<text x={wx(xs.reduce((a, v) => a + v, 0) / xs.length)} y={wy(ys.reduce((a, v) => a + v, 0) / ys.length) + 18}
-							text-anchor="middle" class="dim-label dim-edge" pointer-events="none">{polyAreaM2(zone.points).toFixed(1)} m² · {(Math.max(...xs) - Math.min(...xs)).toFixed(1)} × {(Math.max(...ys) - Math.min(...ys)).toFixed(1)} m</text>
-						{#each edgeDims(zone.points, 8) as d}
-							<text x={wx(d.x)} y={wy(d.y)} text-anchor="middle" dominant-baseline="middle" class="dim-label dim-edge dim-zone" pointer-events="none">{d.len.toFixed(2)}</text>
-						{/each}
-					{/each}
-					{#each tables as t}
-						<text x={wx(Number(t.x))} y={wy(Number(t.y)) + ws(t.shape === 'round' ? Number(t.radius) : Number(t.height) / 2) + 26}
-							text-anchor="middle" class="dim-label dim-edge" pointer-events="none">{t.shape === 'round' ? `⌀ ${(Number(t.radius) * 2).toFixed(1)}` : `${Number(t.width).toFixed(1)} × ${Number(t.height).toFixed(1)}`} m</text>
+					<!-- Every other measurement, the ones that would cover another left out -->
+					{#each dimLabels as l}
+						<text x={l.x} y={l.y} text-anchor="middle" dominant-baseline="middle" class={l.cls} pointer-events="none">{l.text}</text>
 					{/each}
 				{/if}
 
@@ -2551,6 +2605,13 @@
 						x2={wx(cursorPos.x)} y2={wy(cursorPos.y)}
 						stroke={tool==='wall'?'#2b3462':zoneColor} stroke-width="1.5"
 						stroke-dasharray="4,3" opacity="0.6" pointer-events="none"/>
+					<!-- The length of the side being drawn, as it is drawn -->
+					{@const last = drawPts[drawPts.length - 1]}
+					{@const segLen = Math.hypot(cursorPos.x - last.x, cursorPos.y - last.y)}
+					{#if segLen >= 0.05}
+						<text x={(wx(last.x) + wx(cursorPos.x)) / 2} y={(wy(last.y) + wy(cursorPos.y)) / 2 - 10} text-anchor="middle"
+							dominant-baseline="middle" class="dim-label" pointer-events="none">{segLen.toFixed(2)} m</text>
+					{/if}
 					{#each drawPts as p, i}
 						{@const near = i===0 && nearFirstPoint(cursorPos)}
 						<circle cx={wx(p.x)} cy={wy(p.y)} r={i===0?(near?9:6):4}
@@ -2561,8 +2622,13 @@
 
 				<!-- ── Pillar ghost ── -->
 				{#if tool === 'pillar' && !readOnly}
-					<rect x={wx(cursorPos.x - 0.25)} y={wy(cursorPos.y - 0.25)} width={ws(0.5)} height={ws(0.5)}
-						fill="rgba(43,52,98,0.35)" stroke="#2b3462" stroke-width="1.5" stroke-dasharray="4,3" pointer-events="none"/>
+					{#if pillarRound}
+						<circle cx={wx(cursorPos.x)} cy={wy(cursorPos.y)} r={ws(pillarSize / 2)}
+							fill="rgba(43,52,98,0.35)" stroke="#2b3462" stroke-width="1.5" stroke-dasharray="4,3" pointer-events="none"/>
+					{:else}
+						<rect x={wx(cursorPos.x - pillarSize / 2)} y={wy(cursorPos.y - pillarSize / 2)} width={ws(pillarSize)} height={ws(pillarSize)}
+							fill="rgba(43,52,98,0.35)" stroke="#2b3462" stroke-width="1.5" stroke-dasharray="4,3" pointer-events="none"/>
+					{/if}
 				{/if}
 
 				<!-- ── Table ghost ── -->
@@ -2926,9 +2992,26 @@
 							{/if}
 						</section>
 					{:else if selectedWall}
+						{@const wr = axisRect(selectedWall.points)}
 						<section>
 							<div class="sec-title">{tr.editor.wall}</div>
 							<div class="stat"><span>{tr.editor.vertices}</span><b>{selectedWall.points.length}</b></div>
+							{#if wr && !wallsOff}
+								<!-- A straight run of wall or a square pillar: its size typed in. -->
+								<div class="field-row">
+									<div class="field">
+										<label for="w-w">{tr.editor.widthM}</label>
+										<input id="w-w" type="number" min="0.05" step="0.05" value={wr.w}
+											onfocus={pushUndo} oninput={(e) => setWallSize(selectedWall.id, { w: +((e.target as HTMLInputElement).value) })}/>
+									</div>
+									<div class="field">
+										<label for="w-h">{tr.editor.depthM}</label>
+										<input id="w-h" type="number" min="0.05" step="0.05" value={wr.h}
+											onfocus={pushUndo} oninput={(e) => setWallSize(selectedWall.id, { h: +((e.target as HTMLInputElement).value) })}/>
+									</div>
+								</div>
+								<p class="help-text">{tr.editor.wallThicknessHelp}</p>
+							{/if}
 							<p class="help-text">{tr.editor.wallHelp}</p>
 							{#if !wallsOff}
 								<button type="button" class="btn-del" onclick={() => { pushUndo(); walls=walls.filter(w=>w.id!==selectedId); selectedId=null; }}>{tr.editor.deleteWall}</button>
@@ -3406,6 +3489,14 @@
 .canvas-wrap.rulers .status-strip { left:30px; }
 .mode-switch { display:flex; align-items:center; gap:8px; margin:8px 10px 0; padding:8px 10px; border-radius:var(--radius); background:var(--bg-panel2); font-size:12px; font-weight:500; color:var(--text-base); cursor:pointer; }
 .mode-switch input { accent-color:var(--accent); margin:0; }
+.tool-opts { display:flex; flex-direction:column; gap:8px; margin:8px 10px 0; padding:10px; border-radius:var(--radius); background:var(--bg-panel2); }
+.opt-field { display:flex; align-items:center; justify-content:space-between; gap:8px; font-size:12px; font-weight:500; color:var(--text-base); }
+.opt-field input { width:76px; height:28px; border:1px solid var(--border); border-radius:var(--radius); padding:0 8px; font:inherit; font-size:12.5px; background:var(--bg-panel); color:var(--text-base); box-sizing:border-box; }
+.opt-field input:focus { outline:none; border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-dim); }
+.seg { display:flex; gap:2px; padding:2px; border-radius:var(--radius); background:var(--bg-panel); border:1px solid var(--border); }
+.seg button { flex:1; height:26px; border:0; border-radius:var(--radius-sm); background:none; font:inherit; font-size:12px; font-weight:500; color:var(--text-muted); cursor:pointer; }
+.seg button:hover { color:var(--text-base); }
+.seg button.on { background:var(--accent-dim); color:var(--accent-ink); font-weight:600; }
 
 /* Below the instruction bar, not beside it: a long instruction is centred and wide
    enough to run under a legend sitting at the same height. */
