@@ -1,23 +1,24 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
 	import { t } from '$lib/i18n.svelte';
-	import AuthShell from '$lib/components/AuthShell.svelte';
+	import VenueAuthCard from '$lib/site/VenueAuthCard.svelte';
 	import type { PageData, ActionData } from './$types';
 
 	interface Props { data: PageData; form: ActionData; }
 	const { data, form }: Props = $props();
 </script>
 
-<svelte:head><title>{t.forgotPassword.resetTitle} – Hallify</title></svelte:head>
+<svelte:head><title>{t.forgotPassword.resetTitle} – {data.domainOrg.name}</title></svelte:head>
 
-<AuthShell>
+<VenueAuthCard org={data.domainOrg}>
 	{#if !data.valid}
 		<div class="auth-header">
 			<h1>{t.forgotPassword.resetTitle}</h1>
 		</div>
-		<div class="notice notice-error">{t.forgotPassword.invalidToken}</div>
+		<div class="notice notice-error" role="alert">{t.forgotPassword.invalidToken}</div>
 		<p class="auth-switch">
-			<a href="/app/forgot-password">
+			<!-- The venue's own recovery page: /app/* sends clients back to /halls here. -->
+			<a href="/forgot-password">
 				<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
 					<polyline points="15 18 9 12 15 6"/>
 				</svg>
@@ -31,23 +32,24 @@
 		</div>
 
 		{#if form?.error}
-			<div class="notice notice-error">{form.error}</div>
+			<div class="notice notice-error" role="alert">{form.error}</div>
 		{/if}
 
 		<form method="POST" use:enhance class="auth-form">
 			<div class="field">
 				<label for="password">{t.profile.newPassword}</label>
-				<input id="password" name="password" type="password" required minlength="6" placeholder="••••••••" />
+				<input id="password" name="password" type="password" required minlength="8" autocomplete="new-password" placeholder="••••••••" />
 			</div>
 			<div class="field">
 				<label for="confirmPassword">{t.profile.confirmPassword}</label>
-				<input id="confirmPassword" name="confirmPassword" type="password" required minlength="6" placeholder="••••••••" />
+				<input id="confirmPassword" name="confirmPassword" type="password" required minlength="8" autocomplete="new-password" placeholder="••••••••" />
 			</div>
-			<p class="hint">{t.auth.passwordMin}</p>
+			<!-- Client accounts need 8 characters, as at registration; the shared hint said 6. -->
+			<p class="hint">{t.publicBooking.passwordMin8Hint}</p>
 			<button type="submit" class="submit-btn">{t.forgotPassword.resetButton}</button>
 		</form>
 	{/if}
-</AuthShell>
+</VenueAuthCard>
 
 <style>
 	.auth-header { margin-bottom: 32px; }

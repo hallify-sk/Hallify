@@ -2,6 +2,7 @@
   import { page } from '$app/stores';
   import { enhance } from '$app/forms';
   import { t } from '$lib/i18n.svelte';
+  import { ACCEPT_TERMS_FIELD } from '$lib/site/legal-acceptance';
   import type { PageData, ActionData } from './$types';
 
   interface Props { data: PageData; form: ActionData; }
@@ -40,8 +41,10 @@
 
     {#if resetSuccess}<div class="notice notice-success">{t.forgotPassword.resetSuccess}</div>{/if}
 
-    {#if form?.error}
-      <div class="alert-error">{form.error}</div>
+    <!-- An error belongs to the form that produced it: a sign-up error used to stay
+         on screen after switching to the sign-in tab. -->
+    {#if form?.error && (form.tab ?? 'login') === tab}
+      <div class="alert-error" role="alert">{form.error}</div>
     {/if}
 
     <!-- ── Login form ── -->
@@ -97,6 +100,15 @@
           <input class="field-input" id="r-password" name="password" type="password"
             placeholder="••••••••" autocomplete="new-password" required minlength="8" />
         </div>
+        <label class="consent">
+          <input type="checkbox" name={ACCEPT_TERMS_FIELD} required />
+          <span>
+            {t.publicBooking.acceptTermsBefore}
+            <a href="/terms" target="_blank" rel="noopener">{t.publicBooking.acceptTermsLink}</a>
+            {t.publicBooking.acceptTermsBetween}
+            <a href="/privacy" target="_blank" rel="noopener">{t.publicBooking.acceptPrivacyLink}</a>.
+          </span>
+        </label>
         <button type="submit" class="btn-submit">{t.auth.register}</button>
       </form>
       <p class="switch-hint">
@@ -187,6 +199,10 @@
     border-color: var(--accent);
     box-shadow: 0 0 0 3px var(--accent-dim);
   }
+
+  .consent { display: flex; align-items: flex-start; gap: 9px; font-size: 12px; line-height: 1.5; color: var(--text-muted); cursor: pointer; }
+  .consent input { width: 16px; height: 16px; margin: 1px 0 0; flex-shrink: 0; accent-color: var(--accent); }
+  .consent a { color: var(--accent-ink); font-weight: 600; }
 
   .btn-submit {
     width: 100%; padding: 12px; border-radius: var(--radius-sm); font-size: 14px; font-weight: 650;

@@ -4,6 +4,7 @@ import { dbFirst, dbRun } from '$lib/db/index';
 import { st } from '$lib/i18n-server';
 import bcrypt from 'bcryptjs';
 import { rateLimit, rateLimitKey, tooManyAttemptsMessage, RATE_LIMITS } from '$lib/rateLimit';
+import { venueIdentity } from '$lib/site/brand.server';
 
 /** Bubble-scoped password reset for CLIENT accounts.
  *
@@ -23,11 +24,12 @@ async function loadReset(db: App.Locals['db'], token: string, orgId: string) {
 
 export const load: PageServerLoad = async ({ params, locals }) => {
   if (!locals.domainOrg) redirect(303, `/app/reset-password/${params.token}`);
+  const domainOrg = await venueIdentity(locals.db, locals.domainOrg);
   const reset = await loadReset(locals.db, params.token, locals.domainOrg.id);
   if (!reset || !!reset.used || new Date(reset.expires_at) < new Date()) {
-    return { valid: false };
+    return { valid: false, domainOrg };
   }
-  return { valid: true };
+  return { valid: true, domainOrg };
 };
 
 export const actions: Actions = {

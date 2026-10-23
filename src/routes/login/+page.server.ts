@@ -6,6 +6,7 @@ import { createSession } from '$lib/auth';
 import { st } from '$lib/i18n-server';
 import { rateLimit, rateLimitKey, tooManyAttemptsMessage, RATE_LIMITS } from '$lib/rateLimit';
 import { venueIdentity } from '$lib/site/brand.server';
+import { acceptedTerms, recordLegalAcceptance } from '$lib/site/legal-acceptance';
 import type { Actions, PageServerLoad } from './$types';
 
 /** Only a same-origin absolute path may be followed after sign-in or sign-up.
@@ -118,6 +119,8 @@ export const actions: Actions = {
     if (!first_name || !last_name) return fail(400, { ...formShape, tab: 'register', first_name, last_name, email, error: st(locals.locale).serverErrors.firstLastNameRequired });
     if (!email) return fail(400, { ...formShape, tab: 'register', first_name, last_name, email, error: st(locals.locale).serverErrors.emailRequired });
     if (password.length < 8) return fail(400, { ...formShape, tab: 'register', first_name, last_name, email, error: st(locals.locale).serverErrors.passwordMin8 });
+    // The Terms and the Privacy Policy are linked on the form; agreeing is required.
+    if (!acceptedTerms(data)) return fail(400, { ...formShape, tab: 'register', first_name, last_name, email, error: st(locals.locale).serverErrors.mustAcceptTerms });
 
     const orgId = locals.domainOrg.id;
     const existing = await dbFirst<{ id: string }>(locals.db, `SELECT id FROM users WHERE email = ? AND org_id = ?`, email, orgId);
@@ -136,6 +139,8 @@ export const actions: Actions = {
       last_name,
       orgId
     );
+
+    await recordLegalAcceptance(locals.db, { userId: newUserId, orgId, context: 'register' });
 
     await createSession(newUserId, cookies, locals.db);
     redirect(303, redirectTo);
