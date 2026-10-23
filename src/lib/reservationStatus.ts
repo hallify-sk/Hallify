@@ -1,5 +1,9 @@
 // Shared reservation status labels + badge classes + date formatting for the
 // client area. Badge classes (`st-*`) are styled per-page with theme tokens.
+// Pass the viewer's locale: the labels and dates were English on Slovak pages.
+
+import { sk, en } from './i18n';
+import { localeTag, type Locale } from './format';
 
 export const STATUS_LABEL: Record<string, string> = {
 	pending: 'Pending',
@@ -19,8 +23,9 @@ export const STATUS_CLASS: Record<string, string> = {
 	cancelled: 'st-danger',
 };
 
-export function statusLabel(s: string): string {
-	return STATUS_LABEL[s] ?? s;
+export function statusLabel(s: string, locale: Locale | string = 'en'): string {
+	const dict = (locale === 'sk' ? sk : en).status as Record<string, string>;
+	return dict[s] ?? STATUS_LABEL[s] ?? s;
 }
 
 export function statusClass(s: string): string {
@@ -28,11 +33,11 @@ export function statusClass(s: string): string {
 }
 
 /** event_date is stored as YYYY-MM-DD — render it in the local timezone. */
-export function fmtDate(d: string | Date): string {
+export function fmtDate(d: string | Date, locale: Locale | string = 'en'): string {
 	const dt = typeof d === 'string'
 		? new Date(/^\d{4}-\d{2}-\d{2}$/.test(d) ? d + 'T00:00:00' : d)
 		: new Date(d);
-	return dt.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+	return dt.toLocaleDateString(localeTag(locale), { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
 /** Parse "YYYY-MM-DD" + optional "HH:MM" to epoch ms, interpreting the naive value as
