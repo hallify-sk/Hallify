@@ -11,6 +11,7 @@
   import { amenityLabel, amenityLabelMap } from '$lib/site/amenities';
   import { resolveOpeningHours } from '$lib/site/opening-hours';
   import Lightbox from '$lib/components/Lightbox.svelte';
+  import MiniCalendar from '$lib/components/MiniCalendar.svelte';
 
   interface Props { data: PageData; }
   const { data }: Props = $props();
@@ -153,6 +154,24 @@
           <a href={bookHref} class="cta-btn">{t.hallProfile.signInToBook}</a>
         {/if}
       </section>
+
+      {#if data.availability}
+        <section class="section" use:reveal>
+          <div class="section-head">
+            <h2>{t.hallProfile.availabilityTitle}</h2>
+            <p>{t.hallProfile.availabilityHint}</p>
+          </div>
+          <div class="avail-cal">
+            <MiniCalendar
+              takenDates={data.availability.taken}
+              blockedDates={data.availability.unavailable}
+              fullMonths={data.availability.fullMonths}
+              minDate={data.availability.earliest}
+              showLegend={true}
+            />
+          </div>
+        </section>
+      {/if}
     {:else}
       <section class="section" use:reveal>
         <div class="section-head">
@@ -394,6 +413,8 @@
   }
   .cta-btn:hover { background: var(--accent-hover); transform: translateY(-2px); text-decoration: none; }
   .cta-btn:active { transform: translateY(0); }
+
+  .avail-cal { max-width: 360px; }
 
   /* Amenities — ticked lines, no chips */
   .amenities-grid {

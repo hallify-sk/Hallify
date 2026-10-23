@@ -6,7 +6,7 @@
 	import { computeExtras } from '$lib/extras';
 	import { reveal } from '$lib/reveal';
 	import { t, getLocale } from '$lib/i18n.svelte';
-	import { formatDateTime, formatMoney } from '$lib/format';
+	import { formatDate, formatDateTime, formatMoney } from '$lib/format';
 	import type { PageData, ActionData } from './$types';
 
 	interface Props { data: PageData; form: ActionData; }
@@ -47,7 +47,9 @@
 
 	function isoLocal(d: Date) { return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; }
 
+	// Server-computed: blocks AND the days the venue is closed (they used to look free).
 	const blockedStrings = $derived.by(() => {
+		if (data.unavailableDates) return data.unavailableDates;
 		const out: string[] = [];
 		for (const b of data.blocks) {
 			if (b.block_type === 'date_range' && b.date_from && b.date_to) {
@@ -73,6 +75,21 @@
 		role === 'owner' ? t.membersAdmin.roleOwner
 		: role === 'admin' ? t.membersAdmin.roleAdmin
 		: t.membersAdmin.roleMember;
+
+	// An error is shown next to the control that caused it, and scrolled into view:
+	// at the top of the page it was drawn far above where the client was looking.
+	// Falls back to the top of the page when the control it belongs to is gone.
+	const errorScope = $derived.by(() => {
+		if (!form?.error) return null;
+		const scope = (form as { scope?: string }).scope ?? 'page';
+		if (scope === 'update' && !editing) return 'page';
+		if (scope === 'cancel' && !data.cancellable) return 'page';
+		if (scope === 'extras' && !data.extrasEditable) return 'page';
+		return scope;
+	});
+	function errorInView(node: HTMLElement) {
+		node.scrollIntoView({ block: 'center', behavior: 'smooth' });
+	}
 
 	let threadEl: HTMLDivElement | null = $state(null);
 	async function scrollThread() { await tick(); if (threadEl) threadEl.scrollTop = threadEl.scrollHeight; }
@@ -106,7 +123,7 @@
 
 	{#if form?.updated}<div class="toast ok"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> {t.myRes.reservationUpdated}</div>{/if}
 	{#if form?.cancelled}<div class="toast ok"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> {t.myRes.reservationCancelled}</div>{/if}
-	{#if form?.error}<div class="toast err">{form.error}</div>{/if}
+	{#if errorScope === 'page'}<div class="toast err" role="alert">{form?.error}</div>{/if}
 </section>
 
 <!-- ── The reservation itself ── -->
@@ -144,6 +161,7 @@
 					takenDates={data.takenDates}
 					heldDates={data.heldDates}
 					minDate={data.earliestDate}
+					fullMonths={data.fullMonths}
 					selectedDate={eDate}
 					onselect={(d) => eDate = d}
 					showLegend={true}
@@ -176,6 +194,9 @@
 				<textarea id="e-notes" name="description" rows="3" bind:value={eNotes} placeholder={t.myRes.notesPlaceholder}></textarea>
 			</div>
 
+			{#if errorScope === 'update'}
+				{#key form}<div class="toast err" role="alert" use:errorInView>{form?.error}</div>{/key}
+			{/if}
 			<div class="edit-actions">
 				<button type="button" class="btn-ghost" onclick={() => editing = false}>{t.common.cancel}</button>
 				<button type="submit" class="btn-primary" disabled={!eTitle || !eDate || overCapacity}>{t.myRes.saveChanges}</button>
@@ -238,6 +259,9 @@
 						</div>
 					</form>
 					{#if form?.extrasSaved}<span class="x-saved">{t.myRes.saved}</span>{/if}
+					{#if errorScope === 'extras'}
+						{#key form}<div class="toast err small" role="alert" use:errorInView>{form?.error}</div>{/key}
+					{/if}
 				{:else if extrasOverview.lines.length > 0}
 					<div class="row-list">
 						{#each extrasOverview.lines as l}
@@ -248,7 +272,11 @@
 						{/each}
 						<div class="row-item x-line x-line-total"><span>{t.myRes.total}</span><b>{eur(extrasOverview.totalCents)}</b></div>
 					</div>
-					<p class="x-note">{t.myRes.changeExtrasNote}</p>
+					<!-- Only while there is still something to change: not on a finished or
+					     cancelled booking. -->
+					{#if r.status !== 'cancelled' && r.status !== 'completed' && !data.hasStarted}
+						<p class="x-note">{t.myRes.changeExtrasNote}</p>
+					{/if}
 				{:else}
 					<p class="x-empty">{t.myRes.noExtrasSelected}</p>
 				{/if}
@@ -262,6 +290,9 @@
 						<div>
 							<span class="dz-title">{t.myRes.cancelThisReservation}</span>
 							<span class="dz-sub">{t.myRes.cancelFreesDate} {orgName}.</span>
+							{#if data.cancelDeadline}
+								<span class="dz-sub">{t.myRes.freeCancelUntil} {formatDate(data.cancelDeadline, getLocale(), { day: 'numeric', month: 'long', year: 'numeric' })}.</span>
+							{/if}
 						</div>
 						<button type="button" class="btn-danger-outline" onclick={() => confirmCancel = true}>{t.event.cancelReservation}</button>
 					</div>
@@ -276,11 +307,21 @@
 						</div>
 					</div>
 				{/if}
+				{#if errorScope === 'cancel'}
+					{#key form}<div class="toast err" role="alert" use:errorInView>{form?.error}</div>{/key}
+				{/if}
 			</div>
 		{:else if r.status === 'cancelled'}
 			<p class="status-note">{t.myRes.reservationWasCancelled}</p>
+		{:else if r.status === 'completed' || data.isPast}
+			<!-- "This event has already started" read oddly on a finished event. -->
+			<p class="status-note">{t.myRes.eventFinished}</p>
 		{:else if data.hasStarted}
 			<p class="status-note">{t.event.startedLocked}</p>
+		{:else if data.cancelWindowClosed && data.cancelDeadline}
+			<!-- The notice period has passed: say so instead of offering a Cancel button
+			     that the server would refuse. -->
+			<p class="status-note">{t.myRes.cancelWindowClosed.replace('{date}', formatDate(data.cancelDeadline, getLocale(), { day: 'numeric', month: 'long', year: 'numeric' }))}</p>
 		{:else if !data.editable}
 			<p class="status-note">{t.myRes.lockedNotePrefix} {statusLabel(r.status, getLocale()).toLowerCase()} {t.myRes.lockedNoteMid} {orgName} {t.myRes.lockedNoteSuffix}</p>
 		{/if}
