@@ -1,5 +1,7 @@
 import { dbAll, dbFirst, dbRun, toJson, fromJsonArr } from '$lib/db/index';
-import type { HallRow } from '$lib/db/index';
+import type { HallRow, HallExtraRow } from '$lib/db/index';
+import { withBookedPrices } from '$lib/extras';
+import { loadExtrasSnapshot } from '$lib/server/reservation-extras';
 import type { Permission } from '$lib/permissions';
 import { requireOrgPermission } from '$lib/server/access';
 import { assertCanBook } from '$lib/availability';
@@ -852,9 +854,12 @@ const TOOLS: Tool[] = [
 				  WHERE r.id = ? AND r.org_id = ?`, String(a.reservation_id), ctx.org.id);
 			if (!r) return { output: { error: 'No such reservation in this organisation.' } };
 			const extraIds = fromJsonArr(r.extras_json).map(String);
+			// Priced as booked (the snapshot), not from today's price list.
 			const extras = extraIds.length
-				? await dbAll<{ id: string; name: string; price_cents: number; pricing: string }>(ctx.locals.db,
-					`SELECT id, name, price_cents, pricing FROM hall_extras WHERE hall_id = ? AND id IN (${extraIds.map(() => '?').join(',')})`, r.hall_id, ...extraIds)
+				? withBookedPrices(
+					await dbAll<HallExtraRow>(ctx.locals.db,
+						`SELECT * FROM hall_extras WHERE hall_id = ? AND id IN (${extraIds.map(() => '?').join(',')})`, r.hall_id, ...extraIds),
+					await loadExtrasSnapshot(ctx.locals.db, String(r.id))).filter((x) => extraIds.includes(x.id))
 				: [];
 			const layout = r.layout_json ? migrateToMultiFloor(r.layout_json) : null;
 			const seats = layout ? layout.floors.flatMap((f) => f.tables.flatMap((t) => t.assignments ?? [])) : [];

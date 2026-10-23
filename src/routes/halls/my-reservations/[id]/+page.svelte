@@ -248,6 +248,7 @@
 									<span class="x-main">
 										<span class="x-name">{ex.name}</span>
 										{#if ex.description}<span class="x-desc">{ex.description}</span>{/if}
+										{#if ex.retired}<span class="x-desc">{t.myRes.extraRetired}</span>{/if}
 									</span>
 									<span class="x-price">{eur(ex.price_cents)}{ex.pricing === 'per_guest' ? ` ${t.myRes.perGuest}` : ''}</span>
 								</label>

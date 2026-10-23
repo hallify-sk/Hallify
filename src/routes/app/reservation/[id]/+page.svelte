@@ -494,12 +494,15 @@
 						{@const on = extraSel.includes(ex.id)}
 						<label class="row-item exr" class:on>
 							<input type="checkbox" checked={on} onchange={() => toggleExtra(ex.id)} />
-							<span class="exr-main"><span class="exr-name">{ex.name}</span>{#if ex.description}<span class="exr-desc">{ex.description}</span>{/if}</span>
-							<span class="exr-price">{eur(ex.price_cents, getLocale())}{ex.pricing === 'per_guest' ? ` ${t.myRes.perGuest}` : ''}</span>
+							<span class="exr-main"><span class="exr-name">{ex.name}</span>{#if ex.description}<span class="exr-desc">{ex.description}</span>{/if}{#if ex.retired}<span class="exr-desc">{t.reservationAdmin.extraRetired}</span>{/if}</span>
+							<span class="exr-price">{eur(ex.price_cents, getLocale())}{ex.pricing === 'per_guest' ? ` ${t.myRes.perGuest}` : ''}{#if on && ex.live_price_cents != null}<span class="exr-desc exr-now">{t.reservationAdmin.extraPriceNow(eur(ex.live_price_cents, getLocale()))}</span>{/if}</span>
 						</label>
 						{#if on}<input type="hidden" name="extras" value={ex.id} />{/if}
 					{/each}
 					</div>
+					{#if data.extras.some((ex) => ex.live_price_cents != null && extraSel.includes(ex.id))}
+						<p class="exr-desc">{t.reservationAdmin.extrasPricedAsBooked}</p>
+					{/if}
 					<div class="exr-foot">
 						{#if form?.extrasSaved}<span class="exr-saved">{t.myRes.saved}</span>{/if}
 						<button type="submit" class="btn-action btn-sm">{t.myRes.saveExtras}</button>
@@ -879,7 +882,8 @@
 	.exr-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
 	.exr-name { font-size: 12.5px; font-weight: 600; }
 	.exr-desc { font-size: 11px; color: var(--text-muted); }
-	.exr-price { font-size: 12.5px; font-weight: 650; white-space: nowrap; }
+	.exr-price { font-size: 12.5px; font-weight: 650; white-space: nowrap; text-align: right; }
+	.exr-now { display: block; font-weight: 500; }
 	.exr-foot { display: flex; align-items: center; justify-content: flex-end; gap: 10px; }
 	.exr-saved { font-size: 12px; color: var(--success); font-weight: 600; }
 	.exr-line { justify-content: space-between; font-size: 12.5px; color: var(--text-muted); }

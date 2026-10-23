@@ -8,6 +8,7 @@ import { notifyNewReservation } from '$lib/email';
 import { dispatchWebhooks } from '$lib/notifications';
 import { st } from '$lib/i18n-server';
 import { loadBookableExtras } from '$lib/site/bookable-extras';
+import { saveExtrasSnapshot } from '$lib/server/reservation-extras';
 
 const RANGE_DAYS = 540;
 
@@ -104,6 +105,8 @@ export const actions: Actions = {
 		}
 
 		await releaseHold(locals.db, hall.id, eventDate, locals.user.id);
+		// The prices the extras were booked at, so a later price edit leaves this total alone.
+		if (extrasIds.length) await saveExtrasSnapshot(locals.db, reservationId, hall.id, extrasIds);
 
 		// Let the venue's owners/admins know a guest has requested a booking.
 		const guestName = `${locals.user.first_name} ${locals.user.last_name}`;

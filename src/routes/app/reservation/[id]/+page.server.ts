@@ -2,7 +2,7 @@ import { error, redirect, fail } from '@sveltejs/kit';
 import { loginUrl } from '$lib/login-redirect';
 import { dbAll, dbFirst, dbRun, fromJson, toJson } from '$lib/db/index';
 import type { ReservationRow, RsvpRow, TableTypeRow, TemplateRow, ReservationStatus, RsvpConfig, HallExtraRow } from '$lib/db/index';
-import { parseExtraIds } from '$lib/extras';
+import { parseExtraIds, parseExtrasSnapshot, withBookedPrices } from '$lib/extras';
 import type { Actions, PageServerLoad } from './$types';
 import { notifyStatusChange, sendReservationInviteEmail, notifyEventAssigned } from '$lib/email';
 import { postSystemMessage } from '$lib/tickets';
@@ -130,7 +130,10 @@ export const load: PageServerLoad = async ({ locals, params, url }) => {
 		templates: templates.map(t => ({ ...t, layout_json: fromJson(t.layout_json as string | null) })),
 		inviteUrl: `${baseUrl}/rsvp/${reservation.invite_code}`,
 		hasFloorplan,
-		extras: await dbAll<HallExtraRow>(locals.db, 'SELECT * FROM hall_extras WHERE hall_id = ? ORDER BY created_at', reservation.hall_id),
+		// Priced as booked, with today's price alongside where it has changed since.
+		extras: withBookedPrices(
+			await dbAll<HallExtraRow>(locals.db, 'SELECT * FROM hall_extras WHERE hall_id = ? ORDER BY created_at', reservation.hall_id),
+			parseExtrasSnapshot((reservation as { extras_snapshot_json?: string | null }).extras_snapshot_json)),
 		selectedExtras: parseExtraIds(reservation.extras_json as string | null),
 		activity: access.canManage ? await listReservationActivity(locals.db, params.id) : [],
 	};

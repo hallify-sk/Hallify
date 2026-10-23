@@ -10,7 +10,7 @@ vi.mock('$lib/email', () => ({
 vi.mock('$lib/notifications', () => ({ dispatchWebhooks: vi.fn(async () => {}) }));
 
 import { testD1 } from '../test-d1';
-import { changeReservationStatus, editReservationDetails, messageReservationClient } from './reservation-ops';
+import { changeReservationStatus, editReservationDetails, messageReservationClient, setReservationExtras } from './reservation-ops';
 import { notifyHallCancellation, notifyStatusChange } from '$lib/email';
 
 let db: D1Database;
@@ -96,5 +96,32 @@ describe('messageReservationClient', () => {
 		]);
 		const n = await db.prepare(`SELECT COUNT(*) AS n FROM tickets WHERE reservation_id = 'r1'`).first<{ n: number }>();
 		expect(n?.n).toBe(1);
+	});
+});
+
+describe('setReservationExtras (price snapshot, I8)', () => {
+	const snap = async (id: string) =>
+		JSON.parse(String((await row(id))?.extras_snapshot_json ?? '[]')) as Array<{ id: string; price_cents: number }>;
+
+	beforeEach(() => {
+		exec(`INSERT INTO hall_extras (id, hall_id, name, price_cents, pricing) VALUES
+		  ('x1', 'h1', 'Catering', 2500, 'per_guest'), ('x2', 'h1', 'Projektor', 5000, 'fixed');`);
+	});
+
+	it('stores the price each extra was booked at, and keeps it after a price change', async () => {
+		expect((await setReservationExtras(db, 'o1', 'r1', ['x1'])).ok).toBe(true);
+		expect(await snap('r1')).toMatchObject([{ id: 'x1', price_cents: 2500 }]);
+
+		exec(`UPDATE hall_extras SET price_cents = 9900 WHERE id = 'x1'`);
+		await setReservationExtras(db, 'o1', 'r1', ['x1', 'x2']);
+		expect((await snap('r1')).map((s) => [s.id, s.price_cents])).toEqual([['x1', 2500], ['x2', 5000]]);
+	});
+
+	it('lets a booked extra the hall has since deleted stay on the booking', async () => {
+		await setReservationExtras(db, 'o1', 'r1', ['x1', 'x2']);
+		exec(`DELETE FROM hall_extras WHERE id = 'x2'`);
+		const res = await setReservationExtras(db, 'o1', 'r1', ['x1', 'x2']);
+		expect(res.ok && res.kept).toEqual(['x1', 'x2']);
+		expect((await snap('r1')).map((s) => s.id)).toEqual(['x1', 'x2']);
 	});
 });

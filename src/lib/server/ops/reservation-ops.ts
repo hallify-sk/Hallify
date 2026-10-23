@@ -8,6 +8,7 @@ import { formatDate } from '$lib/format';
 import { logReservationActivity } from '$lib/server/reservation-activity';
 import { findOrCreateReservationThread, MESSAGE_MAX } from '$lib/server/threads';
 import { checkStatusTransition, normalizeTime, todayUtcISO } from '$lib/server/reservation-rules';
+import { loadExtrasSnapshot, saveExtrasSnapshot } from '$lib/server/reservation-extras';
 
 /**
  * What staff can do to a booking, in one place: the reservation page's actions and
@@ -180,10 +181,16 @@ export async function setReservationExtras(
 ): Promise<OpResult<{ kept: string[] }>> {
 	const res = await dbFirst<{ hall_id: string }>(db, 'SELECT hall_id FROM reservations WHERE id = ? AND org_id = ?', reservationId, orgId);
 	if (!res) return { ok: false, status: 404, error: 'not_found' };
-	const valid = new Set((await dbAll<{ id: string }>(db, 'SELECT id FROM hall_extras WHERE hall_id = ?', res.hall_id)).map((x) => x.id));
+	// A booked extra the hall no longer offers may stay, at the price it was booked at.
+	const snapshot = await loadExtrasSnapshot(db, reservationId);
+	const valid = new Set([
+		...(await dbAll<{ id: string }>(db, 'SELECT id FROM hall_extras WHERE hall_id = ?', res.hall_id)).map((x) => x.id),
+		...snapshot.map((s) => s.id),
+	]);
 	const kept = [...new Set(requested)].filter((id) => valid.has(id));
 	await dbRun(db, 'UPDATE reservations SET extras_json = ? WHERE id = ? AND org_id = ?',
 		kept.length ? JSON.stringify(kept) : null, reservationId, orgId);
+	await saveExtrasSnapshot(db, reservationId, res.hall_id, kept, snapshot);
 	return { ok: true, kept };
 }
 

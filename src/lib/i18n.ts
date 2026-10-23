@@ -809,6 +809,7 @@ export const sk = {
 		saved: "Uložené.",
 		changeExtrasNote: "Ak chcete teraz zmeniť doplnky, napíšte priestoru.",
 		noExtrasSelected: "Nie sú vybrané žiadne doplnky.",
+		extraRetired: "Už nie je v ponuke – zostáva za dohodnutú cenu.",
 		cancelThisReservation: "Zrušiť túto rezerváciu",
 		cancelFreesDate: "Týmto sa uvoľní dátum a upozorní sa",
 		freeCancelUntil: "Rezerváciu môžete zrušiť do",
@@ -1483,6 +1484,9 @@ export const sk = {
 	},
 	reservationAdmin: {
 		extrasNoneSelected: "Žiadne vybrané.",
+		extraPriceNow: (price: string) => `v cenníku teraz ${price}`,
+		extraRetired: "už nie je v ponuke",
+		extrasPricedAsBooked: "Ceny sú tie, za ktoré boli doplnky rezervované. Novo pridaný doplnok dostane aktuálnu cenu.",
 		messageTheClient: "Napísať klientovi",
 		openMessages: "Otvoriť správy",
 		// Names stay in the nominative ("pre Klára" was wrong), so they follow a colon.
@@ -4184,6 +4188,7 @@ export const en: typeof sk = {
 		saved: "Saved.",
 		changeExtrasNote: "To change extras now, message the venue.",
 		noExtrasSelected: "No extras selected.",
+		extraRetired: "No longer offered – kept at the agreed price.",
 		cancelThisReservation: "Cancel this reservation",
 		cancelFreesDate: "This frees the date and notifies",
 		freeCancelUntil: "You can cancel this reservation until",
@@ -4848,6 +4853,9 @@ export const en: typeof sk = {
 	},
 	reservationAdmin: {
 		extrasNoneSelected: "None selected.",
+		extraPriceNow: (price: string) => `now ${price} on the price list`,
+		extraRetired: "no longer offered",
+		extrasPricedAsBooked: "Prices are the ones the extras were booked at. An extra added now gets today's price.",
 		messageTheClient: "Message the client",
 		openMessages: "Open Messages",
 		messageSentTo: "Message sent to",

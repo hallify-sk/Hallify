@@ -2,7 +2,8 @@ import { error, fail, redirect } from '@sveltejs/kit';
 import { loginUrl } from '$lib/login-redirect';
 import { dbAll, dbFirst, dbRun, fromJsonArr } from '$lib/db/index';
 import type { HallRow, HallBlockRow, ReservationRow } from '$lib/db/index';
-import { parseExtraIds } from '$lib/extras';
+import { parseExtraIds, parseExtrasSnapshot, withBookedPrices } from '$lib/extras';
+import { saveExtrasSnapshot } from '$lib/server/reservation-extras';
 import { dispatchWebhooks } from '$lib/notifications';
 import { notifyGuestMessage, notifyGuestCancel, notifyGuestEdit, reservationChanges } from '$lib/email';
 import {
@@ -102,7 +103,10 @@ export const load: PageServerLoad = async ({ params, locals, url }) => {
 		hasFloorplan: !!hall?.floorplan_json,
 		// Extras: clients can change their selection until the booking is approved (and before it starts).
 		// Within the plan's extras limit, plus whatever this client already ordered.
-		extras: await loadBookableExtras(locals.db, reservation.hall_id, orgId, selectedExtras),
+		// Priced as booked: a price the venue changed since does not change this booking.
+		extras: withBookedPrices(
+			await loadBookableExtras(locals.db, reservation.hall_id, orgId, selectedExtras),
+			parseExtrasSnapshot((reservation as { extras_snapshot_json?: string | null }).extras_snapshot_json)),
 		selectedExtras,
 		extrasEditable: new Set(['pending', 'waiting_payment']).has(reservation.status) && !started,
 		hall: hall ? { id: hall.id, max_people: hall.max_people, min_days_advance: hall.min_days_advance, allow_reservations: hall.allow_reservations } : null,
@@ -132,10 +136,17 @@ export const actions: Actions = {
 		const data = await request.formData();
 		const requested = data.getAll('extras').map(String);
 		// Extras above the plan's limit can be kept (if already chosen) but not added.
-		const valid = (await loadBookableExtras(locals.db, reservation.hall_id, orgId, parseExtraIds(reservation.extras_json))).map(e => e.id);
-		const ids = requested.filter(id => valid.includes(id));
+		// One the venue has since withdrawn can be kept too, at the price it was booked at.
+		const previousIds = parseExtraIds(reservation.extras_json);
+		const snapshot = parseExtrasSnapshot((reservation as { extras_snapshot_json?: string | null }).extras_snapshot_json);
+		const valid = [
+			...(await loadBookableExtras(locals.db, reservation.hall_id, orgId, previousIds)).map(e => e.id),
+			...snapshot.map(s => s.id),
+		];
+		const ids = [...new Set(requested.filter(id => valid.includes(id)))];
 		await dbRun(locals.db, 'UPDATE reservations SET extras_json = ? WHERE id = ? AND user_id = ? AND org_id = ?',
 			ids.length ? JSON.stringify(ids) : null, params.id, locals.user.id, orgId);
+		await saveExtrasSnapshot(locals.db, params.id, reservation.hall_id, ids, snapshot);
 		return { extrasSaved: true };
 	},
 
