@@ -14,7 +14,7 @@ describe('venue explorer', () => {
   });
   it('features only partners, and ranks by distance from the given location', () => {
     const venues = demoVenues();
-    const here = { latitude: 50.0755, longitude: 14.4378 };
+    const here = DEFAULT_CENTER;
     expect(featuredVenues(venues, here).map(v => v.id)).toEqual(['demo-0','demo-2','demo-4']);
     expect(featuredVenues(venues, here).some(v => v.id === 'demo-1')).toBe(false);
     expect(featuredVenues(venues.map(v => ({ ...v, is_partner:false })), here)).toEqual([]);

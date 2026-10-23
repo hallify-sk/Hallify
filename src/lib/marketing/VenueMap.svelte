@@ -4,7 +4,7 @@
   import { getContext, onMount, tick, untrack } from 'svelte';
   import type * as Leaflet from 'leaflet';
   import 'leaflet/dist/leaflet.css';
-  import type { MapCenter } from './discovery';
+  import { DEFAULT_CENTER, type MapCenter } from './discovery';
   import { userLocation, locateUser } from './user-location.svelte';
   import { createPointerKindDetector } from '$lib/pointer-kind';
   import { mapPreferences, loadMapPreferences } from './map-preferences.svelte';
@@ -48,7 +48,13 @@
       const positions = points.filter(valid);
       if (positions.length === 1) map.setView([positions[0].latitude, positions[0].longitude], onpick ? 16 : 12, { animate: !reduced() });
       else if (positions.length) map.fitBounds(library.latLngBounds(positions.map(p => [p.latitude, p.longitude])), { paddingTopLeft: [40,75], paddingBottomRight: [55,paddingBottom], maxZoom: 13, animate: !reduced() });
-      else { const q = fitKey.toLowerCase(); const city: [number, number] = q.includes('bratis') ? [48.1486,17.1077] : q.includes('brno') ? [49.1951,16.6068] : [50.0755,14.4378]; map.setView(city, 10, { animate: !reduced() }); }
+      else {
+        // Nothing to fit: a city the query names, otherwise the whole of Slovakia.
+        const q = fitKey.toLowerCase();
+        const city: [number, number] | null = q.includes('bratis') ? [48.1486,17.1077] : q.includes('brno') ? [49.1951,16.6068] : null;
+        if (city) map.setView(city, 10, { animate: !reduced() });
+        else map.setView([DEFAULT_CENTER.latitude, DEFAULT_CENTER.longitude], 7, { animate: !reduced() });
+      }
     }
   }
   function retry() {

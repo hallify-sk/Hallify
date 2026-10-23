@@ -1,7 +1,9 @@
 import type { PublicVenue } from './types';
 
 export interface MapCenter { latitude: number; longitude: number }
-export const DEFAULT_CENTER: MapCenter = { latitude: 50.0755, longitude: 14.4378 };
+/** Banská Bystrica, near the middle of Slovakia: where demo venues sit and the map opens
+ *  when nothing else says where to look. Hallify's venues are Slovak, not around Prague. */
+export const DEFAULT_CENTER: MapCenter = { latitude: 48.7363, longitude: 19.1462 };
 
 export function distanceKm(a: MapCenter, b: MapCenter): number {
   const radians = Math.PI / 180;
@@ -24,7 +26,7 @@ export function demoVenues(center: MapCenter = DEFAULT_CENTER, nearby = false, e
   const capacities = [120,80,180,60,240,100,40], distances = [3,7,11,18,25,34,42];
   return names.map((name, i) => ({
     id: `demo-${i}`, name, slug: null, description: english ? 'An illustrative venue for trying map selection and filters.' : 'Ilustračný priestor na vyskúšanie výberu na mape a filtrov.',
-    address: nearby ? (english ? 'Your area · sample location' : 'Vaše okolie · ukážková poloha') : (english ? 'Prague area · sample location' : 'Okolie Prahy · ukážková poloha'),
+    address: nearby ? (english ? 'Your area · sample location' : 'Vaše okolie · ukážková poloha') : (english ? 'Central Slovakia · sample location' : 'Stredné Slovensko · ukážková poloha'),
     ...destination(center, distances[i], 32 + i * 51), max_people: capacities[i],
     cover_image_url: ['/marketing/venue-example.jpg','/marketing/venue-dinner.jpg','/marketing/venue-conference.jpg'][i % 3],
     amenities: i % 2 ? ['parking','outdoor'] : ['wifi','catering'],
