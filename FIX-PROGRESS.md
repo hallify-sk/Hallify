@@ -12,3 +12,4 @@ Branch: fix/shell
 | B36 | done | Root layout loads the member's effective permissions (same resolution as requireOrgPermission, in $lib/server/nav-access); $lib/console-nav maps each sidebar link to the guard of its page, so custom roles see their pages and plain members see none. |
 | B78 | done | Sidebar "Verejná stránka" goes to the venue's /halls on its own host and, from the apex, to its own domain (orgPublicBaseUrl + /halls, new tab); "Hľadať priestor" stays for the apex venue search. |
 | B105 | done | Owners/admins get a "Tímový chat" link to /app/messages next to the client inbox (only the sidebar link is ours). |
+| B108 | done | The root layout sends the presence heartbeat every 30 s (and on returning to the tab) from every console page for signed-in staff, not only from Messages. The Messages page still sends its own beat (reservations team file; harmless duplicate, can be removed there). The dashboard count refresh is not in this scope. |

@@ -62,6 +62,33 @@
 		return () => clearInterval(timer);
 	});
 
+	// ─── Presence heartbeat ───
+	// "Online" means "working in the console", so the shell sends it for signed-in
+	// staff on every console page. It used to come only from the Messages page, so an
+	// owner working on the dashboard showed as offline. A hidden tab skips the beat
+	// and so drops out after the two-minute window; coming back sends one at once.
+	// A platform admin viewing an org is not one of its members, so sends none.
+	const presenceOrgId = $derived(
+		data.user && data.user.account_type !== 'client' && data.currentOrg && !data.currentOrg.impersonated
+			&& ($page.url.pathname === '/app' || $page.url.pathname.startsWith('/app/'))
+			? data.currentOrg.id
+			: null
+	);
+	$effect(() => {
+		if (!presenceOrgId) return;
+		const beat = () => {
+			if (document.hidden) return;
+			fetch('/api/presence', { method: 'POST' }).catch(() => {});
+		};
+		beat();
+		const timer = setInterval(beat, 30_000);
+		document.addEventListener('visibilitychange', beat);
+		return () => {
+			clearInterval(timer);
+			document.removeEventListener('visibilitychange', beat);
+		};
+	});
+
 	// Push segmentation context on load and whenever it changes (login, org switch,
 	// plan change). setUserContext de-dupes, so navigation doesn't spam the dataLayer.
 	// $effect.pre, so the context is in place before a page's first event (its onMount).
