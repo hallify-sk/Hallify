@@ -42,11 +42,19 @@ is **who authenticates them**.
   sends the verification email.
 - Accepting a reservation invitation (`/invite/[token]`) creates the same pair; the
   invitation link itself proves the address, so both start verified. An address with a
-  Hallify account is asked to sign in instead.
+  Hallify account is asked to sign in instead; signed in with it (on the venue site, or
+  on hallify.sk when the venue has no public address) the event is taken as the
+  account's linked client row here.
+- Staff assigning an event to an address that has a Hallify account (reservation
+  detail → assign) hand it over at once: the linked client row is created if missing.
 - Password reset on a venue site resets the **Hallify account** when the email has one
   (the link stays on the venue site, whose reset page now also accepts Hallify
-  accounts), otherwise the old client row. A finished reset or password change signs
-  out the account's linked client rows too.
+  accounts: `ResetScope` `venue`), otherwise the old client row. A finished reset or
+  password change signs out the account's linked client rows too (`endSessions`).
+  A finished reset also proves the mailbox, like a verification link
+  (`mailboxProven`): the address counts as verified and old venue rows are claimed.
+- Wrong passwords on venue sites count against the venue's bucket and the address's
+  global one, so spreading guesses over many venues gains nothing.
 - Changing name or email in the profile updates the linked client rows (an email that
   would collide with another client row at that venue is skipped for that venue).
 - Apex sign-in is unchanged: only Hallify accounts sign in there.
@@ -66,8 +74,11 @@ person, so linking waits for a fresh link click or for the same password opening
 
 `/app/client/reservations` (and the personal home) list the bookings of the Hallify
 account and of every client row linked to it, with a link to each booking on its
-venue's own site. Sessions stay host-scoped: opening that link signs in on the venue
-site with the same Hallify email and password.
+venue's own site (`$lib/server/account-bookings`). Sessions stay host-scoped: opening
+that link signs in on the venue site with the same Hallify email and password.
+`/app/client` is now open to every Hallify account (it used to require the
+`client` account type, which never reaches /app) and sits in the app shell; the
+sidebar links it for members and the account menu for owners and admins.
 
 ## D11: email verification
 
@@ -90,7 +101,13 @@ site with the same Hallify email and password.
 - Clients (light version): the link is sent, booking works immediately, the venue site
   shows a reminder banner with a resend button until the address is confirmed, and the
   venue sees "email not verified" next to the client on its bookings.
-- Platform admins can mark an account verified from the platform user list.
+- Operators without the switch: a reminder strip in the app shell links to
+  `/verify-email` until the address is confirmed (existing accounts never see it).
+- Platform admins can mark an account verified on the platform user page
+  (`?/markVerified`, audited as `user.email_verified`); for a linked venue row the
+  Hallify account is marked, with all its rows.
+- `REQUIRE_EMAIL_VERIFICATION` is documented, commented out, in `wrangler.toml` and in
+  `.env.example`.
 
 ## D7: deleting your own account
 
@@ -116,3 +133,11 @@ shows beforehand exactly what will happen.
    deleted, or anonymised the same way when records still point at it (legacy apex
    bookings, setup requests), because those references must not dangle.
 6. Signed out; the sign-in page confirms the account is gone.
+
+Code: `$lib/server/account-deletion` (plan and order, tested with fake side effects)
+and `$lib/server/account-deletion-live` (Stripe, `archiveAndDeleteOrg` with
+`strictBilling`, the new-owner email, the venue's cancellation notice). Billing is
+handled first: hand-overs' subscriptions are set to end, then one-person orgs are
+closed; a failure stops before anything personal is removed. A row is also kept
+(anonymised) when the person sent messages in other people's threads or the team
+channel, which would otherwise cascade away with it.
