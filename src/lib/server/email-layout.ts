@@ -32,7 +32,7 @@ export function renderTemplate(template: string, vars: Record<string, string | n
 const FONT = "font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif";
 const INK = '#202322';
 const MUTED = '#5d635d';
-const FAINT = '#878f87';
+const FAINT = '#687068'; // 4.5:1 on the white card, like the console's subtle text
 const LINE = '#e6e4df';
 const ACCENT = '#f05ca1';
 const ACCENT_INK = '#27131c';

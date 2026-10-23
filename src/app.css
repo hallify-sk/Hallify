@@ -91,9 +91,12 @@
 	--accent-action:      #f05ca1;
 	--accent-action-dim:  #fce5ef;
 
+	/* Both clear WCAG AA (4.5:1) for body-size text on --bg-base, --bg-panel and
+	   --bg-panel2 (contrast.test.ts measures it); subtle stays a step lighter.
+	   Subtle used to be #878f87, about 3:1, and was used for real text. */
 	--text-base:   #202322;
-	--text-muted:  #686d68;
-	--text-subtle: #878f87;
+	--text-muted:  #5f655f;
+	--text-subtle: #687068;
 
 	/* Extended status hues. The paper palette covers warning / success / danger /
 	   accent; "planned" and "waiting payment" need two more inks that stay legible
@@ -165,7 +168,7 @@
 
 	--text-base:   #f0f3ee;
 	--text-muted:  #acb4ac;
-	--text-subtle: #78817a;
+	--text-subtle: #939c94;
 
 	--status-blue:   #8fb6e8;
 	--status-violet: #bda4e8;
@@ -209,8 +212,8 @@
 	--accent-action-dim:  #fce5ef;
 
 	--text-base:   #231f1a;
-	--text-muted:  #6f675d;
-	--text-subtle: #958c80;
+	--text-muted:  #655d53;
+	--text-subtle: #71685d;
 
 	--warning:     #8a5f0e;
 	--warning-dim: #f8f0df;

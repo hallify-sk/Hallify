@@ -183,8 +183,8 @@
 		color-scheme: light;
 
 		--text-base:   #202322;
-		--text-muted:  #686d68;
-		--text-subtle: #878f87;
+		--text-muted:  #5f655f;
+		--text-subtle: #687068;
 		--border:      #dfe2dd;
 		--bg-panel:    #fefefd;
 		--bg-panel2:   #f3f4f0;

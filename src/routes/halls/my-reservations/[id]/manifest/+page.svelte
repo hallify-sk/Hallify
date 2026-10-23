@@ -166,8 +166,8 @@
 		--border:        #dfe2dd;
 		--border-subtle: #eceee9;
 		--text-base:     #202322;
-		--text-muted:    #686d68;
-		--text-subtle:   #878f87;
+		--text-muted:    #5f655f;
+		--text-subtle:   #687068;
 		--warning:       #955f10;
 		/* <FloorplanPrint> draws its walls with var(--editor-wall); in the dark theme
 		   that token inverts to a pale #9aa89c, which would all but disappear on this
