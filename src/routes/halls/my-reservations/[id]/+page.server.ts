@@ -23,6 +23,9 @@ import { markTicketRead } from '$lib/unread';
 import { logReservationActivity } from '$lib/server/reservation-activity';
 import { findOrCreateReservationThread, MESSAGE_MAX } from '$lib/server/threads';
 import { loadPaymentView } from '$lib/server/payments';
+import { feedbackDeadline, feedbackState, parseFeedbackForm } from '$lib/feedback';
+import { loadFeedback, saveFeedback } from '$lib/server/feedback';
+import { todayUtcISO } from '$lib/server/reservation-rules';
 
 const RANGE_DAYS = 540;
 const EDITABLE = new Set(['pending']);
@@ -125,8 +128,26 @@ export const load: PageServerLoad = async ({ params, locals, url }) => {
 		thread: { ticketId: ticket?.id ?? null, messages },
 		// Price and how to pay the venue (D6); nothing to pay on a cancelled booking.
 		payment: reservation.status === 'cancelled' ? null : await loadPaymentView(locals.db, orgId, reservation.id),
+		// The rating card on a completed event (D5); null when there is none to show.
+		feedback: await feedbackForPage(locals.db, reservation, hall?.allow_feedback ?? 0),
 	};
 };
+
+type FeedbackReservation = Pick<ReservationRow, 'id' | 'status' | 'event_date'> & { feedback_requested_at?: string | null };
+
+/** The client's rating card: open for a rating or a change, closed (read-only), or
+ *  null when the hall does not ask or the event is not over. */
+async function feedbackForPage(db: App.Locals['db'], reservation: FeedbackReservation, allowFeedback: number | boolean) {
+	if (reservation.status !== 'completed') return null;
+	const row = await loadFeedback(db, reservation.id);
+	const requestedAt = reservation.feedback_requested_at ?? null;
+	const state = feedbackState({
+		allowFeedback, status: reservation.status, eventDate: reservation.event_date,
+		requestedAt, hasFeedback: !!row, todayISO: todayUtcISO(),
+	});
+	if (state === 'hidden') return null;
+	return { state, row, deadline: feedbackDeadline(reservation.event_date, requestedAt) };
+}
 
 export const actions: Actions = {
 	// Client changes their extras selection (only before the booking is approved).
@@ -275,6 +296,29 @@ export const actions: Actions = {
 		notifyClientCancelled(locals.db, orgId, reservation.id).catch(() => {});
 
 		return { cancelled: true };
+	},
+
+	// The client rates their finished event (D5): 1–5 stars and an optional comment,
+	// changeable while the card is open. One rating per reservation.
+	feedback: async ({ params, request, locals }) => {
+		if (!locals.user) return fail(401, { error: st(locals.locale).serverErrors.notSignedIn, scope: 'feedback' });
+		if (!locals.domainOrg) return fail(400, { error: st(locals.locale).serverErrors.noOrganisationContext, scope: 'feedback' });
+		const orgId = locals.domainOrg.id;
+		const reservation = await loadReservation(locals.db, params.id, locals.user.id, orgId);
+		if (!reservation) return fail(404, { error: st(locals.locale).serverErrors.reservationNotFoundDot, scope: 'feedback' });
+		const f = st(locals.locale).feedback;
+		const hall = await dbFirst<{ allow_feedback: number }>(locals.db, 'SELECT allow_feedback FROM halls WHERE id = ?', reservation.hall_id);
+		const card = await feedbackForPage(locals.db, reservation, hall?.allow_feedback ?? 0);
+		if (card?.state !== 'open') return fail(403, { error: f.errClosed, scope: 'feedback' });
+
+		const data = await request.formData();
+		const parsed = parseFeedbackForm({ rating: String(data.get('rating') ?? ''), comment: String(data.get('comment') ?? '') });
+		if (!parsed.ok) return fail(400, { error: parsed.field === 'rating' ? f.errRating : f.errComment, scope: 'feedback' });
+		await saveFeedback(locals.db, {
+			reservationId: reservation.id, orgId, hallId: reservation.hall_id, userId: locals.user.id,
+			rating: parsed.values.rating, comment: parsed.values.comment,
+		});
+		return { feedbackSaved: true };
 	},
 
 	sendMessage: async ({ params, request, locals }) => {

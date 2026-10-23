@@ -1,8 +1,18 @@
 import { describe, expect, it } from 'vitest';
 import {
 	amountInputValue, depositOverdue, formatIban, isValidIban, isValidVariableSymbol, parseAmount,
-	parsePaymentDefaults, parsePaymentForm, readPaymentDefaults, resolvePayment,
+	parsePaymentDefaults, parsePaymentForm, readPaymentDefaults, resolvePayment, suggestedPrice,
 } from './payment';
+
+describe('suggested price (D6)', () => {
+	it('adds the hall\'s base price and the booked extras', () => {
+		expect(suggestedPrice(100000, 25000)).toBe(125000);
+		expect(suggestedPrice(100000, 0)).toBe(100000);
+		expect(suggestedPrice(null, 25000)).toBe(25000);
+		expect(suggestedPrice(null, 0)).toBeNull();
+		expect(suggestedPrice(0, null)).toBe(0);
+	});
+});
 
 describe('parseAmount', () => {
 	it('reads the ways people type euros', () => {

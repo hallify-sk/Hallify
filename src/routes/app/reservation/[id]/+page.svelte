@@ -15,7 +15,8 @@
 	import type { RsvpConfig } from '$lib/db/index';
 	import { computeExtras, eur } from '$lib/extras';
 	import { eventTypeLabel, parseEventTypes } from '$lib/eventTypes';
-	import { amountInputValue, depositOverdue, formatIban } from '$lib/payment';
+	import { amountInputValue, depositOverdue, formatIban, suggestedPrice } from '$lib/payment';
+	import StarRating from '$lib/components/StarRating.svelte';
 
 	interface Props { data: PageData; form: ActionData; }
 	let { data, form }: Props = $props();
@@ -55,11 +56,15 @@
 	let payIban = $state('');
 	let payVs = $state('');
 	let payNote = $state('');
-	// The booked extras' total, offered as the price while none is entered.
+	// The hall's base price plus the booked extras, offered as the price: prefilled
+	// while the booking states none, and one click away when it differs.
 	const bookedExtrasCents = $derived(computeExtras(data.extras, data.selectedExtras, data.reservation.num_guests).totalCents);
+	const hallBaseCents = $derived(data.payment?.hallBasePriceCents ?? null);
+	const suggestedCents = $derived(suggestedPrice(hallBaseCents, bookedExtrasCents));
+	const suggestionShown = $derived(suggestedCents != null && payPrice.trim() !== amountInputValue(suggestedCents, getLocale()));
 	function startPaymentEdit() {
 		const r = data.payment?.row;
-		payPrice = amountInputValue(r?.price_cents, getLocale());
+		payPrice = amountInputValue(r?.price_cents ?? suggestedCents, getLocale());
 		payDeposit = amountInputValue(r?.deposit_cents, getLocale());
 		payDue = r?.deposit_due_date ?? '';
 		payIban = r?.payment_iban ? formatIban(r.payment_iban) : '';
@@ -448,10 +453,13 @@
 			</div>
 		</div>
 
-		{#if isAdmin}
+		{#if isAdmin || data.clientUrl}
 			<div class="details-foot">
-				{#if form?.detailsSaved}<span class="exr-saved" role="status">{t.resOps.detailsSaved}</span>{/if}
-				<button type="button" class="btn-outline btn-sm" onclick={() => (editOpen = true)}>{t.resOps.editDetails}</button>
+				{#if data.clientUrl}<a class="client-card-link" href={data.clientUrl}>{t.clients.viewClient}</a>{/if}
+				{#if isAdmin}
+					{#if form?.detailsSaved}<span class="exr-saved" role="status">{t.resOps.detailsSaved}</span>{/if}
+					<button type="button" class="btn-outline btn-sm" onclick={() => (editOpen = true)}>{t.resOps.editDetails}</button>
+				{/if}
 			</div>
 		{/if}
 	</section>
@@ -640,10 +648,10 @@
 						<div class="field">
 							<label for="pay-price">{t.payment.price}</label>
 							<input id="pay-price" name="price" type="text" inputmode="decimal" autocomplete="off" bind:value={payPrice} />
-							{#if !payPrice.trim() && bookedExtrasCents > 0}
+							{#if suggestionShown && suggestedCents != null}
 								<span class="pay-hint">
-									{t.payment.suggestion(eur(bookedExtrasCents, getLocale()))}
-									<button type="button" class="assign-link" onclick={() => (payPrice = amountInputValue(bookedExtrasCents, getLocale()))}>{t.payment.useSuggestion}</button>
+									{t.payment.suggestion(eur(suggestedCents, getLocale()))}{#if hallBaseCents != null && bookedExtrasCents > 0} ({t.payment.suggestionParts(eur(hallBaseCents, getLocale()), eur(bookedExtrasCents, getLocale()))}){/if}
+									<button type="button" class="assign-link" onclick={() => (payPrice = amountInputValue(suggestedCents, getLocale()))}>{t.payment.useSuggestion}</button>
 								</span>
 							{/if}
 						</div>
@@ -682,6 +690,41 @@
 						<button type="submit" class="btn-action btn-sm">{t.payment.save}</button>
 					</div>
 				</form>
+			{/if}
+		</section>
+	{/if}
+
+	<!-- The client's rating of the finished event (D5). Private to the team. -->
+	{#if data.feedback}
+		{@const fb = data.feedback}
+		<section class="section">
+			<div class="section-head section-head--row">
+				<div>
+					<h2>{t.feedback.title}</h2>
+					<p>{t.feedback.staffHint}</p>
+				</div>
+			</div>
+			{#if fb.row}
+				<div class="fb-staff">
+					<div class="fb-staff-head">
+						<StarRating rating={fb.row.rating} size={18} />
+						<span class="fb-staff-num">{fb.row.rating} {t.feedback.outOf5}</span>
+						<span class="fb-staff-meta">
+							{t.feedback.givenOn(fmtLocaleDate(fb.row.created_at, getLocale()))}{fb.row.updated_at !== fb.row.created_at ? ` · ${t.feedback.edited}` : ''}
+						</span>
+					</div>
+					<p class="fb-staff-comment" class:muted={!fb.row.comment}>{fb.row.comment ?? t.feedback.noComment}</p>
+					{#if fb.deadline >= new Date().toISOString().slice(0, 10)}
+						<p class="fb-staff-note">{t.feedback.staffEditable(fmtLocaleDate(fb.deadline, getLocale()))}</p>
+					{/if}
+				</div>
+			{:else}
+				<p class="exr-empty">{t.feedback.staffNone}</p>
+				<p class="fb-staff-note">
+					{#if !fb.asked}{t.feedback.staffNotAsked}
+					{:else if fb.requestedAt}{t.feedback.staffInvited(fmtLocaleDate(fb.requestedAt, getLocale()))}
+					{:else if fb.deadline >= new Date().toISOString().slice(0, 10)}{t.feedback.staffWillInvite}{/if}
+				</p>
 			{/if}
 		</section>
 	{/if}
@@ -1080,6 +1123,17 @@
 	.pay-hint a { color: var(--accent-ink); }
 	.pay-form .pay-check { display: flex; align-items: center; gap: 8px; font-weight: 500; cursor: pointer; }
 	.pay-check input { width: 15px; height: 15px; margin: 0; }
+
+	/* ── Client feedback ── */
+	.fb-staff { max-width: 680px; }
+	.fb-staff-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+	.fb-staff-num { font-size: 13px; font-weight: 650; color: var(--text-base); }
+	.fb-staff-meta { font-size: 12px; color: var(--text-muted); }
+	.fb-staff-comment { font-size: 14px; line-height: 1.6; margin: 10px 0 0; white-space: pre-line; overflow-wrap: anywhere; color: var(--text-base); }
+	.fb-staff-comment.muted { color: var(--text-muted); font-size: 13px; }
+	.fb-staff-note { font-size: 12px; color: var(--text-muted); margin: 8px 0 0; }
+	.client-card-link { font-size: 12.5px; font-weight: 600; color: var(--accent-ink); text-decoration: none; margin-right: auto; }
+	.client-card-link:hover { text-decoration: underline; }
 
 	/* ── Message-the-client composer ── */
 	.msg-client-link { font-size: 12px; font-weight: 600; color: var(--accent-ink); text-decoration: none; }

@@ -118,6 +118,15 @@ export function resolvePayment(row: Partial<PaymentRow> | null | undefined, defa
 	};
 }
 
+/** The price offered while a booking states none: the hall's base price plus the
+ *  booked extras. Null when neither is known. */
+export function suggestedPrice(hallBaseCents: number | null | undefined, extrasCents: number | null | undefined): number | null {
+	const base = hallBaseCents ?? null;
+	const extras = extrasCents && extrasCents > 0 ? extrasCents : null;
+	if (base == null && extras == null) return null;
+	return (base ?? 0) + (extras ?? 0);
+}
+
 /** The deposit's due date has passed and nothing has been marked as received. */
 export function depositOverdue(view: PaymentView, todayISO: string): boolean {
 	return !!view.depositDueDate && view.depositCents != null && !view.depositPaidAt && !view.paidInFullAt

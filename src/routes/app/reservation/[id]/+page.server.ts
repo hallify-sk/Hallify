@@ -16,7 +16,11 @@ import { orgPublicBaseUrl } from '$lib/orgUrl';
 import { RSVP_ENABLED } from '$lib/features';
 import { env } from '$env/dynamic/private';
 import { parsePaymentForm, resolvePayment, type PaymentField } from '$lib/payment';
-import { loadPaymentDefaults, loadPaymentRow, markPayment, savePaymentDetails } from '$lib/server/payments';
+import { loadHallBasePrice, loadPaymentDefaults, loadPaymentRow, markPayment, savePaymentDetails } from '$lib/server/payments';
+import { feedbackDeadline } from '$lib/feedback';
+import { loadFeedback } from '$lib/server/feedback';
+import { reservationClientKey } from '$lib/server/clients';
+import { clientUrlId } from '$lib/clients';
 
 // The organization's preferred default language — used to localize emails to the
 // invited/assigned client (who interacts with the org in that language).
@@ -74,13 +78,14 @@ export const load: PageServerLoad = async ({ locals, params, url }) => {
 	const reservation = await dbFirst<ReservationRow & Extra & {
 		hall_max_people: number; hall_floorplan_json: unknown;
 		hall_auto_approve: boolean; hall_min_cancel_days: number;
-		hall_pre_reservation_text: string | null;
+		hall_pre_reservation_text: string | null; hall_allow_feedback: number;
 		user_first_name: string; user_last_name: string; user_email: string | null;
 		user_account_type: string | null;
 	}>(locals.db,
 		`SELECT r.*, h.name AS hall_name, h.max_people AS hall_max_people,
 			h.floorplan_json AS hall_floorplan_json, h.auto_approve AS hall_auto_approve,
 			h.min_cancel_days AS hall_min_cancel_days, h.pre_reservation_text AS hall_pre_reservation_text,
+			h.allow_feedback AS hall_allow_feedback,
 			COALESCE(u.first_name, 'Former') AS user_first_name,
 			COALESCE(u.last_name, 'member') AS user_last_name,
 			u.email AS user_email, u.account_type AS user_account_type
@@ -153,17 +158,45 @@ export const load: PageServerLoad = async ({ locals, params, url }) => {
 			parseExtrasSnapshot((reservation as { extras_snapshot_json?: string | null }).extras_snapshot_json)),
 		selectedExtras: parseExtraIds(reservation.extras_json as string | null),
 		activity: access.canManage ? await listReservationActivity(locals.db, params.id) : [],
-		payment: await paymentForPage(locals.db, orgId, params.id),
+		payment: await paymentForPage(locals.db, orgId, params.id, reservation.hall_id),
+		// The client's rating of the finished event (D5): private to the team.
+		feedback: access.canManage && clientOwner ? await feedbackForStaff(locals.db, reservation) : null,
+		// The client's card in the client list (D10).
+		clientUrl: access.canManage ? await clientCardUrl(locals.db, orgId, params.id) : null,
 	};
 };
 
+async function feedbackForStaff(db: App.Locals['db'], reservation: { id: string; status: string; event_date: string; hall_allow_feedback: number; feedback_requested_at?: string | null }) {
+	const row = await loadFeedback(db, reservation.id);
+	const requestedAt = reservation.feedback_requested_at ?? null;
+	// Before the event is over there is nothing to show, unless a rating exists anyway.
+	if (reservation.status !== 'completed' && !row) return null;
+	return {
+		row,
+		requestedAt,
+		asked: !!reservation.hall_allow_feedback,
+		deadline: feedbackDeadline(reservation.event_date, requestedAt),
+	};
+}
+
+async function clientCardUrl(db: App.Locals['db'], orgId: string, reservationId: string): Promise<string | null> {
+	try {
+		const key = await reservationClientKey(db, orgId, reservationId);
+		return key ? `/app/manage/clients/${clientUrlId(key)}` : null;
+	} catch {
+		return null;
+	}
+}
+
 /** The booking's price and payment details with the venue's defaults (D6); null
  *  before migration 0031. */
-async function paymentForPage(db: App.Locals['db'], orgId: string, reservationId: string) {
+async function paymentForPage(db: App.Locals['db'], orgId: string, reservationId: string, hallId: string) {
 	const row = await loadPaymentRow(db, reservationId);
 	if (!row) return null;
 	const defaults = await loadPaymentDefaults(db, orgId);
-	return { row, defaults, view: resolvePayment(row, defaults) };
+	// The hall's base price, which with the booked extras is offered as the price.
+	const hallBasePriceCents = await loadHallBasePrice(db, hallId);
+	return { row, defaults, view: resolvePayment(row, defaults), hallBasePriceCents };
 }
 
 /** The message for a payment field the staff form got wrong. */

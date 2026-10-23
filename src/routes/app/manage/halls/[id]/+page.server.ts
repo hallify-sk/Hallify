@@ -1,3 +1,6 @@
+import { parseAmount } from '$lib/payment';
+import { saveHallBasePrice } from '$lib/server/payments';
+import { hallFeedback } from '$lib/server/feedback';
 import { error, fail, redirect } from '@sveltejs/kit';
 import { dbAll, dbFirst, dbRun, toJson, fromJson, fromJsonArr } from '$lib/db/index';
 import type { HallRow, HallBlockRow, TemplateRow, TableTypeRow, ReservationRow, HallExtraRow } from '$lib/db/index';
@@ -119,7 +122,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 	const orgId = locals.currentOrg!.id;
 	// price_band arrived with 0006 and is not on HallRow yet; widen it here rather
 	// than wait for the shared type.
-	const hall = await dbFirst<HallRow & { price_band: number | null }>(
+	const hall = await dbFirst<HallRow & { price_band: number | null; base_price_cents?: number | null }>(
 		locals.db, 'SELECT * FROM halls WHERE id = ? AND org_id = ?', params.id, orgId
 	);
 	if (!hall) error(404, st(locals.locale).serverErrors.hallNotFound);
@@ -193,7 +196,9 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 
 	// Ordering (or withdrawing) the paid mapping add-on needs settings.manage (I29).
 	const canOrderAddons = await canManageSettings(locals);
-	return { hall, templates, blocks, tableTypes, reservations, extras, plan, orgAmenities, floorplanRequest, blocking, unused, planFull, swapCandidates, canOrderAddons };
+	// Clients' ratings of events in this hall (D5): private to the team.
+	const feedback = await hallFeedback(locals.db, orgId, hall.id);
+	return { hall, templates, blocks, tableTypes, reservations, extras, plan, orgAmenities, floorplanRequest, blocking, unused, planFull, swapCandidates, canOrderAddons, feedback };
 };
 
 /** The hall in the URL must belong to the acting organization. Every action below
@@ -226,6 +231,20 @@ export const actions: Actions = {
 		}, locals.locale);
 		if (!res.ok) return fail(res.status, { infoError: res.error });
 		return { infoSuccess: true };
+	},
+
+	// The hall's informational base price (D6): with the booked extras it is offered as
+	// a reservation's price. Never charged, never shown to clients on its own.
+	saveBasePrice: async ({ request, params, locals }) => {
+		const org = await requireOrgPermission(locals, 'halls.manage');
+		await assertHallInOrg(locals.db, params.id, org.id);
+		const data = await request.formData();
+		const cents = parseAmount(String(data.get('basePrice') ?? ''));
+		if (cents === undefined) return fail(400, { basePriceError: st(locals.locale).payment.errBasePrice });
+		if (!(await saveHallBasePrice(locals.db, org.id, params.id, cents))) {
+			return fail(503, { basePriceError: st(locals.locale).payment.unavailable });
+		}
+		return { basePriceSaved: true };
 	},
 
 	saveFloorplan: async ({ request, params, locals }) => {

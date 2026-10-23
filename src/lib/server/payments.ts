@@ -47,6 +47,26 @@ export async function loadPaymentView(db: D1Database, orgId: string, reservation
 	return resolvePayment(row, await loadPaymentDefaults(db, orgId));
 }
 
+/** A hall's informational base price in cents (migration 0031a), or null. */
+export async function loadHallBasePrice(db: D1Database, hallId: string): Promise<number | null> {
+	try {
+		const row = await dbFirst<{ base_price_cents: number | null }>(db, 'SELECT base_price_cents FROM halls WHERE id = ?', hallId);
+		return row?.base_price_cents ?? null;
+	} catch {
+		return null;
+	}
+}
+
+/** Store a hall's base price. Returns false before migration 0031a. */
+export async function saveHallBasePrice(db: D1Database, orgId: string, hallId: string, cents: number | null): Promise<boolean> {
+	try {
+		await dbRun(db, 'UPDATE halls SET base_price_cents = ? WHERE id = ? AND org_id = ?', cents, hallId, orgId);
+		return true;
+	} catch {
+		return false;
+	}
+}
+
 /** Whether payment details can be stored here (migration 0031 has run). */
 export async function paymentsAvailable(db: D1Database): Promise<boolean> {
 	try {
