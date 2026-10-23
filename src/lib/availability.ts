@@ -6,6 +6,8 @@ import { dbAll, dbFirst, dbRun } from '$lib/db/index';
 import { getPlan } from '$lib/plans';
 import type { PlanId } from '$lib/plans';
 import { st } from '$lib/i18n-server';
+import { closedWeekdays } from '$lib/site/opening-hours';
+import { localeTag } from '$lib/format';
 import type { D1Database } from '@cloudflare/workers-types';
 
 export const HOLD_MINUTES = 15;
@@ -58,6 +60,85 @@ export function expandBlocks(blocks: BlockRow[], fromISO: string, toISO: string)
 		if (isDateBlocked(blocks, key)) out.add(key);
 	}
 	return out;
+}
+
+/** Every date in [fromISO, toISO] that falls on one of `weekdays` (JS getDay()). */
+export function expandWeekdays(weekdays: number[], fromISO: string, toISO: string): string[] {
+	if (!weekdays.length) return [];
+	const out: string[] = [];
+	const end = parseISO(toISO);
+	for (let d = parseISO(fromISO); d <= end; d = addDays(d, 1)) {
+		if (weekdays.includes(d.getDay())) out.push(isoLocal(d));
+	}
+	return out;
+}
+
+/**
+ * Dates in [fromISO, toISO] that cannot be booked whatever else happens: closed by a
+ * hall block, or a weekday the venue marks closed in its opening hours.
+ *
+ * The booking calendars used to work this out in the browser from the blocks alone,
+ * so a closed Sunday looked free, could be held, and failed only on submit.
+ */
+export function unavailableDates(
+	blocks: BlockRow[],
+	openingHours: unknown,
+	fromISO: string,
+	toISO: string
+): string[] {
+	const out = expandBlocks(blocks, fromISO, toISO);
+	for (const d of expandWeekdays(closedWeekdays(openingHours), fromISO, toISO)) out.add(d);
+	return [...out].sort();
+}
+
+/** Same as unavailableDates, read from the database. */
+export async function getUnavailableDates(
+	db: D1Database,
+	hall: { id: string; opening_hours?: unknown },
+	fromISO: string,
+	toISO: string
+): Promise<string[]> {
+	const rows = await dbAll<BlockRow>(db,
+		'SELECT block_type, date_from, date_to, days_of_week FROM hall_blocks WHERE hall_id = ?', hall.id);
+	const blocks = rows.map(b => ({ ...b, days_of_week: parseDow(b.days_of_week as unknown) }));
+	return unavailableDates(blocks, hall.opening_hours ?? null, fromISO, toISO);
+}
+
+/** The plan's per-hall monthly reservation cap for an org; -1 = unlimited. */
+async function monthlyCap(db: D1Database, orgId: string): Promise<number> {
+	const sub = await dbFirst<{ plan: string | null }>(db, 'SELECT plan FROM subscriptions WHERE org_id = ?', orgId);
+	return getPlan((sub?.plan ?? 'free') as PlanId).limits.maxReservationsPerHallMonth;
+}
+
+/**
+ * Months ('YYYY-MM') in [fromISO, toISO] where the hall has reached its plan's monthly
+ * cap, so the calendar can show them as full instead of letting a client hold a date
+ * and be refused on submit. `excludeReservationId` is left out of the count (a client
+ * moving their own booking).
+ */
+export async function getFullMonths(
+	db: D1Database,
+	hall: { id: string; org_id: string },
+	fromISO: string,
+	toISO: string,
+	excludeReservationId: string | null = null
+): Promise<string[]> {
+	const limit = await monthlyCap(db, hall.org_id);
+	if (limit === -1) return [];
+	const rows = await dbAll<{ m: string; n: number }>(db,
+		`SELECT substr(event_date, 1, 7) AS m, COUNT(*) AS n FROM reservations
+		 WHERE hall_id = ? AND status != 'cancelled' AND id IS NOT ?
+		   AND substr(event_date, 1, 10) >= ? AND substr(event_date, 1, 10) <= ?
+		 GROUP BY m HAVING n >= ?`,
+		hall.id, excludeReservationId, fromISO.slice(0, 7) + '-01', toISO, limit);
+	return rows.map(r => r.m).sort();
+}
+
+/** 'november 2026' / 'November 2026' for a 'YYYY-MM' key. */
+export function monthName(month: string, locale: 'sk' | 'en'): string {
+	const [y, m] = month.split('-').map(Number);
+	if (!y || !m) return month;
+	return new Date(Date.UTC(y, m - 1, 15)).toLocaleDateString(localeTag(locale), { month: 'long', year: 'numeric', timeZone: 'UTC' });
 }
 
 // ── Taken / held lookups ──
@@ -153,15 +234,16 @@ export async function assertCanBook(
 	if (!/^\d{4}-\d{2}-\d{2}$/.test(eventDate)) return { ok: false, reason: e.chooseValidDate };
 
 	// Per-hall/month reservation cap (by the event's calendar month; excludes
-	// cancelled). The number comes from the hall's org plan.
-	const sub = await dbFirst<{ plan: string | null }>(db, 'SELECT plan FROM subscriptions WHERE org_id = ?', hall.org_id);
-	const monthLimit = getPlan((sub?.plan ?? 'free') as PlanId).limits.maxReservationsPerHallMonth;
+	// cancelled). The number comes from the hall's org plan. The message names the
+	// month in words and keeps the plan's number to itself: it is shown to the
+	// venue's clients, who have no business knowing the venue's plan.
+	const monthLimit = await monthlyCap(db, hall.org_id);
 	if (monthLimit !== -1) {
 		const mc = await dbFirst<{ n: number }>(db,
 			"SELECT COUNT(*) AS n FROM reservations WHERE hall_id = ? AND status != 'cancelled' AND substr(event_date, 1, 7) = ? AND id IS NOT ?",
 			hall.id, eventDate.slice(0, 7), excludeReservationId);
 		if ((mc?.n ?? 0) >= monthLimit) {
-			return { ok: false, reason: e.hallFullyBookedMonth(eventDate.slice(0, 7), monthLimit) };
+			return { ok: false, reason: e.hallFullyBookedMonth(monthName(eventDate.slice(0, 7), locale)) };
 		}
 	}
 
@@ -177,17 +259,12 @@ export async function assertCanBook(
 	// NOTE: only the per-day open/closed flag is enforced — NOT the from/to times, since
 	// the field doubles as "office hours" for some venues. If opening_hours is unset or
 	// malformed, nothing is enforced.
+	// The calendars read the same rule (unavailableDates), so a closed day is greyed
+	// out there rather than refused here after the client filled in the form.
 	const oh = await dbFirst<{ opening_hours: string | null }>(db,
 		'SELECT opening_hours FROM halls WHERE id = ?', hall.id);
-	if (oh?.opening_hours) {
-		try {
-			const parsed = JSON.parse(oh.opening_hours) as Record<string, { open?: boolean }>;
-			const dow = parseISO(eventDate).getDay(); // 0 = Sunday
-			// The hall editor writes 'mon'..'sun' keys; accept a numeric key too so any
-			// older rows keep working.
-			const day = parsed[DOW_KEYS[dow]] ?? parsed[String(dow)];
-			if (day && day.open === false) return { ok: false, reason: e.dateUnavailable };
-		} catch { /* malformed — don't block on it */ }
+	if (closedWeekdays(oh?.opening_hours ?? null).includes(parseISO(eventDate).getDay())) {
+		return { ok: false, reason: e.venueClosedThatDay };
 	}
 
 	const blocks = await dbAll<BlockRow>(db,

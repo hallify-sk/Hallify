@@ -19,8 +19,9 @@
 		holdMinutes={data.holdMinutes}
 		extras={data.extras ?? []}
 		backHref={`/halls/${data.hall.slug ?? data.hall.id}`}
+		unavailableDates={data.unavailableDates}
+		fullMonths={data.fullMonths}
 		formError={form?.error ?? null}
-		showAutoApproveNote={false}
 	/>
 </div>
 

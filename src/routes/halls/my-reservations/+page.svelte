@@ -8,7 +8,11 @@
   interface Props { data: PageData; }
   const { data }: Props = $props();
 
-  const justBooked = $derived($page.url.searchParams.get('booked') === '1');
+  // '?booked=approved' when the hall auto-approves: the booking is confirmed, and
+  // saying "the venue will review it" was wrong.
+  const bookedParam = $derived($page.url.searchParams.get('booked'));
+  const justBooked = $derived(bookedParam === '1' || bookedParam === 'approved');
+  const justConfirmed = $derived(bookedParam === 'approved');
 
   const today = new Date(); today.setHours(0, 0, 0, 0);
   function isPast(d: string) { return new Date(d + 'T00:00:00') < today; }
@@ -56,9 +60,13 @@
   </div>
 
   {#if justBooked}
-    <div class="toast">
+    <div class="toast" role="status">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
-      {t.myRes.requestSent} {data.domainOrg.name} {t.myRes.requestSentTail}
+      {#if justConfirmed}
+        {t.myRes.bookingConfirmed}
+      {:else}
+        {t.myRes.requestSent} {data.domainOrg.name} {t.myRes.requestSentTail}
+      {/if}
     </div>
   {/if}
 </section>

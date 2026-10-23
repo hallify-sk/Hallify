@@ -1,10 +1,12 @@
 import { error, fail, redirect } from '@sveltejs/kit';
 import { dbAll, dbFirst, dbRun, fromJsonArr } from '$lib/db/index';
-import type { HallRow, HallBlockRow, HallExtraRow } from '$lib/db/index';
+import type { HallRow, HallBlockRow } from '$lib/db/index';
 import type { PageServerLoad, Actions } from './$types';
-import { assertCanBook, getTakenDates, getHeldDatesByOthers, releaseHold, earliestBookableISO, isoLocal, addDays, HOLD_MINUTES } from '$lib/availability';
+import { assertCanBook, getTakenDates, getHeldDatesByOthers, getUnavailableDates, getFullMonths, releaseHold, earliestBookableISO, isoLocal, addDays, HOLD_MINUTES } from '$lib/availability';
 import { notifyNewReservation } from '$lib/email';
+import { dispatchWebhooks } from '$lib/notifications';
 import { st } from '$lib/i18n-server';
+import { loadBookableExtras } from '$lib/site/bookable-extras';
 
 const RANGE_DAYS = 540;
 
@@ -25,8 +27,14 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 
 	return {
 		hall,
-		extras: await dbAll<HallExtraRow>(locals.db, 'SELECT * FROM hall_extras WHERE hall_id = ? ORDER BY created_at', hall.id),
+		// Only the extras the venue's current plan allows (B88).
+		extras: await loadBookableExtras(locals.db, hall.id, orgId),
 		blocks: blocksRaw.map(b => ({ ...b, days_of_week: fromJsonArr(b.days_of_week as string | null) })),
+		// Blocks AND closed weekdays, worked out on the server with the same rule the
+		// submit check uses, so a closed day cannot be picked and held.
+		unavailableDates: await getUnavailableDates(locals.db, hall, fromISO, toISO),
+		// Months already at the plan's monthly cap: shown as full, not refused on submit.
+		fullMonths: await getFullMonths(locals.db, hall, fromISO, toISO),
 		takenDates: await getTakenDates(locals.db, hall.id, fromISO, toISO),
 		heldDates: await getHeldDatesByOthers(locals.db, hall.id, locals.user.id),
 		earliestDate: earliestBookableISO(hall.min_days_advance),
@@ -51,23 +59,31 @@ export const actions: Actions = {
 		const description = String(data.get('description') ?? '').trim() || null;
 		const numGuests = parseInt(String(data.get('numGuests') ?? ''), 10) || null;
 		// Guard the lower bound too — a negative count was accepted and stored.
-		if (numGuests != null && numGuests < 1) return fail(400, { error: st(locals.locale).serverErrors.chooseValidDate });
+		if (numGuests != null && numGuests < 1) return fail(400, { error: st(locals.locale).serverErrors.invalidGuestCount });
 
 		if (!title) return fail(400, { error: st(locals.locale).serverErrors.eventNameRequired });
 		if (!eventDate) return fail(400, { error: st(locals.locale).serverErrors.pleaseChooseDate });
 
 		const check = await assertCanBook(locals.db, hall, eventDate, locals.user.id, numGuests, locals.locale);
-		if (!check.ok) return fail(400, { error: check.reason });
+		if (!check.ok) {
+			// The date cannot be booked (full month, closed day, taken...), so the
+			// client's hold on it is released instead of blocking it for 15 minutes,
+			// and the form is told to drop the date.
+			await releaseHold(locals.db, hall.id, eventDate, locals.user.id);
+			return fail(400, { error: check.reason, dateRejected: true });
+		}
 
-		// Only keep selected extras that actually belong to this hall.
+		// Only keep selected extras that belong to this hall and that the venue's
+		// plan still allows.
 		const requested = data.getAll('extras').map(String);
 		const valid = requested.length
-			? (await dbAll<{ id: string }>(locals.db, 'SELECT id FROM hall_extras WHERE hall_id = ?', hall.id)).map(e => e.id)
+			? (await loadBookableExtras(locals.db, hall.id, orgId)).map(e => e.id)
 			: [];
 		const extrasIds = requested.filter(id => valid.includes(id));
 		const extrasJson = extrasIds.length ? JSON.stringify(extrasIds) : null;
 
 		const reservationId = crypto.randomUUID();
+		const status = hall.auto_approve ? 'approved' : 'pending';
 		const inviteCode = crypto.randomUUID().replace(/-/g, '').slice(0, 8).toUpperCase();
 
 		try {
@@ -79,7 +95,7 @@ export const actions: Actions = {
 				// Honour the hall's auto-approve flag, exactly as the apex client path and
 				// the staff paths do. This branch hardcoded 'pending', so a venue that had
 				// switched auto-approve on still had to approve every bubble booking.
-				hall.auto_approve ? 'approved' : 'pending',
+				status,
 				inviteCode, numGuests, extrasJson
 			);
 		} catch {
@@ -92,6 +108,14 @@ export const actions: Actions = {
 		const guestName = `${locals.user.first_name} ${locals.user.last_name}`;
 		notifyNewReservation(locals.db, orgId, title, guestName, hall.name, eventDate).catch(() => {});
 
-		redirect(303, '/halls/my-reservations?booked=1');
+		// Same webhook as a staff-made booking (src/lib/server/reservations.ts):
+		// bookings from the venue site fired none.
+		dispatchWebhooks(locals.db, orgId, 'reservation.new', {
+			reservation_id: reservationId, title, hall_id: hall.id, event_date: eventDate, event_type: null,
+		}).catch(() => {});
+
+		// The confirmation says what actually happened: an auto-approved booking is
+		// confirmed, not "the venue will review it".
+		redirect(303, `/halls/my-reservations?booked=${status === 'approved' ? 'approved' : '1'}`);
 	}
 };

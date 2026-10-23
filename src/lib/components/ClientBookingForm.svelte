@@ -3,11 +3,11 @@
 	import { onMount } from 'svelte';
 	import { booking } from '$lib/analytics';
 	import { beforeNavigate } from '$app/navigation';
-	import { onDestroy } from 'svelte';
+	import { onDestroy, tick } from 'svelte';
 	import MiniCalendar from '$lib/components/MiniCalendar.svelte';
 	import { postHold, releaseHoldBeacon } from '$lib/holdClient';
-	import { eur } from '$lib/extras';
-	import { t } from '$lib/i18n.svelte';
+	import { t, getLocale } from '$lib/i18n.svelte';
+	import { formatDate, formatMoney } from '$lib/format';
 
 	interface Hall {
 		id: string; name: string; color: string; max_people: number;
@@ -24,11 +24,19 @@
 		holdMinutes: number;
 		backHref: string;
 		formError?: string | null;
-		/** false on bubble (always pending), otherwise honor hall.auto_approve */
+		/** Honour hall.auto_approve in the note above the submit button. */
 		showAutoApproveNote?: boolean;
 		extras?: Extra[];
+		/** Server-computed days that cannot be booked (blocks AND closed weekdays).
+		 *  When given, it replaces the in-browser expansion of `blocks`. */
+		unavailableDates?: string[] | null;
+		/** 'YYYY-MM' months already at the plan's monthly cap. */
+		fullMonths?: string[];
 	}
-	const { hall, blocks, takenDates, heldDates, earliestDate, holdMinutes, backHref, formError = null, showAutoApproveNote = true, extras = [] }: Props = $props();
+	const { hall, blocks, takenDates, heldDates, earliestDate, holdMinutes, backHref, formError = null, showAutoApproveNote = true, extras = [], unavailableDates = null, fullMonths = [] }: Props = $props();
+
+	const eur = (cents: number) => formatMoney(cents, getLocale());
+	let errorEl: HTMLDivElement | null = $state(null);
 
 	let selectedExtras = $state<string[]>([]);
 	let eventTitle = $state('');
@@ -85,6 +93,16 @@
 
 	/** The outcome. A refusal is as worth measuring as a success — it is the only
 	 *  signal that tells a venue its own rules are costing it bookings. */
+	/** A refusal: drop a date the server says cannot be booked (its hold is already
+	 *  released), and bring the message into view next to the button that was pressed.
+	 *  It was drawn at the top of a long form, hundreds of pixels above the viewport. */
+	async function afterFailure(result: { type: string; data?: Record<string, unknown> }) {
+		if (result.type !== 'failure') return;
+		if (result.data?.dateRejected) { selectedDate = ''; clearTimers(); holdSeconds = 0; }
+		await tick();
+		errorEl?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+	}
+
 	function trackOutcome(result: { type: string; data?: Record<string, unknown> }) {
 		if (result.type === 'redirect' || (result.type === 'success' && !result.data?.error)) {
 			booking.bookingSubmitted(hallSlug, String(result.data?.status ?? 'submitted'), Number(numGuests) || null);
@@ -102,6 +120,7 @@
 	);
 
 	const blockedStrings = $derived.by(() => {
+		if (unavailableDates) return unavailableDates;
 		const out: string[] = [];
 		for (const b of blocks) {
 			if (b.block_type === 'date_range' && b.date_from && b.date_to) {
@@ -167,10 +186,9 @@
 		</div>
 	</div>
 
-	{#if formError}<div class="bk-error">{formError}</div>{/if}
 	{#if hall.pre_reservation_text}<div class="bk-pre card--inset">{hall.pre_reservation_text}</div>{/if}
 
-	<form method="POST" use:enhance={() => async ({ update, result }) => { trackOutcome(result); await update(); }} class="bk-form">
+	<form method="POST" use:enhance={() => async ({ update, result }) => { trackOutcome(result); await update({ reset: false }); await afterFailure(result); }} class="bk-form">
 		<input type="hidden" name="eventDate" value={selectedDate} />
 		<input type="hidden" name="startTime" value={specifyTime ? startTime : ''} />
 		<input type="hidden" name="endTime" value={specifyTime ? endTime : ''} />
@@ -189,6 +207,7 @@
 				takenDates={takenDates}
 				heldDates={heldDates}
 				minDate={earliestDate}
+				{fullMonths}
 				selectedDate={selectedDate}
 				onselect={onDateSelect}
 				showLegend={true}
@@ -197,7 +216,7 @@
 				<div class="bk-hold err">{holdError}</div>
 			{:else if selectedDate && holdActive}
 				<div class="bk-hold ok">
-					<span>{new Date(selectedDate).toLocaleDateString('sk-SK', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</span>
+					<span>{formatDate(selectedDate, getLocale(), { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</span>
 					<span class="bk-timer">{t.createEvent.heldFor} · {holdLabel}</span>
 				</div>
 			{:else if acquiring}
@@ -258,6 +277,7 @@
 		{/if}
 
 		<div class="bk-footer">
+			{#if formError}<div class="bk-error" role="alert" bind:this={errorEl}>{formError}</div>{/if}
 			{#if showAutoApproveNote}
 				<p class="bk-status">{hall.auto_approve ? t.publicBooking.autoApproveNote : t.publicBooking.reviewNote}</p>
 			{:else}
