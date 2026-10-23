@@ -606,6 +606,7 @@ export const sk = {
 		conversationsWith: "Vaše konverzácie s",
 		noConversations: "Zatiaľ žiadne konverzácie",
 		noConversationsHint: "Otvorte niektorú zo svojich rezervácií a pošlite správu — vaše konverzácie sa zobrazia tu.",
+		unread: "Neprečítané",
 		noMessagesYet: "Zatiaľ žiadne správy",
 	},
 	hallDir: {
@@ -3424,6 +3425,7 @@ export const en: typeof sk = {
 		conversationsWith: "Your conversations with",
 		noConversations: "No conversations yet",
 		noConversationsHint: "Open one of your reservations and send a message — your conversations will appear here.",
+		unread: "Unread",
 		noMessagesYet: "No messages yet",
 	},
 	hallDir: {

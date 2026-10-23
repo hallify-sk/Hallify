@@ -3,7 +3,7 @@
   import type { PageData } from './$types';
   import { statusLabel, statusClass, fmtDate } from '$lib/reservationStatus';
   import { reveal } from '$lib/reveal';
-  import { t } from '$lib/i18n.svelte';
+  import { t, getLocale } from '$lib/i18n.svelte';
 
   interface Props { data: PageData; }
   const { data }: Props = $props();
@@ -100,14 +100,14 @@
                   <div class="res-sub">{r.hall_name}</div>
                 </div>
                 <div class="res-badges">
-                  <span class="badge {statusClass(r.status)}">{statusLabel(r.status)}</span>
+                  <span class="badge {statusClass(r.status)}">{statusLabel(r.status, getLocale())}</span>
                   {#if r.status !== 'cancelled' && isPast(r.event_date)}<span class="badge st-past">{t.event.past}</span>{/if}
                 </div>
               </div>
               <div class="res-meta">
                 <span class="meta-item">
                   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
-                  {fmtDate(r.event_date)}
+                  {fmtDate(r.event_date, getLocale())}
                 </span>
                 {#if r.start_time}
                   <span class="meta-item">

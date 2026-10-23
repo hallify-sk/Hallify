@@ -3,9 +3,10 @@
 	import { tick } from 'svelte';
 	import MiniCalendar from '$lib/components/MiniCalendar.svelte';
 	import { statusLabel, statusClass, fmtDate } from '$lib/reservationStatus';
-	import { computeExtras, eur } from '$lib/extras';
+	import { computeExtras } from '$lib/extras';
 	import { reveal } from '$lib/reveal';
-	import { t } from '$lib/i18n.svelte';
+	import { t, getLocale } from '$lib/i18n.svelte';
+	import { formatDateTime, formatMoney } from '$lib/format';
 	import type { PageData, ActionData } from './$types';
 
 	interface Props { data: PageData; form: ActionData; }
@@ -63,10 +64,15 @@
 
 	const overCapacity = $derived(!!eGuests && !!data.hall?.max_people && Number(eGuests) > data.hall.max_people);
 
-	function fmtTime(ts: string) {
-		const iso = ts.includes('T') ? ts : ts.replace(' ', 'T') + 'Z';
-		return new Date(iso).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
-	}
+	const fmtTime = (ts: string) =>
+		formatDateTime(ts, getLocale(), { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+	const eur = (cents: number) => formatMoney(cents, getLocale());
+
+	/** The venue member's role, in words ('owner' was printed as the raw key). */
+	const roleLabel = (role: string) =>
+		role === 'owner' ? t.membersAdmin.roleOwner
+		: role === 'admin' ? t.membersAdmin.roleAdmin
+		: t.membersAdmin.roleMember;
 
 	let threadEl: HTMLDivElement | null = $state(null);
 	async function scrollThread() { await tick(); if (threadEl) threadEl.scrollTop = threadEl.scrollHeight; }
@@ -89,7 +95,7 @@
 			<p class="head-sub">{r.hall_name}</p>
 		</div>
 		<div class="head-badges">
-			<span class="badge {statusClass(r.status)}">{statusLabel(r.status)}</span>
+			<span class="badge {statusClass(r.status)}">{statusLabel(r.status, getLocale())}</span>
 			{#if data.isPast}
 				<span class="badge st-past">{t.event.past}</span>
 			{:else if data.hasStarted}
@@ -178,7 +184,7 @@
 	{:else}
 		<dl class="detail-list">
 			<div><dt>{t.dashboard.hall}</dt><dd>{r.hall_name}</dd></div>
-			<div><dt>{t.common.date}</dt><dd>{fmtDate(r.event_date)}</dd></div>
+			<div><dt>{t.common.date}</dt><dd>{fmtDate(r.event_date, getLocale())}</dd></div>
 			<div><dt>{t.createEvent.time}</dt><dd>{r.start_time ? `${r.start_time}${r.end_time ? ` – ${r.end_time}` : ''}` : t.calendar.allDay}</dd></div>
 			<div><dt>{t.common.guests}</dt><dd>{r.num_guests ?? '—'}</dd></div>
 			<div><dt>{t.myRes.reference}</dt><dd class="mono">{r.invite_code}</dd></div>
@@ -276,7 +282,7 @@
 		{:else if data.hasStarted}
 			<p class="status-note">{t.event.startedLocked}</p>
 		{:else if !data.editable}
-			<p class="status-note">{t.myRes.lockedNotePrefix} {statusLabel(r.status).toLowerCase()} {t.myRes.lockedNoteMid} {orgName} {t.myRes.lockedNoteSuffix}</p>
+			<p class="status-note">{t.myRes.lockedNotePrefix} {statusLabel(r.status, getLocale()).toLowerCase()} {t.myRes.lockedNoteMid} {orgName} {t.myRes.lockedNoteSuffix}</p>
 		{/if}
 	{/if}
 </section>
@@ -304,7 +310,7 @@
 					{@const mine = m.sender_id === r.user_id}
 					<div class="msg" class:mine>
 						<div class="bubble">
-							{#if !mine}<span class="msg-name">{m.sender_first_name} {m.sender_last_name}{#if m.sender_role}<span class="msg-role">{m.sender_role}</span>{/if}</span>{/if}
+							{#if !mine}<span class="msg-name">{m.sender_first_name} {m.sender_last_name}{#if m.sender_role}<span class="msg-role">{roleLabel(m.sender_role)}</span>{/if}</span>{/if}
 							<span class="msg-body">{m.body}</span>
 							<span class="msg-time">{fmtTime(m.created_at)}</span>
 						</div>

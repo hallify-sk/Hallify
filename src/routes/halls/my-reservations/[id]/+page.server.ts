@@ -9,6 +9,7 @@ import {
 	earliestBookableISO, isoLocal, addDays,
 } from '$lib/availability';
 import { st } from '$lib/i18n-server';
+import { formatDate } from '$lib/format';
 import { hasEventStarted, isEventPast } from '$lib/reservationStatus';
 import type { Actions, PageServerLoad } from './$types';
 
@@ -16,8 +17,9 @@ const RANGE_DAYS = 540;
 const EDITABLE = new Set(['pending']);
 const CANCELLABLE = new Set(['pending', 'waiting_payment', 'approved', 'planned']);
 
-function subjectFor(hallName: string, eventDate: string): string {
-	return `${hallName} – ${new Date(eventDate + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}`;
+/** Ticket subject: hall and date, the date in the client's language (it was en-GB). */
+function subjectFor(hallName: string, eventDate: string, locale: App.Locals['locale']): string {
+	return `${hallName} – ${formatDate(eventDate, locale)}`;
 }
 
 async function loadReservation(db: App.Locals['db'], id: string, userId: string, orgId: string) {
@@ -223,7 +225,7 @@ export const actions: Actions = {
 			const ticketId = crypto.randomUUID();
 			await dbRun(locals.db,
 				`INSERT INTO tickets (id, org_id, user_id, reservation_id, subject, status) VALUES (?, ?, ?, ?, ?, 'open')`,
-				ticketId, orgId, user.id, reservation.id, subjectFor(reservation.hall_name, reservation.event_date));
+				ticketId, orgId, user.id, reservation.id, subjectFor(reservation.hall_name, reservation.event_date, locals.locale));
 			ticket = { id: ticketId };
 		}
 
@@ -233,12 +235,12 @@ export const actions: Actions = {
 		await dbRun(locals.db, `UPDATE tickets SET updated_at = datetime('now'), status = 'open' WHERE id = ?`, ticket.id);
 
 		dispatchWebhooks(locals.db, orgId, isNew ? 'ticket.new' : 'ticket.reply', {
-			ticket_id: ticket.id, ticket_subject: subjectFor(reservation.hall_name, reservation.event_date),
+			ticket_id: ticket.id, ticket_subject: subjectFor(reservation.hall_name, reservation.event_date, locals.locale),
 			sender_name: `${user.first_name} ${user.last_name}`.trim(), message: body,
 		}).catch(() => {});
 
 		notifyGuestMessage(locals.db, orgId, `${user.first_name} ${user.last_name}`,
-			subjectFor(reservation.hall_name, reservation.event_date), body).catch(() => {});
+			subjectFor(reservation.hall_name, reservation.event_date, locals.locale), body).catch(() => {});
 
 		return { msgSent: true };
 	},
