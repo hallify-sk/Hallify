@@ -25,9 +25,13 @@
     permissions?: string[];
     /** The organisation's own public site: '/halls' on its host, its domain elsewhere. */
     venueSiteUrl?: string | null;
+    /** Rendered inside the phone drawer: full height of the drawer, never a rail,
+     *  with a close button. */
+    inDrawer?: boolean;
+    onclose?: () => void;
   }
 
-  const { user, branding, currentOrg, orgs = [], allOrgs = [], onBubble = false, unreadMessages = 0, unreadAnnouncements = 0, permissions = [], venueSiteUrl = null }: Props = $props();
+  const { user, branding, currentOrg, orgs = [], allOrgs = [], onBubble = false, unreadMessages = 0, unreadAnnouncements = 0, permissions = [], venueSiteUrl = null, inDrawer = false, onclose }: Props = $props();
 
   const isOrgAdmin    = $derived(currentOrg?.role === 'owner' || currentOrg?.role === 'admin');
   // Each console link shows when the member holds the permission its page requires,
@@ -81,13 +85,20 @@
   afterNavigate(() => { userMenuOpen = false; });
 </script>
 
-<aside class="sidebar" class:rail={uiStore.sidebarRail}>
+<aside class="sidebar" class:rail={uiStore.sidebarRail && !inDrawer} class:in-drawer={inDrawer}>
   <!-- Logo -->
   <div class="sidebar-header">
     <a href="/app/" class="logo-link">
       <img src={branding?.logoUrl || '/Hallify.svg'} alt="" class="logo-img" />
       <span class="logo-text">{branding?.appName || 'Hallify'}</span>
     </a>
+    {#if inDrawer && onclose}
+      <button class="drawer-close" type="button" aria-label={t.sidebar.closeMenu} onclick={onclose}>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+        </svg>
+      </button>
+    {/if}
   </div>
 
   {#if user}
@@ -438,7 +449,15 @@
     display: flex;
     flex-direction: column;
     height: 100vh;
+    height: 100dvh;
     overflow: hidden;
+  }
+
+  /* In the phone drawer the drawer owns the size; the menu just fills it. */
+  .sidebar.in-drawer {
+    width: 100%;
+    height: 100%;
+    border-right: none;
   }
 
   /* Logo */
@@ -446,6 +465,21 @@
     padding: 16px 14px 10px;
     flex-shrink: 0;
   }
+  .sidebar.in-drawer .sidebar-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 10px 8px 14px;
+  }
+  .drawer-close {
+    width: 40px; height: 40px;
+    display: inline-flex; align-items: center; justify-content: center;
+    border: none; background: none; border-radius: var(--radius-sm);
+    color: var(--text-muted); cursor: pointer;
+  }
+  .drawer-close:hover { background: var(--bg-hover); color: var(--text-base); }
+  /* Finger-sized rows on a phone. */
+  .sidebar.in-drawer .nav-item { padding: 10px 9px; font-size: 14px; }
 
   .logo-link {
     display: inline-flex;
