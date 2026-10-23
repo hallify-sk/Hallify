@@ -10,6 +10,7 @@
 	const { form }: Props = $props();
 
 	const resetSuccess = $derived($page.url.searchParams.get('reset') === 'success');
+	const accountDeleted = $derived($page.url.searchParams.get('deleted') === '1');
 
 	// Carry a ?redirect= through to registration, so someone who came here from a
 	// venue page and turns out to have no account still lands back on it. Only a
@@ -34,6 +35,9 @@
 		<p class="subtitle">{t.auth.signInSubtitle}</p>
 	</div>
 
+	{#if accountDeleted}
+		<div class="notice notice-success" role="status">{t.identity.deletedNotice}</div>
+	{/if}
 	{#if resetSuccess}
 		<div class="notice notice-success">{t.forgotPassword.resetSuccess}</div>
 	{/if}

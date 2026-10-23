@@ -5,6 +5,7 @@ import { st } from '$lib/i18n-server';
 import { rateLimit, rateLimitKey, tooManyAttemptsMessage, RATE_LIMITS } from '$lib/rateLimit';
 import { completePasswordReset, findPasswordReset } from '$lib/server/account';
 import { sendPasswordChangedNotice } from '$lib/server/account-emails';
+import { mailboxProven } from '$lib/server/email-verification';
 import { dbFirst } from '$lib/db/index';
 
 // Hallify accounts only (no org): a venue client's link is redeemed on the venue's own
@@ -48,6 +49,9 @@ export const actions: Actions = {
 		if (!(await completePasswordReset(locals.db, reset, hash))) {
 			return fail(400, { error: st(locals.locale).serverErrors.invalidOrExpiredResetLink });
 		}
+		// The link reached the address, so it is confirmed (D11), and old venue accounts
+		// with the same address join the Hallify account (D4).
+		await mailboxProven(locals.db, reset.user_id);
 		const account = await dbFirst<{ email: string }>(locals.db, 'SELECT email FROM users WHERE id = ?', reset.user_id);
 		if (account) sendPasswordChangedNotice(locals.db, locals.locale, account.email).catch(() => {});
 

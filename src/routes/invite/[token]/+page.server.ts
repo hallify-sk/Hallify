@@ -4,6 +4,7 @@ import { dbFirst, dbRun } from '$lib/db/index';
 import { createSession } from '$lib/auth';
 import { st } from '$lib/i18n-server';
 import { rateLimit, rateLimitKey, tooManyAttemptsMessage, RATE_LIMITS } from '$lib/rateLimit';
+import { createLinkedClient, findClientRow, findHallifyAccount, linkClientRow, registerOnVenue } from '$lib/server/identity';
 import type { Actions, PageServerLoad } from './$types';
 import type { D1Database } from '@cloudflare/workers-types';
 
@@ -39,6 +40,14 @@ async function loadInviteHere(locals: App.Locals, token: string) {
 	return invite;
 }
 
+/** Whoever is signed in is the invited person: the invited client of this org, or
+ *  (D4) the Hallify account with the invited address, which is this org's client too. */
+function isInvitee(user: App.Locals['user'], invite: InviteRow): boolean {
+	if (!user || user.email.toLowerCase() !== invite.email.toLowerCase()) return false;
+	if (user.account_type === 'client') return user.org_id === invite.org_id;
+	return user.org_id === null;
+}
+
 const stillValid = (inv: InviteRow | null): inv is InviteRow =>
 	!!inv && !inv.accepted_at && new Date(inv.expires_at) >= new Date();
 
@@ -55,6 +64,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		loggedInMatches: false,
 		loggedInDifferent: false,
 		currentEmail: null,
+		loginHref: '',
 		token: params.token
 	});
 	if (!invite) return dead('notFound');
@@ -66,12 +76,11 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 	// Did this email already register as a client of the org (e.g. after the invite
 	// was sent)? If so we steer them to log in and claim instead of re-registering.
 	const existingUser = await dbFirst<{ id: string }>(locals.db,
-		`SELECT id FROM users WHERE email = ? AND org_id = ?`, invite.email, invite.org_id);
+		`SELECT id FROM users WHERE email = ? AND org_id = ?`, invite.email, invite.org_id)
+		// A Hallify account signs in on every venue site (D4): it accepts by signing in.
+		?? await findHallifyAccount(locals.db, invite.email);
 
-	const loggedInMatches = !!locals.user
-		&& locals.user.account_type === 'client'
-		&& locals.user.org_id === invite.org_id
-		&& locals.user.email.toLowerCase() === invite.email.toLowerCase();
+	const loggedInMatches = isInvitee(locals.user, invite);
 	// Someone else is signed in (a different client, or an org account) — registering
 	// would clobber their session, so the page asks them to log out first.
 	const loggedInDifferent = !!locals.user && !loggedInMatches;
@@ -92,6 +101,8 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		loggedInDifferent,
 		currentEmail: locals.user?.email ?? null,
 		token: params.token,
+		// /login exists only on venue sites; on hallify.sk the Hallify sign-in comes back here.
+		loginHref: `${locals.domainOrg ? '/login' : '/app/login'}?redirect=${encodeURIComponent(`/invite/${params.token}`)}`,
 	};
 };
 
@@ -144,39 +155,57 @@ export const actions: Actions = {
 			`SELECT id FROM users WHERE email = ? AND org_id = ?`, invite.email, invite.org_id);
 		if (existing) return fail(409, { error: st(locals.locale).serverErrors.emailAlreadyRegisteredLogIn });
 
+		// The person's Hallify account and this venue's client row, together (D4). The
+		// invitation reached the address, so it starts verified (D11). An address that
+		// already has a Hallify account signs in with it instead.
 		const password_hash = await bcrypt.hash(password, 12);
-		const newUserId = crypto.randomUUID();
-		try {
-			await dbRun(locals.db,
-				`INSERT INTO users (id, email, password_hash, first_name, last_name, account_type, org_id)
-				 VALUES (?, ?, ?, ?, ?, 'client', ?)`,
-				newUserId, invite.email, password_hash, invite.first_name, invite.last_name, invite.org_id);
-		} catch {
-			// Lost a double-submit race against the (org_id,email) unique index.
-			return fail(409, { error: st(locals.locale).serverErrors.emailAlreadyRegisteredLogIn });
+		const reg = await registerOnVenue(locals.db, invite.org_id, {
+			email: invite.email, passwordHash: password_hash, firstName: invite.first_name, lastName: invite.last_name,
+			locale: locals.locale, verified: true,
+		});
+		if (!reg.ok) {
+			return fail(409, {
+				error: reg.reason === 'hasAccount' ? st(locals.locale).identity.hasHallifyAccount : st(locals.locale).serverErrors.emailAlreadyRegisteredLogIn,
+			});
 		}
+		const newUserId = reg.clientId;
 
 		await dbRun(locals.db, 'UPDATE reservations SET user_id = ? WHERE id = ? AND org_id = ?', newUserId, invite.reservation_id, invite.org_id);
 		await dbRun(locals.db, "UPDATE reservation_invites SET accepted_at = datetime('now') WHERE id = ?", invite.id);
 
-		await createSession(newUserId, cookies, locals.db);
-		redirect(303, `/halls/my-reservations/${invite.reservation_id}`);
+		// On the venue's site as its client; on hallify.sk (a venue without a public
+		// address) as the Hallify account, whose bookings list includes this one.
+		if (locals.domainOrg) {
+			await createSession(newUserId, cookies, locals.db);
+			redirect(303, `/halls/my-reservations/${invite.reservation_id}`);
+		}
+		await createSession(reg.accountId, cookies, locals.db);
+		redirect(303, '/app/client/reservations');
 	},
 
 	// Already signed in as the invited client → just take ownership of the event.
 	claim: async ({ params, locals }) => {
-		if (!locals.user) redirect(303, `/login?redirect=${encodeURIComponent(`/invite/${params.token}`)}`);
+		if (!locals.user) redirect(303, `${locals.domainOrg ? '/login' : '/app/login'}?redirect=${encodeURIComponent(`/invite/${params.token}`)}`);
 		const invite = await loadInviteHere(locals, params.token);
 		if (!stillValid(invite) || invite.res_status === 'cancelled') return fail(410, { error: st(locals.locale).serverErrors.inviteNotFoundOrExpired });
 
-		if (locals.user.account_type !== 'client'
-			|| locals.user.org_id !== invite.org_id
-			|| locals.user.email.toLowerCase() !== invite.email.toLowerCase()) {
+		if (!isInvitee(locals.user, invite)) {
 			return fail(403, { error: st(locals.locale).serverErrors.inviteEmailMismatch });
 		}
 
-		await dbRun(locals.db, 'UPDATE reservations SET user_id = ? WHERE id = ? AND org_id = ?', locals.user.id, invite.reservation_id, invite.org_id);
+		// A Hallify account takes the event as this venue's client row, linked to it.
+		let clientId = locals.user.id;
+		if (locals.user.account_type !== 'client') {
+			const account = await findHallifyAccount(locals.db, locals.user.email);
+			if (!account) return fail(403, { error: st(locals.locale).serverErrors.inviteEmailMismatch });
+			const row = await findClientRow(locals.db, invite.org_id, account.email);
+			if (row && row.account_id && row.account_id !== account.id) return fail(403, { error: st(locals.locale).serverErrors.inviteEmailMismatch });
+			if (row && !row.account_id) await linkClientRow(locals.db, row.id, account);
+			clientId = row ? row.id : await createLinkedClient(locals.db, invite.org_id, account);
+		}
+
+		await dbRun(locals.db, 'UPDATE reservations SET user_id = ? WHERE id = ? AND org_id = ?', clientId, invite.reservation_id, invite.org_id);
 		await dbRun(locals.db, "UPDATE reservation_invites SET accepted_at = datetime('now') WHERE id = ?", invite.id);
-		redirect(303, `/halls/my-reservations/${invite.reservation_id}`);
+		redirect(303, locals.user.account_type === 'client' ? `/halls/my-reservations/${invite.reservation_id}` : '/app/client/reservations');
 	},
 };

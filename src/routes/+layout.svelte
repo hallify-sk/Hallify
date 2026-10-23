@@ -150,7 +150,7 @@
 	// The organisation's default theme (Settings → Customize), or null when it set none.
 	const orgTheme = $derived<string | null>(branding?.theme ?? null);
 
-	const AUTH_PATHS = ['/app/login', '/app/register', '/app/forgot-password', '/app/reset-password', '/app/invite', '/login', '/forgot-password', '/reset-password'];
+	const AUTH_PATHS = ['/app/login', '/app/register', '/app/forgot-password', '/app/reset-password', '/app/invite', '/login', '/forgot-password', '/reset-password', '/verify-email'];
 	const isAuthPage = $derived(AUTH_PATHS.some(p => $page.url.pathname.startsWith(p)));
 	const isLandingPage = $derived(['/', '/pre-prevadzkovatelov', '/priestory'].includes($page.url.pathname) || $page.url.pathname.startsWith('/priestory/') || (!!$page.error && !data.onBubble && !$page.url.pathname.startsWith('/app'))); // venue pages, and public error pages (in the marketing shell)
 	const isPublicHallsPage = $derived($page.url.pathname.startsWith('/halls'));
@@ -275,6 +275,14 @@
 			{/if}
 		{/if}
 		<main class="app-main" class:full-page={isAuthPage}>
+			{#if !isAuthPage && data.user && data.user.account_type !== 'client' && !data.user.email_verified_at && !data.currentOrg?.impersonated}
+				<!-- A Hallify account whose address is not confirmed yet (D11). With
+				     REQUIRE_EMAIL_VERIFICATION on, the console itself waits for it. -->
+				<div class="verify-banner" role="status">
+					<span>{t.identity.bannerText}</span>
+					<a href="/verify-email?redirect={encodeURIComponent($page.url.pathname)}">{t.identity.bannerAction}</a>
+				</div>
+			{/if}
 			{#if !isAuthPage && data.currentOrg?.impersonated}
 				<div class="imp-banner">
 					<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
@@ -416,6 +424,20 @@
 	.app-main.full-page {
 		background: var(--bg-panel);
 	}
+
+	.verify-banner {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		justify-content: space-between;
+		gap: 6px 16px;
+		padding: 9px 18px;
+		font-size: 13px;
+		background: var(--warning-dim);
+		color: var(--text-base);
+		border-bottom: 1px solid var(--border-subtle, var(--border));
+	}
+	.verify-banner a { color: var(--accent-ink); font-weight: 650; white-space: nowrap; }
 
 	.imp-banner {
 		position: sticky;

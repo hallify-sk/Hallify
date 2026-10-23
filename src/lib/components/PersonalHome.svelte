@@ -10,8 +10,10 @@
 	interface Props {
 		firstName: string;
 		invites: { token: string; orgName: string }[];
+		/** Upcoming bookings at any venue, made with this Hallify account. */
+		upcomingBookings?: number;
 	}
-	const { firstName, invites }: Props = $props();
+	const { firstName, invites, upcomingBookings = 0 }: Props = $props();
 </script>
 
 <div class="wrap">
@@ -43,6 +45,13 @@
 				</span>
 				<h3>{t.personalHome.findTitle}</h3>
 				<p>{t.personalHome.findBody}</p>
+			</a>
+			<a class="card--inset home-card" href="/app/client/reservations">
+				<span class="icon-tile" aria-hidden="true">
+					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+				</span>
+				<h3>{t.identity.homeBookingsTitle}</h3>
+				<p>{t.identity.homeBookingsBody(upcomingBookings)}</p>
 			</a>
 			<a class="card--inset home-card" href="/app/org/new">
 				<span class="icon-tile" aria-hidden="true">

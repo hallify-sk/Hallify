@@ -31,6 +31,7 @@
 			<h1>{t.clientArea.myReservations}</h1>
 			<a href="/app/halls" class="browse-link">{t.clientArea.browseHalls} →</a>
 		</div>
+		<p class="lead">{t.identity.bookingsLead}</p>
 	</section>
 
 	<section class="section" use:reveal>
@@ -67,6 +68,7 @@
 						{#if r.description}
 							<p class="card-desc">{r.description}</p>
 						{/if}
+						<a class="open-link" href={r.href}>{r.href.startsWith('/') ? t.identity.openBooking : t.identity.openAtVenue} →</a>
 					</div>
 				{/each}
 			</div>
@@ -83,6 +85,8 @@
 		color: var(--text-base);
 		margin: 0;
 	}
+	.lead { font-size: 13px; color: var(--text-muted); margin: 8px 0 0; max-width: 560px; }
+	.open-link { font-size: 13px; font-weight: 600; color: var(--accent-ink); text-decoration: none; align-self: flex-start; }
 	.browse-link { font-size: 13px; color: var(--accent-ink); font-weight: 600; text-decoration: none; }
 
 	/* A reservation is a multi-line record, so the hairline row stacks. */

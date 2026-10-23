@@ -68,6 +68,12 @@ export interface UserRow {
   account_type: 'client' | 'organization';
   org_id: string | null; // NULL for org/platform users; set for client accounts (the bubble they belong to)
   created_at: string;
+  /** A venue client row linked to the person's Hallify account (migration 0030). */
+  account_id?: string | null;
+  /** When the current email address was confirmed; NULL = not confirmed (0030). */
+  email_verified_at?: string | null;
+  /** Set when the person deleted their account and the row was anonymised (0030). */
+  deleted_at?: string | null;
 }
 
 export interface SessionRow {

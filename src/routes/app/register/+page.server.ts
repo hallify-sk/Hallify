@@ -6,6 +6,7 @@ import { st } from '$lib/i18n-server';
 import { rateLimit, rateLimitKey, tooManyAttemptsMessage, RATE_LIMITS } from '$lib/rateLimit';
 import { isValidEmail, normaliseEmail } from '$lib/server/account';
 import { acceptedTerms, recordLegalAcceptance } from '$lib/site/legal-acceptance';
+import { sendVerificationEmail } from '$lib/server/email-verification';
 import type { Actions, PageServerLoad } from './$types';
 
 /** Where a venue-seeker lands once the account exists — Hallify is a discovery
@@ -55,7 +56,7 @@ const formShape = { firstName: '', lastName: '', email: '', intent: 'guest' as R
 // different thing entirely: they are created inside an org's bubble (its
 // subdomain or custom domain) in src/routes/login, scoped by org_id.
 export const actions: Actions = {
-	default: async ({ request, cookies, locals, getClientAddress }) => {
+	default: async ({ request, cookies, url, locals, getClientAddress }) => {
 		const data = await request.formData();
 		const email = normaliseEmail(data.get('email'));
 		const password = String(data.get('password') ?? '');
@@ -93,7 +94,7 @@ export const actions: Actions = {
 		}
 
 		// org/platform users are globally unique by email (org_id IS NULL).
-		const existing = await dbFirst<{ id: string }>(locals.db, 'SELECT id FROM users WHERE email = ? AND org_id IS NULL', email);
+		const existing = await dbFirst<{ id: string }>(locals.db, 'SELECT id FROM users WHERE email = ? AND org_id IS NULL AND deleted_at IS NULL', email);
 		if (existing) {
 			return fail(400, { ...entered, error: errors.accountEmailExists });
 		}
@@ -110,6 +111,9 @@ export const actions: Actions = {
 			userId, email, hash, firstName, lastName, role
 		);
 		await recordLegalAcceptance(locals.db, { userId, context: 'register' });
+		// Confirming the address (D11) unlocks the console when REQUIRE_EMAIL_VERIFICATION
+		// is on, and joins old venue accounts with the same address (D4).
+		await sendVerificationEmail(locals.db, { userId, email, origin: url.origin, locale: locals.locale });
 
 		await createSession(userId, cookies, locals.db);
 		// An operator asked to set their venue up now, so we hand them the org

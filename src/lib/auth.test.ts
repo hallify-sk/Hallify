@@ -8,7 +8,7 @@ const cookie = (id: string) => ({ get: () => id }) as unknown as Cookies;
 const iso = (offsetMs: number) => new Date(Date.now() + offsetMs).toISOString();
 
 function setup() {
-	const sqlite = sqliteWithSchema(['0002_rate_limits.sql']);
+	const sqlite = sqliteWithSchema(['0002_rate_limits.sql', '0030_identity.sql']);
 	sqlite.exec("INSERT INTO users (id, email, password_hash, first_name, last_name) VALUES ('u', 'u@x.sk', 'h', 'U', 'S')");
 	const add = sqlite.prepare("INSERT INTO sessions (id, user_id, expires_at) VALUES (?, 'u', ?)");
 	add.run('expired', iso(-20 * 60 * 1000)); // twenty minutes ago — usually the same UTC day

@@ -11,6 +11,11 @@
 
   const org = $derived(data.domainOrg);
   let tab = $state((form?.tab as 'login' | 'register' | undefined) ?? 'login');
+  // A sign-up with an address that has a Hallify account answers on the sign-in tab.
+  $effect(() => {
+    const next = form?.tab as 'login' | 'register' | undefined;
+    if (next) tab = next;
+  });
   const resetSuccess = $derived($page.url.searchParams.get('reset') === 'success');
 </script>
 
@@ -47,6 +52,17 @@
     {#if form?.error && (form.tab ?? 'login') === tab}
       <div class="alert-error" role="alert">{form.error}</div>
     {/if}
+    {#if form?.linkSent && tab === 'login'}
+      <div class="notice notice-success" role="status">{t.identity.linkSent.replace('{email}', form.email ?? '')}</div>
+    {/if}
+    <!-- This venue has an older, separate account for the address with another
+         password: a link to the Hallify mailbox joins it to the Hallify account. -->
+    {#if form?.separate && tab === 'login'}
+      <form method="POST" action="?/sendLink" use:enhance class="link-form">
+        <input type="hidden" name="email" value={form.email ?? ''} />
+        <button type="submit" class="btn-secondary">{t.identity.sendLinkButton}</button>
+      </form>
+    {/if}
 
     <!-- ── Login form ── -->
     {#if tab === 'login'}
@@ -71,12 +87,12 @@
         {t.auth.noAccount}
         <button type="button" class="switch-link" onclick={() => tab = 'register'}>{t.publicBooking.createOne}</button>
       </p>
-      <p class="owner-hint">{t.publicBooking.ownerHint}</p>
+      <p class="owner-hint">{t.identity.loginHallifyHint}</p>
     {/if}
 
     <!-- ── Register form ── -->
     {#if tab === 'register'}
-      <p class="register-hint">{t.publicBooking.registerHint}</p>
+      <p class="register-hint">{t.identity.registerHallifyHint}</p>
       <form method="POST" action="?/register" use:enhance class="form">
         <input type="hidden" name="redirect" value={data.redirectTo} />
         <div class="field-row">
@@ -174,8 +190,7 @@
     color: var(--danger);
   }
 
-  /* Says plainly what this account is for: booking at THIS venue. A Hallify
-     account from the apex is a different thing, and the owner hint covers it. */
+  /* Says plainly what this account is: a Hallify account, good at every venue. */
   .register-hint {
     font-size: 11.5px; line-height: 1.45; color: var(--text-muted);
     margin: 0 0 14px;
@@ -212,6 +227,14 @@
   }
   .btn-submit:hover { background: var(--accent-hover); transform: translateY(-2px); }
   .btn-submit:active { transform: translateY(0); }
+
+  .link-form { margin: -6px 0 16px; }
+  .btn-secondary {
+    width: 100%; padding: 10px; border-radius: var(--radius-sm); font-size: 13px; font-weight: 600;
+    background: transparent; color: var(--text-base); border: 1px solid var(--border); cursor: pointer;
+    font-family: inherit;
+  }
+  .btn-secondary:hover { border-color: var(--accent); color: var(--accent-ink); }
 
   /* Switch */
   .switch-hint {

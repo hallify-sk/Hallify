@@ -14,6 +14,7 @@ import { syncUserLocale } from '$lib/server/user-locale';
 import { suspendedResponse } from '$lib/server/suspended-page';
 import { canonicalRedirect, needsOriginCheck, originAllowed, redirectStatus } from '$lib/server/edge';
 import { loginUrl } from '$lib/login-redirect';
+import { isGatedPath, verificationRequired } from '$lib/server/email-verification';
 import { sequence } from '@sveltejs/kit/hooks';
 import type { Handle } from '@sveltejs/kit';
 import type { Branding, OrgContext } from './app.d';
@@ -326,7 +327,22 @@ const appHandle: Handle = async ({ event, resolve }) => {
     is_platform_admin: session.is_platform_admin,
     account_type: session.account_type,
     org_id: session.org_id,
+    email_verified_at: session.email_verified_at ?? null,
   };
+
+  // Operators confirm their email before they run a venue (D11). Behind a switch,
+  // REQUIRE_EMAIL_VERIFICATION, while production email is not reliable; platform
+  // admins are never locked out of their own console.
+  if (
+    session.account_type !== 'client'
+    && !session.email_verified_at
+    && !session.is_platform_admin
+    && isGatedPath(event.url.pathname)
+    && verificationRequired()
+  ) {
+    const back = encodeURIComponent(event.url.pathname + event.url.search);
+    return new Response(null, { status: 303, headers: { Location: `/verify-email?redirect=${back}` } });
+  }
 
   // Client accounts don't belong to any org — skip org context entirely
   if (session.account_type === 'client') {

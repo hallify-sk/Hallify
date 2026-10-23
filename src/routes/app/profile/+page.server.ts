@@ -8,6 +8,11 @@ import bcrypt from 'bcryptjs';
 import { endSessions, isValidEmail, normaliseEmail } from '$lib/server/account';
 import { sendEmailChangedNotice, sendPasswordChangedNotice } from '$lib/server/account-emails';
 import { rateLimit, rateLimitKey, rateLimitStatus, tooManyAttemptsMessage, RATE_LIMITS } from '$lib/rateLimit';
+import { deleteSession } from '$lib/auth';
+import { syncLinkedRows } from '$lib/server/identity';
+import { markEmailChanged, sendVerificationEmail } from '$lib/server/email-verification';
+import { deleteAccount, planAccountDeletion } from '$lib/server/account-deletion';
+import { liveDeletionDeps } from '$lib/server/account-deletion-live';
 
 /** Check the account's current password, counting only wrong guesses against the
  *  same per-account limit sign-in uses: a stolen session must not become a free
@@ -27,18 +32,20 @@ async function checkCurrentPassword(locals: App.Locals, userId: string, email: s
 export const load: PageServerLoad = async ({ locals, url }) => {
 	if (!locals.user) redirect(303, loginUrl(url));
 
-	const user = await dbFirst<Pick<UserRow, 'id' | 'email' | 'first_name' | 'last_name' | 'role' | 'created_at'>>(
+	const user = await dbFirst<Pick<UserRow, 'id' | 'email' | 'first_name' | 'last_name' | 'role' | 'created_at' | 'email_verified_at' | 'org_id'>>(
 		locals.db,
-		'SELECT id, email, first_name, last_name, role, created_at FROM users WHERE id = ?',
+		'SELECT id, email, first_name, last_name, role, created_at, email_verified_at, org_id FROM users WHERE id = ?',
 		locals.user.id
 	);
 	if (!user) redirect(303, loginUrl(url));
 
-	return { profile: user };
+	// What deleting the account would do (D7), shown before anyone confirms.
+	const deletion = await planAccountDeletion(locals.db, user.id);
+	return { profile: user, emailVerified: !!user.email_verified_at, deletion };
 };
 
 export const actions: Actions = {
-	updateProfile: async ({ request, locals }) => {
+	updateProfile: async ({ request, locals, url }) => {
 		if (!locals.user) return fail(401);
 		const errors = st(locals.locale).serverErrors;
 
@@ -89,17 +96,22 @@ export const actions: Actions = {
 			}
 		}
 
-		await dbRun(
-			locals.db,
-			'UPDATE users SET first_name = ?, last_name = ?, email = ? WHERE id = ?',
-			firstName,
-			lastName,
-			email,
-			locals.user.id
-		);
-
 		if (emailChanged) {
+			// A new address is unverified until its own link is opened (D11); the venue
+			// rows linked to the account follow it (D4).
+			await markEmailChanged(locals.db, locals.user.id, { email, firstName, lastName });
 			await sendEmailChangedNotice(locals.db, locals.locale, current.email, email);
+			await sendVerificationEmail(locals.db, { userId: locals.user.id, email, origin: url.origin, locale: locals.locale });
+		} else {
+			await dbRun(
+				locals.db,
+				'UPDATE users SET first_name = ?, last_name = ? WHERE id = ?',
+				firstName,
+				lastName,
+				locals.user.id
+			);
+			// The venues see the same name as hallify.sk does.
+			if (current.org_id === null) await syncLinkedRows(locals.db, locals.user.id, { firstName, lastName });
 		}
 
 		return { success: true, section: 'profile', emailChanged };
@@ -134,5 +146,30 @@ export const actions: Actions = {
 		sendPasswordChangedNotice(locals.db, locals.locale, locals.user.email).catch(() => {});
 
 		return { success: true, section: 'password' };
+	},
+
+	/** Self-service deletion (D7): the password and an explicit confirmation. */
+	deleteAccount: async ({ request, locals, cookies, url }) => {
+		if (!locals.user) return fail(401);
+		const T = st(locals.locale);
+		const data = await request.formData();
+		const password = String(data.get('password') ?? '');
+		if (data.get('confirm') !== 'on') return fail(400, { error: T.identity.deleteMustConfirm, section: 'delete' });
+		if (!password) return fail(400, { error: T.serverErrors.allFieldsRequired, section: 'delete' });
+		const wrong = await checkCurrentPassword(locals, locals.user.id, locals.user.email, password);
+		if (wrong) return fail(400, { error: wrong, section: 'delete' });
+
+		const result = await deleteAccount(
+			locals.db,
+			locals.user.id,
+			liveDeletionDeps(locals.db, { origin: url.origin, closedBy: { id: locals.user.id, email: locals.user.email } })
+		);
+		if (!result.ok) {
+			if (result.reason === 'lastPlatformAdmin') return fail(400, { error: T.identity.deleteLastAdmin, section: 'delete' });
+			if (result.reason === 'billing') return fail(502, { error: T.identity.deleteBillingFailed(result.org), section: 'delete' });
+			return fail(404, { error: T.serverErrors.userNotFound, section: 'delete' });
+		}
+		await deleteSession(cookies, locals.db);
+		redirect(303, '/app/login?deleted=1');
 	},
 };

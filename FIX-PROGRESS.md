@@ -345,3 +345,20 @@ Not verified in a browser (per instructions): the narrow view, label placement, 
 | I1 | done | instructions are now identical for every org, page and day (per language) and the org/date/page travel as a developer note in the conversation (only when changed), so the tools+instructions prefix is cached on the first call too; prompt_cache_key per language; hall-update tool description trimmed and duplicated guidance removed from the instructions; expected cost of an ordinary question shown on the assistant page and in the widget (typicalQuestionMc) |
 | I5 | done | propose_seating takes a `circle` per group; planSeating (src/lib/server/ai/seating-plan.ts) tries circles-as-units and groups-alone, both spreading over free tables (new `spread` option in src/lib/seating.ts, foreign, default off), keeps the better plan and reports split groups AND scattered circles; tool reply carries guests per table |
 | I26 | done | vykanie + "where to do it yourself" page map in the instructions (I1 commit); out-of-credits notice and error link to settings/ai (settings.manage) or "ask an admin"; .xlsx accepted (own ZIP+XML reader on DecompressionStream, no new dependency); conversation delete asks first and leaves no dead ?t=; enable gate shows the cost of a question and links /privacy and /dpa; page-specific widget hints; multi-change proposals can untick changes (skip[] to the apply endpoint, skipped ones reported). Not done: the audit row for on/off in the settings toggle (settings/ai and credits.ts belong to billing) |
+
+# Fix progress: identity team (one account, email verification, account deletion)
+
+Branch: fix/identity-r2 (continues fix/identity). Migration: `0030_identity.sql`
+(users.account_id, users.email_verified_at, users.deleted_at, email_verifications;
+existing accounts marked verified). Additive. Design: DESIGN-identity.md.
+
+| id | status | note |
+|----|--------|------|
+| D4 | done | Venue sign-in uses the Hallify account (member → staff, otherwise a linked client row is created or used; an old row with the same password is linked; one with another password gets "send a link", whose verification claims it). Venue sign-up creates account + linked row (an address with an account is sent to sign in). Invites, staff assignment, venue password reset, profile name/email changes and password changes all follow the account. /app/client lists bookings across venues with links to each venue's site. |
+| D11 | done | Verification links (hashed, 3 days, address-bound) sent on apex and venue sign-up, email change, resend; dev logs the link. `REQUIRE_EMAIL_VERIFICATION` gates the console behind /verify-email (resend, change address, sign out); off unless set. Clients: booking works, venue-site reminder, venue sees "email not verified" in the bookings list and detail. Existing accounts verified by the migration; platform admins can mark verified; reminder strip for unverified operators. |
+| D7 | done | Profile → Delete account: shows what will happen, needs the password and a confirmation. Last platform admin refused. Owned orgs handed to the next admin/member (subscription set to end, halls private, new owner emailed) or closed via archiveAndDeleteOrg; other memberships removed. Upcoming bookings cancelled with the venue notified; kept rows anonymised; account deleted or anonymised; sessions and links removed; signed out with a notice. |
+
+## Checks
+
+- npx vitest run: all pass.
+- svelte-check (check.sh): 0 errors.

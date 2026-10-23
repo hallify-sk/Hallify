@@ -4,13 +4,15 @@ import { st } from '$lib/i18n-server';
 import type { PageServerLoad, Actions } from './$types';
 import { requirePlatformAdmin } from '$lib/guards';
 import { logPlatformAction } from '$lib/server/platform-audit';
+import { markVerified } from '$lib/server/email-verification';
 
 export const load: PageServerLoad = async ({ params, locals }) => {
   const user = await dbFirst<{
     id: string; email: string; first_name: string; last_name: string;
     account_type: string; is_platform_admin: number; org_id: string | null; created_at: string;
+    email_verified_at: string | null; account_id: string | null;
   }>(locals.db,
-    'SELECT id, email, first_name, last_name, account_type, is_platform_admin, org_id, created_at FROM users WHERE id = ?',
+    'SELECT id, email, first_name, last_name, account_type, is_platform_admin, org_id, created_at, email_verified_at, account_id FROM users WHERE id = ?',
     params.id);
   if (!user) error(404, st(locals.locale).serverErrors.userNotFound);
 
@@ -49,5 +51,16 @@ export const actions: Actions = {
     const u = await dbFirst<{ email: string }>(locals.db, 'SELECT email FROM users WHERE id = ?', params.id);
     await logPlatformAction(locals, 'user.admin_revoke', { type: 'user', id: params.id, label: u?.email });
     return { success: true };
+  },
+  // D11: confirm an address on the person's behalf (they could not get the email).
+  // A venue row linked to a Hallify account follows the account, so that is what is
+  // marked, with all of its venue rows.
+  markVerified: async ({ params, locals }) => {
+    requirePlatformAdmin(locals);
+    const u = await dbFirst<{ id: string; email: string; account_id: string | null }>(locals.db, 'SELECT id, email, account_id FROM users WHERE id = ?', params.id);
+    if (!u) return fail(404, { error: st(locals.locale).serverErrors.userNotFound });
+    await markVerified(locals.db, u.account_id ?? u.id);
+    await logPlatformAction(locals, 'user.email_verified', { type: 'user', id: params.id, label: u.email });
+    return { success: true, verified: true };
   },
 };
