@@ -16,3 +16,7 @@
 | B15 | done | New organisation slugs use slugify (Kaštieľ Ťahanovce Žilina -> kastiel-tahanovce-zilina), via a new uniqueOrgSlug helper. |
 | B97 | done | uniqueOrgSlug also refuses any slug in closed_organizations, so a closed venue subdomain is never handed to a new organisation. |
 | I28 | done | Creating an organisation with the name of one you already belong to asks for confirmation first (warning + "Yes, create another"). |
+| B11 | done | The wizard creates its hall with a unique slug (slugify, global check, venue-site paths reserved), so the venue site lists it at once. Venue-site empty state is the venue team's part. |
+| B30 | done | Every wizard action requires settings.manage, and createVenue/saveDetails also halls.manage (requireOrgPermission); the page sends members without it home instead of a 403. |
+| B119 | done | Plan step shows the current plan's limits (unlimited spelled out), custom domain on/off from the plan, only higher plans as offers, and "Pokračovať" instead of "stay on free" for paid orgs; the venue step says "add another venue" when the org already has halls. |
+| B156 | done | Wizard errors carry the step that produced them and only show on that step; the register "Prihláste sa" link keeps ?redirect. (Org switcher part belongs to shell.) |

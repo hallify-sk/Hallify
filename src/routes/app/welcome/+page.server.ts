@@ -1,6 +1,8 @@
-import { fail, redirect } from '@sveltejs/kit';
+import { fail, isHttpError, redirect } from '@sveltejs/kit';
 import { dbFirst, dbRun, fromJson, toJson } from '$lib/db/index';
-import { requireOrg } from '$lib/guards';
+import { requireOrgPermission } from '$lib/server/access';
+import { uniqueHallSlug } from '$lib/server/onboarding-hall';
+import type { OrgContext } from '../../../app.d';
 import { st } from '$lib/i18n-server';
 import { PLANS, getPlan } from '$lib/plans';
 import { canAddHall } from '$lib/limits';
@@ -17,10 +19,18 @@ import type { PageServerLoad, Actions } from './$types';
 /**
  * First run, for a brand-new organisation.
  *
- * Owner-only in practice because only the owner exists yet, but guarded on the
- * org rather than on a permission: this writes a venue and reads the plan, and
- * an invited member who somehow lands here should see it, not a 403.
+ * It sets the organisation up — creates a public venue, rewrites a venue's address
+ * and booking switch, records the org's progress — so every action requires the
+ * permission for what it changes, not mere membership: a plain member used to be
+ * able to POST saveDetails with any hall id and switch its online booking off.
+ * The page itself is for whoever may change settings; anyone else is sent home
+ * rather than shown a 403, and someone with no organisation goes to their own home.
  */
+
+/** May change the organisation's setup (the wizard's own progress, plan, add-ons). */
+const SETUP = 'settings.manage' as const;
+/** May create venues and edit their address and booking switch. */
+const HALLS = 'halls.manage' as const;
 
 const MAX_NAME = 80;
 
@@ -44,7 +54,15 @@ async function saveState(db: App.Locals['db'], orgId: string, state: typeof DEFA
 }
 
 export const load: PageServerLoad = async ({ locals, url }) => {
-  const org = requireOrg(locals);
+  if (!locals.user) redirect(303, `/app/login?redirect=${encodeURIComponent(url.pathname + url.search)}`);
+  if (!locals.currentOrg) redirect(303, '/app/');
+  let org: OrgContext;
+  try {
+    org = await requireOrgPermission(locals, SETUP);
+  } catch (e) {
+    if (isHttpError(e) && e.status === 403) redirect(303, '/app/');
+    throw e;
+  }
   const state = await loadState(locals.db, org.id);
 
   // Finished is finished. Coming back to the URL later lands on the console
@@ -96,31 +114,38 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 export const actions: Actions = {
   /** Step 1. The single thing that makes the product do anything for them. */
   createVenue: async ({ request, locals }) => {
-    const org = requireOrg(locals);
+    await requireOrgPermission(locals, SETUP);
+    const org = await requireOrgPermission(locals, HALLS);
     const data = await request.formData();
     const name = String(data.get('name') ?? '').trim().slice(0, MAX_NAME);
     const capacity = Number(data.get('capacity') ?? 0);
 
-    if (!name) return fail(400, { error: st(locals.locale).serverErrors.nameRequired });
+    // `step` ties an error to the screen that produced it, so it does not follow
+    // the operator onto the next one.
+    if (!name) return fail(400, { error: st(locals.locale).serverErrors.nameRequired, step: 'venue' as OnboardingStep });
 
     if (!(await canAddHall(locals.db, org.id, org.subscription.plan))) {
       const limit = getPlan(org.subscription.plan).limits.maxHalls;
       return fail(403, {
-        error: st(locals.locale).serverErrors.hallLimitReached.replace('{limit}', String(limit))
+        error: st(locals.locale).serverErrors.hallLimitReached.replace('{limit}', String(limit)),
+        step: 'venue' as OnboardingStep
       });
     }
 
     const id = crypto.randomUUID();
     // Same deliberate choice the console's own create makes: listed in discovery
-    // straight away, taking no bookings until the operator opts in.
+    // straight away, taking no bookings until the operator opts in. With a slug:
+    // the venue site lists only halls that have one, so without it the new venue's
+    // public site was an empty page.
     await dbRun(
       locals.db,
-      `INSERT INTO halls (id, org_id, name, max_people, color, allow_reservations, is_public)
-       VALUES (?, ?, ?, ?, '#a6225e', 0, 1)`,
+      `INSERT INTO halls (id, org_id, name, max_people, color, allow_reservations, is_public, slug)
+       VALUES (?, ?, ?, ?, '#a6225e', 0, 1, ?)`,
       id,
       org.id,
       name,
-      Number.isFinite(capacity) && capacity > 0 ? Math.min(capacity, 100_000) : 50
+      Number.isFinite(capacity) && capacity > 0 ? Math.min(capacity, 100_000) : 50,
+      await uniqueHallSlug(locals.db, name)
     );
 
     const state = await loadState(locals.db, org.id);
@@ -136,7 +161,8 @@ export const actions: Actions = {
   /** Step 2. Address and whether it takes bookings yet — the two that decide
    *  whether the public listing is any use. */
   saveDetails: async ({ request, locals }) => {
-    const org = requireOrg(locals);
+    await requireOrgPermission(locals, SETUP);
+    const org = await requireOrgPermission(locals, HALLS);
     const data = await request.formData();
     const hallId = String(data.get('hallId') ?? '');
     const address = String(data.get('address') ?? '').trim().slice(0, 200);
@@ -158,7 +184,7 @@ export const actions: Actions = {
       hallId,
       org.id
     );
-    if (!hall) return fail(404, { error: st(locals.locale).serverErrors.hallNotFound });
+    if (!hall) return fail(404, { error: st(locals.locale).serverErrors.hallNotFound, step: 'details' as OnboardingStep });
 
     // Both coordinates or neither: half a position is not a position.
     const hasPosition = latitude !== null && longitude !== null;
@@ -181,7 +207,7 @@ export const actions: Actions = {
 
   /** Move on without doing the current step. Skipping is a first-class outcome. */
   advance: async ({ request, locals }) => {
-    const org = requireOrg(locals);
+    const org = await requireOrgPermission(locals, SETUP);
     const data = await request.formData();
     const from = String(data.get('from') ?? '') as OnboardingStep;
 
@@ -199,13 +225,13 @@ export const actions: Actions = {
    * is not what the word means. Progress is kept, so coming back resumes.
    */
   leave: async ({ locals }) => {
-    requireOrg(locals);
+    await requireOrgPermission(locals, SETUP);
     redirect(303, '/app/manage');
   },
 
   /** Reached the end. This is the only thing that marks it done. */
   finish: async ({ locals }) => {
-    const org = requireOrg(locals);
+    const org = await requireOrgPermission(locals, SETUP);
     const state = await loadState(locals.db, org.id);
     await saveState(locals.db, org.id, { ...state, completed: true });
     redirect(303, '/app/manage');

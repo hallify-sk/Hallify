@@ -46,6 +46,19 @@
 
   const PAID = ['starter', 'professional'] as const;
 
+  // The plan screen describes the plan the organisation is ON. It used to print the
+  // Free limits and "stay on free" to every organisation, paid ones included.
+  const current = $derived(data.plans[data.plan] ?? data.plans.free);
+  const onFree = $derived(data.plan === 'free');
+  // Upgrades only: a plan at or below the current price is not an offer.
+  const upgrades = $derived(
+    PAID.filter((id) => (data.plans[id].priceMonthly ?? 0) > (current.priceMonthly ?? 0) && data.plan !== 'enterprise')
+  );
+  const limitValue = (n: number) => (n === -1 ? t.onboarding.limitUnlimited : String(n));
+
+  // Ties an error to the screen that produced it; moving to another step drops it.
+  const error = $derived(form?.error && (!('step' in form) || form.step === viewing) ? form.error : null);
+
   // ── Address ⇄ map ──────────────────────────────────────────────────────
   //
   // Both directions. Typing an address drops the pin on it; moving the pin
@@ -153,12 +166,19 @@
   </div>
 
   <main class="ob-body">
-    {#if form?.error}<div class="alert-error">{form.error}</div>{/if}
+    {#if error}<div class="alert-error" role="alert">{error}</div>{/if}
 
     <!-- ── 1. A venue ───────────────────────────────────────────── -->
     {#if viewing === 'venue'}
-      <h1>{t.onboarding.venueTitle}</h1>
-      <p class="ob-lead">{t.onboarding.venueLead}</p>
+      {#if !data.hall && data.hallCount > 0}
+        <!-- Running the wizard again, or an organisation that already has venues:
+             "your first venue" would be untrue. -->
+        <h1>{t.onboarding.venueTitleMore}</h1>
+        <p class="ob-lead">{t.onboarding.venueLeadMore.replace('{count}', String(data.hallCount))}</p>
+      {:else}
+        <h1>{t.onboarding.venueTitle}</h1>
+        <p class="ob-lead">{t.onboarding.venueLead}</p>
+      {/if}
 
       {#if data.hall}
         <div class="card--inset ob-created">
@@ -248,7 +268,7 @@
           </div>
         </form>
       {:else}
-        <p class="ob-lead">{t.onboarding.detailsNoVenue}</p>
+        <p class="ob-lead">{data.hallCount > 0 ? t.onboarding.detailsExistingVenues : t.onboarding.detailsNoVenue}</p>
         <div class="ob-actions">
           <button class="btn-action" onclick={() => (viewing = 'plan')}>{t.onboarding.next}</button>
         </div>
@@ -259,44 +279,50 @@
       <h1>{t.onboarding.planTitle}</h1>
       <!-- The honest version: what the free plan is for, and the exact line it
            stops at. An upgrade prompt that hides the limit gets clicked once. -->
-      <p class="ob-lead">{t.onboarding.planLead}</p>
+      <p class="ob-lead">{onFree ? t.onboarding.planLead : t.onboarding.planLeadPaid}</p>
 
       <div class="ob-plan-now card--inset">
         <div>
           <span class="ob-plan-tag">{t.onboarding.yourPlan}</span>
-          <strong>{data.plans[data.plan].name}</strong>
+          <strong>{current.name}</strong>
         </div>
         <ul>
-          <li>{data.plans.free.limits.maxHalls} {t.onboarding.limitHalls}</li>
-          <li>{data.plans.free.limits.maxReservationsPerHallMonth} {t.onboarding.limitReservations}</li>
-          <li>{data.plans.free.limits.maxMembers} {t.onboarding.limitMembers}</li>
-          <li class="is-off">{t.onboarding.limitNoDomain}</li>
+          <li>{t.onboarding.limitHallsLabel}: {limitValue(current.limits.maxHalls)}</li>
+          <li>{t.onboarding.limitReservationsLabel}: {limitValue(current.limits.maxReservationsPerHallMonth)}</li>
+          <li>{t.onboarding.limitMembersLabel}: {limitValue(current.limits.maxMembers)}</li>
+          {#if current.limits.customDomains}
+            <li>{t.onboarding.limitDomain}</li>
+          {:else}
+            <li class="is-off">{t.onboarding.limitNoDomain}</li>
+          {/if}
         </ul>
       </div>
 
-      <div class="ob-plans">
-        {#each PAID as id (id)}
-          {@const plan = data.plans[id]}
-          <div class="ob-plan">
-            <div class="ob-plan-head">
-              <strong>{plan.name}</strong>
-              <span>€{plan.priceMonthly}<small>{t.onboarding.perMonth}</small></span>
+      {#if upgrades.length > 0}
+        <div class="ob-plans">
+          {#each upgrades as id (id)}
+            {@const plan = data.plans[id]}
+            <div class="ob-plan">
+              <div class="ob-plan-head">
+                <strong>{plan.name}</strong>
+                <span>€{plan.priceMonthly}<small>{t.onboarding.perMonth}</small></span>
+              </div>
+              <ul>
+                <li>{t.onboarding.limitHallsLabel}: {limitValue(plan.limits.maxHalls)}</li>
+                <li>{t.onboarding.limitReservationsLabel}: {limitValue(plan.limits.maxReservationsPerHallMonth)}</li>
+                <li>{t.onboarding.limitDomain}</li>
+                <li>{t.onboarding.limitBranding}</li>
+              </ul>
             </div>
-            <ul>
-              <li>{plan.limits.maxHalls} {t.onboarding.limitHalls}</li>
-              <li>{plan.limits.maxReservationsPerHallMonth} {t.onboarding.limitReservations}</li>
-              <li>{t.onboarding.limitDomain}</li>
-              <li>{t.onboarding.limitBranding}</li>
-            </ul>
-          </div>
-        {/each}
-      </div>
+          {/each}
+        </div>
+      {/if}
 
       <div class="ob-actions">
         <a class="btn-action" href="/app/billing">{t.onboarding.seePlans}</a>
         <form method="POST" action="?/advance" use:enhance>
           <input type="hidden" name="from" value="plan" />
-          <button type="submit" class="ob-link">{t.onboarding.stayFree}</button>
+          <button type="submit" class="ob-link">{onFree ? t.onboarding.stayFree : t.onboarding.next}</button>
         </form>
       </div>
 
