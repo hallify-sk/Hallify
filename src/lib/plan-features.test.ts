@@ -23,6 +23,14 @@ describe('planFeatureList', () => {
 		expect(pro).toContain('Priority support');
 		expect(pro).not.toContain('SLA');
 	});
+
+	it('sells no RSVP on any plan while RSVP is switched off (B41)', () => {
+		for (const plan of Object.values(PLANS)) {
+			for (const list of [plan.features, planFeatureList(plan, sk.accountPages.planFeatures), planFeatureList(plan, en.accountPages.planFeatures)]) {
+				expect(list.join(' ')).not.toMatch(/rsvp/i);
+			}
+		}
+	});
 });
 
 describe('billing status helpers', () => {

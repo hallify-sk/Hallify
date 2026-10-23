@@ -16,7 +16,6 @@ export function planFeatureList(plan: Plan, f: FeatureStrings): string[] {
 		f.gallery(l.maxGalleryImages),
 		f.extras(l.maxExtrasPerHall),
 		f.aiCredits(l.aiCreditsMonthly),
-		l.advancedRsvp ? f.advancedRsvp : f.basicRsvp,
 		l.customDomains ? f.customDomain : f.subdomain,
 	];
 	if (l.customBranding) out.push(f.customBranding);
