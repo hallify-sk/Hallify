@@ -15,3 +15,5 @@
 | B151 | done | /api/upload/image checks the file's signature bytes (JPEG, PNG, GIF, WebP) and stores/serves the detected type; anything else is refused with "Tento súbor nie je obrázok." |
 | I28 | done (role names only) | Creating or renaming a role to a name another role in the org already has (ignoring case and spaces) is refused, and the Roles tab warns while you type. Existing duplicates can still be saved unchanged. |
 | M11 | done | Members tab, owner only (not when impersonating): "Odovzdať vlastníctvo" picks another member, requires the owner's password (attempts share the account's sign-in rate limit), swaps the roles in one batch (new owner loses role rows/overrides, old owner becomes admin with the Administrator role). Billing stays on the org. The leave-org error now points here. |
+
+Checks at the end: `npx vitest run` 32 files / 287 tests pass; svelte-check 0 errors (131 warnings, unchanged). Migration: `migrations/0017_admin_role_rows.sql`.
