@@ -2738,3 +2738,16 @@
   .marketing .explorer-result-copy small,.marketing .explorer-result-copy>span.result-features{font-size:10px}
   .marketing .explorer-result-copy>span,.marketing .explorer-result-footer,.marketing .explorer-result-footer a,.marketing .explorer-result-footer button,.marketing .explorer-result-count{font-size:11px}
 }
+
+/* The directory on a phone. The desktop layout is a fixed-height shell whose rail
+   scrolls on its own; squeezed into a phone it left the results in a 200px scroll
+   box with the rest of the page empty below it. Here the page scrolls as a page:
+   the map first at a fixed share of the screen, then search, filters and every
+   result in normal flow. */
+@media(max-width:800px){
+  .marketing.explorer-shell{height:auto;min-height:100dvh;display:block;overflow:visible}
+  .marketing.explorer-shell main{overflow:visible;min-height:0}
+  .marketing .venue-explorer{display:flex;flex-direction:column;height:auto}
+  .marketing .explorer-map{order:-1;flex:none;height:44svh;min-height:260px;max-height:460px;border-bottom:1px solid var(--line)}
+  .marketing .explorer-sidebar{overflow:visible;overscroll-behavior:auto;border-bottom:0}
+}
