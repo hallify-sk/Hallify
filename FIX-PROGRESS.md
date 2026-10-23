@@ -13,7 +13,7 @@
 | I15 | done | Closing leads to /app/org-closed with a summary (billing, clients emailed). |
 | I16 | done | Webhook test send, edit, delivery detail (payload, error), retry, translated statuses. |
 | M10 | done | Owner can download all org data (JSON) or bookings (CSV) from Advanced. |
-| B40 | partial | Webhook delivery log uses parseDbTime-based timeAgo; announcements: see below. |
+| B40 | done | Webhook delivery log (timeAgo + full time via parseDbTime) and announcement times (formatDateTime, viewer locale) read UTC correctly. |
 | B16 | done | Preview posts a $state.snapshot (the proxy threw DataCloneError and froze the builder); posting is guarded. |
 | B79 | done | On Free the section controls are disabled with a plan notice, saving keeps stored texts/sections, and the preview shows what visitors get. |
 | B17 | done | Logo upload posts to /api/upload/image, shows an error when it fails; accept list and hint match the endpoint (no SVG). |
@@ -34,3 +34,5 @@
 | I17 | done | No CF_ZONE_ID jargon: plain notice when connection is manual, refresh step only when automatic, "čaká na pripojenie" label. |
 | B82 | done | All help articles in Slovak and English; categories, page title and "More in" localized; both languages sent so the switch needs no reload. |
 | M21 | done | Help search (diacritics-insensitive, ranked) and new SK+EN articles: public site, webhooks, AI assistant, messages, calendar (+ export and closing). |
+
+Note: migration 0021_announcements_and_audit.sql must be applied (npm run migrate:local) before running this branch; the announcement queries in the root layout read the new expires_at column.
