@@ -278,6 +278,7 @@
         </div>
       {/each}
     </div>
+    <p class="plans-vat">{t.accountPages.pricesFinalNoVat}</p>
   </section>
   <!-- Add-ons. Work we do for an organisation, as opposed to the plans above,
        which are what the software costs. -->
@@ -448,6 +449,7 @@
   /* Plans — the landing page's .plan treatment: a rule above each column,
      a large light price, a muted feature list, no box. */
   .plans-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--grid-gap); align-items: stretch; }
+  .plans-vat { font-size: 12px; color: var(--text-subtle); margin: 12px 0 0; }
 
   .plan-card {
     position: relative;

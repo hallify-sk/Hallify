@@ -6,6 +6,7 @@ import { documentPart, MAX_INLINE_PDF_PAGES, type R2Like } from './documents';
 import { getAccount, holdUpTo, release, settle } from './credits';
 import { toolsFor, runTool, type ClientAction } from './tools';
 import { st } from '$lib/i18n-server';
+import { RSVP_ENABLED } from '$lib/features';
 import type { OrgContext } from '../../../app.d';
 
 /**
@@ -122,7 +123,8 @@ export function instructions(locale: 'sk' | 'en'): string {
 		`- team members, roles, invitations: "${ui.peopleArea.navLabel}" (/app/manage/members)`,
 		`- archiving or deleting a hall, its visibility and public address: the hall's page under "${ui.nav.halls}" (/app/manage/halls/{hall_id})`,
 		`- the public website, domains, branding: "${ui.sidebar.settings}" (/app/manage/settings)`,
-		`- RSVP forms: "${ui.nav.rsvpTemplates}" (/app/manage/rsvp-templates)`,
+		// RSVP forms are switched off ($lib/features), so the assistant must not send anyone to their 404 page.
+		...(RSVP_ENABLED ? [`- RSVP forms: "${ui.nav.rsvpTemplates}" (/app/manage/rsvp-templates)`] : []),
 		`- moving tables and guests by hand: the event's layout (/app/reservation/{reservation_id}/layout); walls: the hall's floor plan editor (/app/manage/halls/{hall_id}/editor)`,
 		``,
 		`Search the web yourself for public facts (a venue's address, capacity, contacts, photos); prefer the venue's own`,

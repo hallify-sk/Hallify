@@ -5,8 +5,10 @@
  *  forever — unbounded growth, and expired-but-present auth rows are a liability of
  *  their own.
  *
- *  Driven by the Cron Trigger in wrangler.toml (see `scheduled` in src/index.ts-style
- *  handler exported from hooks). Safe to run concurrently and repeatedly.
+ *  Driven hourly by the Cron Trigger in wrangler.toml: `worker.js` adds a `scheduled`
+ *  handler that calls POST /api/cron/cleanup (src/lib/server/scheduled.ts). hooks.server.ts
+ *  also runs it opportunistically off traffic as a fallback. Safe to run concurrently
+ *  and repeatedly.
  */
 import { dbRun } from '$lib/db/index';
 import type { D1Database } from '@cloudflare/workers-types';

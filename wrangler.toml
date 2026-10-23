@@ -4,7 +4,14 @@
 # Required: STRIPE_SECRET_KEY, STRIPE_PUBLISHABLE_KEY,
 # STRIPE_WEBHOOK_SECRET, STRIPE_PRICE_STARTER, STRIPE_PRICE_PROFESSIONAL,
 # BREVO_API_KEY, CF_ZONE_ID, CF_API_TOKEN
-# Optional: CRON_SECRET (enables POST /api/cron/cleanup)
+# CRON_SECRET: required for the hourly clean-up. The Cron Trigger below calls
+#   POST /api/cron/cleanup with it; without it that route is disabled and the scheduled
+#   run only logs an error. Set it on BOTH workers at deploy:
+#     wrangler secret put CRON_SECRET  and  wrangler secret put CRON_SECRET --env dev
+#   The same run checks pending custom domains with Cloudflare for SaaS (CF_ZONE_ID,
+#   CF_API_TOKEN) and releases claims nobody verified within 7 days.
+# Optional: CF_CNAME_TARGET, the hostname customers point their CNAME at
+#   (default fallback.hallify.sk, the zone's fallback origin).
 # NOTE: SESSION_SECRET is NOT used — session ids are random UUIDs stored in D1 and
 # are never signed. It was listed here and set as a prod secret, implying protection
 # the code does not implement. Remove it with: wrangler secret delete SESSION_SECRET
@@ -15,7 +22,10 @@
 #   Prod (hallify.sk):      npm run deploy:prod
 
 name = "hallify"
-main = ".svelte-kit/cloudflare/_worker.js"
+# worker.js wraps SvelteKit's generated .svelte-kit/cloudflare/_worker.js (fetch and
+# static assets unchanged) and adds the scheduled() handler for the Cron Trigger.
+# Inherited by [env.dev].
+main = "worker.js"
 # Set explicitly: without it, any login with access to more than one account makes
 # every non-interactive wrangler command fail with "More than one account available".
 account_id = "46d0e242dd6f2bba5cc3de0a393b8eb6"
@@ -31,6 +41,11 @@ head_sampling_rate = 1
 [assets]
 binding = "ASSETS"
 directory = ".svelte-kit/cloudflare"
+
+# Hourly housekeeping: expired sessions, tokens, invites and holds, old rate-limit rows
+# and 90-day-old logs (src/lib/cleanup.ts), event reminders, and custom-domain checks.
+[triggers]
+crons = ["0 * * * *"]
 
 # ── Production (hallify.sk + customer custom hostnames) ───────────────────────
 
@@ -66,6 +81,9 @@ zone_name = "hallify.sk"
 
 [env.dev]
 name = "hallify-dev"
+
+[env.dev.triggers]
+crons = ["0 * * * *"]
 
 [env.dev.vars]
 HALLIFY_DOMAIN = "dev.hallify.sk"

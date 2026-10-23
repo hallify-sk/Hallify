@@ -28,14 +28,14 @@ export const LISTED_HALL_SQL_WITHOUT_COORDINATES = `h.is_public = 1 AND h.plan_l
   AND TRIM(COALESCE(h.address, '')) != ''`;
 
 /**
- * The organisation's custom domain, when it has one that actually routes: a
- * Cloudflare hostname provisioned for it, a verified one preferred. Mirrors
+ * The organisation's custom domain, when it has one that actually routes: verified
+ * (Cloudflare reported it active), the only state hooks.server.ts serves. Mirrors
  * orgPublicBaseUrl in $lib/orgUrl, as a column so a whole listing needs one query.
  * Expects the organisation aliased `o`.
  */
 export const CUSTOM_DOMAIN_SQL = `(SELECT cd.domain FROM custom_domains cd
-    WHERE cd.org_id = o.id AND cd.cf_hostname_id IS NOT NULL
-    ORDER BY (cd.verified_at IS NOT NULL) DESC, cd.created_at DESC LIMIT 1)`;
+    WHERE cd.org_id = o.id AND cd.verified_at IS NOT NULL
+    ORDER BY cd.created_at DESC LIMIT 1)`;
 
 export interface ListedHallRef {
   slug: string;

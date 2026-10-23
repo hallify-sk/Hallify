@@ -1255,6 +1255,11 @@
   font-weight: 600;
   padding: 15px 0;
 }
+.marketing .pricing-note {
+  font-size: 11px;
+  color: var(--muted);
+  margin: 20px 0 0;
+}
 .marketing .marketing-dialog {
   width: min(620px,calc(100vw - 32px));
   border: 1px solid var(--line);

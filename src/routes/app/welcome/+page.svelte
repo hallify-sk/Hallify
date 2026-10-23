@@ -317,6 +317,7 @@
             </div>
           {/each}
         </div>
+        <p class="ob-hint ob-vat">{t.accountPages.pricesFinalNoVat}</p>
       {/if}
 
       <div class="ob-actions">
@@ -473,6 +474,8 @@
   .ob-plan-now li.is-off { color: var(--text-subtle); text-decoration: line-through; }
 
   .ob-plans { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px; margin-bottom: 26px; }
+  /* Sits under the plan cards, inside the gap they leave before the actions. */
+  .ob-vat { margin: -16px 0 26px; }
   .ob-plan { padding: 16px 18px; border: 1px solid var(--border); border-radius: var(--radius); }
   .ob-plan-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
   .ob-plan-head strong { font-size: 15px; font-weight: 650; letter-spacing: -.03em; }

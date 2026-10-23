@@ -1,26 +1,38 @@
 import { fail } from '@sveltejs/kit';
 import { dbAll, dbFirst, dbRun } from '$lib/db/index';
-import { addCustomHostname, deleteCustomHostname, getHostnameStatus, isCFEnabled } from '$lib/cloudflare-saas';
+import { isCFEnabled, cnameTarget } from '$lib/cloudflare-saas';
 import { getPlan } from '$lib/plans';
 import { st } from '$lib/i18n-server';
 import { env } from '$env/dynamic/private';
 import type { PageServerLoad, Actions } from './$types';
 import { requireOrgPermission } from '$lib/server/access';
-import { tidyDomain, isValidCustomDomain, claimExpired } from '$lib/custom-domain';
+import { tidyDomain, isValidCustomDomain, claimExpired, parseDnsRecords, domainState } from '$lib/custom-domain';
+import {
+  checkCustomDomain, refreshPendingDomains, registerCustomDomain, releaseCustomDomain,
+  type DomainCheckRow,
+} from '$lib/server/custom-domains';
 
-interface DomainRow {
-  id: string;
-  domain: string;
-  cf_hostname_id: string | null;
-  verified_at: string | null;
-  created_at: string;
+interface DomainRow extends DomainCheckRow {
+  cf_status: string | null;
+  ssl_status: string | null;
+  dns_records: string | null;
+  check_error: string | null;
+  checked_at: string | null;
 }
+
+const ROW_COLUMNS = 'id, org_id, domain, cf_hostname_id, verified_at, created_at';
 
 export const load: PageServerLoad = async ({ locals }) => {
   const org = await requireOrgPermission(locals, 'settings.manage');
+  const cfEnabled = isCFEnabled();
 
-  const domains = await dbAll<DomainRow>(locals.db,
-    `SELECT id, domain, cf_hostname_id, verified_at, created_at
+  // Pending domains are re-checked while the page is open (the page reloads its data
+  // every half minute), so a domain turns verified without anyone pressing a button.
+  // A Cloudflare hiccup must not take the settings page down with it.
+  try { await refreshPendingDomains(locals.db, org.id); } catch { /* shown on the next check */ }
+
+  const rows = await dbAll<DomainRow>(locals.db,
+    `SELECT ${ROW_COLUMNS}, cf_status, ssl_status, dns_records, check_error, checked_at
     FROM custom_domains
     WHERE org_id = ?
     ORDER BY created_at DESC`,
@@ -32,8 +44,20 @@ export const load: PageServerLoad = async ({ locals }) => {
   const customDomainsAllowed = getPlan(org.subscription.plan).limits.customDomains;
 
   return {
-    domains,
-    cfEnabled: isCFEnabled(),
+    domains: rows.map((d) => ({
+      id: d.id,
+      domain: d.domain,
+      verified_at: d.verified_at,
+      created_at: d.created_at,
+      cf_status: d.cf_status,
+      ssl_status: d.ssl_status,
+      check_error: d.check_error,
+      checked_at: d.checked_at,
+      state: domainState(d, cfEnabled),
+      records: parseDnsRecords(d.dns_records),
+    })),
+    cfEnabled,
+    cnameTarget: cnameTarget(),
     subdomain,
     customDomainsAllowed,
     plan: org.subscription.plan,
@@ -64,10 +88,11 @@ export const actions: Actions = {
     }
 
     // Taken? A claim nobody verified does not hold a domain forever: after a week
-    // without DNS pointing at us another organisation may add it, so whoever typed
-    // someone else's domain first cannot lock the real owner out.
-    const existing = await dbFirst<{ id: string; org_id: string; verified_at: string | null; created_at: string; cf_hostname_id: string | null }>(locals.db,
-      'SELECT id, org_id, verified_at, created_at, cf_hostname_id FROM custom_domains WHERE domain = ?',
+    // without DNS pointing at us another organisation may add it (the hourly sweep
+    // releases it too), so whoever typed someone else's domain first cannot lock the
+    // real owner out.
+    const existing = await dbFirst<DomainCheckRow>(locals.db,
+      `SELECT ${ROW_COLUMNS} FROM custom_domains WHERE domain = ?`,
       domain
     );
     if (existing) {
@@ -75,27 +100,27 @@ export const actions: Actions = {
       if (existing.verified_at || !claimExpired(existing.created_at)) {
         return fail(400, { error: st(locals.locale).settingsPages.domainClaimedElsewhere, domain });
       }
-      if (existing.cf_hostname_id && isCFEnabled()) {
-        try { await deleteCustomHostname(existing.cf_hostname_id); } catch { /* best-effort */ }
-      }
+      // Its Cloudflare hostname stays: the new claim adopts it when registering.
       await dbRun(locals.db, 'DELETE FROM custom_domains WHERE id = ?', existing.id);
     }
 
-    let cfHostnameId: string | null = null;
-    if (isCFEnabled()) {
-      try {
-        const cf = await addCustomHostname(domain);
-        cfHostnameId = cf.id;
-      } catch (e: unknown) {
-        const msg = e instanceof Error ? e.message : String(e);
-        return fail(502, { error: st(locals.locale).serverErrors.cloudflareError(msg) });
-      }
-    }
-
+    const row: DomainCheckRow = {
+      id: crypto.randomUUID(), org_id: orgId, domain,
+      cf_hostname_id: null, verified_at: null, created_at: '',
+    };
     await dbRun(locals.db,
-      'INSERT INTO custom_domains (id, org_id, domain, cf_hostname_id) VALUES (?, ?, ?, ?)',
-      crypto.randomUUID(), orgId, domain, cfHostnameId
+      'INSERT INTO custom_domains (id, org_id, domain) VALUES (?, ?, ?)',
+      row.id, orgId, domain
     );
+    try {
+      // Creates the Cloudflare custom hostname and stores the DNS records to show.
+      await registerCustomDomain(locals.db, row);
+    } catch (e: unknown) {
+      // Cloudflare refused the hostname: do not keep a claim that can never verify.
+      await dbRun(locals.db, 'DELETE FROM custom_domains WHERE id = ?', row.id);
+      const msg = e instanceof Error ? e.message : String(e);
+      return fail(502, { error: st(locals.locale).serverErrors.cloudflareError(msg), domain });
+    }
 
     return { success: true };
   },
@@ -106,31 +131,20 @@ export const actions: Actions = {
     const data = await request.formData();
     const id = String(data.get('id') ?? '');
 
-    const row = await dbFirst<DomainRow>(locals.db,
-      'SELECT * FROM custom_domains WHERE id = ? AND org_id = ?',
+    const row = await dbFirst<DomainCheckRow>(locals.db,
+      `SELECT ${ROW_COLUMNS} FROM custom_domains WHERE id = ? AND org_id = ?`,
       id, orgId
     );
     if (!row) return fail(404, { error: st(locals.locale).serverErrors.domainNotFound });
-    if (!row.cf_hostname_id) return fail(400, { error: st(locals.locale).serverErrors.noCloudflareRecordToRefresh });
+    if (!isCFEnabled()) return fail(400, { error: st(locals.locale).serverErrors.noCloudflareRecordToRefresh });
 
-    // Report the outcome: a refresh that finds the domain still pending changes nothing
+    // Report the outcome: a check that finds the domain still pending changes little
     // on screen, so without this the button looks broken.
-    let verified = !!row.verified_at;
-    try {
-      const cf = await getHostnameStatus(row.cf_hostname_id);
-      if (cf.ssl?.status === 'active' && cf.status === 'active') {
-        await dbRun(locals.db,
-          `UPDATE custom_domains SET verified_at = datetime('now') WHERE id = ? AND org_id = ?`,
-          id, orgId
-        );
-        verified = true;
-      }
-    } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : String(e);
-      return fail(502, { error: st(locals.locale).serverErrors.cloudflareError(msg) });
+    const result = await checkCustomDomain(locals.db, row);
+    if (!result.ok) {
+      return fail(502, { error: st(locals.locale).serverErrors.cloudflareError(result.error ?? '') });
     }
-
-    return { success: true, refreshed: true, verified };
+    return { success: true, refreshed: true, verified: result.verified };
   },
 
   delete: async ({ request, locals }) => {
@@ -139,19 +153,14 @@ export const actions: Actions = {
     const data = await request.formData();
     const id = String(data.get('id') ?? '');
 
-    const row = await dbFirst<DomainRow>(locals.db,
-      'SELECT * FROM custom_domains WHERE id = ? AND org_id = ?',
+    const row = await dbFirst<DomainCheckRow>(locals.db,
+      `SELECT ${ROW_COLUMNS} FROM custom_domains WHERE id = ? AND org_id = ?`,
       id, orgId
     );
     if (!row) return fail(404, { error: st(locals.locale).serverErrors.domainNotFound });
 
-    if (row.cf_hostname_id && isCFEnabled()) {
-      try {
-        await deleteCustomHostname(row.cf_hostname_id);
-      } catch { /* log but continue — still delete from DB */ }
-    }
-
-    await dbRun(locals.db, 'DELETE FROM custom_domains WHERE id = ? AND org_id = ?', id, orgId);
+    // Removes the Cloudflare hostname too (best-effort), then the row.
+    await releaseCustomDomain(locals.db, row);
     return { success: true };
   }
 };
