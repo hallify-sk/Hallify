@@ -75,7 +75,7 @@
 	};
 </script>
 
-<svelte:head><title>{pageTitle(t.rolesAdmin.pageTitle, t.membersAdmin.title)}</title></svelte:head>
+<svelte:head><title>{pageTitle(t.peopleArea.tabRoles, t.peopleArea.title)}</title></svelte:head>
 
 {#if form?.error}
 	<div class="alert-error">{form.error}</div>

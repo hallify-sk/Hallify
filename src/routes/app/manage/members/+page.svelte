@@ -61,7 +61,7 @@
   }
 </script>
 
-<svelte:head><title>{pageTitle(t.peopleArea.tabMembers)}</title></svelte:head>
+<svelte:head><title>{pageTitle(t.peopleArea.tabMembers, t.peopleArea.title)}</title></svelte:head>
 
 {#if form?.error}
   <div class="alert-error top-alert">{form.error}</div>

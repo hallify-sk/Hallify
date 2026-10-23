@@ -205,7 +205,7 @@
 		<div class="ph-left">
 			<a href={isAdmin ? '/app/manage/reservations' : '/app/'} class="back-link">
 				<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
-				{t.event.backToEvents}
+				{isAdmin ? t.event.backToReservations : t.event.backToEvents}
 			</a>
 			<div class="ph-titlerow">
 				<h1 class="page-title">{data.reservation.title}</h1>

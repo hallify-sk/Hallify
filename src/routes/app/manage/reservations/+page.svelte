@@ -305,7 +305,7 @@
 		{:else}
 			<div class="res-list row-list">
 				<div class="res-head">
-					<span>{t.adminReservations.event}</span>
+					<span>{t.adminReservations.reservation}</span>
 					<span>{t.adminReservations.user}</span>
 					<span class="h-hall">{t.adminReservations.hall}</span>
 					<span>{t.adminReservations.date}</span>
