@@ -7,3 +7,5 @@
 | B130 | done | Forgot-password link moved after the password input in the DOM (grid keeps it beside the label), so Tab goes email -> password. |
 | B172 | done | A legacy apex client account (client, no org) is turned into a personal Hallify account at sign-in instead of getting a session that is then ignored. |
 | I27 | done | Sign-in counts only failed attempts (new rateLimitStatus peek); registration is counted after the form validates. |
+| B44 | done | Register name/email fields are bound $state, so switching the intent no longer resets them. |
+| M2 | done | Apex sign-up links Terms and Privacy with a required checkbox (checked server-side) and records the acceptance in legal_acceptances (migration 0024 creates the table where missing; helper shared verbatim with the venue branch). |

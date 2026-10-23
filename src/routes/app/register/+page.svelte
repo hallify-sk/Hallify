@@ -13,6 +13,15 @@
 	// the account is. The server re-reads and re-validates it on submit.
 	let intent = $state<'guest' | 'operator'>(form?.intent ?? data.intent);
 
+	// Bound, not value={form?.x}: a one-way value is re-applied whenever the template
+	// updates, so switching the intent above wiped the name and email already typed.
+	let firstName = $state(form?.firstName ?? '');
+	let lastName = $state(form?.lastName ?? '');
+	let email = $state(form?.email ?? '');
+
+	// Back to sign-in without losing where they were going (an invitation, a venue).
+	const loginHref = $derived(data.next ? `/app/login?redirect=${encodeURIComponent(data.next)}` : '/app/login');
+
 	onMount(() => saas.signUpStarted());
 </script>
 
@@ -66,28 +75,37 @@
 		<div class="field-row">
 			<div class="field">
 				<label for="firstName">{t.auth.firstName}</label>
-				<input id="firstName" name="firstName" type="text" placeholder="Ján" value={form?.firstName ?? ''} required autocomplete="given-name" />
+				<input id="firstName" name="firstName" type="text" placeholder="Ján" bind:value={firstName} required autocomplete="given-name" />
 			</div>
 			<div class="field">
 				<label for="lastName">{t.auth.lastName}</label>
-				<input id="lastName" name="lastName" type="text" placeholder="Novák" value={form?.lastName ?? ''} required autocomplete="family-name" />
+				<input id="lastName" name="lastName" type="text" placeholder="Novák" bind:value={lastName} required autocomplete="family-name" />
 			</div>
 		</div>
 		<div class="field">
 			<label for="email">{t.auth.email}</label>
-			<input id="email" name="email" type="email" placeholder="you@example.com" value={form?.email ?? ''} required autocomplete="email" />
+			<input id="email" name="email" type="email" placeholder="you@example.com" bind:value={email} required autocomplete="email" />
 		</div>
 		<div class="field">
 			<label for="password">{t.auth.password}</label>
 			<input id="password" name="password" type="password" placeholder={t.auth.passwordMin} required autocomplete="new-password" />
 		</div>
+		<label class="consent">
+			<input type="checkbox" name="acceptTerms" required />
+			<span>
+				{t.authPages.registerTermsBefore}
+				<a href="/terms" target="_blank" rel="noopener">{t.authPages.registerTermsLink}</a>
+				{t.authPages.registerTermsBetween}
+				<a href="/privacy" target="_blank" rel="noopener">{t.authPages.registerPrivacyLink}</a>.
+			</span>
+		</label>
 		<button type="submit" class="submit-btn">{t.authPages.registerSubmit}</button>
 		<p class="next-hint">
 			{intent === 'operator' ? t.authPages.registerNextOperator : t.authPages.registerNextGuest}
 		</p>
 	</form>
 
-	<p class="auth-switch">{t.auth.hasAccount} <a href="/app/login">{t.auth.signInLink}</a></p>
+	<p class="auth-switch">{t.auth.hasAccount} <a href={loginHref}>{t.auth.signInLink}</a></p>
 </AuthShell>
 
 <style>
@@ -212,6 +230,22 @@
 	.intent-copy { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 	.intent-name { font-size: 13px; font-weight: 600; color: var(--text-base); letter-spacing: -.01em; }
 	.intent-hint { font-size: 11.5px; color: var(--text-muted); line-height: 1.45; }
+
+	/* The one checkbox on the page, so it keeps the native control (accent-coloured)
+	   rather than the intent cards' custom mark. */
+	.consent {
+		display: flex;
+		align-items: flex-start;
+		gap: 9px;
+		font-size: 12px;
+		font-weight: 400;
+		line-height: 1.5;
+		color: var(--text-muted);
+		cursor: pointer;
+	}
+	.consent input { width: 16px; height: 16px; margin: 1px 0 0; flex-shrink: 0; accent-color: var(--accent); }
+	.consent a { color: var(--accent-ink); font-weight: 600; text-decoration: none; }
+	.consent a:hover { text-decoration: underline; }
 
 	.submit-btn {
 		width: 100%;
