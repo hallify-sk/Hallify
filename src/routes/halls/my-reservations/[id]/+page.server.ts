@@ -12,6 +12,7 @@ import { st } from '$lib/i18n-server';
 import { hasEventStarted, isEventPast } from '$lib/reservationStatus';
 import type { Actions, PageServerLoad } from './$types';
 import { markTicketRead } from '$lib/unread';
+import { logReservationActivity } from '$lib/server/reservation-activity';
 import { findOrCreateReservationThread, MESSAGE_MAX } from '$lib/server/threads';
 
 const RANGE_DAYS = 540;
@@ -163,6 +164,8 @@ export const actions: Actions = {
 		}
 
 		const guestName = `${locals.user.first_name} ${locals.user.last_name}`;
+		// Shown in the booking's history on the staff page.
+		await logReservationActivity(locals.db, { reservationId: params.id, orgId, actorId: userId, actorName: guestName, kind: 'edited', note: 'client' });
 		notifyGuestEdit(locals.db, orgId, guestName, title, hall.name, eventDate).catch(() => {});
 
 		return { updated: true };
@@ -193,8 +196,12 @@ export const actions: Actions = {
 		}
 
 		await dbRun(locals.db,
-			`UPDATE reservations SET status = 'cancelled' WHERE id = ? AND user_id = ? AND org_id = ?`,
+			`UPDATE reservations SET status = 'cancelled', cancelled_by = 'client' WHERE id = ? AND user_id = ? AND org_id = ?`,
 			params.id, userId, orgId);
+		await logReservationActivity(locals.db, {
+			reservationId: params.id, orgId, actorId: userId,
+			actorName: `${locals.user.first_name} ${locals.user.last_name}`, kind: 'status', status: 'cancelled',
+		});
 
 		dispatchWebhooks(locals.db, orgId, 'reservation.status_changed', {
 			reservation_id: reservation.id, title: reservation.title,

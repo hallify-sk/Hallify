@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
-	import { t } from '$lib/i18n.svelte';
+	import { t, getLocale } from '$lib/i18n.svelte';
+	import { formatDate as fmtLocaleDate } from '$lib/format';
 	import SectionHeader from '$lib/components/SectionHeader.svelte';
 	import type { PageData, ActionData } from './$types';
 	import type { RsvpConfig } from '$lib/db/index';
@@ -10,8 +11,8 @@
 
 	let showCreate = $state(false);
 
-	function formatDate(d: Date | string) {
-		return new Date(d).toLocaleDateString('sk-SK', { day: 'numeric', month: 'short', year: 'numeric' });
+	function formatDate(d: string) {
+		return fmtLocaleDate(d, getLocale());
 	}
 
 	function fieldsCount(config: unknown): number {

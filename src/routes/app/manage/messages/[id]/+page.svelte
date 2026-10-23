@@ -16,7 +16,7 @@
 	let msgBody = $state('');
 	let chatEnd: HTMLDivElement;
 	let pollTimer: ReturnType<typeof setInterval> | null = null;
-	let fileInput: HTMLInputElement;
+	let fileInput: HTMLInputElement | undefined = $state();
 	let pendingFile = $state<{ url: string; name: string; type: string } | null>(null);
 	let uploading = $state(false);
 	let uploadError = $state('');
@@ -207,7 +207,7 @@
 			<input type="hidden" name="attachmentType" value={pendingFile?.type ?? ''} />
 			<input type="file" bind:this={fileInput} onchange={handleFileSelect} class="sr-only"
 				accept="image/jpeg,image/png,image/webp,image/gif" />
-			<button type="button" class="btn-attach" aria-label={t.messagesAdmin.attachment} onclick={() => fileInput.click()} disabled={uploading}>
+			<button type="button" class="btn-attach" aria-label={t.messagesAdmin.attachment} onclick={() => fileInput?.click()} disabled={uploading}>
 				<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
 					<path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
 				</svg>

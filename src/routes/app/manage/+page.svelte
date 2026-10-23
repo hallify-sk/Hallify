@@ -1,5 +1,6 @@
 <script lang="ts">
   import { t, getLocale } from '$lib/i18n.svelte';
+  import { formatDate, timeAgo as relTime } from '$lib/format';
   import KpiCard from '$lib/components/KpiCard.svelte';
   import type { PageData } from './$types';
 
@@ -56,18 +57,13 @@
   });
 
   // ── Helpers ───────────────────────────────────────────────────────────────
-  function fmtDateFull(d: Date | string) {
-    return new Date(d).toLocaleDateString(dateLocale, { day: 'numeric', month: 'short', year: 'numeric' });
+  function fmtDateFull(d: string) {
+    return formatDate(d, getLocale());
   }
 
-  function timeAgo(d: Date | string) {
-    const diff = Date.now() - new Date(d).getTime();
-    const mins = Math.floor(diff / 60000);
-    if (mins < 1) return t.settingsPages.justNow;
-    if (mins < 60) return `${mins}${t.settingsPages.minutesAgo}`;
-    const hrs = Math.floor(mins / 60);
-    if (hrs < 24) return `${hrs}${t.settingsPages.hoursAgo}`;
-    return `${Math.floor(hrs / 24)}${t.settingsPages.daysAgo}`;
+  // created_at is UTC without a zone: read it as UTC (it showed "2 h" for new items).
+  function timeAgo(d: string) {
+    return relTime(d, getLocale());
   }
 
   const STATUS_DOT: Record<string, string> = {
@@ -84,8 +80,9 @@
   }
 
   const today = new Date();
-  function daysUntil(d: Date | string) {
-    const diff = new Date(d).setHours(0,0,0,0) - today.setHours(0,0,0,0);
+  function daysUntil(d: string) {
+    // event_date is a plain day: read it as local midnight, like today.
+    const diff = new Date(`${d.slice(0, 10)}T00:00:00`).getTime() - new Date(today).setHours(0,0,0,0);
     const days = Math.round(diff / 86400000);
     if (days === 0) return t.adminPages.today;
     if (days === 1) return t.adminPages.tomorrow;
@@ -340,7 +337,7 @@
             {#each data.upcoming as ev}
               <a href="/app/reservation/{ev.id}" class="row-item row-item--bleed upcoming-row">
                 <div class="upcoming-date-col">
-                  <span class="upcoming-day">{new Date(ev.event_date).toLocaleDateString(dateLocale, { day: 'numeric', month: 'short' }).replace(' ', '\n')}</span>
+                  <span class="upcoming-day">{formatDate(ev.event_date, getLocale(), { day: 'numeric', month: 'short' }).replace(' ', '\n')}</span>
                 </div>
                 <div class="upcoming-bar" style="background:{ev.hall_color}"></div>
                 <div class="upcoming-info">

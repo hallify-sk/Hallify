@@ -24,7 +24,7 @@ export const load: PageServerLoad = async ({ locals }) => {
       (SELECT COUNT(*) FROM reservations WHERE org_id = ? AND status = 'pending') AS pending,
       (SELECT COUNT(*) FROM tickets WHERE org_id = ? AND status = 'open') AS open_tickets,
       (SELECT COUNT(*) FROM reservations WHERE org_id = ?
-        AND event_date BETWEEN datetime('now') AND datetime('now', '+7 days')
+        AND event_date BETWEEN date('now') AND date('now', '+7 days')
         AND status NOT IN ('cancelled')) AS upcoming_7d,
       (SELECT COUNT(*) FROM reservations WHERE org_id = ? AND status = 'completed') AS completed
   `, orgId, orgId, orgId, orgId, orgId, orgId, orgId);
@@ -80,7 +80,7 @@ export const load: PageServerLoad = async ({ locals }) => {
   }>(locals.db, `
     SELECT h.id, h.name, h.color, h.max_people,
       COUNT(r.id) AS reservation_count,
-      SUM(CASE WHEN r.event_date >= datetime('now') AND r.status != 'cancelled' THEN 1 ELSE 0 END) AS upcoming_count
+      SUM(CASE WHEN r.event_date >= date('now') AND r.status != 'cancelled' THEN 1 ELSE 0 END) AS upcoming_count
     FROM halls h
     LEFT JOIN reservations r ON r.hall_id = h.id
     WHERE h.org_id = ? AND h.archived_at IS NULL
@@ -96,12 +96,13 @@ export const load: PageServerLoad = async ({ locals }) => {
   }>(locals.db, `
     SELECT r.id, r.title, r.event_date, r.start_time, r.status,
            h.name AS hall_name, h.color AS hall_color,
-           u.first_name AS user_first_name, u.last_name AS user_last_name
+           COALESCE(r.customer_name, u.first_name) AS user_first_name,
+           CASE WHEN r.customer_name IS NOT NULL THEN '' ELSE u.last_name END AS user_last_name
     FROM reservations r
     JOIN halls h ON h.id = r.hall_id
     JOIN users u ON u.id = r.user_id
     WHERE r.org_id = ?
-      AND r.event_date BETWEEN datetime('now') AND datetime('now', '+14 days')
+      AND r.event_date BETWEEN date('now') AND date('now', '+14 days')
       AND r.status != 'cancelled'
     ORDER BY r.event_date, r.start_time
     LIMIT 8
@@ -116,7 +117,8 @@ export const load: PageServerLoad = async ({ locals }) => {
   }>(locals.db, `
     SELECT r.id, r.title, r.event_date, r.status,
            h.name AS hall_name, h.color AS hall_color,
-           u.first_name AS user_first_name, u.last_name AS user_last_name,
+           COALESCE(r.customer_name, u.first_name) AS user_first_name,
+           CASE WHEN r.customer_name IS NOT NULL THEN '' ELSE u.last_name END AS user_last_name,
            r.created_at
     FROM reservations r
     JOIN halls h ON h.id = r.hall_id

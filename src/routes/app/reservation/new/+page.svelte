@@ -2,7 +2,8 @@
 	import { enhance } from '$app/forms';
 	import { goto, beforeNavigate } from '$app/navigation';
 	import { untrack, onDestroy } from 'svelte';
-	import { t } from '$lib/i18n.svelte';
+	import { t, getLocale } from '$lib/i18n.svelte';
+	import { formatDate as fmtLocaleDate } from '$lib/format';
 	import { migrateToMultiFloor } from '$lib/floorplan-types';
 	import { parseEventTypes, normalizeEventType, CUSTOM_EVENT_TYPE_MAX } from '$lib/eventTypes';
 	import SectionHeader from '$lib/components/SectionHeader.svelte';
@@ -340,7 +341,7 @@
 							{:else if selectedDate && holdActive}
 								<div class="hold-banner ok">
 									<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
-									<span>{new Date(selectedDate).toLocaleDateString('sk-SK', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</span>
+									<span>{fmtLocaleDate(selectedDate, getLocale(), { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</span>
 									<span class="hold-timer" title={t.createEvent?.heldHint ?? 'This date is reserved for you while you book'}>{t.createEvent?.heldFor ?? 'Held'} · {holdLabel}</span>
 								</div>
 							{:else if acquiring}
@@ -472,7 +473,7 @@
 									<line x1="8" y1="2" x2="8" y2="6"/>
 									<line x1="3" y1="10" x2="21" y2="10"/>
 								</svg>
-								{new Date(selectedDate).toLocaleDateString('sk-SK', { day: 'numeric', month: 'long', year: 'numeric' })}
+								{fmtLocaleDate(selectedDate, getLocale(), { day: 'numeric', month: 'long', year: 'numeric' })}
 							</span>
 						{/if}
 					</div>

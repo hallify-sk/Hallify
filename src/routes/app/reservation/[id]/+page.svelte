@@ -157,7 +157,7 @@
 
 	const FIELD_LABEL = $derived<Record<string, string>>({
 		date: t.resOps.fieldDate, time: t.resOps.fieldTime, guests: t.resOps.fieldGuests,
-		notes: t.resOps.fieldNotes, internal: t.resOps.fieldInternal,
+		notes: t.resOps.fieldNotes, internal: t.resOps.fieldInternal, client: t.resOps.fieldBooking,
 	});
 
 	function activityText(a: { kind: string; status: string | null; note: string | null }) {
@@ -692,7 +692,8 @@
 
 {#if declineOpen}
 	<div class="dialog-backdrop" onclick={() => (declineOpen = false)} role="presentation">
-		<div class="card card--raised dialog-card" onclick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="decline-title"
+		<!-- svelte-ignore a11y_click_events_have_key_events -->
+		<div class="card card--raised dialog-card" onclick={(e) => e.stopPropagation()} tabindex="-1" role="dialog" aria-modal="true" aria-labelledby="decline-title"
 			use:dialog={{ onclose: () => (declineOpen = false), initialFocus: 'textarea' }}>
 			<div class="dialog-header">
 				<h2 id="decline-title">{t.resOps.declineTitle}</h2>
@@ -716,7 +717,8 @@
 
 {#if editOpen}
 	<div class="dialog-backdrop" onclick={() => (editOpen = false)} role="presentation">
-		<div class="card card--raised dialog-card dialog-card--wide" onclick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="edit-title"
+		<!-- svelte-ignore a11y_click_events_have_key_events -->
+		<div class="card card--raised dialog-card dialog-card--wide" onclick={(e) => e.stopPropagation()} tabindex="-1" role="dialog" aria-modal="true" aria-labelledby="edit-title"
 			use:dialog={{ onclose: () => (editOpen = false) }}>
 			<div class="dialog-header">
 				<h2 id="edit-title">{t.resOps.editTitle}</h2>
@@ -773,11 +775,12 @@
 <!-- Template dialog -->
 {#if templateDialogOpen}
 	<div class="dialog-backdrop" onclick={() => (templateDialogOpen = false)} role="presentation">
-		<div class="card card--raised dialog-card" onclick={(e) => e.stopPropagation()} role="dialog" aria-modal="true"
+		<!-- svelte-ignore a11y_click_events_have_key_events -->
+		<div class="card card--raised dialog-card" onclick={(e) => e.stopPropagation()} tabindex="-1" role="dialog" aria-modal="true"
 			use:dialog={{ onclose: () => (templateDialogOpen = false) }}>
 			<div class="dialog-header">
 				<h2>{t.event.loadTemplate}</h2>
-				<button type="button" class="dialog-close" onclick={() => (templateDialogOpen = false)}>
+				<button type="button" class="dialog-close" aria-label={t.memberMessages.closePopup} onclick={() => (templateDialogOpen = false)}>
 					<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
 						<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
 					</svg>
