@@ -930,6 +930,32 @@ export const sk = {
 		inventoryExhausted: (name: string, n: number) => `Všetky stoly „${name}“ sú už rozmiestnené (${n}/${n})`,
 		inventoryLeft: (left: number, total: number) => `zostáva ${left} z ${total}`,
 		tablesClash: (n: number) => `${n} ${n === 1 ? 'stôl sa prekrýva' : n < 5 ? 'stoly sa prekrývajú' : 'stolov sa prekrýva'} s niečím alebo stojí mimo miestnosti`,
+		/** A template or event layout measured against the hall's current floor plan. */
+		layoutFit: {
+			title: "Rozloženie nesedí s aktuálnym pôdorysom sály",
+			inWall: (items: string) => `V stene alebo v stĺpe: ${items}`,
+			outside: (items: string) => `Mimo miestnosti: ${items}`,
+			goneFloor: (floor: string, items: string) => `Na podlaží „${floor}“, ktoré sála už nemá: ${items}`,
+			chairs: (n: number) => `${n} ${sk3(n, 'samostatná stolička', 'samostatné stoličky', 'samostatných stoličiek')}`,
+			hint: "Presuňte alebo odstráňte stoly a stoličky vyznačené červenou. Keď opravené rozloženie uložíte, upozornenie zmizne.",
+			hintSeating: "Stoly a stoličky vyznačené červenou nesedia s pôdorysom. Ich rozmiestnenie môže upraviť sála.",
+			badge: "Nesedí s pôdorysom",
+			badgeTitle: (n: number) => `${n} ${sk3(n, 'stôl alebo stolička nesedí', 'stoly alebo stoličky nesedia', 'stolov alebo stoličiek nesedí')} s aktuálnym pôdorysom sály`,
+			afterSave: (templates: number, events: number) => {
+				const parts = [
+					templates ? `${templates} ${sk3(templates, 'šablóne', 'šablónach', 'šablónach')}` : '',
+					events ? `${events} ${sk3(events, 'nadchádzajúcej udalosti', 'nadchádzajúcich udalostiach', 'nadchádzajúcich udalostiach')}` : ''
+				].filter(Boolean);
+				return `Po zmene pôdorysu nesedí rozloženie v ${parts.join(' a ')}`;
+			},
+			afterSaveHint: "Šablóny a udalosti dostali nový pôdorys sály, ich stoly zostali na mieste. Otvorte ich a presuňte stoly vyznačené červenou.",
+			problems: (n: number) => `${n} ${sk3(n, 'problém', 'problémy', 'problémov')}`,
+			template: "Šablóna",
+			event: "Udalosť",
+			eventsHeading: "Udalosti, ktorých rozloženie nesedí s pôdorysom",
+			syncFailed: "Pôdorys je uložený, no šablóny a udalosti sa mu nepodarilo prispôsobiť. Uložte ho prosím ešte raz.",
+			dismiss: "Skryť",
+		},
 		statusSelectedTable: "úchyt na otáčanie vyššie · Delete na odstránenie",
 		properties: "Vlastnosti",
 		guests: "Hostia",
@@ -4586,6 +4612,32 @@ export const en: typeof sk = {
 		inventoryExhausted: (name: string, n: number) => `Every “${name}” table is already placed (${n}/${n})`,
 		inventoryLeft: (left: number, total: number) => `${left} of ${total} left`,
 		tablesClash: (n: number) => `${n} ${n === 1 ? 'table overlaps' : 'tables overlap'} something or stands off the floor`,
+		/** A template or event layout measured against the hall's current floor plan. */
+		layoutFit: {
+			title: "This layout no longer fits the hall's floor plan",
+			inWall: (items: string) => `In a wall or pillar: ${items}`,
+			outside: (items: string) => `Off the floor: ${items}`,
+			goneFloor: (floor: string, items: string) => `On floor “${floor}”, which the hall no longer has: ${items}`,
+			chairs: (n: number) => `${n} ${en2(n, 'standalone chair', 'standalone chairs')}`,
+			hint: "Move or remove the tables and chairs marked in red. The warning goes once the fixed layout is saved.",
+			hintSeating: "The tables and chairs marked in red do not fit the floor plan. The venue can rearrange them.",
+			badge: "Doesn't fit the plan",
+			badgeTitle: (n: number) => `${n} ${en2(n, 'table or chair does', 'tables or chairs do')} not fit the hall's current floor plan`,
+			afterSave: (templates: number, events: number) => {
+				const parts = [
+					templates ? `${templates} ${en2(templates, 'template', 'templates')}` : '',
+					events ? `${events} upcoming ${en2(events, 'event', 'events')}` : ''
+				].filter(Boolean);
+				return `${parts.join(' and ')} now ${templates + events === 1 ? 'has' : 'have'} layout problems`;
+			},
+			afterSaveHint: "Templates and events now stand on the new floor plan, with their tables where they were. Open them and move the tables marked in red.",
+			problems: (n: number) => `${n} ${en2(n, 'problem', 'problems')}`,
+			template: "Template",
+			event: "Event",
+			eventsHeading: "Events whose layout no longer fits the plan",
+			syncFailed: "The floor plan is saved, but its templates and events could not be updated to it. Please save it once more.",
+			dismiss: "Hide",
+		},
 		statusSelectedTable: "rotate handle above · Delete to remove",
 		properties: "Properties",
 		guests: "Guests",

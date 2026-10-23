@@ -25,6 +25,8 @@ import {
 	addHallBlock, removeHallBlock, addTableType, updateTableType, removeTableType,
 	addHallExtra, updateHallExtra, removeHallExtra, updateBookingSettings, type TableTypeInput, type ExtraInput
 } from '$lib/server/ops/hall-ops';
+import { syncHallLayouts } from '$lib/server/layout-sync';
+import { followsHallPlan, parseProblems, UPCOMING_STATUSES } from '$lib/floorplan-sync';
 
 /** The note sent to every client when a hall's bookings are cancelled together. */
 const MAX_CANCEL_NOTE = 2000;
@@ -194,11 +196,27 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 			orgId, hall.id)
 		: [];
 
+	// Upcoming events whose layout no longer fits the hall's plan (see floorplan-sync).
+	// Wrapped like the other late columns: before migration 0032 there are none.
+	let problemEvents: { id: string; title: string; event_date: string; problems: number }[] = [];
+	try {
+		problemEvents = (await dbAll<{ id: string; title: string; status: string; event_date: string; start_time: string | null; layout_problems: string | null }>(locals.db,
+			`SELECT id, title, status, event_date, start_time, layout_problems FROM reservations
+			  WHERE hall_id = ? AND layout_problems IS NOT NULL AND status IN (${UPCOMING_STATUSES.map(() => '?').join(', ')})
+			    AND event_date >= date('now', '-1 day') ORDER BY event_date, start_time`,
+			hall.id, ...UPCOMING_STATUSES))
+			.filter((e) => followsHallPlan(e))
+			.map((e) => ({ id: e.id, title: e.title, event_date: e.event_date, problems: parseProblems(e.layout_problems).length }))
+			.filter((e) => e.problems > 0);
+	} catch {
+		problemEvents = [];
+	}
+
 	// Ordering (or withdrawing) the paid mapping add-on needs settings.manage (I29).
 	const canOrderAddons = await canManageSettings(locals);
 	// Clients' ratings of events in this hall (D5): private to the team.
 	const feedback = await hallFeedback(locals.db, orgId, hall.id);
-	return { hall, templates, blocks, tableTypes, reservations, extras, plan, orgAmenities, floorplanRequest, blocking, unused, planFull, swapCandidates, canOrderAddons, feedback };
+	return { hall, templates: templates.map((tm) => ({ ...tm, problems: parseProblems((tm as { layout_problems?: unknown }).layout_problems).length })), problemEvents, blocks, tableTypes, reservations, extras, plan, orgAmenities, floorplanRequest, blocking, unused, planFull, swapCandidates, canOrderAddons, feedback };
 };
 
 /** The hall in the URL must belong to the acting organization. Every action below
@@ -253,8 +271,12 @@ export const actions: Actions = {
 		const data = await request.formData();
 		const floorplanJson = String(data.get('floorplanJson') ?? '');
 		if (!floorplanJson) return fail(400, { floorplanError: st(locals.locale).serverErrors.noData });
+		const previous = await dbFirst<{ floorplan_json: string | null }>(locals.db,
+			'SELECT floorplan_json FROM halls WHERE id = ? AND org_id = ?', params.id, org.id);
 		await dbRun(locals.db, 'UPDATE halls SET floorplan_json=? WHERE id=? AND org_id=?', floorplanJson, params.id, org.id);
-		return { floorplanSuccess: true };
+		// The new room goes under the hall's templates and upcoming events.
+		const sync = await syncHallLayouts(locals.db, params.id, previous?.floorplan_json ?? null, floorplanJson);
+		return { floorplanSuccess: true, sync };
 	},
 
 	// Create a template from the hall's CURRENT live floorplan (walls/zones/bounds),

@@ -198,7 +198,8 @@
 								<select id="m-template" name="templateId" required={!!manualHallData?.force_layouts}>
 									<option value="">{t.createEvent.blankLayout}</option>
 									{#each manualTemplates as tm}
-										<option value={tm.id}>{tm.name}</option>
+										<!-- A template the hall's plan no longer fits says so (D2). -->
+										<option value={tm.id}>{tm.name}{tm.problems > 0 ? ` (${t.editor.layoutFit.badge})` : ''}</option>
 									{/each}
 								</select>
 							</div>

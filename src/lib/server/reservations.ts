@@ -14,6 +14,7 @@ import { notifyNewReservation, notifyBookingReceived } from '$lib/email';
 import { postSystemMessage } from '$lib/tickets';
 import { noteMonthUsage, recordTurnedAway } from '$lib/server/cap-notices';
 import { keepAlive } from '$lib/server/background';
+import { refreshLayoutProblems } from '$lib/server/layout-sync';
 import { dispatchWebhooks } from '$lib/notifications';
 import {
 	CUSTOM_EVENT_TYPE_MAX,
@@ -170,6 +171,8 @@ export async function createReservation(
 	}
 
 	await releaseHold(locals.db, hallId, eventDate, user.id);
+	// Booked on a template the hall's plan no longer fits: the event is flagged too (D2).
+	if (layoutJson) await refreshLayoutProblems(locals.db, 'event', newId);
 	// A booking that fills the month under the plan's cap is announced to the owner.
 	keepAlive(noteMonthUsage(locals.db, hall, eventDate));
 

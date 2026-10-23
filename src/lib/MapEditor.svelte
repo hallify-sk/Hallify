@@ -64,6 +64,9 @@
 		/** Zones from the hall's own plan (the stage, the bar): shown, but not moved,
 		 *  reshaped or deleted in a template or an event. */
 		lockedZoneIds?: string[];
+		/** Tables and chairs to mark as needing attention (red), on top of those the
+		 *  editor finds clashing itself: e.g. on a floor the hall no longer has. */
+		flaggedIds?: string[];
 		/** Where "Preview & print" leads (events have a printable manifest). */
 		printHref?: string;
 	}
@@ -71,8 +74,10 @@
 		initialState, onchange, tableTypes, hiddenTools = [], protectWallsZones = false, allowZones = false,
 		lockFloors = false, tablesFromTypesOnly = false, allowGuests = false,
 		mode, saveState = 'idle', onSave, saveLabel, autosave = true, printHref,
-		lockTables = false, audience = 'staff', lockedZoneIds = []
+		lockTables = false, audience = 'staff', lockedZoneIds = [], flaggedIds = []
 	}: Props = $props();
+
+	const flagged = $derived(new Set(flaggedIds));
 
 	const lockedZones = $derived(new Set(lockedZoneIds));
 	/** A zone that may be changed right now: zones are editable in this step, and it
@@ -2411,7 +2416,7 @@
 				{#each tables as table}
 					{@const chairs = localChairs(table)}
 					{@const sel = table.id === selectedId}
-					{@const clash = collidingIds.has(table.id)}
+					{@const clash = collidingIds.has(table.id) || flagged.has(table.id)}
 					{@const rotH  = table.shape === 'rect' ? table.height/2 : table.radius}
 					{@const tag = tagOf(table)}
 					{@const sub = (table.label ?? '').trim() !== tag ? (table.label ?? '').trim() : ''}
@@ -2537,6 +2542,8 @@
 						}}>
 						{#if ssel || drop}
 							<circle cx={0} cy={0} r={ws(0.32)} fill="none" stroke="var(--accent)" stroke-width="2.5"/>
+						{:else if flagged.has(seat.id)}
+							<circle cx={0} cy={0} r={ws(0.32)} fill="none" stroke="#ef4444" stroke-width="2.5"/>
 						{/if}
 						<!-- Chair back bar -->
 						<rect x={-ws(0.21)} y={-ws(0.24)} width={ws(0.42)} height={ws(0.09)}

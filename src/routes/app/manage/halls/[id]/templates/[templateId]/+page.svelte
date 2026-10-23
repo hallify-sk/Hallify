@@ -7,17 +7,39 @@
 	import { LayoutSaver, guardUnsaved } from '$lib/editor/layout-saver.svelte';
 	import { t } from '$lib/i18n.svelte';
 	import { EVENT_TYPE_KEYS, parseEventTypes } from '$lib/eventTypes';
+	import { layoutProblems } from '$lib/floorplan-sync';
+	import LayoutFitBanner from '$lib/editor/LayoutFitBanner.svelte';
 	import type { PageData, ActionData } from './$types';
 
 	interface Props { data: PageData; form: ActionData; }
 	const { data, form }: Props = $props();
 
-	const initialLayout = untrack(() => data.template.layout_json ?? null);
+	// The layout the editor is built from: taken once, and again when the server laid
+	// a newer hall plan under a save (the editor was opened on the old one).
+	let currentInitial = $state<unknown>(untrack(() => data.template.layout_json ?? null));
+	let editorKey = $state(0);
 
 	// Autosave shortly after the last change; the last edits are saved (or the
 	// browser asks) on the way out.
-	const saver = new LayoutSaver({ action: '?/saveLayout', field: 'layoutJson', failedMessage: () => t.editor.saveFailed });
+	const saver = new LayoutSaver({
+		action: '?/saveLayout',
+		field: 'layoutJson',
+		failedMessage: () => t.editor.saveFailed,
+		onResult: (result) => {
+			const layout = result.type === 'success' ? (result.data as { layout?: unknown } | undefined)?.layout : undefined;
+			if (layout) {
+				currentInitial = layout;
+				saver.reset({ savedOnce: true });
+				editorKey++;
+			}
+		}
+	});
 	guardUnsaved(saver, { leaveUnsaved: () => t.editor.leaveUnsaved, leaveFailed: () => t.editor.leaveSaveFailed });
+
+	// What no longer fits the hall's floor plan, measured live, so the warning goes
+	// as the tables are moved off the walls.
+	const problems = $derived(data.hallPlan ? layoutProblems(saver.json ?? currentInitial, data.hallPlan) : []);
+	const flaggedIds = $derived(problems.map((p) => p.id));
 
 	// ── Edit details (name + event types) ──
 	let metaOpen  = $state(false);
@@ -64,23 +86,27 @@
 		</div>
 	</div>
 	{#if saver.error}<div class="save-err" role="alert">{saver.error}</div>{/if}
+	<LayoutFitBanner {problems} />
 
 	<div class="editor-wrap">
-		<MapEditor
-			initialState={initialLayout}
-			onchange={(json) => saver.change(json)}
-			tableTypes={data.tableTypes}
-			mode="template"
-			saveState={saver.state}
-			onSave={() => saver.save({ force: true })}
-			saveLabel={t.common.save}
-			printHref={`/app/manage/halls/${data.hallId}/templates/${data.template.id}/print`}
-			lockedZoneIds={data.hallZoneIds}
-			protectWallsZones={true}
-			allowZones={true}
-			lockFloors={true}
-			tablesFromTypesOnly={true}
-		/>
+		{#key editorKey}
+			<MapEditor
+				initialState={currentInitial}
+				onchange={(json) => saver.change(json)}
+				tableTypes={data.tableTypes}
+				mode="template"
+				saveState={saver.state}
+				onSave={() => saver.save({ force: true })}
+				saveLabel={t.common.save}
+				printHref={`/app/manage/halls/${data.hallId}/templates/${data.template.id}/print`}
+				lockedZoneIds={data.hallZoneIds}
+				{flaggedIds}
+				protectWallsZones={true}
+				allowZones={true}
+				lockFloors={true}
+				tablesFromTypesOnly={true}
+			/>
+		{/key}
 	</div>
 </div>
 

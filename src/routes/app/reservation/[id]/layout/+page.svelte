@@ -10,6 +10,8 @@
 	import { t } from '$lib/i18n.svelte';
 	import { dialog } from '$lib/actions/dialog';
 	import { EVENT_TYPE_KEYS } from '$lib/eventTypes';
+	import { layoutProblems } from '$lib/floorplan-sync';
+	import LayoutFitBanner from '$lib/editor/LayoutFitBanner.svelte';
 	import type { PageData } from './$types';
 
 	interface Props { data: PageData; }
@@ -36,7 +38,12 @@
 		autosave: () => !draft,
 		failedMessage: () => t.editor.saveFailed,
 		onResult: async (result) => {
-			if (result.type === 'success' && draft) await leaveTo(plainLayout);
+			if (result.type !== 'success') return;
+			if (draft) { await leaveTo(plainLayout); return; }
+			// The server laid a newer hall plan under this save (the editor was opened
+			// on the old one): carry on from what it stored.
+			const layout = (result.data as { layout?: unknown } | undefined)?.layout;
+			if (layout) rebuild(layout, { savedOnce: true });
 		}
 	});
 	guardUnsaved(saver, { leaveUnsaved: () => t.editor.leaveUnsaved, leaveFailed: () => t.editor.leaveSaveFailed });
@@ -163,6 +170,11 @@
 	}
 
 	const errorText = $derived(tmplError ?? saver.error);
+
+	// What no longer fits the hall's floor plan, measured live, so the warning goes
+	// as the tables are moved off the walls.
+	const problems = $derived(data.hallPlan ? layoutProblems(saver.json ?? currentInitial, data.hallPlan) : []);
+	const flaggedIds = $derived(problems.map((p) => p.id));
 </script>
 
 <svelte:head><title>{pageTitle(data.reservation.title, t.event.layoutEditorTitle)}</title></svelte:head>
@@ -203,6 +215,7 @@
 									<button type="button" class="row-item tmpl-item" class:recommended={tm.id === recommendedId} onclick={() => chooseTemplate(tm.id)}>
 										<span class="tmpl-item-top">
 											<span class="tmpl-item-name">{tm.name}</span>
+											{#if tm.problems > 0}<span class="tmpl-fit" title={t.editor.layoutFit.badgeTitle(tm.problems)}>{t.editor.layoutFit.badge}</span>{/if}
 											{#if tm.id === recommendedId}<span class="tmpl-rec">{t.myRes.recommended}</span>{/if}
 										</span>
 										<span class="tmpl-item-meta">
@@ -239,6 +252,7 @@
 	</div>
 
 	{#if errorText}<div class="save-err" role="alert">{errorText}</div>{/if}
+	<LayoutFitBanner {problems} />
 	{#if draft}
 		<div class="draft-banner" role="status"><span class="draft-tag">AI</span>{t.ai.draftBanner}</div>
 	{:else if data.draft?.stale}
@@ -270,6 +284,7 @@
 				tablesFromTypesOnly={true}
 				allowGuests={true}
 				lockedZoneIds={data.hallZoneIds}
+				{flaggedIds}
 			/>
 		{/key}
 	</div>
@@ -384,6 +399,12 @@
 		font-size: 10px; font-weight: 650; text-transform: uppercase; letter-spacing: .1em;
 		color: var(--accent-contrast); background: var(--accent); padding: 2px 6px;
 		border-radius: var(--radius-sm); flex-shrink: 0;
+	}
+	/* A template that no longer fits the hall's floor plan. */
+	.tmpl-fit {
+		font-size: 10px; font-weight: 650; text-transform: uppercase; letter-spacing: .1em;
+		color: var(--warning); background: var(--warning-dim); padding: 2px 6px;
+		border-radius: var(--radius-sm); flex-shrink: 0; margin-left: auto;
 	}
 	.tmpl-item-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; }
 	.tmpl-seats { font-size: 11px; font-weight: 600; color: var(--text-muted); }

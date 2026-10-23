@@ -7,6 +7,7 @@ import type { Guest } from '$lib/floorplan-types';
 import { loadHallProfile, currentValue, validateHallPatch, applyHallPatch, type HallField } from '$lib/server/hall-profile';
 import type { OrgContext } from '../../../app.d';
 import { applyChanges, type CheckedOp } from './operations';
+import { refreshLayoutProblems, syncHallLayouts } from '$lib/server/layout-sync';
 
 /**
  * Applying what the assistant proposed.
@@ -126,6 +127,7 @@ export async function applyProposal(
 			'UPDATE reservations SET layout_json = ? WHERE id = ? AND org_id = ? AND layout_json IS ?',
 			JSON.stringify(built.layout), built.reservationId, org.id, built.baseJson);
 		if (write.meta.changes !== 1) return stale();
+		await refreshLayoutProblems(locals.db, 'event', built.reservationId);
 		await dbRun(locals.db, 'UPDATE ai_proposals SET result = ? WHERE id = ?', toJson({ seated: built.seated }), id);
 		return { ok: true, seated: built.seated, reservationId: built.reservationId };
 	}
@@ -172,6 +174,8 @@ export async function applyProposal(
 			'UPDATE halls SET floorplan_json = ? WHERE id = ? AND org_id = ? AND floorplan_json IS ?',
 			JSON.stringify(state), hall.id, org.id, hall.floorplan_json);
 		if (write.meta.changes !== 1) return stale();
+		// The new room goes under the hall's templates and upcoming events too.
+		await syncHallLayouts(locals.db, hall.id, hall.floorplan_json, JSON.stringify(state));
 		await dbRun(locals.db, 'UPDATE ai_proposals SET result = ? WHERE id = ?', toJson({ saved: true }), id);
 		return { ok: true, floorplan: true, hallId: hall.id };
 	}

@@ -7,6 +7,8 @@ import { st } from '$lib/i18n-server';
 import type { Actions, PageServerLoad } from './$types';
 import { requireOrgPermission } from '$lib/server/access';
 import { tableInventoryError } from '$lib/server/table-inventory';
+import { prepareLayoutSave } from '$lib/server/layout-sync';
+import { applyHallGeometry, hasLayout, layoutProblems, problemsColumn } from '$lib/floorplan-sync';
 
 export const load: PageServerLoad = async ({ locals, params }) => {
 	await requireOrgPermission(locals, 'templates.manage');
@@ -28,10 +30,25 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 	);
 
 	const { hall_floorplan_json, ...row } = template;
+	// A template stands on the hall's current room, whatever room it was saved on.
+	let layout: unknown = fromJson(row.layout_json as string | null);
+	if (hall_floorplan_json && hasLayout(row.layout_json)) {
+		layout = applyHallGeometry(row.layout_json, hall_floorplan_json);
+		// The stored flag follows what is there now (a template saved before its
+		// hall's plan was last checked, or fixed since).
+		const column = problemsColumn(layoutProblems(layout, hall_floorplan_json));
+		if (column !== ((row as { layout_problems?: string | null }).layout_problems ?? null)) {
+			try {
+				await dbRun(locals.db, 'UPDATE floorplan_templates SET layout_problems = ? WHERE id = ?', column, row.id);
+			} catch { /* before migration 0032 */ }
+		}
+	}
 	return {
 		hallId: params.id,
-		template: { ...row, layout_json: fromJson(row.layout_json as string | null) },
+		template: { ...row, layout_json: layout },
 		tableTypes,
+		// The hall's plan, to measure the template against while it is edited.
+		hallPlan: fromJson(hall_floorplan_json),
 		// The hall's own zones (the stage, the bar) stay where the hall plan has them.
 		hallZoneIds: migrateToMultiFloor(hall_floorplan_json).floors.flatMap((f) => (f.zones ?? []).map((z) => z.id)),
 	};
@@ -55,17 +72,24 @@ export const actions: Actions = {
 		const layoutJson = String(data.get('layoutJson') ?? '');
 		if (!layoutJson) return fail(400, { error: st(locals.locale).serverErrors.noLayoutData });
 
-		if (!(await assertOwned(locals.db, params.templateId, params.id, orgId))) {
-			return fail(404, { error: st(locals.locale).serverErrors.templateNotFound });
-		}
+		const owned = await dbFirst<{ id: string; hall_json: string | null }>(locals.db,
+			`SELECT ft.id, h.floorplan_json AS hall_json FROM floorplan_templates ft
+			 JOIN halls h ON h.id = ft.hall_id
+			 WHERE ft.id = ? AND ft.hall_id = ? AND h.org_id = ?`,
+			params.templateId, params.id, orgId);
+		if (!owned) return fail(404, { error: st(locals.locale).serverErrors.templateNotFound });
 		const overStock = await tableInventoryError(locals.db, params.id, layoutJson, locals.locale);
 		if (overStock) return fail(400, { error: overStock });
 
+		// On the hall's current room (an editor opened before the hall's plan changed
+		// would put the old walls back), with what is still wrong stored alongside:
+		// saving a fixed template clears its flag.
+		const save = prepareLayoutSave(layoutJson, owned.hall_json);
 		await dbRun(locals.db,
-			'UPDATE floorplan_templates SET layout_json = ? WHERE id = ? AND hall_id = ?',
-			layoutJson, params.templateId, params.id
+			'UPDATE floorplan_templates SET layout_json = ?, layout_problems = ? WHERE id = ? AND hall_id = ?',
+			save.json, save.column, params.templateId, params.id
 		);
-		return { success: true };
+		return { success: true, problems: save.problems.length, ...(save.roomChanged ? { layout: JSON.parse(save.json) } : {}) };
 	},
 
 	// Edit the template's name + event types (the layout is saved separately).

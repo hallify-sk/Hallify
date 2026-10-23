@@ -6,6 +6,7 @@ import type { Actions, PageServerLoad } from './$types';
 import { getTakenDates, getHeldDatesByOthers, earliestBookableISO, HOLD_MINUTES } from '$lib/availability';
 import { st } from '$lib/i18n-server';
 import { createReservation } from '$lib/server/reservations';
+import { parseProblems } from '$lib/floorplan-sync';
 
 const RANGE_DAYS = 540; // how far ahead to compute taken/held for the picker
 
@@ -54,7 +55,8 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 			earliestDate: earliestBookableISO(h.min_days_advance),
 		})),
 		blocks: blocks.map(b => ({ ...b, days_of_week: fromJsonArr(b.days_of_week as string | null) })),
-		templates: templates.map(t => ({ ...t, layout_json: fromJson(t.layout_json as string | null) })),
+		// `problems`: how much of the template no longer fits the hall's plan (D2).
+		templates: templates.map(t => ({ ...t, layout_json: fromJson(t.layout_json as string | null), problems: parseProblems(t.layout_problems).length })),
 		selectedHallId: hallId,
 		selectedDate,
 		takenDates,

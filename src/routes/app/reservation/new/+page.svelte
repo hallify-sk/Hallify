@@ -551,6 +551,7 @@
 									</svg>
 								</div>
 								<span class="template-name">{tmpl.name}</span>
+								{#if tmpl.problems > 0}<span class="template-fit" title={t.editor.layoutFit.badgeTitle(tmpl.problems)}>{t.editor.layoutFit.badge}</span>{/if}
 								{#if tmplTypes.length}
 									<!-- The column holds a JSON array of keys; printing it raw showed
 									     `["wedding","ball"]` on the card. -->
@@ -931,6 +932,14 @@
 		font-size: 12px;
 		font-weight: 500;
 		color: var(--text-base);
+	}
+
+	/* A template the hall's current floor plan no longer fits (D2). */
+	.template-fit {
+		align-self: flex-start;
+		font-size: 10px; font-weight: 650; text-transform: uppercase; letter-spacing: .1em;
+		color: var(--warning); background: var(--warning-dim); padding: 2px 6px;
+		border-radius: var(--radius-sm);
 	}
 
 	.template-tag {
