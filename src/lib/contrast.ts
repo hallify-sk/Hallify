@@ -33,10 +33,19 @@ export function luminance(color: string): number | null {
 	return 0.2126 * r + 0.7152 * g + 0.0722 * b;
 }
 
+/** The two inks a fill can carry. The dark one is the near-black the app writes with. */
+const DARK_INK = '#1a1416';
+const LIGHT_INK = '#ffffff';
+
 /**
- * The text colour to place ON `background`: near-black for light fills, white for dark
- * ones. The 0.42 threshold is where the two candidates cross over, so whichever side a
- * colour falls on, the pairing clears 4.5:1.
+ * The text colour to place ON `background`: whichever of near-black and white has the
+ * higher WCAG contrast against it.
+ *
+ * This used to switch at a luminance of 0.42, which is not where the two inks cross
+ * over: the crossover is near 0.2. Every fill between the two (Hallify's own pink
+ * #f05ca1 among them, luminance 0.30) got white text at about 3.1:1, failing AA, when
+ * near-black on the same fill reads at over 6:1. Comparing the two ratios directly puts
+ * the switch exactly at the crossover, so the pick is always the better of the two.
  *
  * `background` may be a CSS value this cannot parse (a `var(--…)` reference, a gradient,
  * a named colour). In that case there is nothing to measure, so it returns
@@ -47,7 +56,9 @@ export function readableInkOn(background: string | null | undefined): string {
 	if (!background) return 'var(--accent-contrast)';
 	const l = luminance(background);
 	if (l === null) return 'var(--accent-contrast)';
-	return l > 0.42 ? '#1a1416' : '#ffffff';
+	const dark = (l + 0.05) / ((luminance(DARK_INK) ?? 0) + 0.05);
+	const light = (1.05) / (l + 0.05);
+	return dark >= light ? DARK_INK : LIGHT_INK;
 }
 
 /** WCAG contrast ratio between two hex colours, 1–21. Returns null if unparseable. */
