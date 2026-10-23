@@ -56,6 +56,7 @@
 
 	import { onMount } from 'svelte';
 	import { t as tr } from '$lib/i18n.svelte';
+	import { dialog } from '$lib/actions/dialog';
 
 	onMount(() => {
 		if (typeof localStorage !== 'undefined') {
@@ -540,13 +541,14 @@
 			<div class="overlay" role="presentation"
 				onclick={() => { chairPopover = null; guestSearch = ''; }}
 				onkeydown={(e) => e.key === 'Escape' && (chairPopover = null)}></div>
-			<div class="chair-popover"
+			<div class="chair-popover" role="dialog" aria-labelledby="chair-popover-title"
+				use:dialog={{ onclose: () => { chairPopover = null; guestSearch = ''; } }}
 				style="left:{Math.min(chairPopover.x+12, 9999)}px; top:{Math.min(chairPopover.y-8, 9999)}px">
 				<div class="pop-header">
-					<span>
+					<span id="chair-popover-title">
 						{#if popoverTable}{popoverTable.label} · {tr.components.seat} {chairPopover.chairIdx + 1}{/if}
 					</span>
-					<button onclick={() => { chairPopover = null; guestSearch = ''; }} class="pop-close">✕</button>
+					<button type="button" onclick={() => { chairPopover = null; guestSearch = ''; }} class="pop-close" aria-label={tr.myRes.close}>✕</button>
 				</div>
 				{#if popoverChairGuest}
 					<div class="current-guest">

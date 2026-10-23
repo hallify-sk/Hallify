@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
 	import { t } from '$lib/i18n.svelte';
+	import { dialog } from '$lib/actions/dialog';
 	import type { PageData, ActionData } from './$types';
 	import type { RsvpConfig } from '$lib/db/index';
 
@@ -435,10 +436,11 @@
 
 <!-- Fullscreen preview overlay -->
 {#if fullscreenPreview}
-	<!-- svelte-ignore a11y_no_static_element_interactions -->
-	<div class="fullscreen-overlay" onclick={(e) => { if (e.target === e.currentTarget) fullscreenPreview = false; }}
-		onkeydown={(e) => { if (e.key === 'Escape') fullscreenPreview = false; }}>
-		<button type="button" class="fullscreen-close" onclick={() => { fullscreenPreview = false; }}>
+	<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_noninteractive_element_interactions -->
+	<div class="fullscreen-overlay" role="dialog" aria-modal="true" aria-label={t.rsvpEditor.fullscreenPreview}
+		onclick={(e) => { if (e.target === e.currentTarget) fullscreenPreview = false; }}
+		use:dialog={{ onclose: () => (fullscreenPreview = false) }}>
+		<button type="button" class="fullscreen-close" onclick={() => { fullscreenPreview = false; }} aria-label={t.myRes.close}>
 			<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
 		</button>
 		<div class="fullscreen-content rsvp-style-{rsvpStyle}" style={previewBgStyle(bgColor, bgImage)}>

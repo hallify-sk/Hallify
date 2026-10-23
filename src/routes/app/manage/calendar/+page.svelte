@@ -2,6 +2,7 @@
 	import { goto } from '$app/navigation';
 	import { t, getLocale } from '$lib/i18n.svelte';
 	import SectionHeader from '$lib/components/SectionHeader.svelte';
+	import { dialog } from '$lib/actions/dialog';
 	import type { PageData } from './$types';
 
 	interface Props { data: PageData; }
@@ -430,11 +431,11 @@
 <!-- ── Event popover ── -->
 {#if active}
 	<button class="pop-backdrop" onclick={() => active = null} aria-label={t.adminPages.close}></button>
-	<div class="card--raised pop" style="--hc:{hallColor[active.hall_id]};--sc:{STATUS_COLOR[active.status]}" role="dialog">
+	<div class="card--raised pop" style="--hc:{hallColor[active.hall_id]};--sc:{STATUS_COLOR[active.status]}" role="dialog" aria-modal="true" aria-labelledby="pop-title" use:dialog={{ onclose: () => (active = null) }}>
 		<div class="pop-bar"></div>
 		<div class="pop-body">
 			<div class="pop-status"><span class="pop-sdot"></span>{statusLabel(active.status)}</div>
-			<h3 class="pop-title">{active.title}</h3>
+			<h3 class="pop-title" id="pop-title">{active.title}</h3>
 			<div class="pop-meta">
 				<div class="pop-line">
 					<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>

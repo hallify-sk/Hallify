@@ -5,6 +5,7 @@
 	import { untrack } from 'svelte';
 	import { LayoutSaver, guardUnsaved } from '$lib/editor/layout-saver.svelte';
 	import { t } from '$lib/i18n.svelte';
+	import { dialog } from '$lib/actions/dialog';
 	import { EVENT_TYPE_KEYS } from '$lib/eventTypes';
 	import type { PageData } from './$types';
 
@@ -132,8 +133,8 @@
 					</button>
 					{#if pickerOpen}
 						<button type="button" class="tmpl-backdrop" onclick={() => pickerOpen = false} aria-label={t.myRes.close}></button>
-						<div class="tmpl-dropdown">
-							<input class="tmpl-search" type="text" bind:value={tmplSearch} placeholder={t.myRes.searchTemplates} />
+						<div class="tmpl-dropdown" role="dialog" aria-label={t.myRes.startFromTemplate} use:dialog={{ onclose: () => (pickerOpen = false) }}>
+							<input class="tmpl-search" type="text" bind:value={tmplSearch} placeholder={t.myRes.searchTemplates} aria-label={t.myRes.searchTemplates} />
 							<div class="tmpl-typefilter">
 								<button type="button" class="tf-chip" class:on={selectedType === ''} onclick={() => selectedType = ''}>{t.myRes.allTypes}</button>
 								{#each EVENT_TYPE_KEYS as key}

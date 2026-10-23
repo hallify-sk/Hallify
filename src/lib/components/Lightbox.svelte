@@ -11,6 +11,7 @@
    * drift; both had their own idea of what opening a photo meant.
    */
   import { t } from '$lib/i18n.svelte';
+  import { dialog } from '$lib/actions/dialog';
 
   interface Props {
     images: string[];
@@ -57,10 +58,8 @@
     if (Math.abs(dx) > 45 && Math.abs(dx) > Math.abs(dy) * 1.5) step(dx < 0 ? 1 : -1);
   }
 
-  let dialog = $state<HTMLDivElement | null>(null);
-  $effect(() => {
-    if (open) dialog?.focus();
-  });
+  // Focus goes to the close button on open, Tab stays inside the viewer and focus
+  // returns to the photo that opened it (use:dialog).
 
   // The page behind must not scroll while the viewer is over it.
   $effect(() => {
@@ -76,12 +75,12 @@
 {#if open && index !== null}
   <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
   <div
-    bind:this={dialog}
     class="lb"
     role="dialog"
     aria-modal="true"
     aria-label={alt || t.hallProfile.gallery}
     tabindex="-1"
+    use:dialog={{ onclose, initialFocus: '.lb-close' }}
     ontouchstart={onTouchStart}
     ontouchend={onTouchEnd}
   >

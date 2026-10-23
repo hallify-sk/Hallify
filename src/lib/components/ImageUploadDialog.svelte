@@ -11,6 +11,7 @@
    * It floats above the page, so the panel is a .card--raised.
    */
   import { tick } from 'svelte';
+  import { dialog } from '$lib/actions/dialog';
   import { t } from '$lib/i18n.svelte';
   import { downscaleImage } from '$lib/image-resize';
 
@@ -180,7 +181,7 @@
     role="presentation"
     onmousedown={(event) => { if (event.target === event.currentTarget) close(); }}
   >
-    <div class="card--raised image-dialog" role="dialog" aria-modal="true" aria-labelledby="image-dialog-title">
+    <div class="card--raised image-dialog" role="dialog" aria-modal="true" aria-labelledby="image-dialog-title" use:dialog={{ onclose: close, initialFocus: '.drop-zone' }}>
       <div class="image-dialog-head">
         <h2 id="image-dialog-title">{multiple ? t.imageDialog.titleMultiple : t.imageDialog.titleSingle}</h2>
         <button type="button" class="image-dialog-close" onclick={close} aria-label={t.imageDialog.close}>

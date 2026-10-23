@@ -22,6 +22,7 @@
   import { completeOpeningHours } from '$lib/opening-hours';
   import { formatDate as fmtDbDate } from '$lib/format';
   import { confirmFirst } from '$lib/forms';
+  import { dialog } from '$lib/actions/dialog';
 
   interface Props { data: PageData; form: ActionData; }
   const { data, form }: Props = $props();
@@ -1892,9 +1893,9 @@
 <!-- ─── Block dialog ──────────────────────────────────────────────────────────── -->
 {#if showBlockDialog}
   <div class="dialog-backdrop" onmousedown={(e) => { if (e.target === e.currentTarget) showBlockDialog = false; }} role="presentation">
-    <div class="card--raised dialog" onclick={(e) => e.stopPropagation()} role="dialog" tabindex="-1">
+    <div class="card--raised dialog" onclick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="block-dialog-title" tabindex="-1" use:dialog={{ onclose: () => (showBlockDialog = false) }}>
       <div class="dialog-header">
-        <h2 class="dialog-title">{t.hallAdmin.addDateBlock}</h2>
+        <h2 class="dialog-title" id="block-dialog-title">{t.hallAdmin.addDateBlock}</h2>
         <button class="dialog-close" type="button" onclick={() => showBlockDialog=false} aria-label={t.hallAdmin.close}>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
         </button>
@@ -1985,9 +1986,9 @@
 <!-- ─── Cancel confirm dialog ─────────────────────────────────────────────────── -->
 {#if showCancelConfirm}
   <div class="dialog-backdrop" onmousedown={(e) => { if (e.target === e.currentTarget) showCancelConfirm = false; }} role="presentation">
-    <div class="card--raised dialog dialog-sm" onclick={(e) => e.stopPropagation()} role="dialog" tabindex="-1">
+    <div class="card--raised dialog dialog-sm" onclick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="cancel-confirm-title" tabindex="-1" use:dialog={{ onclose: () => (showCancelConfirm = false) }}>
       <div class="dialog-header">
-        <h2 class="dialog-title">{t.hallAdmin.cancelReservationsQuestion}</h2>
+        <h2 class="dialog-title" id="cancel-confirm-title">{t.hallAdmin.cancelReservationsQuestion}</h2>
         <button class="dialog-close" type="button" onclick={() => showCancelConfirm=false} aria-label={t.hallAdmin.close}>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
         </button>
@@ -2022,9 +2023,9 @@
 <!-- ─── Bulk cancel dialog ───────────────────────────────────────────────────── -->
 {#if showBulkCancel}
   <div class="dialog-backdrop" onmousedown={(e) => { if (e.target === e.currentTarget) showBulkCancel = false; }} role="presentation">
-    <div class="card--raised dialog" onclick={(e) => e.stopPropagation()} role="dialog" tabindex="-1">
+    <div class="card--raised dialog" onclick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="bulk-cancel-title" tabindex="-1" use:dialog={{ onclose: () => (showBulkCancel = false) }}>
       <div class="dialog-header">
-        <h2 class="dialog-title">{t.hallAdmin.bulkCancelTitle(data.blocking.length)}</h2>
+        <h2 class="dialog-title" id="bulk-cancel-title">{t.hallAdmin.bulkCancelTitle(data.blocking.length)}</h2>
         <button class="dialog-close" type="button" onclick={() => showBulkCancel = false} aria-label={t.hallAdmin.close}>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
         </button>
@@ -2057,9 +2058,9 @@
 <!-- ─── Archive / delete confirm dialog ──────────────────────────────────────── -->
 {#if retireDialog}
   <div class="dialog-backdrop" onmousedown={(e) => { if (e.target === e.currentTarget) retireDialog = null; }} role="presentation">
-    <div class="card--raised dialog dialog-sm" onclick={(e) => e.stopPropagation()} role="dialog" tabindex="-1">
+    <div class="card--raised dialog dialog-sm" onclick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="retire-dialog-title" tabindex="-1" use:dialog={{ onclose: () => (retireDialog = null) }}>
       <div class="dialog-header">
-        <h2 class="dialog-title">{retireDialog === 'archive' ? t.hallAdmin.archiveDialogTitle : t.hallAdmin.deleteDialogTitle}</h2>
+        <h2 class="dialog-title" id="retire-dialog-title">{retireDialog === 'archive' ? t.hallAdmin.archiveDialogTitle : t.hallAdmin.deleteDialogTitle}</h2>
         <button class="dialog-close" type="button" onclick={() => retireDialog = null} aria-label={t.hallAdmin.close}>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
         </button>
@@ -2091,7 +2092,7 @@
   {@const P = ttPreview}
   {@const pad = 0.45}
   <div class="dialog-backdrop" onmousedown={(e) => { if (e.target === e.currentTarget) ttDialogOpen = false; }} role="presentation">
-    <div class="card--raised dialog dialog-tt" onclick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="tt-title" tabindex="-1">
+    <div class="card--raised dialog dialog-tt" onclick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="tt-title" tabindex="-1" use:dialog={{ onclose: () => (ttDialogOpen = false) }}>
       <div class="dialog-header">
         <h2 class="dialog-title" id="tt-title">{ttEditId ? t.hallAdmin.editTableType : t.hallAdmin.newTableType}</h2>
         <button class="dialog-close" type="button" onclick={() => ttDialogOpen=false} aria-label={t.hallAdmin.close}>
@@ -2254,9 +2255,9 @@
 <!-- ─── Extra editor dialog ───────────────────────────────────────────────────── -->
 {#if tmplDialogOpen}
   <div class="dialog-backdrop" onmousedown={(e) => { if (e.target === e.currentTarget) tmplDialogOpen = false; }} role="presentation">
-    <div class="card--raised dialog" onclick={(e) => e.stopPropagation()} role="dialog" tabindex="-1">
+    <div class="card--raised dialog" onclick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="tmpl-dialog-title" tabindex="-1" use:dialog={{ onclose: () => (tmplDialogOpen = false) }}>
       <div class="dialog-header">
-        <h2 class="dialog-title">{t.hallAdmin.newTemplate}</h2>
+        <h2 class="dialog-title" id="tmpl-dialog-title">{t.hallAdmin.newTemplate}</h2>
         <button class="dialog-close" type="button" onclick={() => tmplDialogOpen = false} aria-label={t.hallAdmin.close}>
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
         </button>
@@ -2290,9 +2291,9 @@
 
 {#if extraDialogOpen}
   <div class="dialog-backdrop" onmousedown={(e) => { if (e.target === e.currentTarget) extraDialogOpen = false; }} role="presentation">
-    <div class="card--raised dialog" onclick={(e) => e.stopPropagation()} role="dialog" tabindex="-1">
+    <div class="card--raised dialog" onclick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="extra-dialog-title" tabindex="-1" use:dialog={{ onclose: () => (extraDialogOpen = false) }}>
       <div class="dialog-header">
-        <h2 class="dialog-title">{extraEditing ? t.hallAdmin.editExtra : t.hallAdmin.newExtra}</h2>
+        <h2 class="dialog-title" id="extra-dialog-title">{extraEditing ? t.hallAdmin.editExtra : t.hallAdmin.newExtra}</h2>
         <button class="dialog-close" type="button" onclick={() => extraDialogOpen = false} aria-label={t.hallAdmin.close}>
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
         </button>
@@ -2334,9 +2335,9 @@
 <!-- ─── Custom amenity dialog ─────────────────────────────────────────────────── -->
 {#if amenityDialogOpen}
   <div class="dialog-backdrop" onmousedown={(e) => { if (e.target === e.currentTarget) amenityDialogOpen = false; }} role="presentation">
-    <div class="card--raised dialog" onclick={(e) => e.stopPropagation()} role="dialog" tabindex="-1">
+    <div class="card--raised dialog" onclick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="amenity-dialog-title" tabindex="-1" use:dialog={{ onclose: () => (amenityDialogOpen = false) }}>
       <div class="dialog-header">
-        <h2 class="dialog-title">{t.hallAdmin.customAmenityTitle}</h2>
+        <h2 class="dialog-title" id="amenity-dialog-title">{t.hallAdmin.customAmenityTitle}</h2>
         <button class="dialog-close" type="button" onclick={() => amenityDialogOpen = false} aria-label={t.hallAdmin.close}>
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
         </button>
@@ -2366,9 +2367,9 @@
 <!-- Removing an amenity unticks it on every venue that used it, so it is confirmed. -->
 {#if amenityDeleting}
   <div class="dialog-backdrop" onmousedown={(e) => { if (e.target === e.currentTarget) amenityDeleting = null; }} role="presentation">
-    <div class="card--raised dialog dialog-narrow" onclick={(e) => e.stopPropagation()} role="dialog" tabindex="-1">
+    <div class="card--raised dialog dialog-narrow" onclick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="amenity-delete-title" tabindex="-1" use:dialog={{ onclose: () => (amenityDeleting = null) }}>
       <div class="dialog-header">
-        <h2 class="dialog-title">{t.hallAdmin.removeAmenity}</h2>
+        <h2 class="dialog-title" id="amenity-delete-title">{t.hallAdmin.removeAmenity}</h2>
       </div>
       <form class="dialog-form" method="POST" action="?/deleteAmenity" use:enhance={() => {
         const slug = amenityDeleting?.slug;

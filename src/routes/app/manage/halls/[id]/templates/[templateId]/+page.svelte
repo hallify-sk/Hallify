@@ -1,6 +1,7 @@
 <script lang="ts">
 	import MapEditor from '$lib/MapEditor.svelte';
 	import { enhance } from '$app/forms';
+	import { dialog } from '$lib/actions/dialog';
 	import { untrack } from 'svelte';
 	import { LayoutSaver, guardUnsaved } from '$lib/editor/layout-saver.svelte';
 	import { t } from '$lib/i18n.svelte';
@@ -84,9 +85,9 @@
 
 {#if metaOpen}
 	<div class="meta-backdrop" onmousedown={(e) => { if (e.target === e.currentTarget) metaOpen = false; }} role="presentation">
-		<div class="meta-dialog" role="dialog">
+		<div class="meta-dialog" role="dialog" aria-modal="true" aria-labelledby="meta-dialog-title" use:dialog={{ onclose: () => (metaOpen = false) }}>
 			<div class="meta-header">
-				<h2>{t.hallAdmin.templateDetails}</h2>
+				<h2 id="meta-dialog-title">{t.hallAdmin.templateDetails}</h2>
 				<button class="meta-close" type="button" onclick={() => metaOpen = false} aria-label={t.hallAdmin.close}>
 					<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
 				</button>
