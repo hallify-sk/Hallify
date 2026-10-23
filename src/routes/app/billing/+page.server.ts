@@ -5,26 +5,50 @@ import {
   getSubscription, changeSubscriptionPlan, cancelScheduledChange, getPendingPlanChange,
   previewPlanChange,
 } from '$lib/stripe';
-import { dbFirst, dbRun } from '$lib/db/index';
+import { dbFirst } from '$lib/db/index';
 import { PLANS, comparePlanPrice } from '$lib/plans';
 import { st } from '$lib/i18n-server';
 import type { PlanId } from '$lib/plans';
 import type { D1Database } from '@cloudflare/workers-types';
-import { requireOrgOwner } from '$lib/guards';
 import { requireOrgPermission } from '$lib/server/access';
-import { sendEmail } from '$lib/email';
-import { OPERATOR } from '$lib/legal';
+import { memberCan } from '$lib/server/ai/tools';
 import { SETUP_SERVICE_PRICE_CENTS } from '$lib/setup-service';
+import { openSetupRequest, createSetupRequest, cancelSetupRequest } from '$lib/server/setup-requests';
+import { planUsage } from '$lib/server/plan-usage';
+import { getAccount, allowanceCredits } from '$lib/server/ai/credits';
+
+async function getSubRow(db: D1Database, orgId: string) {
+  return dbFirst<{ stripe_subscription_id: string | null; stripe_plan: string | null; stripe_status: string | null }>(db,
+    'SELECT stripe_subscription_id, stripe_plan, stripe_status FROM subscriptions WHERE org_id = ?', orgId)
+    // A database without migration 0015 has no stripe_plan / stripe_status yet.
+    .catch(() => dbFirst<{ stripe_subscription_id: string | null; stripe_plan: string | null; stripe_status: string | null }>(db,
+      'SELECT stripe_subscription_id, NULL AS stripe_plan, NULL AS stripe_status FROM subscriptions WHERE org_id = ?', orgId));
+}
 
 async function getSubId(db: D1Database, orgId: string): Promise<string | null> {
-  const row = await dbFirst<{ stripe_subscription_id: string | null }>(db,
-    'SELECT stripe_subscription_id FROM subscriptions WHERE org_id = ?', orgId);
-  return row?.stripe_subscription_id ?? null;
+  return (await getSubRow(db, orgId))?.stripe_subscription_id ?? null;
+}
+
+/** Run a Stripe call; on failure log it and hand back a message for the page instead
+ *  of the generic error page (nothing has changed when Stripe refuses). */
+async function viaStripe<T>(locals: App.Locals, what: string, call: () => Promise<T>): Promise<{ ok: true; value: T } | { ok: false; error: string }> {
+  try {
+    return { ok: true, value: await call() };
+  } catch (err) {
+    console.error(`[billing] ${what} failed`, err);
+    return { ok: false, error: st(locals.locale).accountPages.stripeError };
+  }
 }
 
 export const load: PageServerLoad = async ({ locals, url }) => {
   if (!locals.user) redirect(303, '/app/login');
   if (!locals.currentOrg) redirect(303, '/app/org/new');
+  const org = locals.currentOrg;
+
+  // Changing the plan and payment details is `billing.manage` (the owner always has
+  // it). Everyone else sees where the organisation stands, without buttons that
+  // would only end on a 403 page.
+  const canManage = await memberCan(locals, 'billing.manage');
 
   // Reflect a scheduled cancellation or a scheduled period-end downgrade
   // (read live from Stripe; best-effort).
@@ -33,16 +57,17 @@ export const load: PageServerLoad = async ({ locals, url }) => {
   // Prorated immediate-charge previews for each plan that would be an UPGRADE from
   // the current one — shown in the confirm dialog so charges are never a surprise.
   const previews: Record<string, { amountDue: number; currency: string; exact: boolean }> = {};
-  const currentPlan = locals.currentOrg.subscription.plan as PlanId;
-  if (currentPlan !== 'free' && locals.currentOrg.subscription.stripeCustomerId) {
-    const subId = await getSubId(locals.db, locals.currentOrg.id);
-    if (subId) {
-      const sub = await getSubscription(subId);
-      cancelAtPeriodEnd = sub?.cancel_at_period_end ?? false;
-      if (sub && !cancelAtPeriodEnd) {
-        const pending = await getPendingPlanChange(sub);
-        if (pending) pendingDowngrade = { ...pending, planName: PLANS[pending.plan].name };
-      }
+  const currentPlan = org.subscription.plan as PlanId;
+  const subRow = await getSubRow(locals.db, org.id);
+  if (currentPlan !== 'free' && org.subscription.stripeCustomerId && subRow?.stripe_subscription_id) {
+    const subId = subRow.stripe_subscription_id;
+    const sub = await getSubscription(subId);
+    cancelAtPeriodEnd = sub?.cancel_at_period_end ?? false;
+    if (sub && !cancelAtPeriodEnd) {
+      const pending = await getPendingPlanChange(sub);
+      if (pending) pendingDowngrade = { ...pending, planName: PLANS[pending.plan].name };
+    }
+    if (canManage) {
       for (const pid of ['starter', 'professional'] as PlanId[]) {
         if (comparePlanPrice(pid, currentPlan) > 0) {
           previews[pid] = await previewPlanChange({ subscriptionId: subId, currentPlan, newPlan: pid });
@@ -51,37 +76,42 @@ export const load: PageServerLoad = async ({ locals, url }) => {
     }
   }
 
-  // The paid add-ons belong on the page where an organisation looks at what
-  // Hallify costs them, not only on the Help page where the offer happens to be
-  // contextual.
-  let setupRequest: { id: string; status: string } | null = null;
-  try {
-    setupRequest = await dbFirst<{ id: string; status: string }>(
-      locals.db,
-      `SELECT id, status FROM setup_requests
-        WHERE org_id = ? AND status NOT IN ('delivered', 'cancelled')
-        ORDER BY created_at DESC LIMIT 1`,
-      locals.currentOrg.id
-    );
-  } catch {
-    // Table arrives with migration 0010; absent is simply "never requested".
-  }
+  // The plan a suspended (unpaid / incomplete) Stripe subscription is for: the
+  // organisation is on Free meanwhile, and the page says why.
+  const suspendedPlan = subRow?.stripe_plan && subRow.stripe_plan !== currentPlan && org.subscription.status === 'paused'
+    ? (subRow.stripe_plan as PlanId)
+    : null;
 
-  // How many venues still have no floor plan. The mapping add-on is per venue,
-  // so an org that has already mapped everything should be told that rather
-  // than sold it again.
-  const unmapped = await dbFirst<{ n: number }>(
+  // AI credits are part of what a plan includes; best-effort (needs migration 0012).
+  let ai: { balanceMc: number; allowance: number } | null = null;
+  try {
+    const acc = await getAccount(locals.db, org);
+    ai = { balanceMc: Math.max(0, acc.balance_mc), allowance: allowanceCredits(org, acc.allowance_override) };
+  } catch { /* no assistant tables */ }
+
+  // How many venues still have no floor plan, and whether there are any at all: the
+  // mapping add-on is per venue, so an org that has mapped everything is told so,
+  // and one with no venue yet is told to add one (it used to hear "all mapped").
+  const venues = await dbFirst<{ total: number; unmapped: number }>(
     locals.db,
-    'SELECT COUNT(*) AS n FROM halls WHERE org_id = ? AND floorplan_json IS NULL',
-    locals.currentOrg.id
+    `SELECT COUNT(*) AS total, COALESCE(SUM(CASE WHEN floorplan_json IS NULL THEN 1 ELSE 0 END), 0) AS unmapped
+       FROM halls WHERE org_id = ? AND archived_at IS NULL`,
+    org.id
   ).catch(() => null);
 
   return {
-    currentOrg: locals.currentOrg,
-    setupRequest,
+    currentOrg: org,
+    canManage,
+    canSeeAi: await memberCan(locals, 'settings.manage'),
+    setupRequest: await openSetupRequest(locals.db, org.id),
     setupPriceCents: SETUP_SERVICE_PRICE_CENTS,
-    unmappedVenues: unmapped?.n ?? 0,
+    totalVenues: venues?.total ?? 0,
+    unmappedVenues: venues?.unmapped ?? 0,
     plans: PLANS,
+    usage: await planUsage(locals.db, org.id),
+    ai,
+    stripeStatus: subRow?.stripe_status ?? null,
+    suspendedPlan,
     cancelAtPeriodEnd,
     pendingDowngrade,
     previews,
@@ -97,41 +127,20 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 
 export const actions: Actions = {
   /** Ask us to set the account up. Not a charge — we confirm and invoice on
-   *  delivery — so this is gated on settings.manage rather than on ownership,
-   *  and matches the identical offer on the Help page. */
+   *  delivery — so this is gated on settings.manage rather than on billing, and
+   *  matches the identical offer on the Help page. */
   requestSetup: async ({ request, locals }) => {
     const org = await requireOrgPermission(locals, 'settings.manage');
-    const user = locals.user!;
     const data = await request.formData();
-    const note = String(data.get('note') ?? '').trim().slice(0, 1000);
-
-    const existing = await dbFirst<{ id: string }>(locals.db,
-      `SELECT id FROM setup_requests
-        WHERE org_id = ? AND status NOT IN ('delivered', 'cancelled') LIMIT 1`, org.id);
-    if (existing) return { setupRequested: true };
-
-    await dbRun(locals.db,
-      `INSERT INTO setup_requests (id, org_id, requested_by, note, price_cents)
-       VALUES (?, ?, ?, ?, ?)`,
-      crypto.randomUUID(), org.id, user.id, note || null, SETUP_SERVICE_PRICE_CENTS);
-
-    try {
-      const escape = (v: string) => v.replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c] as string));
-      await sendEmail(
-        locals.db,
-        OPERATOR.contactEmail,
-        `Setup service request — ${org.name}`,
-        `<p><strong>${escape(org.name)}</strong> asked us to set their account up.</p>
-         <p>Agreed price: €${(SETUP_SERVICE_PRICE_CENTS / 100).toFixed(2)} one-off<br>
-         Requested by: ${escape(`${user.first_name} ${user.last_name}`)} (${escape(user.email)})</p>
-         <p>${note ? escape(note) : 'No additional notes.'}</p>`,
-        'setup-request'
-      );
-    } catch {
-      /* recorded regardless — the queue is the source of truth */
-    }
-
+    await createSetupRequest(locals, org, String(data.get('note') ?? ''));
     return { setupRequested: true };
+  },
+
+  /** Withdraw the setup request while we have not started on it. */
+  cancelSetup: async ({ locals }) => {
+    const org = await requireOrgPermission(locals, 'settings.manage');
+    await cancelSetupRequest(locals, org);
+    return { setupCancelled: true };
   },
 
   // Pick a paid plan. A first-time subscriber (currently Free) goes through
@@ -139,70 +148,74 @@ export const actions: Actions = {
   // changed in place — upgrades prorate + charge the difference now, downgrades
   // are scheduled for the period end (no new subscription, no full re-charge).
   upgrade: async ({ request, locals }) => {
-    requireOrgOwner(locals);
-    if (!locals.user || !locals.currentOrg) redirect(303, '/app/login');
+    const org = await requireOrgPermission(locals, 'billing.manage');
+    const user = locals.user!;
     const data = await request.formData();
     const plan = (data.get('plan') as PlanId) ?? 'starter';
     if (plan !== 'starter' && plan !== 'professional') return fail(400, { error: st(locals.locale).serverErrors.invalidPlan });
 
-    const currentPlan = locals.currentOrg.subscription.plan as PlanId;
-    const subId = await getSubId(locals.db, locals.currentOrg.id);
+    const currentPlan = org.subscription.plan as PlanId;
+    const subId = await getSubId(locals.db, org.id);
 
     // First paid subscription → Checkout (creates the subscription).
     if (currentPlan === 'free' || !subId) {
-      const checkoutUrl = await createCheckoutSession({
-        orgId:            locals.currentOrg.id,
+      const res = await viaStripe(locals, 'checkout', () => createCheckoutSession({
+        orgId:            org.id,
         plan,
-        stripeCustomerId: locals.currentOrg.subscription.stripeCustomerId,
-        userEmail:        locals.user.email,
-      });
-      redirect(303, checkoutUrl);
+        stripeCustomerId: org.subscription.stripeCustomerId,
+        userEmail:        user.email,
+      }));
+      if (!res.ok) return fail(502, { error: res.error });
+      redirect(303, res.value);
     }
 
     if (plan === currentPlan) return fail(400, { error: st(locals.locale).serverErrors.alreadyOnThisPlan });
 
     // Existing subscription → change it in place (fair proration / scheduling).
-    const result = await changeSubscriptionPlan({
-      orgId: locals.currentOrg.id, subscriptionId: subId, currentPlan, newPlan: plan,
-    });
-    redirect(303, result === 'upgraded' ? '/app/billing?upgraded=1' : '/app/billing?downgrade_scheduled=1');
+    const res = await viaStripe(locals, 'plan change', () => changeSubscriptionPlan({
+      orgId: org.id, subscriptionId: subId, currentPlan, newPlan: plan,
+    }));
+    if (!res.ok) return fail(502, { error: res.error });
+    redirect(303, res.value === 'upgraded' ? '/app/billing?upgraded=1' : '/app/billing?downgrade_scheduled=1');
   },
 
   // Undo a scheduled period-end downgrade — stay on the current plan.
   cancelScheduledChange: async ({ locals }) => {
-    requireOrgOwner(locals);
-    if (!locals.currentOrg) redirect(303, '/app/login');
-    const subId = await getSubId(locals.db, locals.currentOrg.id);
+    const org = await requireOrgPermission(locals, 'billing.manage');
+    const subId = await getSubId(locals.db, org.id);
     if (!subId) return fail(400, { error: st(locals.locale).serverErrors.noSubscriptionToUpdate });
-    await cancelScheduledChange(subId);
+    const res = await viaStripe(locals, 'cancel scheduled change', () => cancelScheduledChange(subId));
+    if (!res.ok) return fail(502, { error: res.error });
     redirect(303, '/app/billing?change_reverted=1');
   },
 
   manage: async ({ locals }) => {
-    requireOrgOwner(locals);
-    if (!locals.currentOrg?.subscription.stripeCustomerId) redirect(303, '/app/billing');
-    const portalUrl = await createPortalSession(locals.currentOrg.subscription.stripeCustomerId);
-    redirect(303, portalUrl);
+    const org = await requireOrgPermission(locals, 'billing.manage');
+    const customerId = org.subscription.stripeCustomerId;
+    if (!customerId) redirect(303, '/app/billing');
+    const res = await viaStripe(locals, 'billing portal', () => createPortalSession(customerId));
+    if (!res.ok) return fail(502, { error: res.error });
+    redirect(303, res.value);
   },
 
   // Cancel at period end — the org keeps its plan until the period ends, then
   // reverts to Free (handled by the subscription.deleted webhook).
   cancel: async ({ locals }) => {
-    requireOrgOwner(locals);
-    if (!locals.currentOrg) redirect(303, '/app/login');
-    const subId = await getSubId(locals.db, locals.currentOrg.id);
+    const org = await requireOrgPermission(locals, 'billing.manage');
+    const subId = await getSubId(locals.db, org.id);
     if (!subId) return fail(400, { error: st(locals.locale).serverErrors.noActiveSubscriptionToCancel });
-    await cancelSubscription(subId);
+    const res = await viaStripe(locals, 'cancel', () => cancelSubscription(subId));
+    if (!res.ok) return fail(502, { error: res.error });
     redirect(303, '/app/billing?cancel_scheduled=1');
   },
 
   // Undo a scheduled cancellation.
   resume: async ({ locals }) => {
-    requireOrgOwner(locals);
-    if (!locals.currentOrg) redirect(303, '/app/login');
-    const subId = await getSubId(locals.db, locals.currentOrg.id);
+    const org = await requireOrgPermission(locals, 'billing.manage');
+    const subId = await getSubId(locals.db, org.id);
     if (!subId) return fail(400, { error: st(locals.locale).serverErrors.noSubscriptionToResume });
-    await resumeSubscription(subId);
+    const res = await viaStripe(locals, 'resume', () => resumeSubscription(subId));
+    if (!res.ok) return fail(502, { error: res.error });
     redirect(303, '/app/billing?resumed=1');
   },
 };

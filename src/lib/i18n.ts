@@ -2037,6 +2037,7 @@ export const sk = {
 		pastDueBanner: "Poslednú platbu za predplatné sa nepodarilo strhnúť. Stripe to skúsi znova. Aby ste neprišli o platené funkcie, skontrolujte si platobnú kartu.",
 		suspendedBanner: (plan: string) => `Predplatné ${plan} je pozastavené pre neuhradenú platbu. Kým ho neuhradíte, máte k dispozícii len rozsah plánu Free.`,
 		incompleteBanner: (plan: string) => `Platba za plán ${plan} ešte nebola dokončená. Plán sa aktivuje po jej potvrdení.`,
+		consolePaymentBanner: "S platbou za predplatné Hallify je problém. Pozrite sa naň, aby ste neprišli o platené funkcie.",
 		updatePayment: "Uhradiť alebo zmeniť kartu",
 		lockedHallsNotice: (n: number) => n === 1
 			? "1 priestor je pozastavený, lebo ho váš plán nezahŕňa. Nič sa nevymazalo; vráti sa, keď to plán dovolí."
@@ -4925,6 +4926,7 @@ export const en: typeof sk = {
 		pastDueBanner: "The last subscription payment could not be collected. Stripe will try again. To keep your paid features, please check your payment card.",
 		suspendedBanner: (plan: string) => `Your ${plan} subscription is suspended because of an unpaid invoice. Until it is paid, you have what the Free plan includes.`,
 		incompleteBanner: (plan: string) => `The payment for ${plan} has not been completed yet. The plan starts as soon as it is confirmed.`,
+		consolePaymentBanner: "There is a problem with your Hallify subscription payment. Please look at it so you keep your paid features.",
 		updatePayment: "Pay or change card",
 		lockedHallsNotice: (n: number) => n === 1
 			? "1 venue is suspended because your plan doesn't include it. Nothing was deleted; it comes back when your plan allows it."

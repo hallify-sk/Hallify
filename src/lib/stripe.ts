@@ -63,7 +63,9 @@ export async function createCheckoutSession(opts: {
         },
       },
     }],
-    success_url: `${appUrl()}/app/billing/success?plan=${opts.plan}`,
+    // Stripe fills in the session id; the success page verifies it against Stripe
+    // instead of trusting a plan named in the query string.
+    success_url: `${appUrl()}/app/billing/success?session_id={CHECKOUT_SESSION_ID}`,
     cancel_url: `${appUrl()}/app/billing?cancelled=1`,
     allow_promotion_codes: true,
     metadata: { orgId: opts.orgId, plan: opts.plan },
@@ -106,7 +108,7 @@ export async function createAiTopupSession(opts: {
         },
       },
     }],
-    success_url: `${appUrl()}/app/manage/settings/ai?topup=1`,
+    success_url: `${appUrl()}/app/manage/settings/ai?topup={CHECKOUT_SESSION_ID}`,
     cancel_url: `${appUrl()}/app/manage/settings/ai`,
     metadata: { orgId: opts.orgId, kind: 'ai_credits', credits: String(opts.credits), userId: opts.userId },
   };
@@ -114,6 +116,17 @@ export async function createAiTopupSession(opts: {
   else params.customer_email = opts.userEmail;
   const session = await getStripe().checkout.sessions.create(params);
   return session.url!;
+}
+
+/** A Checkout session with its subscription expanded, or null if it can't be fetched
+ *  (unknown id, Stripe unreachable). Used by the pages Stripe redirects back to. */
+export async function getCheckoutSession(sessionId: string): Promise<Stripe.Checkout.Session | null> {
+  if (!/^cs_[A-Za-z0-9_]+$/.test(sessionId)) return null;
+  try {
+    return await getStripe().checkout.sessions.retrieve(sessionId, { expand: ['subscription'] });
+  } catch {
+    return null;
+  }
 }
 
 /** Create a Stripe Billing Portal session for managing an existing subscription. */

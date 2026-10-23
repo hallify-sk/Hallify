@@ -120,18 +120,21 @@ describe('createCheckoutSession', () => {
 			userEmail: 'x@x.com',
 		});
 		const params = mockSessionCreate.mock.calls[0][0];
-		expect(params.success_url).toBe('http://localhost:5173/app/billing/success?plan=starter');
+		expect(params.success_url).toBe('http://localhost:5173/app/billing/success?session_id={CHECKOUT_SESSION_ID}');
 		expect(params.cancel_url).toBe('http://localhost:5173/app/billing?cancelled=1');
 	});
 
-	it('carries the plan through to the success URL', async () => {
+	// The success page verifies the session with Stripe; a plan in the query string
+	// let anyone open "payment successful" for a plan they never paid for.
+	it('does not put the plan in the success URL', async () => {
 		await createCheckoutSession({
 			orgId: 'org_1',
 			plan: 'professional',
 			stripeCustomerId: null,
 			userEmail: 'x@x.com',
 		});
-		expect(mockSessionCreate.mock.calls[0][0].success_url).toContain('plan=professional');
+		expect(mockSessionCreate.mock.calls[0][0].success_url).not.toContain('plan=');
+		expect(mockSessionCreate.mock.calls[0][0].metadata.plan).toBe('professional');
 	});
 
 	it('throws for a plan that is not payable', async () => {

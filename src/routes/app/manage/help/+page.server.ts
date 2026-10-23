@@ -4,9 +4,8 @@ import type { PageServerLoad, Actions } from './$types';
 import { fail } from '@sveltejs/kit';
 import { requireOrgConsole, requireOrgPermission } from '$lib/server/access';
 import { st } from '$lib/i18n-server';
-import { sendEmail } from '$lib/email';
-import { OPERATOR } from '$lib/legal';
 import { SETUP_SERVICE_PRICE_CENTS } from '$lib/setup-service';
+import { openSetupRequest, createSetupRequest, cancelSetupRequest } from '$lib/server/setup-requests';
 
 export const load: PageServerLoad = async ({ locals }) => {
 	await requireOrgConsole(locals);
@@ -60,18 +59,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 
 	// An outstanding request, so the card reports its state instead of offering
 	// the service to somebody who has already asked for it.
-	let setupRequest: { id: string; status: string; created_at: string } | null = null;
-	try {
-		setupRequest = await dbFirst<{ id: string; status: string; created_at: string }>(
-			locals.db,
-			`SELECT id, status, created_at FROM setup_requests
-			  WHERE org_id = ? AND status NOT IN ('delivered', 'cancelled')
-			  ORDER BY created_at DESC LIMIT 1`,
-			orgId
-		);
-	} catch {
-		// Table arrives with migration 0010; absent is simply "never requested".
-	}
+	const setupRequest = await openSetupRequest(locals.db, orgId);
 
 	return {
 		checklist,
@@ -92,41 +80,17 @@ export const actions: Actions = {
 	 *  mailed to us — the organisation's own inbox is the wrong place for it. */
 	requestSetup: async ({ request, locals }) => {
 		const org = await requireOrgPermission(locals, 'settings.manage');
-		const user = locals.user!;
 		const data = await request.formData();
-		const note = String(data.get('note') ?? '').trim().slice(0, 1000);
-
-		// One open request per organisation: asking twice must not bill them twice
-		// or put two identical jobs in the queue.
-		const existing = await dbFirst<{ id: string }>(locals.db,
-			`SELECT id FROM setup_requests
-			  WHERE org_id = ? AND status NOT IN ('delivered', 'cancelled') LIMIT 1`, org.id);
-		if (existing) return { setupRequested: true };
-
-		// The price is copied onto the row, not read back from the constant later:
-		// changing the list price must never rewrite what this request was quoted.
-		await dbRun(locals.db,
-			`INSERT INTO setup_requests (id, org_id, requested_by, note, price_cents)
-			 VALUES (?, ?, ?, ?, ?)`,
-			crypto.randomUUID(), org.id, user.id, note || null, SETUP_SERVICE_PRICE_CENTS);
-
-		try {
-			const escape = (v: string) => v.replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c] as string));
-			await sendEmail(
-				locals.db,
-				OPERATOR.contactEmail,
-				`Setup service request — ${org.name}`,
-				`<p><strong>${escape(org.name)}</strong> asked us to set their account up.</p>
-				 <p>Agreed price: €${(SETUP_SERVICE_PRICE_CENTS / 100).toFixed(2)} one-off<br>
-				 Requested by: ${escape(`${user.first_name} ${user.last_name}`)} (${escape(user.email)})</p>
-				 <p>${note ? escape(note) : 'No additional notes.'}</p>`,
-				'setup-request'
-			);
-		} catch {
-			/* recorded regardless — the queue is the source of truth */
-		}
-
+		// One open request per organisation; also tells us and confirms it to the requester.
+		await createSetupRequest(locals, org, String(data.get('note') ?? ''));
 		return { setupRequested: true };
+	},
+
+	/** Withdraw the setup request while we have not started on it. */
+	cancelSetup: async ({ locals }) => {
+		const org = await requireOrgPermission(locals, 'settings.manage');
+		await cancelSetupRequest(locals, org);
+		return { setupCancelled: true };
 	},
 
 	toggleStep: async ({ request, locals }) => {
