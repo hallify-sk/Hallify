@@ -1,6 +1,8 @@
 <script lang="ts">
   import { enhance } from '$app/forms';
   import { t, getLocale } from '$lib/i18n.svelte';
+  import { confirmFirst } from '$lib/forms';
+  import { formatDateTime } from '$lib/format';
   import type { PageData, ActionData } from './$types';
 
   let { data, form }: { data: PageData; form: ActionData } = $props();
@@ -15,8 +17,8 @@
     return new Intl.NumberFormat('en-GB', { style: 'currency', currency: (currency || 'eur').toUpperCase() }).format(cents / 100);
   }
   function fmtDate(d: string | number) {
-    const ms = typeof d === 'number' ? d * 1000 : Date.parse(d);
-    return new Date(ms).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+    const date = typeof d === 'number' ? new Date(d * 1000) : new Date(/^\d{4}-\d{2}-\d{2} /.test(d) ? d.replace(' ', 'T') + 'Z' : d);
+    return date.toLocaleDateString(getLocale() === 'en' ? 'en-GB' : 'sk-SK', { day: 'numeric', month: 'short', year: 'numeric' });
   }
 </script>
 
@@ -108,10 +110,13 @@
       <div class="row-item kv"><span>{t.platformOrgs.stripeCustomer}</span><b class="mono">{data.sub?.stripe_customer_id ?? '—'}</b></div>
     </div>
 
-    <form method="POST" action="?/setSlug" use:enhance class="plan-form">
+    <!-- Changing the subdomain breaks every link to the old one at once (there is no
+         redirect), so it asks first and says so. -->
+    <form method="POST" action="?/setSlug" class="plan-form"
+      use:enhance={confirmFirst(() => t.platformOrgs.confirmSlugChange(data.org.slug), async ({ update }) => { await update({ reset: false }); })}>
       <label for="slug">{t.platformOrgs.subdomain}</label>
       <div class="plan-row">
-        <input id="slug" name="slug" value={data.org.slug} spellcheck="false" autocomplete="off" />
+        <input id="slug" name="slug" value={data.org.slug} spellcheck="false" autocomplete="off" maxlength="63" pattern="[a-z0-9]([a-z0-9-]*[a-z0-9])?" />
         <button type="submit" class="btn-action">{t.platformOrgs.save}</button>
       </div>
       <span class="sub-suffix">&lt;slug&gt;.hallify.sk</span>
@@ -133,12 +138,55 @@
           <button type="submit" class="btn-outline">{t.platformOrgs.unsuspendOrganization}</button>
         </form>
       {:else}
-        <form method="POST" action="?/suspend" use:enhance>
-          <button type="submit" class="btn-danger"
-            onclick={(e) => { if (!confirm(t.platformOrgs.confirmSuspend)) e.preventDefault(); }}>{t.platformOrgs.suspendOrganization}</button>
+        <form method="POST" action="?/suspend" use:enhance={confirmFirst(() => t.platformOrgs.confirmSuspend)}>
+          <button type="submit" class="btn-danger">{t.platformOrgs.suspendOrganization}</button>
         </form>
       {/if}
     </div>
+  </section>
+
+  <!-- AI credits: grants and corrections without editing the database. -->
+  <section class="section">
+    <div class="section-head">
+      <p class="eyebrow">{data.org.name}</p>
+      <h2>{t.platformOrgs.creditsTitle}</h2>
+      <p>{t.platformOrgs.creditsLead}</p>
+    </div>
+    <div class="row-list">
+      <div class="row-item kv"><span>{t.platformOrgs.creditsBalance}</span><b>{data.aiBalance == null ? '—' : data.aiBalance.toLocaleString(getLocale() === 'en' ? 'en-GB' : 'sk-SK', { maximumFractionDigits: 2 })}</b></div>
+    </div>
+    <form method="POST" action="?/adjustCredits" class="plan-form"
+      use:enhance={confirmFirst(() => t.platformOrgs.confirmCredits, async ({ update }) => { await update(); })}>
+      <label for="credits">{t.platformOrgs.creditsAmount}</label>
+      <div class="plan-row">
+        <input id="credits" name="credits" type="number" step="1" min="-100000" max="100000" required placeholder="100" class="credits-input" />
+        <input name="reason" type="text" maxlength="160" required placeholder={t.platformOrgs.creditsReason} aria-label={t.platformOrgs.creditsReason} />
+        <button type="submit" class="btn-action">{t.platformOrgs.apply}</button>
+      </div>
+      <span class="sub-suffix">{t.platformOrgs.creditsHint}</span>
+      {#if form?.creditsError}<span class="field-err" role="alert">{form.creditsError}</span>{/if}
+      {#if form && 'creditsApplied' in form && form.creditsApplied != null}<p class="hint" role="status">{t.platformOrgs.creditsDone(form.creditsApplied)}</p>{/if}
+    </form>
+  </section>
+
+  <!-- What platform admins did to this organisation. -->
+  <section class="section">
+    <div class="section-head">
+      <p class="eyebrow">{data.org.name}</p>
+      <h2>{t.platformOrgs.auditTitle}</h2>
+    </div>
+    {#if data.audit.length === 0}
+      <p class="hint">{t.platformOrgs.auditEmpty}</p>
+    {:else}
+      <div class="row-list">
+        {#each data.audit as row (row.id)}
+          <div class="row-item kv audit-row">
+            <span>{formatDateTime(row.created_at, getLocale())} · {row.actor_email ?? '—'}</span>
+            <b><code>{row.action}</code>{#if row.details} <span class="muted">{row.details}</span>{/if}</b>
+          </div>
+        {/each}
+      </div>
+    {/if}
   </section>
 
   <!-- Invoices -->
@@ -205,6 +253,9 @@
   .plan-row { display: flex; gap: 8px; }
   .plan-row select, .plan-row input { flex: 1; padding: 9px 13px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg-panel2); color: var(--text-base); font-size: 13px; font-family: inherit; transition: border-color .15s, box-shadow .15s; }
   .plan-row select:focus, .plan-row input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-dim); }
+  .plan-row .credits-input { flex: 0 0 120px; }
+  .audit-row { gap: 16px; align-items: flex-start; }
+  .audit-row b { font-weight: 400; font-size: 12px; text-align: right; overflow-wrap: anywhere; }
   .sub-suffix { display: block; font-size: 11px; color: var(--text-subtle); margin-top: 5px; }
   .field-err { display: block; font-size: 11.5px; color: var(--danger); margin-top: 5px; }
 

@@ -12,6 +12,7 @@ import {
 } from '$lib/server/platform-settings';
 import { DEFAULT_AI, MODEL_PRICES, AI_MODEL, AI_REASONING_EFFORT, loadAiPlatform, costUsdMicro, toMilliCredits } from '$lib/server/ai/pricing';
 import { aiConfigured } from '$lib/server/ai/openai';
+import { logPlatformAction } from '$lib/server/platform-audit';
 import type { PageServerLoad, Actions } from './$types';
 
 /**
@@ -82,6 +83,8 @@ export const actions: Actions = {
       { ...DEFAULT_ANALYTICS, containerId: raw, includeBubbles, serverUrl: serverUrl ?? '' },
       locals.user?.id ?? null
     );
+    await logPlatformAction(locals, 'settings.update', { type: 'settings', id: 'analytics' },
+      { containerId: raw, includeBubbles, serverUrl: serverUrl ?? '' });
 
     return { saved: true };
   },
@@ -96,6 +99,8 @@ export const actions: Actions = {
     await writePlatformSetting(locals.db, 'ai',
       { ...DEFAULT_AI, enabled: data.get('enabled') === 'on', markup, usdToEur },
       locals.user?.id ?? null);
+    await logPlatformAction(locals, 'settings.update', { type: 'settings', id: 'ai' },
+      { enabled: data.get('enabled') === 'on', markup, usdToEur });
     return { saved: true };
   }
 };

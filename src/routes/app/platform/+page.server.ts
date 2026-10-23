@@ -29,7 +29,7 @@ export const load: PageServerLoad = async ({ locals }) => {
   const stats = await dbFirst<{
     total_orgs: string; suspended_orgs: string; closed_orgs: string;
     total_users: string; platform_admins: string;
-    active_subscriptions: string; partners: string;
+    active_subscriptions: string; manual_plans: string; partners: string;
     total_reservations: string;
     orgs_7d: string; users_7d: string; reservations_7d: string;
     orgs_30d: string; users_30d: string; reservations_30d: string;
@@ -40,11 +40,15 @@ export const load: PageServerLoad = async ({ locals }) => {
       (SELECT COUNT(*) FROM closed_organizations) AS closed_orgs,
       (SELECT COUNT(*) FROM users) AS total_users,
       (SELECT COUNT(*) FROM users WHERE is_platform_admin = 1) AS platform_admins,
-      (SELECT COUNT(*) FROM subscriptions WHERE status IN ('active','trialing') AND plan != 'free') AS active_subscriptions,
-      (SELECT COUNT(*) FROM organizations o LEFT JOIN subscriptions s ON s.org_id = o.id
-        WHERE o.suspended_at IS NULL
-          AND (o.is_hallify_partner = 1
-               OR (s.plan IS NOT NULL AND s.plan != 'free' AND s.status IN ('active','trialing')))) AS partners,
+      -- Paid = backed by a Stripe subscription. Plans set by hand on the platform
+      -- page are counted apart: they used to be counted as paid, which showed
+      -- revenue that did not exist.
+      (SELECT COUNT(*) FROM subscriptions WHERE status IN ('active','trialing') AND plan != 'free'
+         AND stripe_subscription_id IS NOT NULL) AS active_subscriptions,
+      (SELECT COUNT(*) FROM subscriptions WHERE status IN ('active','trialing') AND plan != 'free'
+         AND stripe_subscription_id IS NULL) AS manual_plans,
+      -- Partners are the organisations marked as Hallify partners, nothing else.
+      (SELECT COUNT(*) FROM organizations WHERE suspended_at IS NULL AND is_hallify_partner = 1) AS partners,
       (SELECT COUNT(*) FROM reservations) AS total_reservations,
       (SELECT COUNT(*) FROM organizations WHERE created_at >= datetime('now','-7 days')) AS orgs_7d,
       (SELECT COUNT(*) FROM users WHERE created_at >= datetime('now','-7 days')) AS users_7d,
@@ -133,6 +137,7 @@ export const load: PageServerLoad = async ({ locals }) => {
       totalUsers: num(stats?.total_users),
       platformAdmins: num(stats?.platform_admins),
       activeSubscriptions: num(stats?.active_subscriptions),
+      manualPlans: num(stats?.manual_plans),
       partners: num(stats?.partners),
       totalReservations: num(stats?.total_reservations),
       orgs7d: num(stats?.orgs_7d), users7d: num(stats?.users_7d), reservations7d: num(stats?.reservations_7d),

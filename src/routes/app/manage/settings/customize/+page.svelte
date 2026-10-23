@@ -373,11 +373,6 @@
 		margin-bottom: 8px;
 		letter-spacing: .01em;
 	}
-	.opt {
-		font-weight: 400;
-		color: var(--text-subtle);
-	}
-
 	.logo-row {
 		display: flex;
 		align-items: center;

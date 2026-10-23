@@ -3,6 +3,7 @@ import type { RequestHandler } from './$types';
 import { dbFirst, dbRun } from '$lib/db/index';
 import { st } from '$lib/i18n-server';
 import { orgPublicBaseUrl } from '$lib/orgUrl';
+import { logPlatformAction } from '$lib/server/platform-audit';
 
 /** Login URL on the target org's OWN bubble (its custom domain if the plan allows,
  *  else the free <slug>.<HALLIFY_DOMAIN> subdomain). Null on localhost/dev or when the
@@ -37,12 +38,16 @@ export const POST: RequestHandler = async ({ request, locals, cookies, url }) =>
   let crossDomain: string | null = null;
   if (locals.user.is_platform_admin) {
     // Platform admins may "view as" any non-suspended org without membership.
-    const org = await dbFirst<{ id: string }>(
+    const org = await dbFirst<{ id: string; name: string }>(
       locals.db,
-      'SELECT id FROM organizations WHERE id = ? AND suspended_at IS NULL',
+      'SELECT id, name FROM organizations WHERE id = ? AND suspended_at IS NULL',
       orgId
     );
     if (!org) error(404, st(locals.locale).serverErrors.organizationNotFound);
+    // Viewing an organisation one is not a member of is recorded (platform audit log).
+    const member = await dbFirst<{ org_id: string }>(locals.db,
+      'SELECT org_id FROM organization_members WHERE org_id = ? AND user_id = ?', orgId, locals.user.id);
+    if (!member) await logPlatformAction(locals, 'org.view_as', { type: 'org', id: org.id, label: org.name });
   } else {
     // Everyone else must be a member of the target org.
     const membership = await dbFirst<{ org_id: string }>(

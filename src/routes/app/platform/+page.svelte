@@ -21,6 +21,7 @@
     <div class="section-head">
       <p class="eyebrow">{t.platformOrgs.platformAdmin}</p>
       <h1>{t.platformExtra.overviewTitle}</h1>
+      <p><a href="/app/platform/audit">{t.platformExtra.auditLink}</a></p>
     </div>
 
     <div class="stat-strip">
@@ -37,7 +38,7 @@
       <div class="stat">
         <span class="kpi-label">{t.platformExtra.paidSubscriptions}</span>
         <span class="kpi-value">{s.activeSubscriptions}</span>
-        <span class="kpi-sub">{s.partners} {t.platformExtra.partners}</span>
+        <span class="kpi-sub">{t.platformExtra.manualPlans(s.manualPlans)} · {s.partners} {t.platformExtra.partners}</span>
       </div>
       <div class="stat">
         <span class="kpi-label">{t.platformExtra.totalReservations}</span>

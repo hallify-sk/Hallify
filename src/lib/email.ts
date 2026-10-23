@@ -42,7 +42,7 @@ export interface EmailTemplates {
 	testEmail?: string;
 }
 
-const DEFAULT_TEMPLATES: Required<EmailTemplates> = {
+export const DEFAULT_TEMPLATES: Required<EmailTemplates> = {
 	newReservation: `<h2>New Reservation</h2>
 <p><b>{{userName}}</b> created a new reservation <b>{{title}}</b> at <b>{{hallName}}</b> on <b>{{date}}</b>.</p>`,
 	guestMessage: `<h2>New message from a guest</h2>

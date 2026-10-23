@@ -1,7 +1,9 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
 	import type { PageData, ActionData } from './$types';
-	import { t } from '$lib/i18n.svelte';
+	import { t, getLocale } from '$lib/i18n.svelte';
+	import { formatDateTime } from '$lib/format';
+	import { previewTemplate } from '$lib/email-template-overrides';
 
 	interface Props { data: PageData; form: ActionData; }
 	const { data, form }: Props = $props();
@@ -20,9 +22,23 @@
 		{ key: 'testEmail', label: t.platformMisc.tplTestEmail, vars: '' },
 	] as const);
 
-	function fmtDate(d: string) {
-		return new Date(d).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
-	}
+	const fmtDate = (d: string) => formatDateTime(d, getLocale(), { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+
+	// The editable text of each template, seeded from what is in effect (an emptied
+	// stored template shows the default it now falls back to) and re-seeded after a save.
+	type TplKey = keyof typeof data.defaults;
+	const seed = () => Object.fromEntries(
+		Object.keys(data.defaults).map((k) => [k, (data.templates as Record<string, string>)[k] || (data.defaults as Record<string, string>)[k]])
+	) as Record<string, string>;
+	let drafts = $state<Record<string, string>>(seed());
+	$effect(() => { drafts = seed(); });
+	let previewKey = $state<string | null>(null);
+
+	const isDefault = (k: string) => (drafts[k] ?? '').trim() === ((data.defaults as Record<string, string>)[k] ?? '').trim();
+	const resetOne = (k: string) => { drafts[k] = (data.defaults as Record<string, string>)[k as TplKey]; };
+
+	// The preview runs in a sandboxed frame with no scripts: a template is HTML.
+	const previewDoc = (k: string) => `<!doctype html><meta charset="utf-8"><body style="font-family:system-ui,sans-serif;font-size:14px;color:#202322;padding:12px;margin:0">${previewTemplate(drafts[k] ?? '')}</body>`;
 </script>
 
 <svelte:head><title>Email – Platform – Hallify</title></svelte:head>
@@ -116,9 +132,20 @@
 		<form method="POST" action="?/saveTemplates" use:enhance={() => async ({ update }) => { await update({ reset: false }); }}>
 			{#each templateMeta as tpl}
 				<div class="tpl-field">
-					<label for="tpl-{tpl.key}">{tpl.label}</label>
+					<div class="tpl-head">
+						<label for="tpl-{tpl.key}">{tpl.label}</label>
+						{#if !isDefault(tpl.key)}<span class="tpl-badge">{t.platformMisc.tplCustomized}</span>{/if}
+						<span class="tpl-tools">
+							<button type="button" class="link-btn" aria-expanded={previewKey === tpl.key} onclick={() => (previewKey = previewKey === tpl.key ? null : tpl.key)}>{previewKey === tpl.key ? t.platformMisc.tplHidePreview : t.platformMisc.tplPreview}</button>
+							{#if !isDefault(tpl.key)}<button type="button" class="link-btn" onclick={() => resetOne(tpl.key)}>{t.platformMisc.tplReset}</button>{/if}
+						</span>
+					</div>
 					{#if tpl.vars}<span class="tpl-vars">{t.platformMisc.variablesLabel} {tpl.vars}</span>{/if}
-					<textarea id="tpl-{tpl.key}" name="tpl_{tpl.key}" rows="3">{data.templates[tpl.key] ?? ''}</textarea>
+					<textarea id="tpl-{tpl.key}" name="tpl_{tpl.key}" rows="3" bind:value={drafts[tpl.key]}></textarea>
+					{#if !drafts[tpl.key]?.trim()}<span class="tpl-vars">{t.platformMisc.tplEmptyUsesDefault}</span>{/if}
+					{#if previewKey === tpl.key}
+						<iframe class="tpl-preview" title={`${t.platformMisc.tplPreview}: ${tpl.label}`} sandbox="" srcdoc={previewDoc(tpl.key)}></iframe>
+					{/if}
 				</div>
 			{/each}
 			<div class="actions"><button type="submit" class="btn-action">{t.platformMisc.saveTemplates}</button></div>
@@ -204,6 +231,12 @@
 	/* Templates */
 	.tpl-field { margin-bottom: 14px; }
 	.tpl-field label { display: block; font-size: 12.5px; font-weight: 600; color: var(--text-base); margin-bottom: 4px; }
+	.tpl-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+	.tpl-badge { font-size: 10px; font-weight: 650; text-transform: uppercase; letter-spacing: .06em; padding: 1px 7px; border-radius: 3px; background: var(--accent-dim); color: var(--accent-ink); }
+	.tpl-tools { margin-left: auto; display: flex; gap: 12px; }
+	.link-btn { background: none; border: none; padding: 0; font: inherit; font-size: 12px; color: var(--accent-ink); cursor: pointer; }
+	.link-btn:hover { text-decoration: underline; }
+	.tpl-preview { display: block; width: 100%; height: 200px; margin-top: 8px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: #fff; }
 	.tpl-vars { display: block; font-size: 10.5px; color: var(--text-subtle); margin-bottom: 5px; font-family: ui-monospace, monospace; }
 	.tpl-field textarea {
 		width: 100%; box-sizing: border-box; font-family: ui-monospace, monospace; font-size: 12px;
