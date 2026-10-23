@@ -64,7 +64,9 @@ export const load: PageServerLoad = async ({ locals, url }) => {
   }>(locals.db,
     `SELECT r.id, r.title, r.event_date, r.start_time, r.end_time, r.status,
             h.name AS hall_name, h.id AS hall_id,
-            u.first_name AS booker_first, u.last_name AS booker_last
+            -- A phone booking shows its customer, not the colleague who typed it in.
+            COALESCE(r.customer_name, u.first_name) AS booker_first,
+            CASE WHEN r.customer_name IS NOT NULL THEN NULL ELSE u.last_name END AS booker_last
      FROM reservations r
      JOIN halls h ON h.id = r.hall_id
      LEFT JOIN users u ON u.id = r.user_id

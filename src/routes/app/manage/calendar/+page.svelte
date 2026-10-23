@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
-	import { t } from '$lib/i18n.svelte';
+	import { t, getLocale } from '$lib/i18n.svelte';
 	import SectionHeader from '$lib/components/SectionHeader.svelte';
 	import type { PageData } from './$types';
 
@@ -55,6 +55,28 @@
 	//   • the hall's opening_hours marks that day as closed
 	const DOW_KEY = ['sun','mon','tue','wed','thu','fri','sat'] as const;
 	const visibleHallIds = $derived(data.halls.map(h => h.id).filter(id => !hiddenHalls.has(id)));
+	// Date -> the reasons given for the blocks that close it (shown on the day; they
+	// were not shown anywhere before).
+	const blockReasons = $derived.by(() => {
+		const result = new Map<string, string[]>();
+		for (const key of blockedDates) {
+			const jsDow = parseISO(key).getDay();
+			const reasons = data.blocks
+				.filter(b => visibleHallIds.includes(b.hall_id) && b.reason && (
+					(b.block_type === 'date_range' && b.date_from && b.date_to &&
+					 key >= b.date_from.slice(0, 10) && key <= b.date_to.slice(0, 10) &&
+					 (b.days_of_week.length === 0 || (b.days_of_week as number[]).includes(jsDow))) ||
+					(b.block_type === 'weekly' && (b.days_of_week as number[]).includes(jsDow))))
+				.map(b => b.reason as string);
+			result.set(key, [...new Set(reasons)]);
+		}
+		return result;
+	});
+	function blockTitle(key: string): string {
+		const r = blockReasons.get(key) ?? [];
+		return r.length ? `${t.calendar.blocked}: ${r.join(', ')}` : t.calendar.blocked;
+	}
+
 	const blockedDates = $derived.by(() => {
 		const result = new Set<string>();
 		if (visibleHallIds.length === 0) return result;
@@ -288,9 +310,13 @@
 								{@const evs = eventsByDay.get(cell.iso) ?? []}
 								<div class="mcell" class:out={!cell.inMonth} class:today={cell.isToday}
 									class:weekend={cell.isWeekend} class:blocked={blockedDates.has(cell.iso)}
+									title={blockedDates.has(cell.iso) ? blockTitle(cell.iso) : undefined}
 									ondblclick={() => quickCreate(cell.iso)} role="gridcell" tabindex="-1">
 									<div class="mcell-head">
 										<span class="mday">{cell.day}</span>
+										{#if blockedDates.has(cell.iso)}
+											<span class="block-reason">{(blockReasons.get(cell.iso) ?? []).join(', ') || t.calendar.blocked}</span>
+										{/if}
 										<button class="add-day" title={t.calendar.newEvent} onclick={() => quickCreate(cell.iso)} aria-label={t.calendar.newEvent}>
 											<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
 										</button>
@@ -332,7 +358,7 @@
 					<div class="tg-gutter allday-label">{t.calendar.allDay}</div>
 					{#each days as d}
 						{@const ad = layoutDay(d.iso).allDay}
-						<div class="allday-col" class:blocked={blockedDates.has(d.iso)}>
+						<div class="allday-col" class:blocked={blockedDates.has(d.iso)} title={blockedDates.has(d.iso) ? blockTitle(d.iso) : undefined}>
 							{#each ad as ev}
 								<button class="chip-ev allday-chip" class:past={ev.event_date.slice(0, 10) < todayISO} style="--hc:{hallColor[ev.hall_id]};--sc:{STATUS_COLOR[ev.status]}" onclick={() => active = ev}>
 									<span class="ev-sdot"></span><span class="ev-title">{ev.title}</span>
@@ -416,7 +442,7 @@
 				</div>
 				<div class="pop-line">
 					<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-					<span>{parseISO(active.event_date.slice(0, 10)).toLocaleDateString('sk-SK', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}{#if active.start_time} · {fmtTime(active.start_time)}{#if active.end_time}–{fmtTime(active.end_time)}{/if}{/if}</span>
+					<span>{parseISO(active.event_date.slice(0, 10)).toLocaleDateString(getLocale() === 'en' ? 'en-GB' : 'sk-SK', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}{#if active.start_time} · {fmtTime(active.start_time)}{#if active.end_time}–{fmtTime(active.end_time)}{/if}{/if}</span>
 				</div>
 				{#if bookerName(active)}
 					<div class="pop-line">
@@ -494,11 +520,16 @@
 	.week-row { display: grid; grid-template-columns: repeat(7, 1fr); flex: 1; min-height: 96px; }
 	.mcell { border-right: 1px solid var(--border-subtle, var(--border)); border-bottom: 1px solid var(--border-subtle, var(--border)); padding: 5px 5px 4px; display: flex; flex-direction: column; gap: 3px; min-height: 0; position: relative; }
 	.mcell:nth-child(7n) { border-right: none; }
-	.mcell.out { background: var(--bg-panel2); }
+	.mcell.out { background-color: var(--bg-panel2); }
 	.mcell.out .mday { color: var(--text-subtle); }
-	.mcell.weekend:not(.out) { background: color-mix(in srgb, var(--bg-panel2) 50%, transparent); }
+	/* background-color, not the shorthand: the shorthand wiped a blocked day's hatching. */
+	.mcell.weekend:not(.out) { background-color: color-mix(in srgb, var(--bg-panel2) 50%, transparent); }
 	.mcell.blocked { background-image: repeating-linear-gradient(45deg, transparent, transparent 6px, color-mix(in srgb, var(--danger) 7%, transparent) 6px, color-mix(in srgb, var(--danger) 7%, transparent) 12px); }
-	.mcell.today { background: var(--accent-dim); }
+	.mcell.today { background-color: var(--accent-dim); }
+	.block-reason {
+		flex: 1; min-width: 0; margin: 0 4px; font-size: 10px; font-weight: 600; color: var(--danger);
+		overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+	}
 	.mcell.today .mday { background: var(--accent); color: var(--accent-contrast); }
 	.mcell-head { display: flex; align-items: center; justify-content: space-between; }
 	.mday { font-size: 12px; font-weight: 600; color: var(--text-muted); width: 22px; height: 22px; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; }
@@ -539,7 +570,7 @@
 	.hour-label { display: flex; align-items: flex-start; justify-content: flex-end; padding: 2px 8px 0 0; position: relative; }
 	.hour-label span { font-size: 10px; color: var(--text-muted); font-variant-numeric: tabular-nums; transform: translateY(-6px); }
 	.day-col { position: relative; border-left: 1px solid var(--border-subtle, var(--border)); }
-	.day-col.today { background: color-mix(in srgb, var(--accent-dim) 50%, transparent); }
+	.day-col.today { background-color: color-mix(in srgb, var(--accent-dim) 50%, transparent); }
 	.day-col.blocked { background-image: repeating-linear-gradient(45deg, transparent, transparent 7px, color-mix(in srgb, var(--danger) 6%, transparent) 7px, color-mix(in srgb, var(--danger) 6%, transparent) 14px); }
 	.hour-line { border-bottom: 1px solid var(--border-subtle, var(--border)); box-sizing: border-box; }
 	.tev { position: absolute; border-radius: var(--radius-sm); padding: 3px 7px; border: none; border-left: 3px solid var(--sc); cursor: pointer; font-family: inherit; text-align: left; overflow: hidden; display: flex; flex-direction: column; gap: 1px; background: color-mix(in srgb, var(--hc) 18%, var(--bg-panel)); color: color-mix(in srgb, var(--hc) 80%, var(--text-base)); box-shadow: var(--shadow-xs); }

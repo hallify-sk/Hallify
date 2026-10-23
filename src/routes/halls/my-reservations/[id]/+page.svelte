@@ -69,6 +69,7 @@
 	}
 
 	let threadEl: HTMLDivElement | null = $state(null);
+	let sendingMsg = $state(false);
 	async function scrollThread() { await tick(); if (threadEl) threadEl.scrollTop = threadEl.scrollHeight; }
 	$effect(() => { if (data.thread.messages.length) scrollThread(); });
 </script>
@@ -305,7 +306,17 @@
 					<div class="msg" class:mine>
 						<div class="bubble">
 							{#if !mine}<span class="msg-name">{m.sender_first_name} {m.sender_last_name}{#if m.sender_role}<span class="msg-role">{m.sender_role}</span>{/if}</span>{/if}
-							<span class="msg-body">{m.body}</span>
+							{#if m.body}<span class="msg-body">{m.body}</span>{/if}
+							{#if m.attachment_url?.startsWith('/uploads/')}
+								<!-- Attachments the venue sends (images uploaded from the staff inbox). -->
+								<a class="msg-att" href={m.attachment_url} target="_blank" rel="noopener noreferrer">
+									{#if m.attachment_type?.startsWith('image/')}
+										<img src={m.attachment_url} alt={m.attachment_name ?? ''} loading="lazy" />
+									{:else}
+										{m.attachment_name ?? m.attachment_url}
+									{/if}
+								</a>
+							{/if}
 							<span class="msg-time">{fmtTime(m.created_at)}</span>
 						</div>
 					</div>
@@ -316,9 +327,10 @@
 
 	{#if form?.msgError}<div class="toast err small">{form.msgError}</div>{/if}
 
-	<form method="POST" action="?/sendMessage" class="compose" use:enhance={() => async ({ update }) => { await update(); scrollThread(); }}>
-		<textarea name="body" rows="2" placeholder="{t.myRes.composePlaceholder} {orgName}…" required></textarea>
-		<button type="submit" class="btn-primary send">
+	<form method="POST" action="?/sendMessage" class="compose" use:enhance={() => { sendingMsg = true; return async ({ update }) => { await update(); sendingMsg = false; scrollThread(); }; }}>
+		<textarea name="body" rows="2" maxlength="5000" placeholder="{t.myRes.composePlaceholder} {orgName}…" required></textarea>
+		<!-- Disabled while sending: a double click stored the message twice. -->
+		<button type="submit" class="btn-primary send" disabled={sendingMsg}>
 			<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
 			{t.messaging.send}
 		</button>
@@ -450,6 +462,8 @@
 	.msg-role { font-size: 9px; font-weight: 650; text-transform: uppercase; letter-spacing: .08em; color: var(--accent-ink); background: var(--accent-dim); padding: 0 6px; border-radius: 3px; }
 	.msg-body { font-size: 13px; color: var(--text-base); line-height: 1.5; white-space: pre-wrap; word-break: break-word; }
 	.msg-time { font-size: 10px; color: var(--text-subtle); align-self: flex-end; }
+	.msg-att { font-size: 12.5px; color: inherit; text-decoration: underline; word-break: break-all; }
+	.msg-att img { display: block; max-width: 240px; max-height: 240px; border-radius: var(--radius-sm); margin-top: 4px; }
 
 	.compose { display: flex; gap: 8px; align-items: flex-end; margin-top: 18px; padding-top: 18px; border-top: 1px solid var(--border-subtle); }
 	.compose textarea { flex: 1; font-family: inherit; font-size: 13.5px; padding: 9px 13px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg-panel2); color: var(--text-base); resize: vertical; transition: border-color .15s, box-shadow .15s; }

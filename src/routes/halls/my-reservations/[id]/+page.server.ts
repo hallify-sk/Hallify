@@ -11,6 +11,9 @@ import {
 import { st } from '$lib/i18n-server';
 import { hasEventStarted, isEventPast } from '$lib/reservationStatus';
 import type { Actions, PageServerLoad } from './$types';
+import { markTicketRead } from '$lib/unread';
+import { logReservationActivity } from '$lib/server/reservation-activity';
+import { findOrCreateReservationThread, MESSAGE_MAX } from '$lib/server/threads';
 
 const RANGE_DAYS = 540;
 const EDITABLE = new Set(['pending']);
@@ -53,9 +56,11 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 	const messages = ticket
 		? await dbAll<{
 				id: string; sender_id: string; body: string | null; message_type: string;
+				attachment_url: string | null; attachment_name: string | null; attachment_type: string | null;
 				created_at: string; sender_first_name: string; sender_last_name: string; sender_role: string | null;
 			}>(locals.db,
 				`SELECT m.id, m.sender_id, m.body, m.message_type, m.created_at,
+				        m.attachment_url, m.attachment_name, m.attachment_type,
 				        COALESCE(u.first_name, 'Former') AS sender_first_name,
 				        COALESCE(u.last_name, 'member') AS sender_last_name, om.role AS sender_role
 				FROM messages m
@@ -65,6 +70,8 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 				ORDER BY m.created_at`,
 				orgId, ticket.id)
 		: [];
+	// Opening the booking shows its conversation: that is reading it (clears the badge).
+	if (ticket) await markTicketRead(locals.db, userId, ticket.id);
 
 	// Once the event has STARTED the client can no longer change anything about it.
 	const started = hasEventStarted(reservation.event_date, reservation.start_time);
@@ -157,6 +164,8 @@ export const actions: Actions = {
 		}
 
 		const guestName = `${locals.user.first_name} ${locals.user.last_name}`;
+		// Shown in the booking's history on the staff page.
+		await logReservationActivity(locals.db, { reservationId: params.id, orgId, actorId: userId, actorName: guestName, kind: 'edited', note: 'client' });
 		notifyGuestEdit(locals.db, orgId, guestName, title, hall.name, eventDate, {
 			reservationId: params.id,
 			changes: reservationChanges(reservation, { title, description, event_date: eventDate, start_time: startTime, end_time: endTime, num_guests: numGuests }),
@@ -190,8 +199,12 @@ export const actions: Actions = {
 		}
 
 		await dbRun(locals.db,
-			`UPDATE reservations SET status = 'cancelled' WHERE id = ? AND user_id = ? AND org_id = ?`,
+			`UPDATE reservations SET status = 'cancelled', cancelled_by = 'client' WHERE id = ? AND user_id = ? AND org_id = ?`,
 			params.id, userId, orgId);
+		await logReservationActivity(locals.db, {
+			reservationId: params.id, orgId, actorId: userId,
+			actorName: `${locals.user.first_name} ${locals.user.last_name}`, kind: 'status', status: 'cancelled',
+		});
 
 		dispatchWebhooks(locals.db, orgId, 'reservation.status_changed', {
 			reservation_id: reservation.id, title: reservation.title,
@@ -216,19 +229,15 @@ export const actions: Actions = {
 		const data = await request.formData();
 		const body = String(data.get('body') ?? '').trim();
 		if (!body) return fail(400, { msgError: st(locals.locale).serverErrors.writeMessageFirst });
+		if (body.length > MESSAGE_MAX) return fail(400, { msgError: st(locals.locale).resOps.messageTooLong(MESSAGE_MAX) });
 
-		let ticket = await dbFirst<{ id: string }>(locals.db,
-			`SELECT id FROM tickets WHERE user_id = ? AND org_id = ? AND reservation_id = ? ORDER BY created_at DESC LIMIT 1`,
-			user.id, orgId, reservation.id);
-
-		const isNew = !ticket;
-		if (!ticket) {
-			const ticketId = crypto.randomUUID();
-			await dbRun(locals.db,
-				`INSERT INTO tickets (id, org_id, user_id, reservation_id, subject, status) VALUES (?, ?, ?, ?, ?, 'open')`,
-				ticketId, orgId, user.id, reservation.id, subjectFor(reservation.hall_name, reservation.event_date));
-			ticket = { id: ticketId };
-		}
+		// One thread per booking: parallel first sends join the same thread (unique index, migration 0018).
+		const thread = await findOrCreateReservationThread(locals.db, {
+			orgId, reservationId: reservation.id, userId: user.id,
+			subject: subjectFor(reservation.hall_name, reservation.event_date),
+		});
+		const ticket = { id: thread.id };
+		const isNew = thread.created;
 
 		await dbRun(locals.db,
 			`INSERT INTO messages (id, ticket_id, sender_id, body, message_type) VALUES (?, ?, ?, ?, 'text')`,

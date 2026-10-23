@@ -1,13 +1,18 @@
 import { error, redirect, fail } from '@sveltejs/kit';
-import { dbAll, dbFirst, dbRun, fromJson, fromJsonArr, toJson } from '$lib/db/index';
-import type { ReservationRow, RsvpRow, TableTypeRow, TemplateRow, HallRow, ReservationStatus, RsvpConfig, HallExtraRow } from '$lib/db/index';
+import { dbAll, dbFirst, dbRun, fromJson, toJson } from '$lib/db/index';
+import type { ReservationRow, RsvpRow, TableTypeRow, TemplateRow, ReservationStatus, RsvpConfig, HallExtraRow } from '$lib/db/index';
 import { parseExtraIds } from '$lib/extras';
 import type { Actions, PageServerLoad } from './$types';
 import { notifyStatusChange, sendReservationInviteEmail, notifyEventAssigned } from '$lib/email';
 import { postSystemMessage } from '$lib/tickets';
-import { changeReservationStatus, messageReservationClient, setReservationExtras } from '$lib/server/ops/reservation-ops';
+import {
+	changeReservationStatus, editReservationDetails, messageReservationClient, setReservationExtras,
+} from '$lib/server/ops/reservation-ops';
+import { reservationAccess, assertCanOpenReservation, type ReservationAccess } from '$lib/server/reservation-access';
+import { listReservationActivity, logReservationActivity } from '$lib/server/reservation-activity';
 import { st } from '$lib/i18n-server';
 import { orgPublicBaseUrl } from '$lib/orgUrl';
+import { RSVP_ENABLED } from '$lib/features';
 import { env } from '$env/dynamic/private';
 
 // The organization's preferred default language — used to localize emails to the
@@ -23,17 +28,24 @@ async function orgEmailLocale(db: App.Locals['db'], orgId: string): Promise<'sk'
 
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 
-// This is an org-staff management view. Reservations are always scoped to the
-// acting user's current org, so cross-org access is impossible.
-function isOrgStaff(locals: App.Locals): boolean {
-	return locals.currentOrg?.role === 'owner' || locals.currentOrg?.role === 'admin';
+type Extra = { customer_name: string | null; customer_contact: string | null; internal_notes: string | null; status_reason: string | null; cancelled_by: string | null };
+
+/** Members with `reservations.manage` may act on any booking in the org; everyone
+ *  else only on their own. Org scoping alone is NOT enough — without this, any
+ *  member could cancel, re-layout or reset a colleague's (or a client's) booking. */
+function canActOnReservation(access: ReservationAccess, locals: App.Locals, reservationUserId: string): boolean {
+	return access.canManage || reservationUserId === locals.user?.id;
 }
 
-/** Staff may act on any reservation in their org; everyone else only on their own.
- *  Org scoping alone is NOT enough here — without this, any `member`-role account
- *  could cancel, re-layout or reset a colleague's (or a client's) booking. */
-function canActOnReservation(locals: App.Locals, reservationUserId: string): boolean {
-	return isOrgStaff(locals) || reservationUserId === locals.user?.id;
+/** The common preamble of a staff-only action. */
+async function staffAction(locals: App.Locals, key: 'error' | 'assignError' | 'statusError' | 'detailsError') {
+	const e = st(locals.locale).serverErrors;
+	if (!locals.user) return { fail: fail(403, { [key]: e.unauthorized }) } as const;
+	const orgId = locals.currentOrg?.id;
+	if (!orgId) return { fail: fail(403, { [key]: e.accessDenied }) } as const;
+	const access = await reservationAccess(locals);
+	if (!access.canManage) return { fail: fail(403, { [key]: e.accessDenied }) } as const;
+	return { orgId, user: locals.user, access } as const;
 }
 
 export const load: PageServerLoad = async ({ locals, params, url }) => {
@@ -41,7 +53,7 @@ export const load: PageServerLoad = async ({ locals, params, url }) => {
 	const orgId = locals.currentOrg?.id;
 	if (!orgId) error(403, st(locals.locale).serverErrors.accessDenied);
 
-	const reservation = await dbFirst<ReservationRow & {
+	const reservation = await dbFirst<ReservationRow & Extra & {
 		hall_max_people: number; hall_floorplan_json: unknown;
 		hall_auto_approve: boolean; hall_min_cancel_days: number;
 		hall_pre_reservation_text: string | null;
@@ -63,10 +75,13 @@ export const load: PageServerLoad = async ({ locals, params, url }) => {
 
 	if (!reservation) error(404, st(locals.locale).serverErrors.reservationNotFound);
 
-	const rsvps = await dbAll<RsvpRow>(locals.db,
-		'SELECT * FROM rsvp_entries WHERE reservation_id = ? ORDER BY created_at',
-		params.id
-	);
+	// Denying `reservations.view` used to change nothing here: the load scoped by org only.
+	const access = await reservationAccess(locals);
+	assertCanOpenReservation(access, reservation.user_id, locals.user.id, st(locals.locale).serverErrors.reservationNotFound);
+
+	const rsvps = RSVP_ENABLED
+		? await dbAll<RsvpRow>(locals.db, 'SELECT * FROM rsvp_entries WHERE reservation_id = ? ORDER BY created_at', params.id)
+		: [];
 
 	const tableTypes = await dbAll<TableTypeRow>(locals.db,
 		'SELECT * FROM table_types WHERE hall_id = ? ORDER BY name',
@@ -89,17 +104,21 @@ export const load: PageServerLoad = async ({ locals, params, url }) => {
 	const clientOwner = reservation.user_account_type === 'client';
 
 	// A pending (un-accepted) event invite awaiting the client's registration.
-	const pendingInvite = await dbFirst<{ email: string; first_name: string; last_name: string; created_at: string }>(locals.db,
-		`SELECT email, first_name, last_name, created_at FROM reservation_invites
-		 WHERE reservation_id = ? AND accepted_at IS NULL ORDER BY created_at DESC LIMIT 1`,
-		params.id
-	);
+	const pendingInvite = access.canManage
+		? await dbFirst<{ email: string; first_name: string; last_name: string; created_at: string }>(locals.db,
+			`SELECT email, first_name, last_name, created_at FROM reservation_invites
+			 WHERE reservation_id = ? AND accepted_at IS NULL ORDER BY created_at DESC LIMIT 1`,
+			params.id)
+		: null;
 
 	return {
+		canManage: access.canManage,
 		clientOwner,
 		pendingInvite,
 		reservation: {
 			...reservation,
+			// Staff-only notes never leave the server for someone who cannot manage.
+			internal_notes: access.canManage ? reservation.internal_notes : null,
 			hall_floorplan_json: fromJson(reservation.hall_floorplan_json as string | null),
 			hall_auto_approve: !!reservation.hall_auto_approve,
 			rsvp_config: fromJson<RsvpConfig>(reservation.rsvp_config as string | null),
@@ -112,6 +131,7 @@ export const load: PageServerLoad = async ({ locals, params, url }) => {
 		hasFloorplan,
 		extras: await dbAll<HallExtraRow>(locals.db, 'SELECT * FROM hall_extras WHERE hall_id = ? ORDER BY created_at', reservation.hall_id),
 		selectedExtras: parseExtraIds(reservation.extras_json as string | null),
+		activity: access.canManage ? await listReservationActivity(locals.db, params.id) : [],
 	};
 };
 
@@ -121,12 +141,10 @@ export const actions: Actions = {
 	// the reservation's ticket thread (creates one if none exists) so the
 	// conversation shows up in Messages for both sides, and emails the client.
 	messageClient: async ({ request, locals, params }) => {
-		if (!locals.user) return fail(403, { error: st(locals.locale).serverErrors.unauthorized });
-		const orgId = locals.currentOrg?.id;
-		if (!orgId) return fail(403, { error: st(locals.locale).serverErrors.accessDenied });
-		if (!isOrgStaff(locals)) return fail(403, { error: st(locals.locale).serverErrors.onlyStaffCanMessageClient });
+		const ctx = await staffAction(locals, 'error');
+		if ('fail' in ctx) return ctx.fail;
 		const body = String((await request.formData()).get('body') ?? '');
-		const res = await messageReservationClient(locals, orgId, params.id, body, locals.user);
+		const res = await messageReservationClient(locals, ctx.orgId, params.id, body, ctx.user);
 		if (!res.ok) return fail(res.status, { error: res.error });
 		return { messageSent: true, ticketId: res.ticketId };
 	},
@@ -136,10 +154,9 @@ export const actions: Actions = {
 	// notified. Otherwise a one-time invite is emailed so they can register and
 	// become the owner. Assignment NEVER changes the reservation's status.
 	assignClient: async ({ request, locals, params, url }) => {
-		if (!locals.user) return fail(403, { assignError: st(locals.locale).serverErrors.unauthorized });
-		const orgId = locals.currentOrg?.id;
-		if (!orgId) return fail(403, { assignError: st(locals.locale).serverErrors.accessDenied });
-		if (!isOrgStaff(locals)) return fail(403, { assignError: st(locals.locale).serverErrors.onlyStaffCanAssignClient });
+		const ctx = await staffAction(locals, 'assignError');
+		if ('fail' in ctx) return ctx.fail;
+		const { orgId, user } = ctx;
 
 		const data = await request.formData();
 		const firstName = String(data.get('firstName') ?? '').trim();
@@ -155,10 +172,10 @@ export const actions: Actions = {
 		if (!res) return fail(404, { assignError: st(locals.locale).serverErrors.notFound });
 
 		const locale = await orgEmailLocale(locals.db, orgId);
-		const dateFmt = new Date(res.event_date).toLocaleDateString(locale === 'en' ? 'en-GB' : 'sk-SK', { day: 'numeric', month: 'long', year: 'numeric' });
+		const dateFmt = new Date(res.event_date + 'T00:00:00').toLocaleDateString(locale === 'en' ? 'en-GB' : 'sk-SK', { day: 'numeric', month: 'long', year: 'numeric' });
 		const base = (await orgPublicBaseUrl(locals.db, orgId, url)) ?? (env.APP_URL || url.origin).replace(/\/$/, '');
 		const orgName = locals.currentOrg?.name ?? 'Hallify';
-		const inviterName = `${locals.user.first_name} ${locals.user.last_name}`;
+		const inviterName = `${user.first_name} ${user.last_name}`;
 
 		// Already a client of this org → hand the event over right away.
 		const existing = await dbFirst<{ id: string; first_name: string; last_name: string }>(locals.db,
@@ -168,8 +185,12 @@ export const actions: Actions = {
 		if (existing) {
 			await dbRun(locals.db, 'UPDATE reservations SET user_id = ? WHERE id = ? AND org_id = ?', existing.id, params.id, orgId);
 			await dbRun(locals.db, 'DELETE FROM reservation_invites WHERE reservation_id = ? AND accepted_at IS NULL', params.id);
-			notifyEventAssigned(locals.db, email, { orgName, eventTitle: res.title, hallName: res.hall_name, date: dateFmt, eventUrl: `${base}/halls/my-reservations/${params.id}` }, locale).catch(() => {});
-			return { assigned: true, assignedName: `${existing.first_name} ${existing.last_name}` };
+			await logReservationActivity(locals.db, {
+				reservationId: params.id, orgId, actorId: user.id, actorName: inviterName,
+				kind: 'assigned', note: `${existing.first_name} ${existing.last_name}`,
+			});
+			const sent = await notifyEventAssigned(locals.db, email, { orgName, eventTitle: res.title, hallName: res.hall_name, date: dateFmt, eventUrl: `${base}/halls/my-reservations/${params.id}` }, locale).catch(() => false);
+			return { assigned: true, assignedName: `${existing.first_name} ${existing.last_name}`, emailSent: sent };
 		}
 
 		// New person → (re)create a single pending invite and email the registration link.
@@ -179,7 +200,7 @@ export const actions: Actions = {
 		await dbRun(locals.db,
 			`INSERT INTO reservation_invites (id, reservation_id, org_id, email, first_name, last_name, token, invited_by, expires_at)
 			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-			crypto.randomUUID(), params.id, orgId, email, firstName, lastName, token, locals.user.id, expiresAt);
+			crypto.randomUUID(), params.id, orgId, email, firstName, lastName, token, user.id, expiresAt);
 
 		const sent = await sendReservationInviteEmail(locals.db, email,
 			{ firstName, orgName, inviterName, eventTitle: res.title, hallName: res.hall_name, date: dateFmt, inviteUrl: `${base}/invite/${token}` }, locale);
@@ -188,10 +209,9 @@ export const actions: Actions = {
 
 	// Re-send the pending invite email (same token) without re-entering details.
 	resendInvite: async ({ locals, params, url }) => {
-		if (!locals.user) return fail(403, { assignError: st(locals.locale).serverErrors.unauthorized });
-		const orgId = locals.currentOrg?.id;
-		if (!orgId) return fail(403, { assignError: st(locals.locale).serverErrors.accessDenied });
-		if (!isOrgStaff(locals)) return fail(403, { assignError: st(locals.locale).serverErrors.onlyStaffCanAssignClient });
+		const ctx = await staffAction(locals, 'assignError');
+		if ('fail' in ctx) return ctx.fail;
+		const { orgId, user } = ctx;
 
 		const invite = await dbFirst<{ email: string; first_name: string; token: string; title: string; event_date: string; hall_name: string }>(locals.db,
 			`SELECT i.email, i.first_name, i.token, r.title, r.event_date, h.name AS hall_name
@@ -201,33 +221,47 @@ export const actions: Actions = {
 		if (!invite) return fail(404, { assignError: st(locals.locale).serverErrors.inviteNotFoundOrExpired });
 
 		const locale = await orgEmailLocale(locals.db, orgId);
-		const dateFmt = new Date(invite.event_date).toLocaleDateString(locale === 'en' ? 'en-GB' : 'sk-SK', { day: 'numeric', month: 'long', year: 'numeric' });
+		const dateFmt = new Date(invite.event_date + 'T00:00:00').toLocaleDateString(locale === 'en' ? 'en-GB' : 'sk-SK', { day: 'numeric', month: 'long', year: 'numeric' });
 		const base = (await orgPublicBaseUrl(locals.db, orgId, url)) ?? (env.APP_URL || url.origin).replace(/\/$/, '');
 		const sent = await sendReservationInviteEmail(locals.db, invite.email,
-			{ firstName: invite.first_name, orgName: locals.currentOrg?.name ?? 'Hallify', inviterName: `${locals.user.first_name} ${locals.user.last_name}`, eventTitle: invite.title, hallName: invite.hall_name, date: dateFmt, inviteUrl: `${base}/invite/${invite.token}` }, locale);
+			{ firstName: invite.first_name, orgName: locals.currentOrg?.name ?? 'Hallify', inviterName: `${user.first_name} ${user.last_name}`, eventTitle: invite.title, hallName: invite.hall_name, date: dateFmt, inviteUrl: `${base}/invite/${invite.token}` }, locale);
 		return { inviteResent: true, emailSent: sent };
 	},
 
 	// Revoke the pending invite (the typed-in person can no longer register via it).
 	cancelInvite: async ({ locals, params }) => {
-		if (!locals.user) return fail(403, { assignError: st(locals.locale).serverErrors.unauthorized });
-		const orgId = locals.currentOrg?.id;
-		if (!orgId) return fail(403, { assignError: st(locals.locale).serverErrors.accessDenied });
-		if (!isOrgStaff(locals)) return fail(403, { assignError: st(locals.locale).serverErrors.onlyStaffCanAssignClient });
-		await dbRun(locals.db, 'DELETE FROM reservation_invites WHERE reservation_id = ? AND org_id = ? AND accepted_at IS NULL', params.id, orgId);
+		const ctx = await staffAction(locals, 'assignError');
+		if ('fail' in ctx) return ctx.fail;
+		await dbRun(locals.db, 'DELETE FROM reservation_invites WHERE reservation_id = ? AND org_id = ? AND accepted_at IS NULL', params.id, ctx.orgId);
 		return { inviteCancelled: true };
 	},
 
 	// Staff adjust the reservation's extras (e.g. after agreeing in messages).
 	editExtras: async ({ request, locals, params }) => {
-		if (!locals.user) return fail(403, { error: st(locals.locale).serverErrors.unauthorized });
-		const orgId = locals.currentOrg?.id;
-		if (!orgId) return fail(403, { error: st(locals.locale).serverErrors.accessDenied });
-		if (!isOrgStaff(locals)) return fail(403, { error: st(locals.locale).serverErrors.onlyStaffCanChangeExtras });
+		const ctx = await staffAction(locals, 'error');
+		if ('fail' in ctx) return ctx.fail;
 		const requested = (await request.formData()).getAll('extras').map(String);
-		const res = await setReservationExtras(locals.db, orgId, params.id, requested);
+		const res = await setReservationExtras(locals.db, ctx.orgId, params.id, requested);
 		if (!res.ok) return fail(404, { error: st(locals.locale).serverErrors.notFound });
 		return { extrasSaved: true };
+	},
+
+	// Staff edit date, times, guests and notes. A new date goes through the
+	// availability rules (taken, held, blocked, closed day, monthly cap).
+	editDetails: async ({ request, locals, params }) => {
+		const ctx = await staffAction(locals, 'detailsError');
+		if ('fail' in ctx) return ctx.fail;
+		const data = await request.formData();
+		const res = await editReservationDetails(locals, ctx.orgId, params.id, {
+			eventDate: String(data.get('eventDate') ?? ''),
+			startTime: String(data.get('startTime') ?? ''),
+			endTime: String(data.get('endTime') ?? ''),
+			numGuests: String(data.get('numGuests') ?? ''),
+			description: String(data.get('description') ?? ''),
+			internalNotes: String(data.get('internalNotes') ?? ''),
+		}, ctx.user);
+		if (!res.ok) return fail(res.status, { detailsError: res.error });
+		return { detailsSaved: true };
 	},
 
 	saveLayout: async ({ request, locals, params }) => {
@@ -243,8 +277,9 @@ export const actions: Actions = {
 			params.id, orgId
 		);
 		if (!reservation) return fail(404, { error: st(locals.locale).serverErrors.notFound });
-		if (!canActOnReservation(locals, reservation.user_id)) return fail(403, { error: st(locals.locale).serverErrors.accessDenied });
-		if (!isOrgStaff(locals) && !['approved', 'planned'].includes(reservation.status)) {
+		const access = await reservationAccess(locals);
+		if (!canActOnReservation(access, locals, reservation.user_id)) return fail(403, { error: st(locals.locale).serverErrors.accessDenied });
+		if (!access.canManage && !['approved', 'planned'].includes(reservation.status)) {
 			return fail(403, { error: st(locals.locale).serverErrors.reservationMustBeApprovedToEditLayout });
 		}
 
@@ -252,17 +287,31 @@ export const actions: Actions = {
 		return { success: true };
 	},
 
-	// Only staff (owner/admin) may change the reservation status — this includes
-	// bringing an event back from the cancelled state. Booking owners cannot.
+	// Staff with `reservations.manage` change the status — including bringing an
+	// event back from the cancelled state. Booking owners cannot. `from` is the
+	// status the person saw: a stale tab cannot overwrite a change it never saw.
 	updateStatus: async ({ request, locals, params }) => {
-		if (!locals.user) return fail(403, { error: st(locals.locale).serverErrors.unauthorized });
-		const orgId = locals.currentOrg?.id;
-		if (!orgId) return fail(403, { error: st(locals.locale).serverErrors.accessDenied });
-		if (!isOrgStaff(locals)) return fail(403, { error: st(locals.locale).serverErrors.onlyStaffCanChangeStatus });
-		const status = String((await request.formData()).get('status') ?? '') as ReservationStatus;
-		const res = await changeReservationStatus(locals, orgId, params.id, status, locals.user);
-		if (!res.ok) return fail(res.status, { error: res.error });
-		return { success: true };
+		const ctx = await staffAction(locals, 'statusError');
+		if ('fail' in ctx) return ctx.fail;
+		const data = await request.formData();
+		const status = String(data.get('status') ?? '') as ReservationStatus;
+		const from = String(data.get('from') ?? '') || null;
+		const res = await changeReservationStatus(locals, ctx.orgId, params.id, status, ctx.user, { expectedFrom: from });
+		if (!res.ok) return fail(res.status, { statusError: res.error });
+		return { statusChanged: true };
+	},
+
+	// Decline a request with a reason the client sees (in the booking's messages and
+	// in the e-mail). Declining is cancelling by the venue.
+	decline: async ({ request, locals, params }) => {
+		const ctx = await staffAction(locals, 'statusError');
+		if ('fail' in ctx) return ctx.fail;
+		const data = await request.formData();
+		const reason = String(data.get('reason') ?? '').trim();
+		const from = String(data.get('from') ?? '') || null;
+		const res = await changeReservationStatus(locals, ctx.orgId, params.id, 'cancelled', ctx.user, { expectedFrom: from, reason });
+		if (!res.ok) return fail(res.status, { statusError: res.error });
+		return { declined: true };
 	},
 
 	cancel: async ({ locals, params }) => {
@@ -277,12 +326,12 @@ export const actions: Actions = {
 			params.id, orgId
 		);
 		if (!reservation) return fail(404, { error: st(locals.locale).serverErrors.notFound });
-		if (!canActOnReservation(locals, reservation.user_id)) return fail(403, { error: st(locals.locale).serverErrors.accessDenied });
-
-		const isAdmin = isOrgStaff(locals);
+		const access = await reservationAccess(locals);
+		if (!canActOnReservation(access, locals, reservation.user_id)) return fail(403, { error: st(locals.locale).serverErrors.accessDenied });
+		if (['cancelled', 'completed'].includes(reservation.status)) return { success: true };
 
 		// Enforce minimum cancel-notice for non-staff.
-		if (!isAdmin && reservation.hall_min_cancel_days > 0) {
+		if (!access.canManage && reservation.hall_min_cancel_days > 0) {
 			const eventDate = new Date(reservation.event_date);
 			const now = new Date();
 			const daysUntil = Math.ceil((eventDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
@@ -291,23 +340,17 @@ export const actions: Actions = {
 			}
 		}
 
-		await dbRun(locals.db, "UPDATE reservations SET status = 'cancelled' WHERE id = ? AND org_id = ?", params.id, orgId);
+		const ownBooking = reservation.user_id === locals.user.id;
+		await dbRun(locals.db, "UPDATE reservations SET status = 'cancelled', cancelled_by = ? WHERE id = ? AND org_id = ?",
+			ownBooking ? 'client' : 'venue', params.id, orgId);
 
 		const actorName = `${locals.user.first_name} ${locals.user.last_name}`;
-		await postSystemMessage(
-			locals.db,
-			reservation.user_id,
-			reservation.title,
-			`status_change:cancelled:${actorName}`,
-			locals.user.id
-		);
+		await postSystemMessage(locals.db, reservation.user_id, reservation.title,
+			`status_change:cancelled:${actorName}`, locals.user.id, params.id);
 
-		const userInfo = await dbFirst<{ email: string }>(locals.db,
-			'SELECT email FROM users WHERE id = ?',
-			reservation.user_id
-		);
-		if (userInfo?.email) {
-			notifyStatusChange(locals.db, orgId, userInfo.email, reservation.title, 'cancelled', { reservationId: params.id }).catch(() => {});
+		if (!ownBooking) {
+			const userInfo = await dbFirst<{ email: string }>(locals.db, 'SELECT email FROM users WHERE id = ?', reservation.user_id);
+			if (userInfo?.email) notifyStatusChange(locals.db, orgId, userInfo.email, reservation.title, 'cancelled', { reservationId: params.id }).catch(() => {});
 		}
 
 		return { success: true };
@@ -322,7 +365,7 @@ export const actions: Actions = {
 			params.id, orgId
 		);
 		if (!reservation) return fail(404, { error: st(locals.locale).serverErrors.notFound });
-		if (!canActOnReservation(locals, reservation.user_id)) return fail(403, { error: st(locals.locale).serverErrors.accessDenied });
+		if (!canActOnReservation(await reservationAccess(locals), locals, reservation.user_id)) return fail(403, { error: st(locals.locale).serverErrors.accessDenied });
 		await dbRun(locals.db,
 			'UPDATE reservations SET layout_json = (SELECT floorplan_json FROM halls WHERE id = ?) WHERE id = ? AND org_id = ?',
 			reservation.hall_id, params.id, orgId
@@ -343,7 +386,7 @@ export const actions: Actions = {
 			params.id, orgId
 		);
 		if (!reservation) return fail(404, { error: st(locals.locale).serverErrors.notFound });
-		if (!canActOnReservation(locals, reservation.user_id)) return fail(403, { error: st(locals.locale).serverErrors.accessDenied });
+		if (!canActOnReservation(await reservationAccess(locals), locals, reservation.user_id)) return fail(403, { error: st(locals.locale).serverErrors.accessDenied });
 
 		// Template must belong to the same hall (and therefore the same org).
 		const tmpl = await dbFirst<TemplateRow>(locals.db,
@@ -360,6 +403,8 @@ export const actions: Actions = {
 	},
 
 	toggleRsvp: async ({ request, locals, params }) => {
+		// RSVP is switched off product-wide; its settings must not be writable either.
+		if (!RSVP_ENABLED) return fail(404, { error: st(locals.locale).serverErrors.notFound });
 		if (!locals.user) return fail(403, { error: st(locals.locale).serverErrors.unauthorized });
 		const orgId = locals.currentOrg?.id;
 		if (!orgId) return fail(403, { error: st(locals.locale).serverErrors.accessDenied });
@@ -371,7 +416,7 @@ export const actions: Actions = {
 			params.id, orgId
 		);
 		if (!reservation) return fail(404, { error: st(locals.locale).serverErrors.notFound });
-		if (!canActOnReservation(locals, reservation.user_id)) return fail(403, { error: st(locals.locale).serverErrors.accessDenied });
+		if (!canActOnReservation(await reservationAccess(locals), locals, reservation.user_id)) return fail(403, { error: st(locals.locale).serverErrors.accessDenied });
 
 		const existing = fromJson<Record<string, boolean | string | unknown[]>>(reservation.rsvp_config as string | null) ?? {};
 		const config = { ...existing, enabled };

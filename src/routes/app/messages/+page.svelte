@@ -1,13 +1,17 @@
 <script lang="ts">
   import { enhance } from '$app/forms';
   import { invalidateAll } from '$app/navigation';
-  import { t as tr } from '$lib/i18n.svelte';
-  import type { PageData } from './$types';
+  import { t as tr, getLocale } from '$lib/i18n.svelte';
+  import { confirmFirst } from '$lib/forms';
+  import { parseDbTime, timeAgo as relTime, formatDate } from '$lib/format';
+  import { channelName, splitMentions, CHANNEL_NAME_MAX, CHANNEL_DESC_MAX } from '$lib/channels';
+  import type { PageData, ActionData } from './$types';
 
-  interface Props { data: PageData; }
-  const { data }: Props = $props();
+  interface Props { data: PageData; form: ActionData; }
+  const { data, form }: Props = $props();
 
-  const channels        = $derived(data.channels);
+  const channels        = $derived(data.channels.filter((c) => !c.archived_at));
+  const archivedChannels = $derived(data.channels.filter((c) => !!c.archived_at));
   const tickets         = $derived(data.tickets);
   const myReservations  = $derived(data.myReservations);
   const members         = $derived(data.members);
@@ -16,16 +20,32 @@
   const channelMessages = $derived(data.channelMessages);
   const ticketMessages  = $derived(data.ticketMessages);
   const currentUserId   = $derived(data.currentUserId);
-  const orgRole         = $derived(data.orgRole);
+  const canManage       = $derived(data.canManageChannels);
 
   const onlineCount = $derived(members.filter((m: { is_online: number }) => !!m.is_online).length);
+  // Names that can be @mentioned: full names and first names of the team.
+  const mentionNames = $derived(members.flatMap((m) => [`${m.first_name} ${m.last_name}`, m.first_name]));
+
+  type ChatForm = { chatError?: string; channelError?: string; manageError?: string; name?: string } | null;
+  const f = $derived(form as ChatForm);
 
   let body         = $state('');
   let editingId    = $state<string | null>(null);
   let editBody     = $state('');
   let showNewTicket   = $state(false);
   let showNewChannel  = $state(false);
+  let showManage      = $state(false);
+  let newChannelName  = $state('');
   let threadEl     = $state<HTMLDivElement | null>(null);
+  let sending      = $state(false);
+  let uploading    = $state(false);
+  let uploadError  = $state('');
+  let pendingFile  = $state<{ url: string; name: string; type: string } | null>(null);
+  let fileInput: HTMLInputElement | undefined = $state();
+
+  // A failed create keeps the form open with what was typed.
+  $effect(() => { if (f?.channelError) { showNewChannel = true; newChannelName = f.name ?? newChannelName; } });
+  $effect(() => { if (f?.manageError) showManage = true; });
 
   $effect(() => {
     void channelMessages.length;
@@ -33,10 +53,27 @@
     if (threadEl) threadEl.scrollTop = threadEl.scrollHeight;
   });
 
+  // Poll a cheap read-only marker and reload only when the thread changed (the page
+  // used to reload everything every 3 s and write a read marker each time). Paused
+  // while the tab is hidden.
   $effect(() => {
-    if (!activeChannel && !activeTicket) return;
-    const timer = setInterval(() => invalidateAll(), 3000);
-    return () => clearInterval(timer);
+    const target = activeChannel ? `c=${activeChannel.id}` : activeTicket ? `t=${activeTicket.id}` : '';
+    if (!target) return;
+    let last: string | null = null;
+    let stopped = false;
+    async function tick() {
+      if (stopped || document.hidden) return;
+      try {
+        const res = await fetch(`/app/messages/poll?${target}`, { headers: { accept: 'application/json' } });
+        if (!res.ok) return;
+        const { marker } = (await res.json()) as { marker: string | null };
+        if (last !== null && marker !== last) await invalidateAll();
+        last = marker;
+      } catch { /* offline — try again next tick */ }
+    }
+    tick();
+    const timer = setInterval(tick, 4000);
+    return () => { stopped = true; clearInterval(timer); };
   });
 
   $effect(() => {
@@ -46,14 +83,10 @@
     return () => clearInterval(timer);
   });
 
-  function timeAgo(d: Date | string) {
-    const diff = Date.now() - new Date(d).getTime();
-    const mins = Math.floor(diff / 60000);
-    if (mins < 1) return tr.memberMessages.timeNow;
-    if (mins < 60) return `${mins}${tr.memberMessages.timeMinutes}`;
-    const hrs = Math.floor(mins / 60);
-    if (hrs < 24) return `${hrs}${tr.memberMessages.timeHours}`;
-    return `${Math.floor(hrs / 24)}${tr.memberMessages.timeDays}`;
+  // Stored times are UTC without a zone; parseDbTime reads them correctly (they were
+  // shown two hours off before).
+  function timeAgo(d: string) {
+    return relTime(d, getLocale());
   }
 
   function initials(first: string, last: string) {
@@ -70,23 +103,75 @@
   function startEdit(id: string, currentBody: string) { editingId = id; editBody = currentBody; }
   function cancelEdit() { editingId = null; editBody = ''; }
 
-  function shouldShowMeta(msgs: { sender_id: string; created_at: Date | string }[], i: number) {
+  function shouldShowMeta(msgs: { sender_id: string; created_at: string }[], i: number) {
     if (i === 0) return true;
     if (msgs[i - 1].sender_id !== msgs[i].sender_id) return true;
-    return new Date(msgs[i].created_at).getTime() - new Date(msgs[i - 1].created_at).getTime() > 5 * 60 * 1000;
+    const a = parseDbTime(msgs[i - 1].created_at)?.getTime() ?? 0;
+    const b = parseDbTime(msgs[i].created_at)?.getTime() ?? 0;
+    return b - a > 5 * 60 * 1000;
   }
 
+  // Enter sends, Shift+Enter starts a new line.
   function submitOnEnter(e: KeyboardEvent) {
-    if (e.key === 'Enter' && !e.shiftKey) {
+    if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
       e.preventDefault();
       (e.currentTarget as HTMLElement).closest('form')?.requestSubmit();
     }
+  }
+
+  const sendEnhance = () => {
+    sending = true;
+    return async ({ update, result }: { update: (o?: { reset?: boolean }) => Promise<void>; result: { type: string } }) => {
+      await update({ reset: false });
+      if (result.type === 'success' || result.type === 'redirect') { body = ''; pendingFile = null; }
+      sending = false;
+    };
+  };
+
+  async function handleFileSelect(e: Event) {
+    const input = e.target as HTMLInputElement;
+    const file = input.files?.[0];
+    if (!file) return;
+    uploading = true;
+    uploadError = '';
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      const res = await fetch('/api/upload/image', { method: 'POST', body: fd });
+      if (!res.ok) { uploadError = tr.messagesAdmin.uploadFailed; return; }
+      const { url } = (await res.json()) as { url: string };
+      pendingFile = { url, name: file.name, type: file.type };
+    } catch { uploadError = tr.messagesAdmin.uploadFailed; }
+    finally { uploading = false; input.value = ''; }
+  }
+
+  function roleLabel(role: string) {
+    return (tr.teamChat.roles as Record<string, string>)[role] ?? role;
   }
 </script>
 
 <svelte:head>
   <title>{activeChannel ? `#${activeChannel.name}` : activeTicket ? activeTicket.subject : tr.memberMessages.pageTitle} – Hallify</title>
 </svelte:head>
+
+{#snippet richText(text: string)}
+  {#each splitMentions(text, mentionNames) as seg}{#if seg.mention}<span class="mention">{seg.text}</span>{:else}{seg.text}{/if}{/each}
+{/snippet}
+
+{#snippet attachment(m: { attachment_url: string | null; attachment_name: string | null; attachment_type: string | null })}
+  {#if m.attachment_url}
+    {#if m.attachment_type?.startsWith('image/')}
+      <a href={m.attachment_url} target="_blank" rel="noopener noreferrer">
+        <img src={m.attachment_url} alt={m.attachment_name ?? tr.memberMessages.attachment} class="msg-image" loading="lazy" />
+      </a>
+    {:else}
+      <a href={m.attachment_url} target="_blank" rel="noopener noreferrer" class="msg-file">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+        {m.attachment_name ?? tr.memberMessages.attachment}
+      </a>
+    {/if}
+  {/if}
+{/snippet}
 
 <div class="hub">
 
@@ -114,27 +199,51 @@
       <div class="row-list">
         {#each channels as ch}
           <a href="/app/messages?c={ch.id}" class="row-item nav-item" class:active={activeChannel?.id === ch.id}>
-            <span class="ch-icon">{ch.type === 'announcement' ? '📣' : '#'}</span>
+            <span class="ch-icon" aria-hidden="true">{ch.type === 'announcement' ? '📣' : '#'}</span>
             <span class="nav-item-name">{ch.name}</span>
-            {#if parseInt(ch.unread_count) > 0}<span class="unread-badge">{ch.unread_count}</span>{/if}
+            {#if Number(ch.unread_count) > 0}<span class="unread-badge">{ch.unread_count}</span>{/if}
           </a>
+        {:else}
+          <!-- Members used to see an empty "Team" with no word on why. -->
+          <p class="nav-empty">{canManage ? tr.teamChat.noChannelsAdmin : tr.teamChat.noChannelsMember}</p>
         {/each}
       </div>
 
-      {#if orgRole === 'owner' || orgRole === 'admin'}
-        <button class="nav-new-btn" type="button" onclick={() => { showNewChannel = !showNewChannel; showNewTicket = false; }}>
+      {#if canManage}
+        <button class="nav-new-btn" type="button" aria-expanded={showNewChannel} onclick={() => { showNewChannel = !showNewChannel; showNewTicket = false; }}>
           {tr.memberMessages.newChannel}
         </button>
         {#if showNewChannel}
-          <form method="POST" action="?/createChannel" use:enhance={() => { showNewChannel = false; return async ({ update }) => update(); }} class="inline-form">
-            <input name="name" placeholder={tr.memberMessages.channelNamePlaceholder} required class="inline-input" autocomplete="off" />
-            <input name="description" placeholder={tr.memberMessages.descriptionPlaceholder} class="inline-input" />
+          <form method="POST" action="?/createChannel" use:enhance class="inline-form">
+            <label class="inline-label" for="new-ch-name">{tr.teamChat.channelName}</label>
+            <input id="new-ch-name" name="name" bind:value={newChannelName} placeholder={tr.memberMessages.channelNamePlaceholder}
+              required maxlength={CHANNEL_NAME_MAX * 2} class="inline-input" autocomplete="off" aria-describedby="new-ch-hint" />
+            <span id="new-ch-hint" class="inline-hint">
+              {#if newChannelName.trim() && channelName(newChannelName)}{tr.teamChat.savedAs} #{channelName(newChannelName)}{:else}{tr.teamChat.nameHint}{/if}
+            </span>
+            <input name="description" placeholder={tr.memberMessages.descriptionPlaceholder} maxlength={CHANNEL_DESC_MAX} class="inline-input" />
+            <label class="inline-check"><input type="checkbox" name="type" value="announcement" /> {tr.teamChat.announcementType}</label>
+            {#if f?.channelError}<span class="inline-error" role="alert">{f.channelError}</span>{/if}
             <div class="inline-actions">
               <button type="submit" class="btn-xs btn-accent">{tr.common.create}</button>
               <button type="button" class="btn-xs" onclick={() => showNewChannel = false}>{tr.common.cancel}</button>
             </div>
           </form>
         {/if}
+      {/if}
+
+      {#if canManage && archivedChannels.length > 0}
+        <details class="archived">
+          <summary>{tr.teamChat.archived} ({archivedChannels.length})</summary>
+          <div class="row-list">
+            {#each archivedChannels as ch}
+              <a href="/app/messages?c={ch.id}" class="row-item nav-item" class:active={activeChannel?.id === ch.id}>
+                <span class="ch-icon" aria-hidden="true">#</span>
+                <span class="nav-item-name">{ch.name}</span>
+              </a>
+            {/each}
+          </div>
+        </details>
       {/if}
     </div>
 
@@ -143,7 +252,7 @@
     <div class="nav-section">
       <div class="nav-section-header">
         <span class="nav-section-label">{tr.memberMessages.clients}</span>
-        <button class="nav-new-btn-inline" type="button" onclick={() => { showNewTicket = !showNewTicket; showNewChannel = false; }}>{tr.memberMessages.newShort}</button>
+        <button class="nav-new-btn-inline" type="button" aria-expanded={showNewTicket} onclick={() => { showNewTicket = !showNewTicket; showNewChannel = false; }}>{tr.memberMessages.newShort}</button>
       </div>
 
       {#if showNewTicket}
@@ -151,14 +260,14 @@
           {#if myReservations.length === 0}
             <p class="inline-hint">{tr.memberMessages.noReservationsHint}</p>
           {:else}
-            <label class="inline-label">{tr.memberMessages.reservation}</label>
-            <select name="reservation_id" required class="inline-input inline-select">
+            <label class="inline-label" for="new-t-res">{tr.memberMessages.reservation}</label>
+            <select id="new-t-res" name="reservation_id" required class="inline-input inline-select">
               <option value="">{tr.memberMessages.selectReservation}</option>
               {#each myReservations as r}
-                <option value={r.id}>{r.hall_name} – {new Date(r.event_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</option>
+                <option value={r.id}>{r.hall_name} – {formatDate(r.event_date, getLocale())}</option>
               {/each}
             </select>
-            <textarea name="body" placeholder={tr.memberMessages.ticketBodyPlaceholder} rows="2" required class="inline-input inline-textarea"></textarea>
+            <textarea name="body" placeholder={tr.memberMessages.ticketBodyPlaceholder} rows="2" required maxlength="5000" class="inline-input inline-textarea"></textarea>
             <div class="inline-actions">
               <button type="submit" class="btn-xs btn-accent">{tr.messaging.send}</button>
               <button type="button" class="btn-xs" onclick={() => showNewTicket = false}>{tr.common.cancel}</button>
@@ -177,7 +286,7 @@
             <span class="nav-item-name">
               {#if t.hall_name}{t.hall_name}{:else}{t.subject}{/if}
             </span>
-            {#if t.unread}<span class="unread-dot"></span>{/if}
+            {#if t.unread}<span class="unread-dot" title={tr.teamChat.unread}></span>{/if}
           </a>
         {:else}
           <p class="nav-empty">{tr.memberMessages.noThreadsYet}</p>
@@ -193,12 +302,48 @@
 
       <div class="msg-header">
         <div class="msg-header-left">
-          <span class="header-icon">{activeChannel.type === 'announcement' ? '📣' : '#'}</span>
+          <span class="header-icon" aria-hidden="true">{activeChannel.type === 'announcement' ? '📣' : '#'}</span>
           <span class="header-title">{activeChannel.name}</span>
           {#if activeChannel.description}<span class="header-desc">{activeChannel.description}</span>{/if}
         </div>
-        <span class="member-count">{members.length} {tr.memberMessages.membersLower} · {onlineCount} {tr.memberMessages.online}</span>
+        <div class="msg-header-right">
+          <span class="member-count">{members.length} {tr.memberMessages.membersLower} · {onlineCount} {tr.memberMessages.online}</span>
+          {#if canManage}
+            <button type="button" class="header-action-btn header-action-neutral" aria-expanded={showManage} onclick={() => (showManage = !showManage)}>{tr.teamChat.manage}</button>
+          {/if}
+        </div>
       </div>
+
+      {#if canManage && showManage}
+        <div class="manage-panel">
+          <form method="POST" action="?/renameChannel" use:enhance class="manage-row">
+            <input type="hidden" name="channel_id" value={activeChannel.id} />
+            <label class="inline-label" for="mg-name">{tr.teamChat.channelName}</label>
+            <input id="mg-name" name="name" class="inline-input" value={activeChannel.name} required maxlength={CHANNEL_NAME_MAX * 2} />
+            <label class="inline-label" for="mg-desc">{tr.common.description}</label>
+            <input id="mg-desc" name="description" class="inline-input" value={activeChannel.description ?? ''} maxlength={CHANNEL_DESC_MAX} />
+            <button type="submit" class="btn-xs btn-accent">{tr.common.save}</button>
+          </form>
+          <div class="manage-actions">
+            {#if activeChannel.archived_at}
+              <form method="POST" action="?/unarchiveChannel" use:enhance>
+                <input type="hidden" name="channel_id" value={activeChannel.id} />
+                <button type="submit" class="btn-xs">{tr.teamChat.unarchive}</button>
+              </form>
+            {:else}
+              <form method="POST" action="?/archiveChannel" use:enhance={confirmFirst(() => tr.teamChat.confirmArchive)}>
+                <input type="hidden" name="channel_id" value={activeChannel.id} />
+                <button type="submit" class="btn-xs">{tr.teamChat.archive}</button>
+              </form>
+            {/if}
+            <form method="POST" action="?/removeChannel" use:enhance={confirmFirst(() => tr.teamChat.confirmDeleteChannel(activeChannel.name))}>
+              <input type="hidden" name="channel_id" value={activeChannel.id} />
+              <button type="submit" class="btn-xs btn-danger-xs">{tr.teamChat.deleteChannel}</button>
+            </form>
+          </div>
+          {#if f?.manageError}<span class="inline-error" role="alert">{f.manageError}</span>{/if}
+        </div>
+      {/if}
 
       <div class="msg-thread" bind:this={threadEl}>
         {#if channelMessages.length === 0}
@@ -213,7 +358,7 @@
           </div>
         {/if}
 
-        {#each channelMessages as msg, i}
+        {#each channelMessages as msg, i (msg.id)}
           {@const showMeta = shouldShowMeta(channelMessages, i)}
           {@const isOwn = msg.sender_id === currentUserId}
           {@const member = members.find((m: { user_id: string }) => m.user_id === msg.sender_id)}
@@ -230,32 +375,35 @@
               {#if showMeta}
                 <div class="msg-meta">
                   <span class="msg-author">{msg.sender_first_name} {msg.sender_last_name}</span>
-                  {#if member}<span class="msg-role role-{member.role}">{member.role}</span>{/if}
+                  {#if member}<span class="msg-role role-{member.role}">{roleLabel(member.role)}</span>{/if}
                   <span class="msg-time">{timeAgo(msg.created_at)}</span>
                 </div>
               {/if}
               {#if editingId === msg.id}
                 <form method="POST" action="?/editChannel" use:enhance={() => { editingId = null; return async ({ update }) => update(); }}>
                   <input type="hidden" name="msg_id" value={msg.id} />
-                  <input class="edit-input" name="body" bind:value={editBody} onkeydown={(e) => { if (e.key === 'Escape') cancelEdit(); }} />
+                  <textarea class="edit-input" name="body" rows="2" maxlength="5000" bind:value={editBody} onkeydown={(e) => { if (e.key === 'Escape') cancelEdit(); else submitOnEnter(e); }}></textarea>
                   <div class="edit-actions">
                     <button type="submit" class="btn-xs btn-accent">{tr.common.save}</button>
                     <button type="button" class="btn-xs" onclick={cancelEdit}>{tr.common.cancel}</button>
                   </div>
                 </form>
               {:else}
-                <p class="msg-text">{msg.body}{#if msg.edited_at}<span class="msg-edited"> ({tr.messaging.edited})</span>{/if}</p>
+                {#if msg.body}<p class="msg-text">{@render richText(msg.body)}{#if msg.edited_at}<span class="msg-edited"> ({tr.messaging.edited})</span>{/if}</p>{/if}
+                {@render attachment(msg)}
               {/if}
             </div>
-            {#if isOwn && editingId !== msg.id}
+            {#if (isOwn || canManage) && editingId !== msg.id}
               <div class="msg-actions">
-                <button type="button" class="action-btn" title={tr.common.edit} onclick={() => startEdit(msg.id, msg.body)}>
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-                </button>
-                <form method="POST" action="?/deleteChannel" use:enhance style="display:contents">
+                {#if isOwn}
+                  <button type="button" class="action-btn" title={tr.common.edit} aria-label={tr.common.edit} onclick={() => startEdit(msg.id, msg.body)}>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                  </button>
+                {/if}
+                <!-- Owners and admins may remove anyone's message (moderation). -->
+                <form method="POST" action="?/deleteChannel" use:enhance={confirmFirst(() => tr.messaging.confirmDelete)} style="display:contents">
                   <input type="hidden" name="msg_id" value={msg.id} />
-                  <button type="submit" class="action-btn action-btn-danger" title={tr.common.delete}
-                    onclick={(e) => { if (!confirm(tr.messaging.confirmDelete)) e.preventDefault(); }}>
+                  <button type="submit" class="action-btn action-btn-danger" title={tr.common.delete} aria-label={tr.common.delete}>
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
                   </button>
                 </form>
@@ -265,13 +413,35 @@
         {/each}
       </div>
 
-      <form class="compose" method="POST" action="?/sendChannel" use:enhance={() => { body = ''; return async ({ update }) => update(); }}>
-        <input type="hidden" name="channel_id" value={activeChannel.id} />
-        <input class="compose-input" name="body" placeholder="{tr.memberMessages.messagePrefix} #{activeChannel.name}…" bind:value={body} onkeydown={submitOnEnter} autocomplete="off" />
-        <button type="submit" class="compose-send" disabled={!body.trim()}>
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
-        </button>
-      </form>
+      {#if uploadError || f?.chatError}<div class="compose-error" role="alert">{uploadError || f?.chatError}</div>{/if}
+      {#if data.canPostInChannel}
+        {#if pendingFile}
+          <div class="pending-file">
+            <img src={pendingFile.url} alt="" class="pending-thumb" />
+            <span class="pending-name">{pendingFile.name}</span>
+            <button type="button" class="action-btn" aria-label={tr.common.delete} onclick={() => (pendingFile = null)}>&times;</button>
+          </div>
+        {/if}
+        <form class="compose" method="POST" action="?/sendChannel" use:enhance={sendEnhance}>
+          <input type="hidden" name="channel_id" value={activeChannel.id} />
+          <input type="hidden" name="attachment_url" value={pendingFile?.url ?? ''} />
+          <input type="hidden" name="attachment_name" value={pendingFile?.name ?? ''} />
+          <input type="hidden" name="attachment_type" value={pendingFile?.type ?? ''} />
+          <input type="file" bind:this={fileInput} onchange={handleFileSelect} class="sr-only" tabindex="-1"
+            accept="image/jpeg,image/png,image/webp,image/gif" />
+          <button type="button" class="compose-attach" aria-label={tr.teamChat.attachImage} title={tr.teamChat.attachImage}
+            onclick={() => fileInput?.click()} disabled={uploading}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+          </button>
+          <textarea class="compose-input" name="body" rows="1" maxlength="5000" aria-label="{tr.memberMessages.messagePrefix} #{activeChannel.name}"
+            placeholder="{tr.memberMessages.messagePrefix} #{activeChannel.name}… {tr.teamChat.newLineHint}" bind:value={body} onkeydown={submitOnEnter}></textarea>
+          <button type="submit" class="compose-send" aria-label={tr.messaging.send} disabled={(!body.trim() && !pendingFile) || sending || uploading}>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+          </button>
+        </form>
+      {:else}
+        <div class="compose-closed">{activeChannel.archived_at ? tr.teamChat.channelArchived : tr.teamChat.announcementReadOnly}</div>
+      {/if}
 
     {:else if activeTicket}
 
@@ -283,17 +453,16 @@
               {activeTicket.hall_name ?? activeTicket.subject}
             </span>
             {#if activeTicket.hall_name && activeTicket.event_date}
-              <span class="header-desc">{new Date(activeTicket.event_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
+              <span class="header-desc">{formatDate(activeTicket.event_date, getLocale())}</span>
             {/if}
           </div>
           <span class="ticket-badge" class:badge-open={activeTicket.status === 'open'} class:badge-closed={activeTicket.status === 'closed'}>{activeTicket.status === 'open' ? tr.status.open : tr.status.closed}</span>
         </div>
         <div class="msg-header-right">
           {#if activeTicket.status === 'open'}
-            <form method="POST" action="?/closeTicket" use:enhance style="display:contents">
+            <form method="POST" action="?/closeTicket" use:enhance={confirmFirst(() => tr.memberMessages.confirmCloseThread)} style="display:contents">
               <input type="hidden" name="ticket_id" value={activeTicket.id} />
-              <button type="submit" class="header-action-btn"
-                onclick={(e) => { if (!confirm(tr.memberMessages.confirmCloseThread)) e.preventDefault(); }}>
+              <button type="submit" class="header-action-btn">
                 {tr.memberMessages.closeThread}
               </button>
             </form>
@@ -307,68 +476,54 @@
       </div>
 
       <div class="msg-thread" bind:this={threadEl}>
-        {#each ticketMessages as msg, i}
-          {#if msg.message_type === 'system'}
-            <div class="msg-system">{msg.body}</div>
-          {:else}
-            {@const showMeta = shouldShowMeta(ticketMessages, i)}
-            {@const isOwn = msg.sender_id === currentUserId}
-            {@const isSupport = msg.sender_role === 'owner' || msg.sender_role === 'admin'}
-            <div class="msg-row" class:editing={editingId === msg.id}>
-              {#if showMeta}
-                <div class="msg-av-wrap">
-                  <div class="msg-av" style="background:{avatarColor(msg.sender_id)}">{initials(msg.sender_first_name, msg.sender_last_name)}</div>
-                </div>
-              {:else}
-                <div class="msg-av-spacer"></div>
-              {/if}
-              <div class="msg-body">
-                {#if showMeta}
-                  <div class="msg-meta">
-                    <span class="msg-author">{msg.sender_first_name} {msg.sender_last_name}</span>
-                    {#if isSupport}<span class="msg-role role-admin">{tr.memberMessages.support}</span>{/if}
-                    <span class="msg-time">{timeAgo(msg.created_at)}</span>
-                  </div>
-                {/if}
-                {#if editingId === msg.id}
-                  <form method="POST" action="?/editTicket" use:enhance={() => { editingId = null; return async ({ update }) => update(); }}>
-                    <input type="hidden" name="msg_id" value={msg.id} />
-                    <input class="edit-input" name="body" bind:value={editBody} onkeydown={(e) => { if (e.key === 'Escape') cancelEdit(); }} />
-                    <div class="edit-actions">
-                      <button type="submit" class="btn-xs btn-accent">{tr.common.save}</button>
-                      <button type="button" class="btn-xs" onclick={cancelEdit}>{tr.common.cancel}</button>
-                    </div>
-                  </form>
-                {:else}
-                  {#if msg.body}<p class="msg-text">{msg.body}{#if msg.edited_at}<span class="msg-edited"> ({tr.messaging.edited})</span>{/if}</p>{/if}
-                  {#if msg.attachment_url}
-                    {#if msg.attachment_type?.startsWith('image/')}
-                      <img src={msg.attachment_url} alt={msg.attachment_name ?? tr.memberMessages.attachment} class="msg-image" />
-                    {:else}
-                      <a href={msg.attachment_url} target="_blank" rel="noopener noreferrer" class="msg-file">
-                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
-                        {msg.attachment_name}
-                      </a>
-                    {/if}
-                  {/if}
-                {/if}
+        {#each ticketMessages as msg, i (msg.id)}
+          {@const showMeta = shouldShowMeta(ticketMessages, i)}
+          {@const isOwn = msg.sender_id === currentUserId}
+          {@const isSupport = msg.sender_role === 'owner' || msg.sender_role === 'admin'}
+          <div class="msg-row" class:editing={editingId === msg.id}>
+            {#if showMeta}
+              <div class="msg-av-wrap">
+                <div class="msg-av" style="background:{avatarColor(msg.sender_id)}">{initials(msg.sender_first_name, msg.sender_last_name)}</div>
               </div>
-              {#if isOwn && editingId !== msg.id && msg.message_type === 'text'}
-                <div class="msg-actions">
-                  <button type="button" class="action-btn" title={tr.common.edit} onclick={() => startEdit(msg.id, msg.body ?? '')}>
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-                  </button>
-                  <form method="POST" action="?/deleteTicket" use:enhance style="display:contents">
-                    <input type="hidden" name="msg_id" value={msg.id} />
-                    <button type="submit" class="action-btn action-btn-danger" title={tr.common.delete}
-                      onclick={(e) => { if (!confirm(tr.messaging.confirmDelete)) e.preventDefault(); }}>
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
-                    </button>
-                  </form>
+            {:else}
+              <div class="msg-av-spacer"></div>
+            {/if}
+            <div class="msg-body">
+              {#if showMeta}
+                <div class="msg-meta">
+                  <span class="msg-author">{msg.sender_first_name} {msg.sender_last_name}</span>
+                  {#if isSupport}<span class="msg-role role-admin">{tr.memberMessages.support}</span>{/if}
+                  <span class="msg-time">{timeAgo(msg.created_at)}</span>
                 </div>
+              {/if}
+              {#if editingId === msg.id}
+                <form method="POST" action="?/editTicket" use:enhance={() => { editingId = null; return async ({ update }) => update(); }}>
+                  <input type="hidden" name="msg_id" value={msg.id} />
+                  <textarea class="edit-input" name="body" rows="2" maxlength="5000" bind:value={editBody} onkeydown={(e) => { if (e.key === 'Escape') cancelEdit(); else submitOnEnter(e); }}></textarea>
+                  <div class="edit-actions">
+                    <button type="submit" class="btn-xs btn-accent">{tr.common.save}</button>
+                    <button type="button" class="btn-xs" onclick={cancelEdit}>{tr.common.cancel}</button>
+                  </div>
+                </form>
+              {:else}
+                {#if msg.body}<p class="msg-text">{msg.body}{#if msg.edited_at}<span class="msg-edited"> ({tr.messaging.edited})</span>{/if}</p>{/if}
+                {@render attachment(msg)}
               {/if}
             </div>
-          {/if}
+            {#if isOwn && editingId !== msg.id && msg.message_type === 'text'}
+              <div class="msg-actions">
+                <button type="button" class="action-btn" title={tr.common.edit} aria-label={tr.common.edit} onclick={() => startEdit(msg.id, msg.body ?? '')}>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                </button>
+                <form method="POST" action="?/deleteTicket" use:enhance={confirmFirst(() => tr.messaging.confirmDelete)} style="display:contents">
+                  <input type="hidden" name="msg_id" value={msg.id} />
+                  <button type="submit" class="action-btn action-btn-danger" title={tr.common.delete} aria-label={tr.common.delete}>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+                  </button>
+                </form>
+              </div>
+            {/if}
+          </div>
         {:else}
           <div class="thread-empty">
             <div class="card card--inset thread-empty-inner">
@@ -382,11 +537,13 @@
         {/each}
       </div>
 
+      {#if f?.chatError}<div class="compose-error" role="alert">{f.chatError}</div>{/if}
       {#if activeTicket.status === 'open'}
-        <form class="compose" method="POST" action="?/sendTicket" use:enhance={() => { body = ''; return async ({ update }) => update(); }}>
+        <form class="compose" method="POST" action="?/sendTicket" use:enhance={sendEnhance}>
           <input type="hidden" name="ticket_id" value={activeTicket.id} />
-          <input class="compose-input" name="body" placeholder={tr.memberMessages.replyPlaceholder} bind:value={body} onkeydown={submitOnEnter} autocomplete="off" />
-          <button type="submit" class="compose-send" disabled={!body.trim()}>
+          <textarea class="compose-input" name="body" rows="1" maxlength="5000" aria-label={tr.memberMessages.replyPlaceholder}
+            placeholder="{tr.memberMessages.replyPlaceholder} {tr.teamChat.newLineHint}" bind:value={body} onkeydown={submitOnEnter}></textarea>
+          <button type="submit" class="compose-send" aria-label={tr.messaging.send} disabled={!body.trim() || sending}>
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
           </button>
         </form>
@@ -401,6 +558,7 @@
             <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
           </div>
           <p>{tr.memberMessages.selectToStart}</p>
+          {#if channels.length === 0}<p class="empty-hint">{canManage ? tr.teamChat.noChannelsAdmin : tr.teamChat.noChannelsMember}</p>{/if}
         </div>
       </div>
     {/if}
@@ -567,6 +725,7 @@
     flex-shrink: 0; min-height: 52px; gap: 12px;
   }
   .msg-header-left { display: flex; align-items: center; gap: 8px; min-width: 0; }
+  .msg-header-right { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
   .header-icon { font-size: 16px; flex-shrink: 0; }
   .header-title {
     font-size: 14px; font-weight: 650; letter-spacing: -.03em; color: var(--text-base);
@@ -737,4 +896,45 @@
     border-top: 1px solid var(--border);
     text-align: center; flex-shrink: 0;
   }
+
+  /* ── Team chat additions: mentions, channel management, attachments, errors ── */
+  .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+  .mention {
+    color: var(--accent-ink); background: var(--accent-dim);
+    border-radius: 3px; padding: 0 2px; font-weight: 600;
+  }
+  .inline-hint, .inline-error { display: block; font-size: 11px; line-height: 1.4; margin: -2px 0 6px; }
+  .inline-hint { color: var(--text-subtle); }
+  .inline-error { color: var(--danger); }
+  .inline-check { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-muted); margin-bottom: 6px; }
+  .archived { padding: 4px 0 0; }
+  .archived > summary {
+    cursor: pointer; padding: 5px 14px; font-size: 12px; color: var(--text-subtle); list-style: none;
+  }
+  .archived > summary::-webkit-details-marker { display: none; }
+  .archived > summary:hover { color: var(--accent-ink); }
+  .header-action-neutral:hover { color: var(--accent-ink); border-color: var(--accent); }
+  .manage-panel {
+    display: flex; flex-direction: column; gap: 8px;
+    padding: 10px 16px; border-bottom: 1px solid var(--border); background: var(--bg-panel2);
+  }
+  .manage-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+  .manage-row .inline-input { width: auto; flex: 1 1 160px; margin: 0; }
+  .manage-row .inline-label { margin: 0; }
+  .manage-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+  .btn-danger-xs { color: var(--danger); }
+  .compose { align-items: flex-end; }
+  textarea.compose-input { resize: none; max-height: 160px; line-height: 1.45; field-sizing: content; }
+  .compose-attach {
+    width: 34px; height: 34px; border-radius: var(--radius-sm); flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    background: none; border: 1px solid var(--border); color: var(--text-muted); cursor: pointer;
+  }
+  .compose-attach:hover:not(:disabled) { color: var(--accent-ink); border-color: var(--accent); }
+  .compose-attach:disabled { opacity: .4; cursor: default; }
+  .compose-error { padding: 6px 16px 0; font-size: 12px; color: var(--danger); }
+  .pending-file { display: flex; align-items: center; gap: 8px; padding: 8px 16px 0; font-size: 12px; color: var(--text-muted); }
+  .pending-thumb { width: 40px; height: 40px; object-fit: cover; border-radius: var(--radius-sm); border: 1px solid var(--border); }
+  .pending-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 240px; }
+  .empty-hint { font-size: 12px; color: var(--text-subtle); max-width: 40ch; }
 </style>

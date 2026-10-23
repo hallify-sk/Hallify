@@ -94,12 +94,16 @@
 				<h2>{t.dashboard.scheduledEvents}</h2>
 			</div>
 			<div class="pane-body">
-				<!-- Without onselect the component renders every day as non-clickable, which
-				     is why the dashboard calendar felt dead. The manage calendar already
-				     accepts ?date=, so a day opens that day. -->
+				<!-- Without onselect the component renders every day as non-clickable. A day
+				     used to open the console calendar, which members without console access
+				     are bounced out of straight back here; it now opens their own event on
+				     that day, or the new-event form for it. -->
 				<MiniCalendar
 					events={data.eventDates}
-					onselect={(iso) => goto(`/app/manage/calendar?date=${iso}`)}
+					onselect={(iso) => {
+						const own = data.reservations.find((r) => r.status !== 'cancelled' && r.event_date.slice(0, 10) === iso);
+						goto(own ? `/app/reservation/${own.id}` : `/app/reservation/new?date=${iso}`);
+					}}
 				/>
 			</div>
 		</div>

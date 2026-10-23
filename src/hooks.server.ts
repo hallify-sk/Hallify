@@ -4,6 +4,7 @@ import { isReservedSubdomain } from '$lib/reserved-subdomains';
 import { getBrandingCacheTime, setBrandingCacheTime, BRANDING_CACHE_TTL } from '$lib/branding-cache';
 import { dbAll, dbFirst, dbRun } from '$lib/db';
 import { runCleanup } from '$lib/cleanup';
+import { expirePastRequests } from '$lib/server/reservation-activity';
 import { getPlan } from '$lib/plans';
 import type { PlanId } from '$lib/plans';
 import { env } from '$env/dynamic/private';
@@ -192,6 +193,8 @@ function autoCompletePastEvents(db: D1Database) {
   if (now - lastAutoComplete < AUTO_COMPLETE_INTERVAL) return;
   lastAutoComplete = now;
   keepAlive(dbRun(db, "UPDATE reservations SET status = 'completed' WHERE event_date < date('now') AND status IN ('approved', 'planned')").catch(() => {}));
+  // Requests nobody answered before their date expire instead of waiting forever (B121).
+  keepAlive(expirePastRequests(db).catch(() => {}));
   // Sweep expired booking holds (reads already filter on expires_at; this is housekeeping).
   keepAlive(dbRun(db, "DELETE FROM reservation_holds WHERE expires_at <= datetime('now')").catch(() => {}));
 }

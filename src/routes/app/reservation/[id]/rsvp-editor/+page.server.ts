@@ -5,6 +5,7 @@ import { getPlan } from '$lib/plans';
 import { st } from '$lib/i18n-server';
 import type { Actions, PageServerLoad } from './$types';
 import { RSVP_ENABLED } from '$lib/features';
+import { reservationAccess, assertCanOpenReservation } from '$lib/server/reservation-access';
 
 export const load: PageServerLoad = async ({ locals, params }) => {
 	if (!RSVP_ENABLED) error(404, 'Not found');
@@ -21,6 +22,7 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 	);
 
 	if (!reservation) error(404, st(locals.locale).serverErrors.reservationNotFound);
+	assertCanOpenReservation(await reservationAccess(locals), reservation.user_id, locals.user.id, st(locals.locale).serverErrors.reservationNotFound);
 
 	const templates = await dbAll<RsvpTemplateRow>(locals.db,
 		'SELECT * FROM rsvp_templates WHERE org_id = ? ORDER BY name',
@@ -61,6 +63,9 @@ export const actions: Actions = {
 			params.id, orgId
 		);
 		if (!reservation) return fail(404, { error: st(locals.locale).serverErrors.notFound });
+		// Staff with reservations.manage, or the booking's own owner — not any member of the org.
+		const access = await reservationAccess(locals);
+		if (!access.canManage && reservation.user_id !== locals.user.id) return fail(403, { error: st(locals.locale).serverErrors.accessDenied });
 
 		await dbRun(locals.db,
 			'UPDATE reservations SET rsvp_config = ? WHERE id = ? AND org_id = ?',

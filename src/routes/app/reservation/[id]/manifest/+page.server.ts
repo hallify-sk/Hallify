@@ -5,6 +5,7 @@ import { buildSeatableLayout } from '$lib/reservationLayout';
 import { rsvpDetailMap } from '$lib/reservationLayout';
 import { st } from '$lib/i18n-server';
 import type { PageServerLoad } from './$types';
+import { reservationAccess, assertCanOpenReservation } from '$lib/server/reservation-access';
 
 export const load: PageServerLoad = async ({ locals, params }) => {
 	if (!locals.user) redirect(303, '/app/login');
@@ -18,6 +19,8 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 		params.id, orgId
 	);
 	if (!reservation) error(404, st(locals.locale).serverErrors.reservationNotFound);
+	// The guest list is not for members denied reservations.view (unless it is their own booking).
+	assertCanOpenReservation(await reservationAccess(locals), reservation.user_id, locals.user.id, st(locals.locale).serverErrors.reservationNotFound);
 
 	const { layout, rsvps } = await buildSeatableLayout(locals.db, params.id, reservation.hall_floorplan_json, reservation.layout_json);
 	const rsvpDetail = rsvpDetailMap(rsvps);

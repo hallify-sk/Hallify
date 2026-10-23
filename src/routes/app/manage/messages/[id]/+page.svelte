@@ -2,21 +2,25 @@
 	import { enhance } from '$app/forms';
 	import { invalidateAll } from '$app/navigation';
 	import { page } from '$app/stores';
-	import { t } from '$lib/i18n.svelte';
+	import { t, getLocale } from '$lib/i18n.svelte';
+	import { confirmFirst } from '$lib/forms';
+	import { formatDateTime } from '$lib/format';
 	import StatusBadge from '$lib/components/StatusBadge.svelte';
-	import type { PageData } from './$types';
+	import type { PageData, ActionData } from './$types';
 
-	interface Props { data: PageData; }
-	const { data }: Props = $props();
+	interface Props { data: PageData; form: ActionData; }
+	const { data, form }: Props = $props();
 
 	const currentUserId = $derived($page.data.user?.id);
 
 	let msgBody = $state('');
 	let chatEnd: HTMLDivElement;
 	let pollTimer: ReturnType<typeof setInterval> | null = null;
-	let fileInput: HTMLInputElement;
+	let fileInput: HTMLInputElement | undefined = $state();
 	let pendingFile = $state<{ url: string; name: string; type: string } | null>(null);
 	let uploading = $state(false);
+	let uploadError = $state('');
+	let sending = $state(false);
 	let editingId = $state<string | null>(null);
 	let editBody = $state('');
 
@@ -29,18 +33,26 @@
 		return () => { if (pollTimer) clearInterval(pollTimer); };
 	});
 
+	// Attachments go through the image upload endpoint (/api/upload never existed, so
+	// every attachment failed). It answers { url }; the name and type come from the file.
 	async function handleFileSelect(e: Event) {
 		const input = e.target as HTMLInputElement;
 		const file = input.files?.[0];
 		if (!file) return;
 		uploading = true;
+		uploadError = '';
 		try {
 			const fd = new FormData();
 			fd.append('file', file);
-			const res = await fetch('/api/upload', { method: 'POST', body: fd });
-			if (!res.ok) { alert(t.messagesAdmin.uploadFailed); return; }
-			pendingFile = await res.json();
-		} catch { alert(t.messagesAdmin.uploadFailed); }
+			const res = await fetch('/api/upload/image', { method: 'POST', body: fd });
+			if (!res.ok) {
+				const msg = await res.json().then((j: { message?: string }) => j.message).catch(() => '');
+				uploadError = msg ? `${t.messagesAdmin.uploadFailed}: ${msg}` : t.messagesAdmin.uploadFailed;
+				return;
+			}
+			const { url } = (await res.json()) as { url: string };
+			pendingFile = { url, name: file.name, type: file.type };
+		} catch { uploadError = t.messagesAdmin.uploadFailed; }
 		finally { uploading = false; input.value = ''; }
 	}
 
@@ -60,10 +72,10 @@
 		return `${actor} ${t.messaging.changedStatusTo} ${statusLabel}`;
 	}
 
-	function formatTime(d: Date | string) {
-		return new Date(d).toLocaleString('sk-SK', {
-			day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'
-		});
+	// Stored times are UTC without a zone; formatDateTime reads them as UTC (they
+	// showed two hours early before) and formats them in the viewer's language.
+	function formatTime(d: string) {
+		return formatDateTime(d, getLocale(), { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 	}
 </script>
 
@@ -79,6 +91,7 @@
 			<h2>{data.ticket.subject}</h2>
 			<div class="chat-meta">
 				<span>{data.ticket.user_first_name} {data.ticket.user_last_name}</span>
+				{#if data.ticket.user_is_member}<span class="member-tag">{t.teamChat.teamMemberTag}</span>{/if}
 				<span class="email">{data.ticket.user_email}</span>
 				<StatusBadge status={data.ticket.status} />
 			</div>
@@ -150,8 +163,7 @@
 									{t.messaging.editMessage}
 								</button>
 							{/if}
-							<form method="POST" action="?/deleteMessage" class="inline-form" use:enhance
-								onsubmit={(e) => { if (!confirm(t.messaging.confirmDelete)) e.preventDefault(); }}>
+							<form method="POST" action="?/deleteMessage" class="inline-form" use:enhance={confirmFirst(() => t.messaging.confirmDelete)}>
 								<input type="hidden" name="messageId" value={msg.id} />
 								<button type="submit" class="msg-action-btn danger">{t.messaging.deleteMessage}</button>
 							</form>
@@ -178,29 +190,32 @@
 				{:else}
 					<span class="pending-name">{pendingFile.name}</span>
 				{/if}
-				<button class="pending-remove" onclick={() => pendingFile = null}>&times;</button>
+				<button class="pending-remove" aria-label={t.common.delete} onclick={() => pendingFile = null}>&times;</button>
 			</div>
 		{/if}
+		{#if uploadError || form?.error}<div class="send-error" role="alert">{uploadError || form?.error}</div>{/if}
 		<form method="POST" action="?/send" class="chat-input" use:enhance={() => {
-			return async ({ update }) => {
-				await update();
-				msgBody = '';
-				pendingFile = null;
+			sending = true;
+			return async ({ update, result }) => {
+				await update({ reset: result.type === 'success' });
+				if (result.type === 'success') { msgBody = ''; pendingFile = null; }
+				sending = false;
 			};
 		}}>
 			<input type="hidden" name="attachmentUrl" value={pendingFile?.url ?? ''} />
 			<input type="hidden" name="attachmentName" value={pendingFile?.name ?? ''} />
 			<input type="hidden" name="attachmentType" value={pendingFile?.type ?? ''} />
 			<input type="file" bind:this={fileInput} onchange={handleFileSelect} class="sr-only"
-				accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt" />
-			<button type="button" class="btn-attach" onclick={() => fileInput.click()} disabled={uploading}>
+				accept="image/jpeg,image/png,image/webp,image/gif" />
+			<button type="button" class="btn-attach" aria-label={t.messagesAdmin.attachment} onclick={() => fileInput?.click()} disabled={uploading}>
 				<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
 					<path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
 				</svg>
 			</button>
-			<input type="text" name="body" bind:value={msgBody}
+			<input type="text" name="body" bind:value={msgBody} maxlength="5000"
 				placeholder={t.messaging.writeMessage} autocomplete="off" />
-			<button type="submit" class="btn-send" disabled={!msgBody.trim() && !pendingFile}>
+			<!-- Disabled while sending: a double click stored the message twice. -->
+			<button type="submit" class="btn-send" aria-label={t.messaging.send} disabled={(!msgBody.trim() && !pendingFile) || sending || uploading}>
 				<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
 					<line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
 				</svg>
@@ -236,6 +251,11 @@
 	.back-link:hover { color: var(--accent-ink); }
 
 	.chat-title { flex: 1; }
+	.member-tag {
+		font-size: 10px; font-weight: 650; text-transform: uppercase; letter-spacing: .08em;
+		color: var(--accent-ink); background: var(--accent-dim); padding: 1px 6px; border-radius: 3px;
+	}
+	.send-error { margin: 0 24px 8px; font-size: 12.5px; color: var(--danger); }
 	.chat-title h2 { font-size: 16px; font-weight: 550; letter-spacing: -.045em; margin: 0; }
 	.chat-meta { display: flex; gap: 10px; align-items: center; font-size: 12px; color: var(--text-muted); margin-top: 2px; }
 	.email { color: var(--text-muted); }
