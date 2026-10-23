@@ -2818,6 +2818,7 @@ export const sk = {
 		rateLimitedBody: "Príliš veľa požiadaviek. Skúste to o chvíľu znova.",
 		serverBody: "Na našej strane nastala chyba. Skúste to znova o chvíľu — ak problém pretrváva, kontaktujte nás.",
 		backHome: "Späť na úvod",
+		browseVenues: "Prehľadať priestory",
 		goBack: "Späť",
 	},
 	consent: {
@@ -5632,6 +5633,7 @@ export const en: typeof sk = {
 		rateLimitedBody: "Too many requests. Please try again shortly.",
 		serverBody: "Something went wrong on our end. Please try again in a moment — if it keeps happening, get in touch.",
 		backHome: "Back to home",
+		browseVenues: "Browse venues",
 		goBack: "Go back",
 	},
 	consent: {
