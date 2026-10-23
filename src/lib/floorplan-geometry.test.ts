@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { FloorData, TableObj } from './floorplan-types';
 import {
-	partsJoined, partsConnected,
+	partsJoined, partsConnected, rectCovered,
 	countTablesByType, defaultChairSides, hitboxHitsWall, hitboxInRoom, hitboxesOverlap,
 	inventoryOverage, localChairs, roomArea, roomOutline, roomParts, seatHitbox, tableHitbox, withRoom, CHAIR_R
 } from './floorplan-geometry';
@@ -174,5 +174,19 @@ describe('room parts must be connected', () => {
 		expect(partsConnected([left, right])).toBe(false);
 		expect(partsConnected([a])).toBe(true);
 		expect(partsConnected([])).toBe(true);
+	});
+});
+
+describe('rectCovered', () => {
+	it('spots a part drawn wholly inside the room, even across two parts', () => {
+		expect(rectCovered({ x: 1, y: 1, w: 2, h: 2 }, L)).toBe(true);
+		// Spans the seam between the strip and the leg of the L.
+		expect(rectCovered({ x: 1, y: 3, w: 2, h: 3 }, L)).toBe(true);
+		expect(rectCovered({ x: 0, y: 0, w: 10, h: 4 }, L)).toBe(true);
+	});
+	it('lets a part through that adds floor', () => {
+		expect(rectCovered({ x: 8, y: 3, w: 2, h: 3 }, L)).toBe(false);
+		expect(rectCovered({ x: 5, y: 5, w: 2, h: 2 }, L)).toBe(false);
+		expect(rectCovered({ x: 0, y: 0, w: 1, h: 1 }, [])).toBe(false);
 	});
 });

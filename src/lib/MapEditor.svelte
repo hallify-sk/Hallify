@@ -4,7 +4,7 @@
 	import { migrateToMultiFloor } from '$lib/floorplan-types';
 	import {
 		CHAIR_R, SEAT_R, localChairs, totalChairs, defaultChairSides, tableHitbox, seatHitbox, hitboxesOverlap,
-		hitboxHitsWall, hitboxInRoom, pointInPoly, roomParts, withRoom, partsBBox, partsConnected, roomOutline, roomArea,
+		hitboxHitsWall, hitboxInRoom, pointInPoly, roomParts, withRoom, partsBBox, partsConnected, rectCovered, roomOutline, roomArea,
 		countTablesByType, type Hitbox
 	} from '$lib/floorplan-geometry';
 	import type { FloorData, MultiFloorState, WallObj, ZoneObj, TableObj, SeatObj, Guest, BoundsRect, Point, TableShape } from '$lib/floorplan-types';
@@ -44,14 +44,30 @@
 		saveState?: SaveState;
 		onSave?: () => void;
 		saveLabel?: string;
+		/** Save on a step change. Off while saving is the user's decision (an AI draft). */
+		autosave?: boolean;
+		/** Tables and chairs stay where they are and only guests are seated: a hall
+		 *  that does not let its clients arrange the tables. */
+		lockTables?: boolean;
+		/** Who is at the keyboard. A client is never told to do what only staff can. */
+		audience?: 'staff' | 'client';
+		/** Zones from the hall's own plan (the stage, the bar): shown, but not moved,
+		 *  reshaped or deleted in a template or an event. */
+		lockedZoneIds?: string[];
 		/** Where "Preview & print" leads (events have a printable manifest). */
 		printHref?: string;
 	}
 	const {
 		initialState, onchange, tableTypes, hiddenTools = [], protectWallsZones = false, allowZones = false,
 		lockFloors = false, tablesFromTypesOnly = false, allowGuests = false,
-		mode, saveState = 'idle', onSave, saveLabel, printHref
+		mode, saveState = 'idle', onSave, saveLabel, autosave = true, printHref,
+		lockTables = false, audience = 'staff', lockedZoneIds = []
 	}: Props = $props();
+
+	const lockedZones = $derived(new Set(lockedZoneIds));
+	/** A zone that may be changed right now: zones are editable in this step, and it
+	 *  is not one of the hall's own. */
+	const zoneEditable = (id: string) => !zonesOff && !lockedZones.has(id);
 
 	// Walls (the venue shell) can be protected while zones stay editable.
 	const wallsLocked = $derived(protectWallsZones);
@@ -350,10 +366,10 @@
 		// Access reactive working copy to create dependency
 		const snap = { walls, zones, tables, seats };
 		const room = roomRects;
-		// Read floors without creating deep dependency — use untrack for floors array
-		const currentFloors = untrack(() => floors).map((f, i) =>
-			i === untrack(() => activeFloorIdx) ? withRoom({ ...f, ...snap }, room) : f
-		);
+		// The floors list is read tracked as well: renaming a floor changes nothing but
+		// `floors`, and with it untracked a rename was never reported, so never saved.
+		const idx = activeFloorIdx;
+		const currentFloors = floors.map((f, i) => (i === idx ? withRoom({ ...f, ...snap }, room) : f));
 		const state: MultiFloorState = { version: 2, floors: currentFloors, guests };
 		onchange(JSON.stringify(state));
 	});
@@ -978,8 +994,10 @@
 		chairPopover = null; helpOpen = false;
 		partDrag = null; selectedPart = null;
 		if (!visited.includes(step)) visited = [...visited, step];
-		// Moving between steps saves what was done, without waiting for autosave.
-		if (onSave && saveState === 'dirty' && id !== step) onSave();
+		// Moving between steps saves what was done, without waiting for autosave —
+		// except where nothing may be saved until the user says so (an AI draft).
+		if (autosave && onSave && saveState === 'dirty' && id !== step) onSave();
+		roomNotice = null;
 		step = id as StepId;
 		tool = 'select';
 	}
@@ -1033,6 +1051,8 @@
 		if (t !== 'bounds') boundsStart = null;
 		if (t !== 'measure') { measureStart = null; measureEnd = null; }
 		chairPopover = null;
+		// A refusal from the previous tool must not hide what this one asks for.
+		roomNotice = null;
 	}
 
 	/** The one line at the top of the canvas that says what to do now. */
@@ -1242,7 +1262,7 @@
 	function selectedPolyPoints(): Point[] | null {
 		if (!selectedId) return null;
 		const w = wallsOff ? undefined : walls.find(x => x.id === selectedId);
-		const z = zonesOff ? undefined : zones.find(x => x.id === selectedId);
+		const z = zoneEditable(selectedId) ? zones.find(x => x.id === selectedId) : undefined;
 		return w?.points ?? z?.points ?? null;
 	}
 	function setSelectedPoints(points: Point[]) {
@@ -1284,7 +1304,7 @@
 	/** The shapes the active drawing tool works on. */
 	function toolShapes(): { id: string; points: Point[] }[] {
 		if (tool === 'wall') return wallsOff ? [] : walls;
-		if (tool === 'zone') return zonesOff ? [] : zones;
+		if (tool === 'zone') return zones.filter(z => zoneEditable(z.id));
 		return [];
 	}
 	/** With the Wall or Zone tool, a corner of ANY wall (or zone) can be grabbed and
@@ -1430,10 +1450,8 @@
 			for (let i = tables.length - 1; i >= 0; i--) {
 				if (tableHit(tables[i], raw)) { pushUndo(); tables = tables.filter((_, j) => j !== i); return; }
 			}
-			if (!zonesOff) {
-				for (let i = zones.length - 1; i >= 0; i--) {
-					if (pointInPoly(raw, zones[i].points)) { pushUndo(); zones = zones.filter((_, j) => j !== i); return; }
-				}
+			for (let i = zones.length - 1; i >= 0; i--) {
+				if (zoneEditable(zones[i].id) && pointInPoly(raw, zones[i].points)) { pushUndo(); zones = zones.filter((_, j) => j !== i); return; }
 			}
 			if (!wallsOff) {
 				for (let i = walls.length - 1; i >= 0; i--) {
@@ -1452,8 +1470,11 @@
 				const w = Math.abs(pos.x - boundsStart.x);
 				const h = Math.abs(pos.y - boundsStart.y);
 				if (w > 0.5 && h > 0.5) {
-					// A new part must join the room: overlap it or share a doorway's width of edge.
-					if (partsConnected([...roomRects, { x, y, w, h }])) {
+					// A new part must add floor (one drawn wholly inside the room is a
+					// part that does nothing, and a trap later when it is moved), and must
+					// join the room: overlap it or share a doorway's width of edge.
+					if (rectCovered({ x, y, w, h }, roomRects)) noticeRoom(tr.editor.roomPartInside);
+					else if (partsConnected([...roomRects, { x, y, w, h }])) {
 						pushUndo();
 						roomRects = [...roomRects, { x, y, w, h }];
 					} else noticeRoom(tr.editor.roomNotJoined);
@@ -1488,15 +1509,16 @@
 					openSeatPopover(t, ci);
 					return;
 				}
-				// Then table body (drag)
+				// Then table body (drag — unless the venue fixes where tables stand)
 				if (tableBodyHit(t, raw)) {
+					if (lockTables) { selectedId = t.id; selectedPart = null; return; }
 					pushUndo(); selectedId = t.id; selectedPart = null; isDragging = true; dragStart = raw; elemStart = { x: t.x, y: t.y }; return;
 				}
 			}
-			// Zones — select + drag
+			// Zones — select + drag (the hall's own zones are part of the room here)
 			if (!zonesOff) {
 				for (let i = zones.length - 1; i >= 0; i--) {
-					if (pointInPoly(raw, zones[i].points)) {
+					if (zoneEditable(zones[i].id) && pointInPoly(raw, zones[i].points)) {
 						pushUndo(); selectedId = zones[i].id; selectedPart = null;
 						isPolyDragging = true; polyDragStart = raw;
 						polyOrigPoints = zones[i].points.map(p => ({ ...p }));
@@ -1612,7 +1634,7 @@
 		if (readOnly) return { title: tr.editor.readOnlyStep, items: [{ label: tr.editor.fitRoom, kbd: '⇧1', run: fitToRoom }] };
 
 		const shapes: { id: string; points: Point[]; kind: 'wall' | 'zone' }[] = [
-			...(zonesOff ? [] : zones.map(z => ({ id: z.id, points: z.points, kind: 'zone' as const }))),
+			...zones.filter(z => zoneEditable(z.id)).map(z => ({ id: z.id, points: z.points, kind: 'zone' as const })),
 			...(wallsOff ? [] : walls.map(w => ({ id: w.id, points: w.points, kind: 'wall' as const }))),
 		];
 		const shapeItems = (sh: { id: string; kind: 'wall' | 'zone' }): CtxItem[] => [
@@ -1641,8 +1663,11 @@
 				items.push({ label: tr.editor.assign, run: () => { chairPopover = { seatId: st.id, x: wx(st.x), y: wy(st.y) }; guestSearch = ''; } });
 				if (st.assignment) items.push({ label: tr.editor.ctxClearSeat, run: () => clearSeat({ seatId: st.id }) });
 			}
-			items.push({ label: tr.editor.ctxRotate90, run: () => { pushUndo(); seats = seats.map(x => x.id === st.id ? { ...x, rotation: (Number(x.rotation) + 90) % 360 } : x); } });
-			items.push({ label: tr.editor.ctxDeleteChair, danger: true, kbd: 'Del', run: () => { pushUndo(); seats = seats.filter(x => x.id !== st.id); selectedId = null; } });
+			if (!lockTables) {
+				items.push({ label: tr.editor.ctxRotate90, run: () => { pushUndo(); seats = seats.map(x => x.id === st.id ? { ...x, rotation: (Number(x.rotation) + 90) % 360 } : x); } });
+				items.push({ label: tr.editor.ctxDeleteChair, danger: true, kbd: 'Del', run: () => { pushUndo(); seats = seats.filter(x => x.id !== st.id); selectedId = null; } });
+			}
+			if (!items.length) break;
 			return { title: tr.editor.chairRef(i + 1), items };
 		}
 		// A table chair, then the table itself
@@ -1658,12 +1683,13 @@
 				if (t.assignments[ci]) items.push({ label: tr.editor.ctxClearSeat, run: () => clearSeat({ tableId: t.id, chairIdx: ci }) });
 			}
 			const tt = t.typeId ? tableTypes?.find(x => x.id === t.typeId) : null;
-			items.push(
+			if (!lockTables) items.push(
 				{ label: tr.editor.ctxRotate90, run: () => rotateTable(t.id, 90) },
 				{ label: tr.editor.ctxDuplicate, disabled: !!tt && typeLeft(tt) <= 0, run: () => { duplicateTable(t); } },
 			);
 			if (allowGuests && t.assignments.some(Boolean)) items.push({ label: tr.editor.clearSeats, run: () => clearTableSeats(t.id) });
-			items.push({ label: tr.editor.deleteTable, danger: true, kbd: 'Del', run: () => { pushUndo(); tables = tables.filter(x => x.id !== t.id); selectedId = null; } });
+			if (!lockTables) items.push({ label: tr.editor.deleteTable, danger: true, kbd: 'Del', run: () => { pushUndo(); tables = tables.filter(x => x.id !== t.id); selectedId = null; } });
+			if (!items.length) break;
 			return { title: ci >= 0 ? tr.editor.seatRef(t.label, ci + 1) : t.label, items };
 		}
 		// An edge of a shape: add a corner there
@@ -1814,16 +1840,23 @@
 		}
 		if (!selectedId) return;
 		pushUndo();
-		tables = tables.filter(t => t.id !== selectedId);
+		if (!lockTables) {
+			tables = tables.filter(t => t.id !== selectedId);
+			seats = seats.filter(s => s.id !== selectedId);
+		}
 		if (!wallsOff) walls = walls.filter(w => w.id !== selectedId);
-		if (!zonesOff) zones = zones.filter(z => z.id !== selectedId);
-		seats = seats.filter(s => s.id !== selectedId);
+		zones = zones.filter(z => z.id !== selectedId || !zoneEditable(z.id));
 		selectedId = null;
 	}
 
+	/** Inputs that take no typing: focus left on one (the drag-to-draw checkbox) must
+	 *  not switch the canvas shortcuts off. */
+	const NON_TEXT_INPUTS = new Set(['checkbox', 'radio', 'button', 'submit', 'reset', 'range', 'color', 'file']);
 	function isTyping(e: KeyboardEvent): boolean {
 		const el = e.target as HTMLElement | null;
-		return !!el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable);
+		if (!el) return false;
+		if (el.tagName === 'INPUT') return !NON_TEXT_INPUTS.has((el as HTMLInputElement).type);
+		return el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable;
 	}
 
 	function onKeyDown(e: KeyboardEvent) {
@@ -1852,7 +1885,8 @@
 		if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z' && !e.shiftKey) { e.preventDefault(); undo(); return; }
 		if ((e.ctrlKey || e.metaKey) && (e.key.toLowerCase() === 'y' || (e.key.toLowerCase() === 'z' && e.shiftKey))) { e.preventDefault(); redo(); return; }
 		if (e.ctrlKey || e.metaKey || e.altKey) return;
-		if (e.key === '1' && e.shiftKey) { fitToRoom(); return; }
+		// By the physical key: Shift+1 is "!" on a US keyboard, "1" on a Slovak one.
+		if (e.shiftKey && (e.code === 'Digit1' || e.code === 'Numpad1' || e.key === '1')) { fitToRoom(); return; }
 		if (e.key.toLowerCase() === 'd' && !e.shiftKey) { showDims = !showDims; return; }
 		// Single-key tools, only the ones this step offers.
 		const t = toolForKey(e.key);
@@ -1892,6 +1926,24 @@
 			return u;
 		});
 	}
+	/** A number field whose value was capped: show the capped value. Svelte leaves the
+	 *  typed text when the bound value comes out unchanged, so a field could read 12
+	 *  on a table that only takes 10. An emptied field is left to be typed into. */
+	function showClamped(el: HTMLInputElement, v: number) {
+		if (el.value !== '' && String(v) !== el.value) el.value = String(v);
+	}
+	/** One side's chair count: on a table, as `updateTable` allowed it (a table type
+	 *  caps the total); on the new-table settings, as typed. */
+	function setSideChairs(e: Event, key: 'chairsTop' | 'chairsBottom' | 'chairsLeft' | 'chairsRight', T: TableObj | null, setNew: (v: number) => void) {
+		const el = e.target as HTMLInputElement;
+		let v = Math.max(0, Math.floor(+el.value || 0));
+		if (T) {
+			updateTable({ [key]: v });
+			v = Number(tables.find(t => t.id === T.id)?.[key]) || 0;
+		} else setNew(v);
+		showClamped(el, v);
+	}
+
 	function updateZone(patch: Partial<ZoneObj>) {
 		zones = zones.map(z => z.id === selectedId ? { ...z, ...patch } : z);
 	}
@@ -2016,7 +2068,7 @@
 <!-- ─── Layout ─────────────────────────────────────────────────────────────── -->
 <div class="app">
 	<StepStrip steps={stepItems} onPick={goStep}
-		note={editorMode === 'room' ? tr.editor.stepsNoteRoom : tr.editor.stepsNoteLocked}
+		note={editorMode === 'room' ? tr.editor.stepsNoteRoom : editorMode === 'seating' ? tr.editor.stepsNoteSeating : tr.editor.stepsNoteLocked}
 		right={stripRight} />
 
 	<div class="body">
@@ -2031,7 +2083,8 @@
 				canUndo={undoStack.length > 0} canRedo={redoStack.length > 0} onUndo={undo} onRedo={redo}
 				undoLabel={tr.editor.undo} redoLabel={tr.editor.redo}>
 				{#if step === 'tables' && tablesFromTypesOnly && !(tableTypes && tableTypes.length)}
-					<p class="tool-note">{tr.editor.tablesNeedTypes}</p>
+					<!-- Only staff can define table types; a client is told who can help. -->
+					<p class="tool-note">{audience === 'client' ? tr.editor.tablesNeedTypesClient : tr.editor.tablesNeedTypes}</p>
 				{:else if step === 'walls'}
 					<label class="mode-switch"><input type="checkbox" checked={rectDraw} onchange={(e) => setRectDraw((e.target as HTMLInputElement).checked)} />{tr.editor.rectDrawMode}</label>
 					<p class="tool-note">{tr.editor.wallsOptional}</p>
@@ -2147,9 +2200,9 @@
 					{@const sel = zone.id === selectedId}
 					<polygon points={pts} fill={zone.color} fill-opacity={sel ? 0.5 : 0.28}
 						stroke={zone.color} stroke-width={sel ? 2.5 : 1.5} stroke-opacity="0.7"
-						style={tool === 'select' && !zonesOff && !readOnly ? 'cursor:move' : ''}
+						style={tool === 'select' && zoneEditable(zone.id) && !readOnly ? 'cursor:move' : ''}
 						pointer-events={tool === 'select' || tool === 'eraser' ? 'auto' : 'none'}/>
-					{#if sel && !zonesOff && !readOnly}
+					{#if sel && zoneEditable(zone.id) && !readOnly}
 						{#each zone.points as p, vi}
 							<circle cx={wx(p.x)} cy={wy(p.y)} r="6"
 								fill={vertexDragIdx === vi && isVertexDragging ? zone.color : 'white'}
@@ -2256,7 +2309,7 @@
 							if (e.button !== 0 || spaceDown || e.altKey) return;
 							e.stopPropagation();
 							if (chairPopover) { chairPopover = null; guestSearch = ''; return; }
-							if (readOnly) { selectedId = table.id; return; }
+							if (readOnly || lockTables) { selectedId = table.id; selectedPart = null; return; }
 							if (tool === 'eraser') { pushUndo(); tables = tables.filter(t => t.id !== table.id); return; }
 							if (tool === 'select') {
 								pushUndo();
@@ -2331,7 +2384,7 @@
 						{/each}
 
 						<!-- Rotation handle -->
-						{#if sel && !readOnly}
+						{#if sel && !readOnly && !lockTables}
 							<line x1={0} y1={-ws(rotH)} x2={0} y2={-ws(rotH+0.65)}
 								stroke="var(--accent)" stroke-width="1.5" stroke-dasharray="3,2" pointer-events="none"/>
 							<circle cx={0} cy={-ws(rotH+0.65)} r={6}
@@ -2355,10 +2408,11 @@
 							e.stopPropagation();
 							if (chairPopover) { chairPopover = null; guestSearch = ''; return; }
 							if (readOnly) { selectedId = seat.id; return; }
-							if (tool === 'eraser') { pushUndo(); seats = seats.filter(s => s.id !== seat.id); return; }
+							if (tool === 'eraser' && !lockTables) { pushUndo(); seats = seats.filter(s => s.id !== seat.id); return; }
 							if (tool === 'select') {
 								selectedId = seat.id; selectedPart = null;
-								isDragging = true;
+								// With the tables fixed a press only opens the seat, never moves it.
+								isDragging = !lockTables;
 								dragStart = svgCoords(e);
 								elemStart = { x: seat.x, y: seat.y };
 								const r = svgEl.getBoundingClientRect();
@@ -2418,7 +2472,7 @@
 
 				<!-- ── Where a click adds a corner: the middle of each edge of the selected shape ── -->
 				{#if rectDraw && !readOnly && !isDrawing && (tool === 'select' || tool === 'wall' || tool === 'zone')}
-					{@const pts = (selectedWall && !wallsOff ? selectedWall.points : selectedZone && !zonesOff ? selectedZone.points : null)}
+					{@const pts = (selectedWall && !wallsOff ? selectedWall.points : selectedZone && zoneEditable(selectedZone.id) ? selectedZone.points : null)}
 					{#if pts}
 						{#each pts as p, i}
 							{@const q = pts[(i + 1) % pts.length]}
@@ -2833,8 +2887,8 @@
 				{/if}
 
 				<!-- ── Zone options: the zones step, or a zone in the chairs step ── -->
-				{#if (step === 'zones' || step === 'chairs') && (tool === 'zone' || selectedZone)}
-					{@const Z = selectedZone}
+				{#if (step === 'zones' || step === 'chairs') && (tool === 'zone' || (selectedZone && zoneEditable(selectedZone.id)))}
+					{@const Z = selectedZone && zoneEditable(selectedZone.id) ? selectedZone : null}
 					<section>
 						<div class="sec-title">{Z ? Z.label || tr.editor.zoneOptions : tr.editor.zoneNew}</div>
 						{#if Z}
@@ -2857,7 +2911,7 @@
 									title={tr.editor.custom}/>
 							</div>
 						</div>
-						{#if Z && !zonesOff}
+						{#if Z}
 							<button type="button" class="btn-del" onclick={() => { pushUndo(); zones=zones.filter(z=>z.id!==selectedId); selectedId=null; }}>{tr.editor.deleteZone}</button>
 						{/if}
 					</section>
@@ -2967,7 +3021,7 @@
 								<label for="t-ch">{tr.editor.chairs} {maxChairs < 999 ? `(${tr.editor.max} ${maxChairs})` : ''}</label>
 								<input id="t-ch" type="number" min="0" max={maxChairs} step="1"
 									value={T?.chairs ?? tChairs}
-									oninput={(e) => { const v=Math.min(+((e.target as HTMLInputElement).value), maxChairs); if(T) updateTable({chairs:v}); else tChairs=v; }}/>
+									oninput={(e) => { const el = e.target as HTMLInputElement; const v = Math.max(0, Math.min(Math.floor(+el.value || 0), maxChairs)); if(T) updateTable({chairs:v}); else tChairs=v; showClamped(el, v); }}/>
 							</div>
 						{:else}
 							{@const currentTotal = T ? (Number(T.chairsTop)||0)+(Number(T.chairsBottom)||0)+(Number(T.chairsLeft)||0)+(Number(T.chairsRight)||0) : tChairsTop+tChairsBottom+tChairsLeft+tChairsRight}
@@ -2979,13 +3033,13 @@
 									<label for="t-ct">{tr.editor.top}</label>
 									<input id="t-ct" type="number" min="0" max={maxChairs} step="1"
 										value={T?.chairsTop ?? tChairsTop}
-										oninput={(e) => { const v=Math.max(0,+((e.target as HTMLInputElement).value)||0); if(T) updateTable({chairsTop:v}); else tChairsTop=v; }}/>
+										oninput={(e) => setSideChairs(e, 'chairsTop', T, v => tChairsTop = v)}/>
 								</div>
 								<div class="field">
 									<label for="t-cb">{tr.editor.bottom}</label>
 									<input id="t-cb" type="number" min="0" max={maxChairs} step="1"
 										value={T?.chairsBottom ?? tChairsBottom}
-										oninput={(e) => { const v=Math.max(0,+((e.target as HTMLInputElement).value)||0); if(T) updateTable({chairsBottom:v}); else tChairsBottom=v; }}/>
+										oninput={(e) => setSideChairs(e, 'chairsBottom', T, v => tChairsBottom = v)}/>
 								</div>
 							</div>
 							<div class="field-row">
@@ -2993,13 +3047,13 @@
 									<label for="t-cl">{tr.editor.left}</label>
 									<input id="t-cl" type="number" min="0" max={maxChairs} step="1"
 										value={T?.chairsLeft ?? tChairsLeft}
-										oninput={(e) => { const v=Math.max(0,+((e.target as HTMLInputElement).value)||0); if(T) updateTable({chairsLeft:v}); else tChairsLeft=v; }}/>
+										oninput={(e) => setSideChairs(e, 'chairsLeft', T, v => tChairsLeft = v)}/>
 								</div>
 								<div class="field">
 									<label for="t-cr">{tr.editor.right}</label>
 									<input id="t-cr" type="number" min="0" max={maxChairs} step="1"
 										value={T?.chairsRight ?? tChairsRight}
-										oninput={(e) => { const v=Math.max(0,+((e.target as HTMLInputElement).value)||0); if(T) updateTable({chairsRight:v}); else tChairsRight=v; }}/>
+										oninput={(e) => setSideChairs(e, 'chairsRight', T, v => tChairsRight = v)}/>
 								</div>
 							</div>
 						{/if}
@@ -3279,13 +3333,15 @@
 .coach-pos { position:absolute; left:16px; top:66px; z-index:31; }
 /* With rulers on, the overlays move clear of them. */
 .canvas-wrap.rulers .instr { top:30px; }
-.canvas-wrap.rulers .legend { top:30px; }
+.canvas-wrap.rulers .legend { top:78px; }
 .canvas-wrap.rulers .coach-pos { left:34px; top:84px; }
 .canvas-wrap.rulers .status-strip { left:30px; }
 .mode-switch { display:flex; align-items:center; gap:8px; margin:8px 10px 0; padding:8px 10px; border-radius:var(--radius); background:var(--bg-panel2); font-size:12px; font-weight:500; color:var(--text-base); cursor:pointer; }
 .mode-switch input { accent-color:var(--accent); margin:0; }
 
-.legend { position:absolute; right:16px; top:14px; z-index:20; display:flex; gap:12px; font-size:11px; color:var(--text-muted); background:color-mix(in srgb, var(--bg-panel) 85%, transparent); padding:6px 10px; border-radius:var(--radius); border:1px solid var(--border); }
+/* Below the instruction bar, not beside it: a long instruction is centred and wide
+   enough to run under a legend sitting at the same height. */
+.legend { position:absolute; right:16px; top:60px; z-index:20; display:flex; gap:12px; font-size:11px; color:var(--text-muted); background:color-mix(in srgb, var(--bg-panel) 85%, transparent); padding:6px 10px; border-radius:var(--radius); border:1px solid var(--border); }
 .legend span { display:inline-flex; align-items:center; gap:6px; }
 .legend i { width:12px; height:12px; border-radius:3px; display:inline-block; }
 .legend i.ring { background:none; border:2px solid var(--accent); border-radius:50%; box-sizing:border-box; }

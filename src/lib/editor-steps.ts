@@ -15,9 +15,11 @@
  *             then a check.
  *   event     a booked event: tables, chairs and zones, then the guests, then a
  *             check before printing.
+ *   seating   a booked event whose tables the venue fixes (the hall does not let
+ *             clients arrange their own): only the guests, then the check.
  */
 
-export type EditorMode = 'room' | 'template' | 'event';
+export type EditorMode = 'room' | 'template' | 'event' | 'seating';
 
 export type StepId = 'room' | 'walls' | 'zones' | 'tables' | 'chairs' | 'guests' | 'check';
 
@@ -35,7 +37,8 @@ export type Tool =
 export const STEPS_BY_MODE: Record<EditorMode, StepId[]> = {
 	room: ['room', 'walls', 'zones', 'check'],
 	template: ['tables', 'chairs', 'check'],
-	event: ['tables', 'chairs', 'guests', 'check']
+	event: ['tables', 'chairs', 'guests', 'check'],
+	seating: ['guests', 'check']
 };
 
 export function stepsFor(mode: EditorMode): StepId[] {
