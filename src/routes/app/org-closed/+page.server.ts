@@ -1,11 +1,12 @@
 import { redirect } from '@sveltejs/kit';
+import { loginUrl } from '$lib/login-redirect';
 import { CLOSED_COOKIE } from '$lib/org-closure-email';
 import type { PageServerLoad } from './$types';
 
 /** Confirmation after an owner closes their organisation. The summary arrives in a
  *  short-lived cookie set by the close action and is shown once. */
-export const load: PageServerLoad = ({ cookies, locals }) => {
-	if (!locals.user) redirect(303, '/app/login');
+export const load: PageServerLoad = ({ cookies, locals, url }) => {
+	if (!locals.user) redirect(303, loginUrl(url));
 	const raw = cookies.get(CLOSED_COOKIE);
 	if (!raw) redirect(303, '/app/');
 	cookies.delete(CLOSED_COOKIE, { path: '/app/org-closed' });

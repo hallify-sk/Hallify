@@ -1,5 +1,6 @@
 import type { PageServerLoad, Actions } from './$types';
 import { redirect, fail } from '@sveltejs/kit';
+import { loginUrl } from '$lib/login-redirect';
 import { dbFirst, dbRun } from '$lib/db/index';
 import type { UserRow } from '$lib/db/index';
 import { st } from '$lib/i18n-server';
@@ -23,15 +24,15 @@ async function checkCurrentPassword(locals: App.Locals, userId: string, email: s
 	return errors.currentPasswordIncorrect;
 }
 
-export const load: PageServerLoad = async ({ locals }) => {
-	if (!locals.user) redirect(303, '/app/login');
+export const load: PageServerLoad = async ({ locals, url }) => {
+	if (!locals.user) redirect(303, loginUrl(url));
 
 	const user = await dbFirst<Pick<UserRow, 'id' | 'email' | 'first_name' | 'last_name' | 'role' | 'created_at'>>(
 		locals.db,
 		'SELECT id, email, first_name, last_name, role, created_at FROM users WHERE id = ?',
 		locals.user.id
 	);
-	if (!user) redirect(303, '/app/login');
+	if (!user) redirect(303, loginUrl(url));
 
 	return { profile: user };
 };

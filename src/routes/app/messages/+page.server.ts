@@ -1,5 +1,6 @@
 import type { PageServerLoad, Actions } from './$types';
 import { fail, redirect } from '@sveltejs/kit';
+import { loginUrl } from '$lib/login-redirect';
 import { dbAll, dbFirst, dbRun } from '$lib/db/index';
 import { dispatchWebhooks } from '$lib/notifications';
 import { notifyGuestMessage } from '$lib/email';
@@ -22,7 +23,7 @@ function attachmentFrom(data: FormData): { url: string; name: string | null; typ
 }
 
 export const load: PageServerLoad = async ({ locals, url }) => {
-  if (!locals.user) redirect(303, '/app/login');
+  if (!locals.user) redirect(303, loginUrl(url));
   const user = locals.user;
   const org = locals.currentOrg;
   if (!org) redirect(303, '/app/'); // home offers creating an org; the form itself felt compulsory

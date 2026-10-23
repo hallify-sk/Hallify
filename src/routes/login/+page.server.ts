@@ -28,11 +28,22 @@ function safeNext(raw: unknown): string {
   return v;
 }
 
+/** Where an org member goes after signing in on the venue's domain: the console page
+ *  they were sent here from, or the console home. A public-page redirect (/halls/…)
+ *  is a client's destination, not theirs. */
+function memberNext(redirectTo: string): string {
+  return redirectTo === '/app/manage' || redirectTo.startsWith('/app/manage/') || redirectTo.startsWith('/app/manage?')
+    ? redirectTo
+    : '/app/manage';
+}
+
 export const load: PageServerLoad = async ({ locals, url }) => {
   // This route is only for custom-domain visitors
   if (!locals.domainOrg) redirect(303, '/app/login');
   // Already signed in — org members manage on the bubble, clients book.
-  if (locals.user) redirect(303, locals.user.account_type === 'client' ? '/halls' : '/app/manage');
+  if (locals.user) {
+    redirect(303, locals.user.account_type === 'client' ? '/halls' : memberNext(safeNext(url.searchParams.get('redirect'))));
+  }
   return {
     // Branded like the rest of the venue's site (display name and logo).
     domainOrg: await venueIdentity(locals.db, locals.domainOrg),
@@ -95,7 +106,7 @@ export const actions: Actions = {
 
     await createSession(authed.id, cookies, locals.db);
     // Org members land in the management app; clients return to the booking surface.
-    redirect(303, authed.account_type === 'client' ? redirectTo : '/app/manage');
+    redirect(303, authed.account_type === 'client' ? redirectTo : memberNext(redirectTo));
   },
 
   register: async ({ request, cookies, locals, getClientAddress }) => {

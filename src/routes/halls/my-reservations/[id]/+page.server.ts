@@ -1,4 +1,5 @@
 import { error, fail, redirect } from '@sveltejs/kit';
+import { loginUrl } from '$lib/login-redirect';
 import { dbAll, dbFirst, dbRun, fromJsonArr } from '$lib/db/index';
 import type { HallRow, HallBlockRow, ReservationRow } from '$lib/db/index';
 import { parseExtraIds } from '$lib/extras';
@@ -38,8 +39,8 @@ async function loadReservation(db: App.Locals['db'], id: string, userId: string,
 	);
 }
 
-export const load: PageServerLoad = async ({ params, locals }) => {
-	if (!locals.user) redirect(303, `/login?redirect=/halls/my-reservations/${params.id}`);
+export const load: PageServerLoad = async ({ params, locals, url }) => {
+	if (!locals.user) redirect(303, loginUrl(url, '/login'));
 	const orgId = locals.domainOrg!.id;
 	const userId = locals.user.id;
 

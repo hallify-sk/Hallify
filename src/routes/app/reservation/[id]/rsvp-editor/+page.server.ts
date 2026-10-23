@@ -1,4 +1,5 @@
 import { error, redirect, fail } from '@sveltejs/kit';
+import { loginUrl } from '$lib/login-redirect';
 import { dbFirst, dbAll, dbRun, fromJson, toJson } from '$lib/db/index';
 import type { ReservationRow, RsvpTemplateRow } from '$lib/db/index';
 import { getPlan } from '$lib/plans';
@@ -7,9 +8,9 @@ import type { Actions, PageServerLoad } from './$types';
 import { RSVP_ENABLED } from '$lib/features';
 import { reservationAccess, assertCanOpenReservation } from '$lib/server/reservation-access';
 
-export const load: PageServerLoad = async ({ locals, params }) => {
+export const load: PageServerLoad = async ({ locals, params, url }) => {
 	if (!RSVP_ENABLED) error(404, 'Not found');
-	if (!locals.user) redirect(303, '/app/login');
+	if (!locals.user) redirect(303, loginUrl(url));
 	const orgId = locals.currentOrg?.id;
 	if (!orgId) error(403, st(locals.locale).serverErrors.accessDenied);
 
@@ -40,9 +41,9 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 };
 
 export const actions: Actions = {
-	save: async ({ request, locals, params }) => {
+	save: async ({ request, locals, params, url }) => {
 		if (!RSVP_ENABLED) error(404, 'Not found');
-		if (!locals.user) redirect(303, '/app/login');
+		if (!locals.user) redirect(303, loginUrl(url));
 		const orgId = locals.currentOrg?.id;
 		if (!orgId) return fail(403, { error: st(locals.locale).serverErrors.accessDenied });
 		if (!getPlan(locals.currentOrg!.subscription.plan).limits.advancedRsvp) {

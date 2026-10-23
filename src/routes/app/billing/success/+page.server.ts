@@ -1,4 +1,5 @@
 import { redirect } from '@sveltejs/kit';
+import { loginUrl } from '$lib/login-redirect';
 import type { PageServerLoad } from './$types';
 import { getCheckoutSession } from '$lib/stripe';
 import { applySubscription } from '$lib/server/stripe-sync';
@@ -12,7 +13,7 @@ import type Stripe from 'stripe';
  * session, checks it belongs to this organisation, and only then celebrates.
  */
 export const load: PageServerLoad = async ({ locals, url }) => {
-  if (!locals.user) redirect(303, '/app/login');
+  if (!locals.user) redirect(303, loginUrl(url));
   const org = locals.currentOrg;
   const sessionId = url.searchParams.get('session_id') ?? '';
   const session = org && sessionId ? await getCheckoutSession(sessionId) : null;

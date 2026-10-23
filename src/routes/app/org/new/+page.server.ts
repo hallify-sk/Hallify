@@ -4,6 +4,7 @@ import { dbFirst, dbRun } from '$lib/db/index';
 import { uniqueOrgSlug } from '$lib/server/org-slug';
 import { seedBuiltInRoles } from '$lib/server/people';
 import { st } from '$lib/i18n-server';
+import { loginUrl } from '$lib/login-redirect';
 
 /** Who may reach the org form.
  *
@@ -13,8 +14,8 @@ import { st } from '$lib/i18n-server';
  *  precondition itself rather than trusting where the visitor came from.
  *
  *  Returns a redirect target, or null when the visitor may proceed. */
-function orgFormGuard(locals: App.Locals): string | null {
-  if (!locals.user) return '/app/login';
+function orgFormGuard(locals: App.Locals, url: URL): string | null {
+  if (!locals.user) return loginUrl(url);
   // Per-org client accounts live inside one org's bubble and own nothing on the
   // apex. They can't authenticate here today, but the check costs nothing and
   // keeps the rule in the route rather than in the login query.
@@ -25,15 +26,15 @@ function orgFormGuard(locals: App.Locals): string | null {
   return null;
 }
 
-export const load: PageServerLoad = ({ locals }) => {
-  const away = orgFormGuard(locals);
+export const load: PageServerLoad = ({ locals, url }) => {
+  const away = orgFormGuard(locals, url);
   if (away) redirect(303, away);
   return {};
 };
 
 export const actions: Actions = {
-  default: async ({ request, locals, cookies }) => {
-    const away = orgFormGuard(locals);
+  default: async ({ request, locals, cookies, url }) => {
+    const away = orgFormGuard(locals, url);
     if (away) redirect(303, away);
     // orgFormGuard has already redirected when there is no user; the helper's
     // string return just doesn't narrow locals.user for the compiler.

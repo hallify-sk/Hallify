@@ -1,4 +1,5 @@
 import { redirect } from '@sveltejs/kit';
+import { loginUrl } from '$lib/login-redirect';
 import { hasConsoleAccess } from '$lib/server/access';
 import type { LayoutServerLoad } from './$types';
 
@@ -16,8 +17,8 @@ import type { LayoutServerLoad } from './$types';
  * Relaxing it was only safe once every page under /app/manage guarded its own
  * load, which they now do.
  */
-export const load: LayoutServerLoad = async ({ locals }) => {
-  if (!locals.user) redirect(303, '/app/login');
+export const load: LayoutServerLoad = async ({ locals, url }) => {
+  if (!locals.user) redirect(303, loginUrl(url));
   if (locals.user.account_type === 'client') redirect(303, '/app/client');
   if (!locals.currentOrg) redirect(303, '/app/org/new');
 

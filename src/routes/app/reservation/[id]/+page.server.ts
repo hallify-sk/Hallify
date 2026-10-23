@@ -1,4 +1,5 @@
 import { error, redirect, fail } from '@sveltejs/kit';
+import { loginUrl } from '$lib/login-redirect';
 import { dbAll, dbFirst, dbRun, fromJson, toJson } from '$lib/db/index';
 import type { ReservationRow, RsvpRow, TableTypeRow, TemplateRow, ReservationStatus, RsvpConfig, HallExtraRow } from '$lib/db/index';
 import { parseExtraIds } from '$lib/extras';
@@ -49,7 +50,7 @@ async function staffAction(locals: App.Locals, key: 'error' | 'assignError' | 's
 }
 
 export const load: PageServerLoad = async ({ locals, params, url }) => {
-	if (!locals.user) redirect(303, '/app/login');
+	if (!locals.user) redirect(303, loginUrl(url));
 	const orgId = locals.currentOrg?.id;
 	if (!orgId) error(403, st(locals.locale).serverErrors.accessDenied);
 
@@ -264,8 +265,8 @@ export const actions: Actions = {
 		return { detailsSaved: true };
 	},
 
-	saveLayout: async ({ request, locals, params }) => {
-		if (!locals.user) redirect(303, '/app/login');
+	saveLayout: async ({ request, locals, params, url }) => {
+		if (!locals.user) redirect(303, loginUrl(url));
 		const orgId = locals.currentOrg?.id;
 		if (!orgId) return fail(403, { error: st(locals.locale).serverErrors.accessDenied });
 		const data = await request.formData();

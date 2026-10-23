@@ -1,10 +1,11 @@
 import { redirect } from '@sveltejs/kit';
+import { loginUrl } from '$lib/login-redirect';
 import { dbAll } from '$lib/db/index';
 import type { PageServerLoad } from './$types';
 import { ticketUnreadSql } from '$lib/unread';
 
-export const load: PageServerLoad = async ({ locals }) => {
-	if (!locals.user) redirect(303, '/login?redirect=/halls/messages');
+export const load: PageServerLoad = async ({ locals, url }) => {
+	if (!locals.user) redirect(303, loginUrl(url, '/login'));
 	const orgId = locals.domainOrg!.id;
 	const userId = locals.user.id;
 

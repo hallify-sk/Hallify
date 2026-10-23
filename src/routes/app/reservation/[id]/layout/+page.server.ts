@@ -1,4 +1,5 @@
 import { error, redirect, fail } from '@sveltejs/kit';
+import { loginUrl } from '$lib/login-redirect';
 import { dbFirst, dbAll, dbRun, fromJson } from '$lib/db/index';
 import type { ReservationRow, TableTypeRow } from '$lib/db/index';
 import { buildSeatableLayout } from '$lib/reservationLayout';
@@ -12,7 +13,7 @@ import { seatingDraft, recordSavedDraft } from '$lib/server/ai/proposals';
 import { tableInventoryError } from '$lib/server/table-inventory';
 
 export const load: PageServerLoad = async ({ locals, params, url }) => {
-	if (!locals.user) redirect(303, '/app/login');
+	if (!locals.user) redirect(303, loginUrl(url));
 	const orgId = locals.currentOrg?.id;
 	if (!orgId) error(403, st(locals.locale).serverErrors.accessDenied);
 
@@ -68,8 +69,8 @@ export const load: PageServerLoad = async ({ locals, params, url }) => {
 };
 
 export const actions: Actions = {
-	saveLayout: async ({ request, locals, params }) => {
-		if (!locals.user) redirect(303, '/app/login');
+	saveLayout: async ({ request, locals, params, url }) => {
+		if (!locals.user) redirect(303, loginUrl(url));
 		const orgId = locals.currentOrg?.id;
 		if (!orgId) return fail(403, { error: st(locals.locale).serverErrors.accessDenied });
 		const data = await request.formData();
@@ -110,8 +111,8 @@ export const actions: Actions = {
 	// Apply an org template to this reservation: its tables, with the guest list kept
 	// (guests whose chair the template also has stay on it). Persisted, and handed back
 	// so the editor can remount on it without a full reload.
-	loadTemplate: async ({ request, locals, params }) => {
-		if (!locals.user) redirect(303, '/app/login');
+	loadTemplate: async ({ request, locals, params, url }) => {
+		if (!locals.user) redirect(303, loginUrl(url));
 		const orgId = locals.currentOrg?.id;
 		if (!orgId) return fail(403, { error: st(locals.locale).serverErrors.accessDenied });
 		const data = await request.formData();

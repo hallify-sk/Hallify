@@ -1,4 +1,5 @@
 import { redirect, fail } from '@sveltejs/kit';
+import { loginUrl } from '$lib/login-redirect';
 import type { PageServerLoad, Actions } from './$types';
 import {
   createCheckoutSession, createPortalSession, cancelSubscription, resumeSubscription,
@@ -41,7 +42,7 @@ async function viaStripe<T>(locals: App.Locals, what: string, call: () => Promis
 }
 
 export const load: PageServerLoad = async ({ locals, url }) => {
-  if (!locals.user) redirect(303, '/app/login');
+  if (!locals.user) redirect(303, loginUrl(url));
   if (!locals.currentOrg) redirect(303, '/app/org/new');
   const org = locals.currentOrg;
 

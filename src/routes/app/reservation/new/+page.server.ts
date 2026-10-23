@@ -1,4 +1,5 @@
 import { fail, redirect } from '@sveltejs/kit';
+import { loginUrl } from '$lib/login-redirect';
 import { dbAll, fromJson, fromJsonArr } from '$lib/db/index';
 import type { HallRow, HallBlockRow, TemplateRow } from '$lib/db/index';
 import type { Actions, PageServerLoad } from './$types';
@@ -9,7 +10,7 @@ import { createReservation } from '$lib/server/reservations';
 const RANGE_DAYS = 540; // how far ahead to compute taken/held for the picker
 
 export const load: PageServerLoad = async ({ locals, url }) => {
-	if (!locals.user) redirect(303, '/app/login');
+	if (!locals.user) redirect(303, loginUrl(url));
 	const orgId = locals.currentOrg?.id;
 
 	const halls = await dbAll<Pick<HallRow,
@@ -63,8 +64,8 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 };
 
 export const actions: Actions = {
-	default: async ({ request, locals }) => {
-		if (!locals.user) redirect(303, '/app/login');
+	default: async ({ request, locals, url }) => {
+		if (!locals.user) redirect(303, loginUrl(url));
 		const orgId = locals.currentOrg?.id;
 		if (!orgId) return fail(403, { error: st(locals.locale).serverErrors.noOrganizationSelected });
 

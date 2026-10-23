@@ -1,4 +1,5 @@
 import { error, redirect } from '@sveltejs/kit';
+import { loginUrl } from '$lib/login-redirect';
 import { dbFirst, dbAll } from '$lib/db/index';
 import type { ReservationRow, TableTypeRow } from '$lib/db/index';
 import { buildSeatableLayout } from '$lib/reservationLayout';
@@ -7,8 +8,8 @@ import { st } from '$lib/i18n-server';
 import type { PageServerLoad } from './$types';
 import { reservationAccess, assertCanOpenReservation } from '$lib/server/reservation-access';
 
-export const load: PageServerLoad = async ({ locals, params }) => {
-	if (!locals.user) redirect(303, '/app/login');
+export const load: PageServerLoad = async ({ locals, params, url }) => {
+	if (!locals.user) redirect(303, loginUrl(url));
 	const orgId = locals.currentOrg?.id;
 	if (!orgId) error(403, st(locals.locale).serverErrors.accessDenied);
 

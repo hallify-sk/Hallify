@@ -1,9 +1,10 @@
 import { redirect } from '@sveltejs/kit';
+import { loginUrl } from '$lib/login-redirect';
 import { listAnnouncementsForOrg, markAnnouncementsRead } from '$lib/announcements';
 import type { PageServerLoad } from './$types';
 
-export const load: PageServerLoad = async ({ locals }) => {
-	if (!locals.user) redirect(303, '/app/login');
+export const load: PageServerLoad = async ({ locals, url }) => {
+	if (!locals.user) redirect(303, loginUrl(url));
 	const orgId = locals.currentOrg?.id;
 	const isStaff = locals.currentOrg?.role === 'owner' || locals.currentOrg?.role === 'admin';
 	if (!orgId || !isStaff) redirect(303, '/app');

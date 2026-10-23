@@ -1,4 +1,5 @@
 import { error, redirect, fail } from '@sveltejs/kit';
+import { loginUrl } from '$lib/login-redirect';
 import { dbFirst, dbAll, dbRun } from '$lib/db/index';
 import type { ReservationRow, TableTypeRow } from '$lib/db/index';
 import { buildSeatableLayout } from '$lib/reservationLayout';
@@ -14,8 +15,8 @@ import type { Actions, PageServerLoad } from './$types';
 // until the event starts.
 const CLIENT_EDITABLE = new Set(['approved', 'planned']);
 
-export const load: PageServerLoad = async ({ locals, params }) => {
-	if (!locals.user) redirect(303, `/login?redirect=/halls/my-reservations/${params.id}/layout`);
+export const load: PageServerLoad = async ({ locals, params, url }) => {
+	if (!locals.user) redirect(303, loginUrl(url, '/login'));
 	const orgId = locals.domainOrg!.id;
 
 	const reservation = await dbFirst<ReservationRow & { hall_floorplan_json: unknown; hall_name: string; hall_custom_layouts: number; hall_force_layouts: number }>(locals.db,

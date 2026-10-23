@@ -1,4 +1,5 @@
 import { error, redirect } from '@sveltejs/kit';
+import { loginUrl } from '$lib/login-redirect';
 import { dbFirst, dbAll } from '$lib/db/index';
 import type { ReservationRow, TableTypeRow } from '$lib/db/index';
 import { buildSeatableLayout, rsvpDetailMap } from '$lib/reservationLayout';
@@ -11,8 +12,8 @@ import type { PageServerLoad } from './$types';
 // layout EDITOR stays approved/planned only.
 const CLIENT_VISIBLE = new Set(['approved', 'planned', 'completed']);
 
-export const load: PageServerLoad = async ({ locals, params }) => {
-	if (!locals.user) redirect(303, `/login?redirect=/halls/my-reservations/${params.id}/manifest`);
+export const load: PageServerLoad = async ({ locals, params, url }) => {
+	if (!locals.user) redirect(303, loginUrl(url, '/login'));
 	const orgId = locals.domainOrg!.id;
 
 	const reservation = await dbFirst<ReservationRow & { hall_floorplan_json: unknown; hall_name: string }>(locals.db,

@@ -1,4 +1,5 @@
 import { error, redirect, fail } from '@sveltejs/kit';
+import { loginUrl } from '$lib/login-redirect';
 import { dbFirst, dbRun, toJson } from '$lib/db/index';
 import type { RsvpTemplateRow } from '$lib/db/index';
 import { st } from '$lib/i18n-server';
@@ -6,9 +7,9 @@ import type { Actions, PageServerLoad } from './$types';
 import { RSVP_ENABLED } from '$lib/features';
 import { requireOrgPermission } from '$lib/server/access';
 
-export const load: PageServerLoad = async ({ locals, params }) => {
+export const load: PageServerLoad = async ({ locals, params, url }) => {
 	if (!RSVP_ENABLED) error(404, 'Not found');
-	if (!locals.user) redirect(303, '/app/login');
+	if (!locals.user) redirect(303, loginUrl(url));
 	const orgId = (await requireOrgPermission(locals, 'templates.manage')).id;
 
 	// `AND org_id = ?` is not optional: scoping is not authorization, but without it

@@ -1,4 +1,5 @@
 import { error, fail, redirect } from '@sveltejs/kit';
+import { loginUrl } from '$lib/login-redirect';
 import { dbAll, dbFirst, dbRun, fromJsonArr } from '$lib/db/index';
 import type { HallRow, HallBlockRow } from '$lib/db/index';
 import type { PageServerLoad, Actions } from './$types';
@@ -10,9 +11,9 @@ import { loadBookableExtras } from '$lib/site/bookable-extras';
 
 const RANGE_DAYS = 540;
 
-export const load: PageServerLoad = async ({ params, locals }) => {
+export const load: PageServerLoad = async ({ params, locals, url }) => {
 	if (!locals.user) {
-		redirect(303, `/login?redirect=${encodeURIComponent(`/halls/${params.slug}/book`)}`);
+		redirect(303, loginUrl(url, '/login'));
 	}
 	const orgId = locals.domainOrg!.id;
 

@@ -1,5 +1,6 @@
 import type { PageServerLoad, Actions } from './$types';
 import { redirect, fail } from '@sveltejs/kit';
+import { loginUrl } from '$lib/login-redirect';
 import { dbAll, dbFirst, dbRun, toJson, fromJson, fromJsonArr } from '$lib/db/index';
 import { st } from '$lib/i18n-server';
 import { PLANS } from '$lib/plans';
@@ -76,8 +77,8 @@ function readWebhookForm(data: FormData, locale: App.Locals['locale']) {
   return { name, url, secret, events, values };
 }
 
-export const load: PageServerLoad = async ({ locals }) => {
-  if (!locals.user) redirect(303, '/app/login');
+export const load: PageServerLoad = async ({ locals, url }) => {
+  if (!locals.user) redirect(303, loginUrl(url));
   // Any member may open this tab to leave the organisation; everything else on it
   // needs settings.manage, so a member without it sees only the danger zone.
   const org = requireOrg(locals);
@@ -346,8 +347,8 @@ export const actions: Actions = {
   // Current user leaves the org. The last member (usually the owner) cannot
   // leave — they must explicitly close the organization. Leaving is about your own
   // membership, not about managing the organisation, so any member may do it.
-  leave: async ({ locals }) => {
-    if (!locals.user) redirect(303, '/app/login');
+  leave: async ({ locals, url }) => {
+    if (!locals.user) redirect(303, loginUrl(url));
     requireOrg(locals);
     if (locals.currentOrg?.impersonated) return fail(403, { dangerError: st(locals.locale).serverErrors.impersonationBlockThisOrg });
     const refused = await leaveOrganization(locals.db, locals.currentOrg!.id, locals.user.id);

@@ -12,6 +12,7 @@ import { runInRequestScope, keepAlive } from '$lib/server/background';
 import { syncUserLocale } from '$lib/server/user-locale';
 import { suspendedResponse } from '$lib/server/suspended-page';
 import { canonicalRedirect, needsOriginCheck, originAllowed, redirectStatus } from '$lib/server/edge';
+import { loginUrl } from '$lib/login-redirect';
 import { sequence } from '@sveltejs/kit/hooks';
 import type { Handle } from '@sveltejs/kit';
 import type { Branding, OrgContext } from './app.d';
@@ -291,6 +292,10 @@ const appHandle: Handle = async ({ event, resolve }) => {
       if (pathname === '/') {
         return new Response(null, { status: 303, headers: { Location: '/app/manage' } });
       }
+    } else if (!session && (pathname === '/app/manage' || pathname.startsWith('/app/manage/'))) {
+      // A signed-out member opening a console link on their venue's domain (from a
+      // notification email, a bookmark) signs in here and comes back to that page.
+      return new Response(null, { status: 303, headers: { Location: loginUrl(event.url, '/login') } });
     } else if (pathname === '/' || pathname.startsWith('/app/')) {
       // Clients, anonymous visitors, and non-members stay on the public surface.
       return new Response(null, { status: 303, headers: { Location: '/halls' } });
