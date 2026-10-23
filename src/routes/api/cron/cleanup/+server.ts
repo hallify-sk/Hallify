@@ -2,6 +2,7 @@ import { json, error } from '@sveltejs/kit';
 import { env } from '$env/dynamic/private';
 import { runCleanup } from '$lib/cleanup';
 import { sendEventReminders } from '$lib/server/reminders';
+import { sendFeedbackInvites } from '$lib/server/feedback';
 import type { RequestHandler } from './$types';
 
 /** Explicit housekeeping run, for an external scheduler.
@@ -30,5 +31,6 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 
   const results = await runCleanup(locals.db);
   const reminders = await sendEventReminders(locals.db);
-  return json({ ok: true, results, reminders }, { headers: { 'cache-control': 'no-store' } });
+  const feedbackInvites = await sendFeedbackInvites(locals.db);
+  return json({ ok: true, results, reminders, feedbackInvites }, { headers: { 'cache-control': 'no-store' } });
 };

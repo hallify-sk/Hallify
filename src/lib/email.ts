@@ -11,6 +11,7 @@ import { st } from '$lib/i18n-server';
 import { orgPublicBaseUrl } from '$lib/orgUrl';
 import { formatIban, type PaymentView } from '$lib/payment';
 import { loadPaymentView } from '$lib/server/payments';
+import { feedbackDeadline } from '$lib/feedback';
 
 // Email is sent platform-wide via the Brevo transactional HTTP API
 // (https://developers.brevo.com/reference/sendtransacemail). Every email goes
@@ -70,6 +71,7 @@ export interface EmailTemplates {
 	venueChanged?: string;
 	eventReminder?: string;
 	paymentDetails?: string;
+	feedbackRequest?: string;
 }
 
 const TEMPLATE_KEYS = Object.keys(DEFAULT_TEMPLATES.sk) as TemplateKey[];
@@ -908,6 +910,28 @@ export const notifyPaymentDetails = inBackground(async function notifyPaymentDet
 			footer: [c.payment.disclaimer(org.name)],
 		}),
 		link: { url: await clientReservationUrl(db, orgId, res.id), label: (c) => c.cta.viewBooking },
+	});
+});
+
+// The event is over and its hall asks for feedback → invite the client to rate it, once
+// (src/lib/server/feedback.ts picks the bookings and claims each before sending).
+// The hall's own "ask for feedback" switch is the setting; there is no second one.
+export const notifyFeedbackRequest = inBackground(async function notifyFeedbackRequest(
+	db: D1Database, orgId: string, reservationId: string
+): Promise<boolean> {
+	const res = await loadReservation(db, reservationId);
+	if (!res?.clientEmail || !res.clientIsClient || res.status !== 'completed') return false;
+	const requestedAt = new Date().toISOString().slice(0, 10);
+	return emailClient(db, {
+		orgId, to: res.clientEmail, templateName: 'feedbackRequest', res,
+		build: (c, locale, tpl) => ({
+			subject: c.subject.feedbackRequest(res.title),
+			bodyHtml: renderTemplate(tpl.feedbackRequest, {
+				title: res.title, hallName: res.hallName, date: eventDate(res.eventDate, locale),
+				deadline: eventDate(feedbackDeadline(res.eventDate, requestedAt), locale),
+			}),
+		}),
+		link: { url: `${await clientReservationUrl(db, orgId, res.id)}#feedback`, label: (c) => c.cta.rateEvent },
 	});
 });
 

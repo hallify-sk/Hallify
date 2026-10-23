@@ -6,7 +6,7 @@ describe('consoleNav', () => {
 	it('gives the owner every link', () => {
 		const nav = consoleNav('owner', PERMISSIONS);
 		expect(nav).toEqual({
-			console: true, halls: true, reservations: true, calendar: true, assistant: true,
+			console: true, halls: true, reservations: true, clients: true, calendar: true, assistant: true,
 			clientMessages: true, announcements: true, members: '/app/manage/members',
 			billing: true, settings: true
 		});
@@ -26,6 +26,7 @@ describe('consoleNav', () => {
 		const nav = consoleNav('member', [...DEFAULT_ROLE_PERMISSIONS, 'reservations.manage', 'ai.use']);
 		expect(nav.console).toBe(true);
 		expect(nav.reservations).toBe(true);
+		expect(nav.clients).toBe(true);
 		expect(nav.calendar).toBe(true);
 		expect(nav.assistant).toBe(true);
 		expect(nav.halls).toBe(false);
