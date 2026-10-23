@@ -42,6 +42,19 @@
     }
   });
 
+  // While the banner is up it sits over the bottom of the page, where the venue
+  // site's booking form has its submit button: on a phone the tap landed on the
+  // banner. Its height is published as --consent-space so the venue site can add
+  // that much room under its content, and every control can scroll above it.
+  let bannerHeight = $state(0);
+  $effect(() => {
+    if (typeof document === 'undefined') return;
+    const root = document.documentElement;
+    if (open && bannerHeight > 0) root.style.setProperty('--consent-space', `${bannerHeight + 24}px`);
+    else root.style.removeProperty('--consent-space');
+    return () => root.style.removeProperty('--consent-space');
+  });
+
   function apply(state: ConsentState) {
     setConsent(state, containers);
     open = false;
@@ -50,7 +63,7 @@
 </script>
 
 {#if open}
-  <div class="consent" role="dialog" aria-modal="false" aria-label={t.consent.title}>
+  <div class="consent" role="dialog" aria-modal="false" aria-label={t.consent.title} bind:clientHeight={bannerHeight}>
     <div class="consent-body">
       <div class="consent-head">
         <h2>{t.consent.title}</h2>
@@ -159,4 +172,5 @@
     .btn-ghost, .btn-accept { flex: 1; }
   }
   .consent-hallify { margin-top: 6px; font-size: 12px; opacity: .85; }
+  @media print { .consent { display: none; } }
 </style>

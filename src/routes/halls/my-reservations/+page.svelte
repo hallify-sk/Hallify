@@ -152,7 +152,8 @@
   }
   .toast svg { flex-shrink: 0; }
 
-  .tabs { display: flex; gap: 4px; }
+  /* Wraps on a phone: four tabs with counts in one row made the page 476px wide. */
+  .tabs { display: flex; flex-wrap: wrap; gap: 4px; min-width: 0; max-width: 100%; }
   .tab {
     display: inline-flex; align-items: center; gap: 7px; padding: 8px 13px;
     background: none; border: none; border-bottom: 2px solid transparent; cursor: pointer;
@@ -199,5 +200,9 @@
 
   @media (prefers-reduced-motion: reduce) {
     .btn-primary:hover { transform: none; }
+  }
+
+  @media (max-width: 520px) {
+    .tab { padding: 8px 9px; }
   }
 </style>
