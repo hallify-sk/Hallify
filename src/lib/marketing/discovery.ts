@@ -1,7 +1,9 @@
 import type { PublicVenue } from './types';
 
 export interface MapCenter { latitude: number; longitude: number }
-export const DEFAULT_CENTER: MapCenter = { latitude: 50.0755, longitude: 14.4378 };
+/** Banská Bystrica, near the middle of Slovakia: where demo venues sit and the map opens
+ *  when nothing else says where to look. Hallify's venues are Slovak, not around Prague. */
+export const DEFAULT_CENTER: MapCenter = { latitude: 48.7363, longitude: 19.1462 };
 
 export function distanceKm(a: MapCenter, b: MapCenter): number {
   const radians = Math.PI / 180;
@@ -24,7 +26,7 @@ export function demoVenues(center: MapCenter = DEFAULT_CENTER, nearby = false, e
   const capacities = [120,80,180,60,240,100,40], distances = [3,7,11,18,25,34,42];
   return names.map((name, i) => ({
     id: `demo-${i}`, name, slug: null, description: english ? 'An illustrative venue for trying map selection and filters.' : 'Ilustračný priestor na vyskúšanie výberu na mape a filtrov.',
-    address: nearby ? (english ? 'Your area · sample location' : 'Vaše okolie · ukážková poloha') : (english ? 'Prague area · sample location' : 'Okolie Prahy · ukážková poloha'),
+    address: nearby ? (english ? 'Your area · sample location' : 'Vaše okolie · ukážková poloha') : (english ? 'Central Slovakia · sample location' : 'Stredné Slovensko · ukážková poloha'),
     ...destination(center, distances[i], 32 + i * 51), max_people: capacities[i],
     cover_image_url: ['/marketing/venue-example.jpg','/marketing/venue-dinner.jpg','/marketing/venue-conference.jpg'][i % 3],
     amenities: i % 2 ? ['parking','outdoor'] : ['wifi','catering'],
@@ -82,12 +84,77 @@ export function featuredVenues(
   return Array.from({ length: limit }, (_, i) => ordered[(offset + i) % ordered.length]);
 }
 
-export function filterVenues(venues: PublicVenue[], filters: { query: string; guests: number; floorplan: boolean; booking: boolean; center?: MapCenter | null; radius?: number; bands?: number[] }): PublicVenue[] {
-  const normalize = (text: string) => text.toLocaleLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+/** Lower case without diacritics, so "kosice" finds "Ko\u0161ice" and "sala" finds "\u0160a\u013ea". */
+export function normalizeText(text: string): string {
+  return text.toLocaleLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+}
+
+/**
+ * Whether a venue's name or address mentions every word of the query, in any order:
+ * "Reduta Bratislava" finds Reduta on Meden\u00e1 in Bratislava even though the words are
+ * not next to each other in the text.
+ */
+export function matchesQuery(venue: Pick<PublicVenue, 'name' | 'address'>, query: string): boolean {
+  const words = normalizeText(query).split(/[\s,]+/).filter(Boolean);
+  if (!words.length) return true;
+  const text = normalizeText(`${venue.name} ${venue.address ?? ''}`);
+  return words.every(word => text.includes(word));
+}
+
+/**
+ * The directory filters.
+ *
+ * `center` + `radius` is the "around" filter. When the centre is where the typed
+ * query was geocoded to (`centerIsQuery`), the area widens the search rather than
+ * narrowing it: a venue matches by its name or address OR by lying in the area.
+ * Requiring both hid exactly what people searched for -- "Reduta" geocodes to Brno,
+ * "kosice" to a Czech village, and a venue in \u0160a\u013ea without a map position was
+ * dropped by the radius however well its address matched. When the centre is the
+ * visitor's own position, the area is a real constraint and both must hold.
+ */
+export function filterVenues(venues: PublicVenue[], filters: { query: string; guests: number; floorplan: boolean; booking: boolean; center?: MapCenter | null; radius?: number; bands?: number[]; centerIsQuery?: boolean }): PublicVenue[] {
   // An unstated band must not pass a band filter: it is unknown, not cheap.
   const bands = filters.bands?.length ? new Set(filters.bands) : null;
+  const center = filters.center && filters.radius ? filters.center : null;
+  const typed = !!filters.query.trim();
+  const inArea = (venue: PublicVenue) => !!center && venue.latitude !== null && venue.longitude !== null &&
+    distanceKm(center, { latitude: venue.latitude, longitude: venue.longitude }) <= filters.radius!;
+  const place = (venue: PublicVenue) => {
+    const text = matchesQuery(venue, filters.query);
+    if (!center) return text;
+    return filters.centerIsQuery && typed ? text || inArea(venue) : text && inArea(venue);
+  };
   return venues.filter(venue => venue.max_people >= filters.guests && (!filters.floorplan || !!venue.has_floorplan) &&
-    (!filters.booking || !!venue.allow_reservations) && normalize(`${venue.name} ${venue.address ?? ''}`).includes(normalize(filters.query.trim())) &&
-    (!bands || (venue.price_band !== null && bands.has(venue.price_band))) &&
-    (!filters.center || !filters.radius || (venue.latitude !== null && venue.longitude !== null && distanceKm(filters.center, { latitude: venue.latitude, longitude: venue.longitude }) <= filters.radius)));
+    (!filters.booking || !!venue.allow_reservations) && place(venue) &&
+    (!bands || (venue.price_band !== null && bands.has(venue.price_band))));
+}
+
+/** The orders the directory offers. 'recommended' keeps featured partners first. */
+export const VENUE_SORTS = ['recommended', 'distance', 'capacity-desc', 'capacity-asc', 'price', 'name'] as const;
+export type VenueSort = typeof VENUE_SORTS[number];
+
+export function parseVenueSort(value: string | null | undefined): VenueSort {
+  return (VENUE_SORTS as readonly string[]).includes(value ?? '') ? value as VenueSort : 'recommended';
+}
+
+/**
+ * Sort a result list. Ties fall back to the name, so the order is stable. What a
+ * sort cannot rank goes last rather than first: a venue without a map position when
+ * sorting by distance, one that never stated a price when sorting by price.
+ * 'recommended' (and 'distance' with no known centre) keeps the given order.
+ */
+export function sortVenues(venues: PublicVenue[], sort: VenueSort, center?: MapCenter | null): PublicVenue[] {
+  const byName = (a: PublicVenue, b: PublicVenue) => a.name.localeCompare(b.name, 'sk');
+  const last = (value: number | null) => value ?? Number.POSITIVE_INFINITY;
+  const distance = (venue: PublicVenue) => center && venue.latitude !== null && venue.longitude !== null
+    ? distanceKm(center, { latitude: venue.latitude, longitude: venue.longitude }) : null;
+  const list = [...venues];
+  switch (sort) {
+    case 'distance': return center ? list.sort((a, b) => last(distance(a)) - last(distance(b)) || byName(a, b)) : list;
+    case 'capacity-desc': return list.sort((a, b) => b.max_people - a.max_people || byName(a, b));
+    case 'capacity-asc': return list.sort((a, b) => a.max_people - b.max_people || byName(a, b));
+    case 'price': return list.sort((a, b) => last(a.price_band) - last(b.price_band) || byName(a, b));
+    case 'name': return list.sort(byName);
+    default: return list;
+  }
 }

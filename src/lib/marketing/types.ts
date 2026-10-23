@@ -16,12 +16,38 @@ export interface PublicVenue extends Coordinates {
   has_floorplan: number;
   demo?: boolean;
   is_partner: boolean;
+  /** The organisation's slug; with the hall's slug it addresses the venue page. */
+  org_slug?: string | null;
+  /** Origin of the venue's own site (custom domain or org subdomain), where it is booked. */
+  site_url?: string | null;
 }
 
-// UUIDs are globally unique; slugs are only unique within an organization.
+/**
+ * The venue's public page in the directory.
+ *
+ * Hall slugs are only unique within an organisation, so the organisation's slug
+ * comes first. It lives under /priestory, not /app: robots.txt keeps search engines
+ * out of the app, and the venue pages are exactly what should be found.
+ */
+export function venuePagePath(orgSlug: string, hallSlug: string): string {
+  return `/priestory/${encodeURIComponent(orgSlug)}/${encodeURIComponent(hallSlug)}`;
+}
+
 export function venueHref(venue: PublicVenue): string {
   if (venue.demo) return '#venue-preview';
-  return `/app/halls/${encodeURIComponent(venue.id)}`;
+  if (venue.org_slug && venue.slug) return venuePagePath(venue.org_slug, venue.slug);
+  // Listed halls always have both slugs; this keeps an odd row reachable all the same.
+  return venue.site_url && venue.slug ? `${venue.site_url}/halls/${encodeURIComponent(venue.slug)}` : '/priestory';
+}
+
+/**
+ * Where to book the venue: the booking page on the venue's own site, where the
+ * visitor signs in or registers as that venue's client. Null when the hall takes
+ * no bookings, or its site has no address that would route.
+ */
+export function bookingHref(venue: PublicVenue): string | null {
+  if (venue.demo || !venue.allow_reservations || !venue.site_url || !venue.slug) return null;
+  return `${venue.site_url}/halls/${encodeURIComponent(venue.slug)}/book`;
 }
 
 export type PriceBand = 1 | 2 | 3;

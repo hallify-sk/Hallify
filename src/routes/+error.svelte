@@ -1,6 +1,7 @@
 <script lang="ts">
   import { page } from '$app/stores';
   import { t } from '$lib/i18n.svelte';
+  import MarketingShell from '$lib/marketing/MarketingShell.svelte';
 
   const status = $derived($page.status);
   const isNotFound = $derived(status === 404);
@@ -12,10 +13,26 @@
     : status === 429 ? t.errorPage.rateLimitedBody
     : t.errorPage.serverBody
   );
+  // On the public Hallify site (not the console, not a venue's own site) a missing
+  // page keeps the site's header, footer and theme, and offers the directory.
+  const marketing = $derived(!($page.data as { onBubble?: boolean }).onBubble && !$page.url.pathname.startsWith('/app'));
 </script>
 
 <svelte:head><title>{status} · Hallify</title></svelte:head>
 
+{#if marketing}
+<MarketingShell audience="customer">
+  <section class="wrap marketing-error">
+    <p class="eyebrow">{status}</p>
+    <h1>{isNotFound ? t.errorPage.notFoundTitle : t.errorPage.genericTitle}</h1>
+    <p class="lead">{detail}</p>
+    <div class="marketing-error-actions">
+      <a class="primary" href="/priestory">{t.errorPage.browseVenues}</a>
+      <a class="marketing-error-home" href="/">{t.errorPage.backHome}</a>
+    </div>
+  </section>
+</MarketingShell>
+{:else}
 <div class="err">
   <a href="/" class="brand">
     <img src="/Hallify.svg" alt="" />
@@ -29,8 +46,13 @@
     <button class="btn-outline" type="button" onclick={() => history.back()}>{t.errorPage.goBack}</button>
   </div>
 </div>
+{/if}
 
 <style>
+  .marketing-error { padding: 90px 0 120px; min-height: 55vh; }
+  .marketing-error h1 { max-width: 14ch; }
+  .marketing-error-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 22px; }
+  .marketing-error-home { font-size: 12px; font-weight: 650; color: var(--accent-ink); }
   .err {
     min-height: 100vh;
     display: flex;

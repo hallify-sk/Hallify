@@ -4,7 +4,9 @@
   import { getContext, onMount, tick, untrack } from 'svelte';
   import type * as Leaflet from 'leaflet';
   import 'leaflet/dist/leaflet.css';
-  import type { MapCenter } from './discovery';
+  import { DEFAULT_CENTER, type MapCenter } from './discovery';
+  import { clusterPins } from './map-clusters';
+  import { sk, en } from '$lib/i18n';
   import { userLocation, locateUser } from './user-location.svelte';
   import { createPointerKindDetector } from '$lib/pointer-kind';
   import { mapPreferences, loadMapPreferences } from './map-preferences.svelte';
@@ -31,6 +33,10 @@
   let map = $state.raw<Leaflet.Map | null>(null), library = $state.raw<typeof Leaflet | null>(null);
   let status = $state<'loading' | 'ready' | 'error'>('loading'), zoom = $state(6);
   const markers = new Map<string, Leaflet.Marker>();
+  const clusterMarkers: Leaflet.Marker[] = [];
+  /** From this zoom on every pin is drawn on its own. */
+  const CLUSTER_UNTIL_ZOOM = 16;
+  const clusterLabel = (count: number) => (english ? en : sk).appHalls.mapCluster(count);
   let previousFit = '', previousSelection: string | null = null;
   let locationMarker: Leaflet.CircleMarker | null = null;
   let radiusCircle: Leaflet.Circle | null = null;
@@ -48,7 +54,13 @@
       const positions = points.filter(valid);
       if (positions.length === 1) map.setView([positions[0].latitude, positions[0].longitude], onpick ? 16 : 12, { animate: !reduced() });
       else if (positions.length) map.fitBounds(library.latLngBounds(positions.map(p => [p.latitude, p.longitude])), { paddingTopLeft: [40,75], paddingBottomRight: [55,paddingBottom], maxZoom: 13, animate: !reduced() });
-      else { const q = fitKey.toLowerCase(); const city: [number, number] = q.includes('bratis') ? [48.1486,17.1077] : q.includes('brno') ? [49.1951,16.6068] : [50.0755,14.4378]; map.setView(city, 10, { animate: !reduced() }); }
+      else {
+        // Nothing to fit: a city the query names, otherwise the whole of Slovakia.
+        const q = fitKey.toLowerCase();
+        const city: [number, number] | null = q.includes('bratis') ? [48.1486,17.1077] : q.includes('brno') ? [49.1951,16.6068] : null;
+        if (city) map.setView(city, 10, { animate: !reduced() });
+        else map.setView([DEFAULT_CENTER.latitude, DEFAULT_CENTER.longitude], 7, { animate: !reduced() });
+      }
     }
   }
   function retry() {
@@ -117,14 +129,43 @@
       map = instance;
       resize = new ResizeObserver(() => instance.invalidateSize({ pan: false })); resize.observe(container);
     }).catch(() => { if (!disposed) status = 'error'; });
-    return () => { disposed = true; resize?.disconnect(); container.removeEventListener('wheel',wheel); container.removeEventListener('pointerdown',activate); container.removeEventListener('pointerleave',deactivate); if (frame) cancelAnimationFrame(frame); map?.remove(); markers.clear(); };
+    return () => { disposed = true; resize?.disconnect(); container.removeEventListener('wheel',wheel); container.removeEventListener('pointerdown',activate); container.removeEventListener('pointerleave',deactivate); if (frame) cancelAnimationFrame(frame); map?.remove(); markers.clear(); clusterMarkers.length = 0; };
   });
 
   $effect(() => {
     const L = library, instance = map; if (!L || !instance) return;
     const positions = points.filter(valid), ids = new Set(positions.map(p => p.id));
-    for (const [id, marker] of markers) if (!ids.has(id)) { marker.remove(); markers.delete(id); }
+    // Group pins that would overlap at this zoom (re-run on every zoomend through
+    // `zoom`). The location picker has one pin, and from street level on, pins that
+    // still overlap share a building: grouping them would only ever zoom in again.
+    void zoom;
+    const current = instance.getZoom() as number | undefined;
+    const groups = onpick || current === undefined || current >= CLUSTER_UNTIL_ZOOM
+      ? positions.map(point => ({ items: [point] }))
+      : clusterPins(positions.map(point => { const at = instance.project([point.latitude, point.longitude], current); return { item: point, x: at.x, y: at.y }; }), { keep: selected });
+    const single = new Set(groups.filter(group => group.items.length === 1).map(group => group.items[0].id));
+    for (const [id, marker] of markers) {
+      if (!ids.has(id)) { marker.remove(); markers.delete(id); }
+      else if (!single.has(id)) marker.remove();
+    }
+    for (const marker of clusterMarkers) marker.remove();
+    clusterMarkers.length = 0;
+    for (const group of groups) {
+      if (group.items.length < 2) continue;
+      const bounds = L.latLngBounds(group.items.map(point => [point.latitude, point.longitude] as [number, number]));
+      const label = clusterLabel(group.items.length);
+      const inner = document.createElement('span'); inner.className = 'venue-map-cluster-inner'; inner.textContent = String(group.items.length);
+      const cluster = L.marker(bounds.getCenter(), { keyboard: true, title: label, icon: L.divIcon({ html: inner, className: 'venue-map-cluster', iconSize: [46, 46], iconAnchor: [23, 23] }) });
+      cluster.on('add', () => cluster.getElement()?.setAttribute('aria-label', label));
+      cluster.on('click', () => {
+        if (bounds.getNorthEast().equals(bounds.getSouthWest())) instance.setView(bounds.getCenter(), Math.min(instance.getZoom() + 3, CLUSTER_UNTIL_ZOOM), { animate: !reduced() });
+        else instance.fitBounds(bounds, { padding: [70, 70], maxZoom: CLUSTER_UNTIL_ZOOM, animate: !reduced() });
+      });
+      cluster.addTo(instance);
+      clusterMarkers.push(cluster);
+    }
     for (const point of positions) {
+      if (!single.has(point.id)) continue;
       let marker = markers.get(point.id);
       if (!marker) {
         marker = L.marker([point.latitude,point.longitude], { keyboard: true, draggable: !!onpick, title: point.name });
@@ -298,6 +339,12 @@
   :global(.venue-map-pin.is-selected .venue-map-pin-inner){background:#f05ca1;color:#28111c;border-color:#f05ca1}
   :global(.venue-map-pin.is-selected .venue-map-pin-inner::after){border-color:#f05ca1}
   :global(.venue-map-pin:focus-visible){outline:3px solid var(--map-accent);outline-offset:4px;border-radius:3px}
+  /* A group of pins that would overlap: a counted disc that zooms in when chosen. */
+  :global(.venue-map-cluster){display:flex;align-items:center;justify-content:center;background:none;border:0;cursor:pointer}
+  :global(.venue-map-cluster-inner){display:grid;place-items:center;width:46px;height:46px;border-radius:50%;background:var(--map-panel);color:var(--map-ink);border:2px solid #f05ca1;font:700 13px/1 Inter,sans-serif;box-shadow:0 5px 13px #11151126;transition:background .15s,color .15s,transform .15s}
+  :global(.venue-map-cluster:hover .venue-map-cluster-inner){background:#f05ca1;color:#28111c;transform:scale(1.06)}
+  :global(.venue-map-cluster:focus-visible){outline:3px solid var(--map-accent);outline-offset:4px;border-radius:50%}
+  @media (prefers-reduced-motion: reduce){:global(.venue-map-cluster-inner){transition:none}:global(.venue-map-cluster:hover .venue-map-cluster-inner){transform:none}}
 
   /* Hover. The pins had a selected state and a focus ring but nothing for the
      pointer, so nothing on the map reacted to the mouse at all. Transform and

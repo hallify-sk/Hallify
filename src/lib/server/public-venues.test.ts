@@ -18,7 +18,10 @@ describe('public venue migration compatibility', () => {
     const venues = await publicVenues(db);
     expect(venues[0]).toMatchObject({ latitude: null, longitude: null, is_partner: false, amenities: ['parking'] });
     const fallbackSql = vi.mocked(dbAll).mock.calls[1][1];
-    expect(fallbackSql).toContain('h.is_public = 1 AND h.plan_locked = 0 AND o.suspended_at IS NULL');
+    expect(fallbackSql).toContain('h.is_public = 1 AND h.plan_locked = 0 AND h.archived_at IS NULL');
+    expect(fallbackSql).toContain('o.suspended_at IS NULL');
+    // Without coordinates, an address is what makes a hall complete enough to list.
+    expect(fallbackSql).toContain("TRIM(COALESCE(h.address, '')) != ''");
     expect(fallbackSql).toContain('NULL AS latitude');
     warning.mockRestore();
   });
@@ -32,6 +35,29 @@ describe('public venue migration compatibility', () => {
     expect(applyDiscoveryMigrations).toHaveBeenCalledWith(db);
     expect(venues[0]).toMatchObject({ latitude: 50, longitude: 14, is_partner: true });
     expect(ready).toHaveBeenCalledWith(true);
+  });
+
+  it('lists only halls complete enough to show: a slug and an address or a map position', async () => {
+    vi.mocked(dbAll).mockResolvedValueOnce([]);
+    await publicVenues(db);
+    const sql = vi.mocked(dbAll).mock.calls[0][1];
+    expect(sql).toContain("h.slug IS NOT NULL AND TRIM(h.slug) != ''");
+    expect(sql).toContain('h.latitude IS NOT NULL AND h.longitude IS NOT NULL');
+    expect(sql).toContain('h.plan_locked = 0');
+    expect(sql).toContain('o.suspended_at IS NULL');
+  });
+
+  it('points each venue at its own site, where it is booked', async () => {
+    vi.mocked(dbAll).mockResolvedValueOnce([
+      { id: 'a', slug: 'sala', org_slug: 'kastiel', amenities: '[]', is_partner: 0, custom_domain: null, plan: 'free' },
+      { id: 'b', slug: 'sala', org_slug: 'reduta', amenities: '[]', is_partner: 1, custom_domain: 'reduta.sk', plan: 'starter' },
+      { id: 'c', slug: 'sala', org_slug: 'mlyn', amenities: '[]', is_partner: 0, custom_domain: 'mlyn.sk', plan: 'free' },
+    ]);
+    const venues = await publicVenues(db, undefined, { url: new URL('https://hallify.sk/priestory'), appDomain: 'hallify.sk' });
+    expect(venues.map(v => v.site_url)).toEqual(['https://kastiel.hallify.sk', 'https://reduta.sk', 'https://mlyn.hallify.sk']);
+    // The plan and the raw domain are inputs, not something the page needs to carry.
+    expect(venues[0]).not.toHaveProperty('plan');
+    expect(venues[0]).not.toHaveProperty('custom_domain');
   });
 
   it('does not suppress unrelated database failures', async () => {

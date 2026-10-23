@@ -29,7 +29,7 @@ export const load: PageServerLoad = async ({ locals }) => {
     `SELECT id, name, description, max_people, color, slug, cover_image_url, amenities, address,
             contact_phone, contact_email, contact_website, gallery_images, price_band
     FROM halls
-    WHERE is_public = 1 AND slug IS NOT NULL AND org_id = ?
+    WHERE is_public = 1 AND plan_locked = 0 AND slug IS NOT NULL AND org_id = ?
     ORDER BY name`,
     orgId
   );

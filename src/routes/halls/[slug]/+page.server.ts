@@ -14,7 +14,7 @@ export const load: PageServerLoad = async ({ params, locals, url }) => {
   const hall = await dbFirst<HallRow>(
     locals.db,
     `SELECT * FROM halls
-    WHERE slug = ? AND is_public = 1 AND org_id = ?`,
+    WHERE slug = ? AND is_public = 1 AND plan_locked = 0 AND org_id = ?`,
     params.slug,
     orgId
   );

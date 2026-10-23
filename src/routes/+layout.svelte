@@ -151,7 +151,7 @@
 
 	const AUTH_PATHS = ['/app/login', '/app/register', '/app/forgot-password', '/app/reset-password', '/app/invite', '/login', '/forgot-password', '/reset-password'];
 	const isAuthPage = $derived(AUTH_PATHS.some(p => $page.url.pathname.startsWith(p)));
-	const isLandingPage = $derived(['/', '/pre-prevadzkovatelov', '/priestory'].includes($page.url.pathname));
+	const isLandingPage = $derived(['/', '/pre-prevadzkovatelov', '/priestory'].includes($page.url.pathname) || $page.url.pathname.startsWith('/priestory/') || (!!$page.error && !data.onBubble && !$page.url.pathname.startsWith('/app'))); // venue pages, and public error pages (in the marketing shell)
 	const isPublicHallsPage = $derived($page.url.pathname.startsWith('/halls'));
 	// Document-style pages (printable seating manifest) render without the app shell.
 	const isDocPage = $derived($page.url.pathname.endsWith('/manifest'));

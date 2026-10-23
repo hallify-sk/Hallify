@@ -4,11 +4,17 @@
   import { getLocale, chooseLocale } from '$lib/i18n.svelte';
   import { LEGAL_LABELS } from '$lib/legal';
   import { openConsentSettings } from '$lib/analytics';
+  import { chooseMarketingTheme, chosenMarketingTheme, readMarketingTheme } from './theme.svelte';
   import './marketing.css';
   import { page } from '$app/stores';
   let { audience, children, explorer = false }: { audience: 'customer' | 'business'; children: Snippet; explorer?: boolean } = $props();
-  let theme = $state<'light' | 'dark'>('dark');
+  // A choice made during this visit wins; otherwise the cookie the page load read
+  // (pages without a load of their own, like the error page, fall back to dark).
+  const theme = $derived(chosenMarketingTheme() ?? readMarketingTheme(($page.data as { marketingTheme?: string | null }).marketingTheme) ?? 'dark');
   setContext('marketing-theme', () => theme);
+  // <html lang> is rendered by the server; keep it in step when the language changes
+  // on the page, so assistive technology reads English as English.
+  $effect(() => { document.documentElement.lang = getLocale(); });
   const en = $derived(getLocale() === 'en');
   const legal = $derived(LEGAL_LABELS[getLocale()]);
   // Signed in: the header leads back into the app instead of to the sign-in form.
@@ -24,7 +30,7 @@
     </nav>
     <div class="header-right">
       <button class="locale-toggle" onclick={() => chooseLocale(en ? 'sk' : 'en')} aria-label={en ? 'Switch to Slovak' : 'Prepnúť na angličtinu'}>{en ? 'SK' : 'EN'}</button>
-      <button class="theme-toggle" onclick={() => theme = theme === 'dark' ? 'light' : 'dark'} aria-label={en ? 'Switch color theme' : 'Prepnúť farebný režim'}>◐</button>
+      <button class="theme-toggle" onclick={() => chooseMarketingTheme(theme === 'dark' ? 'light' : 'dark')} aria-label={en ? 'Switch color theme' : 'Prepnúť farebný režim'}>◐</button>
       {#if signedIn}
         <a class="header-cta" href="/app">{en ? 'Go to the app' : 'Prejsť do aplikácie'} <Icon /></a>
       {:else}
