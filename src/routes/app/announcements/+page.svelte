@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { t } from '$lib/i18n.svelte';
+  import { t, getLocale } from '$lib/i18n.svelte';
+  import { formatDateTime } from '$lib/format';
   import type { PageData } from './$types';
   let { data }: { data: PageData } = $props();
 
@@ -10,9 +11,9 @@
     error:   { label: t.accountExtra.levelMajor,    icon: 'M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zM15 9l-6 6M9 9l6 6' },
   });
 
-  function fmtDate(d: string) {
-    return new Date(d).toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
-  }
+  // Stored times are UTC without a zone; formatDateTime reads them as UTC and shows
+  // them in the viewer's zone and language (they were 2 h off, in English).
+  const fmtDate = (d: string) => formatDateTime(d, getLocale());
 </script>
 
 <svelte:head><title>{t.accountExtra.announcementsTitle} – Hallify</title></svelte:head>
@@ -49,7 +50,7 @@
                 <span class="ann-level">{lvl.label}</span>
               </div>
               <p class="ann-text">{a.body}</p>
-              <div class="ann-meta">{a.author ?? 'Hallify'} · {fmtDate(a.created_at)}</div>
+              <div class="ann-meta">{t.accountExtra.announcementSignature} · {fmtDate(a.created_at)}{#if a.updated_at} · {t.platformMisc.editedTag}{/if}</div>
             </div>
           </article>
         {/each}

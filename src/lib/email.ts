@@ -272,8 +272,11 @@ export async function sendAnnouncementEmail(
 	db: D1Database,
 	orgIds: string[],
 	opts: { level: string; title: string; body: string }
-): Promise<void> {
-	if (!orgIds.length) return;
+): Promise<{ delivered: number; failed: number }> {
+	// Counted, so the platform page reports what really went out instead of
+	// "sent by email" when every send failed.
+	const result = { delivered: 0, failed: 0 };
+	if (!orgIds.length) return result;
 	const safe = (s: string) => String(s).replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c] as string));
 	const accent = ({ info: '#a6225e', success: '#2f7a52', warning: '#955f10', error: '#c3362c' } as Record<string, string>)[opts.level] ?? '#a6225e';
 	const html = `
@@ -294,9 +297,11 @@ export async function sendAnnouncementEmail(
 		for (const r of recipients) {
 			if (!r.email || seen.has(r.email)) continue;
 			seen.add(r.email);
-			await sendEmail(db, r.email, `Hallify announcement: ${opts.title}`, html, 'announcement');
+			if (await sendEmail(db, r.email, `Hallify announcement: ${opts.title}`, html, 'announcement')) result.delivered++;
+			else result.failed++;
 		}
 	}
+	return result;
 }
 
 // Organization invite → email the invited address with the accept link.
