@@ -371,6 +371,11 @@ export const sk = {
 	},
 	auth: {
 		backToSite: 'Späť na Hallify',
+		brandHeadline1: 'Správa priestorov',
+		brandHeadline2: 'pre moderné tímy.',
+		brandFeature1: 'Všetky sály, miesta a rozloženia na jednom mieste',
+		brandFeature2: 'Jednoduchšie rezervácie a zasadací poriadok',
+		brandFeature3: 'Spolupráca v rámci celej organizácie',
 		welcomeBack: 'Vitajte späť',
 		signInSubtitle: 'Prihláste sa do svojho účtu',
 		email: 'Email',
@@ -3187,6 +3192,11 @@ export const en: typeof sk = {
 	},
 	auth: {
 		backToSite: 'Back to Hallify',
+		brandHeadline1: 'Venue management',
+		brandHeadline2: 'for modern teams.',
+		brandFeature1: 'Manage every hall, seat, and layout',
+		brandFeature2: 'Streamline bookings and seating',
+		brandFeature3: 'Collaborate across your organization',
 		welcomeBack: 'Welcome back',
 		signInSubtitle: 'Sign in to your account',
 		email: 'Email',
