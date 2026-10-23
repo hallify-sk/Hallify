@@ -5,7 +5,10 @@ import {
 	listNotifications,
 	markAllNotificationsRead,
 	markNotificationRead,
+	notifyFeedback,
+	notifyLayoutProblems,
 	notifyOrg,
+	notifyPayment,
 	unreadNotificationCount,
 	type NotificationViewer
 } from './notification-centre';
@@ -119,6 +122,33 @@ describe('notifyOrg and what a member sees (D12)', () => {
 		await expect(booking()).resolves.toBeUndefined();
 		expect(await unreadNotificationCount(db, owner)).toBe(0);
 		expect(await listNotifications(db, owner)).toEqual({ items: [], unread: 0 });
+	});
+});
+
+describe('event helpers', () => {
+	it('records feedback, once per booking', async () => {
+		await notifyFeedback(db, { orgId: 'o1', reservationId: 'r1', title: 'Svadba', client: 'Jana K', rating: 4, actorId: 'client' });
+		await notifyFeedback(db, { orgId: 'o1', reservationId: 'r1', title: 'Svadba', client: 'Jana K', rating: 5, actorId: 'client' });
+		const { items } = await listNotifications(db, owner);
+		expect(items).toHaveLength(1);
+		expect(items[0]).toMatchObject({ kind: 'feedback.received', link: '/app/reservation/r1' });
+		expect(items[0].params.rating).toBe(5);
+	});
+
+	it('records payment states separately, and not to the member who marked them', async () => {
+		await notifyPayment(db, { orgId: 'o1', reservationId: 'r1', title: 'Svadba', status: 'deposit_received', actorId: 'member' });
+		await notifyPayment(db, { orgId: 'o1', reservationId: 'r1', title: 'Svadba', status: 'paid', actorId: 'member' });
+		expect(await unreadNotificationCount(db, owner)).toBe(2);
+		expect(await unreadNotificationCount(db, { ...member, areas: ALL })).toBe(0);
+	});
+
+	it('records layout problems only when there are some, for those who see halls', async () => {
+		await notifyLayoutProblems(db, { orgId: 'o1', hallId: 'h1', hall: 'Sála', templates: 0, events: 0 });
+		expect(await unreadNotificationCount(db, member)).toBe(0);
+		await notifyLayoutProblems(db, { orgId: 'o1', hallId: 'h1', hall: 'Sála', templates: 2, events: 1 });
+		const { items } = await listNotifications(db, member);
+		expect(items).toHaveLength(1);
+		expect(items[0]).toMatchObject({ kind: 'layout.problems', link: '/app/manage/halls/h1' });
 	});
 });
 

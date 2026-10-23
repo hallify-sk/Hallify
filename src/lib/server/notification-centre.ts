@@ -88,6 +88,49 @@ export async function notifyOrg(db: D1Database, input: NotifyOrgInput): Promise<
 	}
 }
 
+// ─── Event helpers for the features that report into the centre ─────────────
+// One call at the place the event happens; each knows its kind, link and dedupe.
+
+/** A client left (or edited) feedback on a completed event (D5). */
+export function notifyFeedback(db: D1Database, e: {
+	orgId: string; reservationId: string; title: string; client: string; rating: number; actorId: string;
+}): Promise<void> {
+	return notifyOrg(db, {
+		orgId: e.orgId, kind: 'feedback.received',
+		params: { title: e.title, client: e.client, rating: e.rating },
+		link: `/app/reservation/${e.reservationId}`, actorId: e.actorId,
+		// Editing the stars a minute later is the same feedback.
+		dedupeKey: `feedback:${e.reservationId}`,
+	});
+}
+
+/** A booking's payment changed: 'deposit_received', 'paid' or 'overdue' (D6). */
+export function notifyPayment(db: D1Database, e: {
+	orgId: string; reservationId: string; title: string; hall?: string; date?: string; client?: string;
+	status: 'deposit_received' | 'paid' | 'overdue' | string; actorId?: string | null;
+}): Promise<void> {
+	return notifyOrg(db, {
+		orgId: e.orgId, kind: 'payment.updated',
+		params: { title: e.title, hall: e.hall, date: e.date, client: e.client, status: e.status },
+		link: `/app/reservation/${e.reservationId}`, actorId: e.actorId ?? null,
+		dedupeKey: `payment:${e.reservationId}:${e.status}`,
+	});
+}
+
+/** Saving a hall's plan left templates or upcoming events with tables in walls,
+ *  outside the room or on a removed floor (D2). Nothing is sent for zero problems. */
+export async function notifyLayoutProblems(db: D1Database, e: {
+	orgId: string; hallId: string; hall: string; templates: number; events: number; actorId?: string | null;
+}): Promise<void> {
+	if (e.templates <= 0 && e.events <= 0) return;
+	await notifyOrg(db, {
+		orgId: e.orgId, kind: 'layout.problems',
+		params: { hall: e.hall, templates: e.templates, events: e.events },
+		link: `/app/manage/halls/${e.hallId}`, actorId: e.actorId ?? null,
+		dedupeKey: `layout:${e.hallId}`,
+	});
+}
+
 /** Whose notifications, and from which areas. */
 export interface NotificationViewer {
 	orgId: string;
