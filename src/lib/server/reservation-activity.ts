@@ -6,6 +6,7 @@
 
 import { dbAll, dbRun } from '$lib/db/index';
 import type { D1Database } from '@cloudflare/workers-types';
+import { EXPIRE_PAST_REQUESTS_SQL } from '$lib/server/reservation-rules';
 
 export type ActivityKind = 'created' | 'status' | 'declined' | 'expired' | 'edited' | 'assigned';
 
@@ -61,4 +62,15 @@ export function parseSystemBody(body: string): { kind: ActivityKind; status: str
 	const actorName = rest.join(':') || null;
 	if (type === 'reservation_created') return { kind: 'created', status: status || null, actorName };
 	return { kind: 'status', status: status || null, actorName };
+}
+
+/**
+ * Requests whose date passed while they were still waiting for an answer expire:
+ * they are cancelled (cancelled_by = 'expired') with a history entry, and can no
+ * longer be approved. Run from the request-time sweep next to auto-completion.
+ */
+export async function expirePastRequests(db: D1Database): Promise<void> {
+	const [logSql, updateSql] = EXPIRE_PAST_REQUESTS_SQL;
+	try { await dbRun(db, logSql); } catch { /* reservation_activity arrives with migration 0018 */ }
+	await dbRun(db, updateSql);
 }

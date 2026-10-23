@@ -6,6 +6,7 @@ import { parseEventTypes } from '$lib/eventTypes';
 import { countSeats } from '$lib/floorplan-types';
 import { st } from '$lib/i18n-server';
 import type { Actions, PageServerLoad } from './$types';
+import { reservationAccess, assertCanOpenReservation } from '$lib/server/reservation-access';
 import { seatingDraft, markProposalApplied } from '$lib/server/ai/proposals';
 import { tableInventoryError } from '$lib/server/table-inventory';
 
@@ -23,6 +24,7 @@ export const load: PageServerLoad = async ({ locals, params, url }) => {
 	);
 
 	if (!reservation) error(404, st(locals.locale).serverErrors.reservationNotFound);
+	assertCanOpenReservation(await reservationAccess(locals), reservation.user_id, locals.user.id, st(locals.locale).serverErrors.reservationNotFound);
 
 	// The table layout is built on the hall's floor plan — without one there is
 	// nothing to arrange tables on, so send them back to the detail page.
@@ -80,7 +82,7 @@ export const actions: Actions = {
 
 		// Same gate as the sibling action on /app/reservation/[id]: staff may edit any
 		// booking in the org; everyone else only their own, and only once it is live.
-		const staff = locals.currentOrg?.role === 'owner' || locals.currentOrg?.role === 'admin';
+		const staff = (await reservationAccess(locals)).canManage;
 		if (!staff && reservation.user_id !== locals.user.id) {
 			return fail(403, { error: st(locals.locale).serverErrors.accessDenied });
 		}
@@ -119,9 +121,12 @@ export const actions: Actions = {
 		const templateId = String(data.get('templateId') ?? '');
 		if (!templateId) return fail(400, { error: st(locals.locale).serverErrors.noTemplateSelected });
 
-		const reservation = await dbFirst<{ hall_id: string }>(locals.db,
-			'SELECT hall_id FROM reservations WHERE id = ? AND org_id = ?', params.id, orgId);
+		const reservation = await dbFirst<{ hall_id: string; user_id: string }>(locals.db,
+			'SELECT hall_id, user_id FROM reservations WHERE id = ? AND org_id = ?', params.id, orgId);
 		if (!reservation) return fail(404, { error: st(locals.locale).serverErrors.notFound });
+		if (!(await reservationAccess(locals)).canManage && reservation.user_id !== locals.user.id) {
+			return fail(403, { error: st(locals.locale).serverErrors.accessDenied });
+		}
 
 		const tmpl = await dbFirst<{ layout_json: string | null }>(locals.db,
 			'SELECT layout_json FROM floorplan_templates WHERE id = ? AND hall_id = ?',

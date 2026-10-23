@@ -2,7 +2,11 @@
 	import { RSVP_ENABLED } from '$lib/features';
 	import { enhance } from '$app/forms';
 	import { page } from '$app/stores';
-	import { t } from '$lib/i18n.svelte';
+	import { t, getLocale } from '$lib/i18n.svelte';
+	import { confirmFirst } from '$lib/forms';
+	import { dialog } from '$lib/actions/dialog';
+	import { formatDate as fmtLocaleDate, formatDateTime } from '$lib/format';
+	import { hasEventStarted, isEventPast } from '$lib/reservationStatus';
 	import { migrateToMultiFloor } from '$lib/floorplan-types';
 	import StatusBadge from '$lib/components/StatusBadge.svelte';
 	import KpiCard from '$lib/components/KpiCard.svelte';
@@ -15,6 +19,11 @@
 	let { data, form }: Props = $props();
 
 	let messageBody = $state('');
+	let sendingMessage = $state(false);
+	let declineOpen = $state(false);
+	let editOpen = $state(false);
+	// The status picked in the menu, for the confirmation text.
+	let pickedStatus = $state('');
 
 	// The occasion the booking was made for — a canonical key, or the label the
 	// operator typed in when they picked "Other".
@@ -91,7 +100,9 @@
 	};
 
 	const user = $derived($page.data.user);
-	const isAdmin = $derived($page.data.currentOrg?.role === 'owner' || $page.data.currentOrg?.role === 'admin');
+	// Follows the member's permissions (reservations.manage), not the owner/admin flag:
+	// a custom role that may approve from the list may approve here too.
+	const isAdmin = $derived(data.canManage);
 	const canEditAdvanced = $derived(
 		isAdmin || ['approved', 'planned'].includes(data.reservation.status)
 	);
@@ -105,19 +116,60 @@
 
 	function selectStatus(value: string) {
 		statusOpen = false;
-		if (!statusFormRef) return;
+		if (!statusFormRef || value === data.reservation.status) return;
+		pickedStatus = value;
 		const input = statusFormRef.querySelector('input[name="status"]') as HTMLInputElement;
 		if (input) {
 			input.value = value;
 			statusFormRef.requestSubmit();
 		}
 	}
-	const isPast = $derived(new Date(data.reservation.event_date) < new Date(new Date().toDateString()));
+	function statusConfirmText() {
+		if (pickedStatus === 'cancelled') return t.resOps.confirmCancelStatus;
+		return t.resOps.confirmStatus((t.status as Record<string, string>)[pickedStatus] ?? pickedStatus);
+	}
 
-	function formatDate(d: Date | string) {
-		return new Date(d).toLocaleDateString('sk-SK', {
-			weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
-		});
+	// Over = past its end (or the end of its day); started = past its start. A finished
+	// event no longer reads "has started".
+	const isPast = $derived(isEventPast(data.reservation.event_date, data.reservation.end_time));
+	const inProgress = $derived(!isPast && !!data.reservation.start_time && hasEventStarted(data.reservation.event_date, data.reservation.start_time));
+	const isRequest = $derived(['pending', 'waiting_payment'].includes(data.reservation.status));
+
+	function formatDate(d: string) {
+		return fmtLocaleDate(d, getLocale(), { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+	}
+
+	const timeText = $derived.by(() => {
+		const s = data.reservation.start_time?.slice(0, 5);
+		const e = data.reservation.end_time?.slice(0, 5);
+		if (s && e) return `${s} – ${e}`;
+		if (s) return t.resOps.timeFrom(s);
+		return '';
+	});
+
+	const cancelNotice = $derived.by(() => {
+		if (data.reservation.status !== 'cancelled') return '';
+		if (data.reservation.cancelled_by === 'expired') return t.resOps.expiredNotice;
+		if (data.reservation.cancelled_by === 'client') return t.resOps.cancelledByClient;
+		if (data.reservation.cancelled_by === 'venue') return data.reservation.status_reason ? t.resOps.declinedWithReason : t.resOps.cancelledByVenue;
+		return '';
+	});
+
+	const FIELD_LABEL = $derived<Record<string, string>>({
+		date: t.resOps.fieldDate, time: t.resOps.fieldTime, guests: t.resOps.fieldGuests,
+		notes: t.resOps.fieldNotes, internal: t.resOps.fieldInternal,
+	});
+
+	function activityText(a: { kind: string; status: string | null; note: string | null }) {
+		const label = a.status ? ((t.status as Record<string, string>)[a.status] ?? a.status) : '';
+		switch (a.kind) {
+			case 'created': return label ? `${t.resOps.actCreated} (${label})` : t.resOps.actCreated;
+			case 'declined': return t.resOps.actDeclined;
+			case 'expired': return t.resOps.actExpired;
+			case 'edited': return `${t.resOps.actEdited} ${(a.note ?? '').split(',').filter(Boolean).map((k) => FIELD_LABEL[k] ?? k).join(', ')}`;
+			case 'assigned': return a.note ? `${t.resOps.actAssigned}: ${a.note}` : t.resOps.actAssigned;
+			default: return `${t.resOps.actStatus} ${label}`;
+		}
 	}
 
 	async function copyInvite() {
@@ -168,20 +220,28 @@
 				</a>
 			{/if}
 			{#if canCancel && !isAdmin}
-				<form method="POST" action="?/cancel" use:enhance style="display:inline"
-					onsubmit={(e) => { if (!confirm(t.event.confirmCancel)) e.preventDefault(); }}>
+				<form method="POST" action="?/cancel" use:enhance={confirmFirst(() => t.event.confirmCancel)} style="display:inline">
 					<button type="submit" class="btn-danger btn-sm">{t.event.cancelReservation}</button>
 				</form>
 			{/if}
 		</div>
 	</div>
 
-	{#if isPast}
+	{#if (isPast || inProgress) && data.reservation.status !== 'cancelled'}
 		<div class="alert-warning past-banner">
 			<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
 				<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
 			</svg>
-			{t.event.pastEvent}
+			{#if inProgress}{t.resOps.eventInProgress}{:else if data.reservation.status === 'completed'}{t.resOps.eventCompleted}{:else}{t.event.pastEvent}{/if}
+		</div>
+	{/if}
+
+	{#if cancelNotice}
+		<div class="alert-warning past-banner cancel-notice">
+			<span>{cancelNotice}</span>
+			{#if data.reservation.cancelled_by === 'venue' && data.reservation.status_reason}
+				<q class="cancel-reason">{data.reservation.status_reason}</q>
+			{/if}
 		</div>
 	{/if}
 
@@ -204,12 +264,17 @@
 
 			<!-- Status control -->
 			{#if isAdmin}
-				<form method="POST" action="?/updateStatus" use:enhance bind:this={statusFormRef} class="status-form">
+				<form method="POST" action="?/updateStatus" use:enhance={confirmFirst(statusConfirmText)} bind:this={statusFormRef} class="status-form">
 					<input type="hidden" name="status" value={data.reservation.status} />
+					<!-- What the person saw: the server refuses the change if the booking moved on meanwhile. -->
+					<input type="hidden" name="from" value={data.reservation.status} />
 					<div class="status-dropdown" bind:this={statusDropdownRef}>
 						<button
 							type="button"
 							class="status-trigger"
+							aria-haspopup="menu"
+							aria-expanded={statusOpen}
+							aria-label={t.resOps.changeStatus}
 							onclick={() => (statusOpen = !statusOpen)}
 						>
 							<StatusBadge status={data.reservation.status} />
@@ -239,6 +304,31 @@
 			{/if}
 		</div>
 
+		<!-- Status errors sit next to the control that caused them (they used to land in
+		     the message composer further down the page). -->
+		{#if form?.statusError}
+			<div class="alert-error status-error" role="alert">{form.statusError}</div>
+		{:else if form?.statusChanged || form?.declined}
+			<div class="status-ok" role="status">{form?.declined ? t.resOps.declined : t.resOps.statusChanged}</div>
+		{/if}
+
+		{#if isAdmin && isRequest && !isPast}
+			<div class="card card--inset decision">
+				<div class="decision-text">
+					<strong>{t.resOps.decisionTitle}</strong>
+					<span>{t.resOps.decisionHint}</span>
+				</div>
+				<div class="decision-actions">
+					<form method="POST" action="?/updateStatus" use:enhance={confirmFirst(() => t.resOps.confirmApprove)}>
+						<input type="hidden" name="status" value="approved" />
+						<input type="hidden" name="from" value={data.reservation.status} />
+						<button type="submit" class="btn-action btn-sm">{t.resOps.approve}</button>
+					</form>
+					<button type="button" class="btn-outline btn-sm decline-btn" onclick={() => (declineOpen = true)}>{t.resOps.decline}</button>
+				</div>
+			</div>
+		{/if}
+
 		<div class="row-list">
 			<div class="row-item">
 				<div class="detail-icon">
@@ -250,8 +340,8 @@
 				<div>
 					<div class="detail-label">{t.event.dateTime}</div>
 					<div class="detail-value">{formatDate(data.reservation.event_date)}</div>
-					{#if data.reservation.start_time && data.reservation.end_time}
-						<div class="detail-sub">{data.reservation.start_time} - {data.reservation.end_time}</div>
+					{#if timeText}
+						<div class="detail-sub">{timeText}</div>
 					{/if}
 				</div>
 			</div>
@@ -294,6 +384,21 @@
 				</div>
 			</div>
 
+			{#if data.reservation.customer_name}
+				<div class="row-item">
+					<div class="detail-icon">
+						<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="2" aria-hidden="true">
+							<path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"/>
+						</svg>
+					</div>
+					<div>
+						<div class="detail-label">{t.resOps.customer} <span class="detail-tag">{t.resOps.phoneBooking}</span></div>
+						<div class="detail-value">{data.reservation.customer_name}</div>
+						{#if data.reservation.customer_contact}<div class="detail-sub">{data.reservation.customer_contact}</div>{/if}
+					</div>
+				</div>
+			{/if}
+
 			<div class="row-item">
 				<div class="detail-icon">
 					<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="2">
@@ -301,7 +406,7 @@
 					</svg>
 				</div>
 				<div>
-					<div class="detail-label">{t.calendar.bookedBy}</div>
+					<div class="detail-label">{data.reservation.customer_name ? t.manualReservation.descTakenBy : t.calendar.bookedBy}</div>
 					<div class="detail-value">{data.reservation.user_first_name} {data.reservation.user_last_name}</div>
 					{#if data.reservation.user_email}
 						<div class="detail-sub"><a href="mailto:{data.reservation.user_email}" style="color:var(--accent-ink);text-decoration:none">{data.reservation.user_email}</a></div>
@@ -309,6 +414,13 @@
 				</div>
 			</div>
 		</div>
+
+		{#if isAdmin}
+			<div class="details-foot">
+				{#if form?.detailsSaved}<span class="exr-saved" role="status">{t.resOps.detailsSaved}</span>{/if}
+				<button type="button" class="btn-outline btn-sm" onclick={() => (editOpen = true)}>{t.resOps.editDetails}</button>
+			</div>
+		{/if}
 	</section>
 
 	<!-- Assign / invite a client (staff only) -->
@@ -335,9 +447,21 @@
 				<p class="assign-state muted">{t.reservationAdmin.assignNoClient}</p>
 			{/if}
 
-			{#if form?.assigned}<div class="assign-toast ok">{t.reservationAdmin.assignedToast}</div>{/if}
-			{#if form?.invited}<div class="assign-toast ok">{t.reservationAdmin.invitedToast}{#if form?.emailSent === false} — {t.reservationAdmin.assignEmailFailed}{/if}</div>{/if}
-			{#if form?.inviteResent}<div class="assign-toast ok">{t.reservationAdmin.inviteResentToast}{#if form?.emailSent === false} — {t.reservationAdmin.assignEmailFailed}{/if}</div>{/if}
+			<!-- A failed e-mail is a warning, never a green "sent". -->
+			{#if form?.assigned}
+				{#if form?.emailSent === false}
+					<div class="assign-toast warn" role="alert">{t.resOps.assignedEmailFailed}</div>
+				{:else}
+					<div class="assign-toast ok" role="status">{t.reservationAdmin.assignedToast}</div>
+				{/if}
+			{/if}
+			{#if form?.invited || form?.inviteResent}
+				{#if form?.emailSent === false}
+					<div class="assign-toast warn" role="alert">{t.resOps.inviteSavedEmailFailed}</div>
+				{:else}
+					<div class="assign-toast ok" role="status">{form?.invited ? t.reservationAdmin.invitedToast : t.reservationAdmin.inviteResentToast}</div>
+				{/if}
+			{/if}
 			{#if form?.inviteCancelled}<div class="assign-toast">{t.reservationAdmin.inviteCancelledToast}</div>{/if}
 
 			<details class="assign-form-wrap" open={!data.clientOwner && !data.pendingInvite}>
@@ -407,12 +531,12 @@
 						{t.reservationAdmin.messageSentTo} {data.reservation.user_first_name}.
 					</div>
 				{/if}
-				<form method="POST" action="?/messageClient" use:enhance={() => async ({ update }) => { await update({ reset: true }); messageBody = ''; }}>
-					<textarea name="body" rows="3" bind:value={messageBody}
+				<form method="POST" action="?/messageClient" use:enhance={() => { sendingMessage = true; return async ({ update, result }) => { await update({ reset: result.type === 'success' }); if (result.type === 'success') messageBody = ''; sendingMessage = false; }; }}>
+					<textarea name="body" rows="3" maxlength="5000" bind:value={messageBody}
 						placeholder="{t.reservationAdmin.messageComposePrefix} {data.reservation.user_first_name}{t.reservationAdmin.messageComposeSuffix}"></textarea>
 					<div class="msg-client-actions">
 						{#if form?.error}<span class="msg-err">{form.error}</span>{/if}
-						<button type="submit" class="btn-action btn-sm" disabled={!messageBody.trim()}>{t.reservationAdmin.sendMessage}</button>
+						<button type="submit" class="btn-action btn-sm" disabled={!messageBody.trim() || sendingMessage}>{t.reservationAdmin.sendMessage}</button>
 					</div>
 				</form>
 			</div>
@@ -425,6 +549,16 @@
 				<h2>{t.event.eventDescription}</h2>
 			</div>
 			<p class="desc-text">{data.reservation.description}</p>
+		</section>
+	{/if}
+
+	{#if isAdmin && data.reservation.internal_notes}
+		<section class="section">
+			<div class="section-head">
+				<h2>{t.resOps.internalNotesTitle}</h2>
+				<p>{t.resOps.internalNotesHint}</p>
+			</div>
+			<p class="desc-text">{data.reservation.internal_notes}</p>
 		</section>
 	{/if}
 
@@ -529,8 +663,106 @@
 			</div>
 		{/if}
 	</section>
+
+	{#if isAdmin}
+		<section class="section">
+			<div class="section-head">
+				<h2>{t.resOps.historyTitle}</h2>
+			</div>
+			{#if data.activity.length === 0}
+				<p class="exr-empty">{t.resOps.historyEmpty}</p>
+			{:else}
+				<ol class="history">
+					{#each data.activity as a (a.id)}
+						<li>
+							<span class="history-text">
+								{#if a.kind !== 'expired'}<strong>{a.actor_name || t.resOps.actSystem}</strong>{/if}
+								{activityText(a)}
+							</span>
+							{#if a.kind === 'declined' && a.note}<q class="cancel-reason">{a.note}</q>{/if}
+							<time class="history-time" datetime={a.created_at}>{formatDateTime(a.created_at, getLocale())}</time>
+						</li>
+					{/each}
+				</ol>
+			{/if}
+		</section>
+	{/if}
 </div>
 </div>
+
+{#if declineOpen}
+	<div class="dialog-backdrop" onclick={() => (declineOpen = false)} role="presentation">
+		<div class="card card--raised dialog-card" onclick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="decline-title"
+			use:dialog={{ onclose: () => (declineOpen = false), initialFocus: 'textarea' }}>
+			<div class="dialog-header">
+				<h2 id="decline-title">{t.resOps.declineTitle}</h2>
+				<button type="button" class="dialog-close" aria-label={t.memberMessages.closePopup} onclick={() => (declineOpen = false)}>
+					<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+				</button>
+			</div>
+			<form method="POST" action="?/decline" class="dialog-form" use:enhance={() => async ({ update }) => { declineOpen = false; await update(); }}>
+				<input type="hidden" name="from" value={data.reservation.status} />
+				<label for="decline-reason">{t.resOps.declineReason}</label>
+				<textarea id="decline-reason" name="reason" rows="4" maxlength="1000" placeholder={t.resOps.declineReasonPlaceholder} aria-describedby="decline-hint"></textarea>
+				<p id="decline-hint" class="assign-hint">{t.resOps.declineReasonHint}</p>
+				<div class="dialog-actions">
+					<button type="button" class="btn-outline btn-sm" onclick={() => (declineOpen = false)}>{t.common.cancel}</button>
+					<button type="submit" class="btn-danger btn-sm">{t.resOps.decline}</button>
+				</div>
+			</form>
+		</div>
+	</div>
+{/if}
+
+{#if editOpen}
+	<div class="dialog-backdrop" onclick={() => (editOpen = false)} role="presentation">
+		<div class="card card--raised dialog-card dialog-card--wide" onclick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="edit-title"
+			use:dialog={{ onclose: () => (editOpen = false) }}>
+			<div class="dialog-header">
+				<h2 id="edit-title">{t.resOps.editTitle}</h2>
+				<button type="button" class="dialog-close" aria-label={t.memberMessages.closePopup} onclick={() => (editOpen = false)}>
+					<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+				</button>
+			</div>
+			<form method="POST" action="?/editDetails" class="dialog-form"
+				use:enhance={() => async ({ update, result }) => { await update({ reset: false }); if (result.type === 'success') editOpen = false; }}>
+				<div class="dialog-grid">
+					<div class="field">
+						<label for="ed-date">{t.resOps.date}</label>
+						<input id="ed-date" name="eventDate" type="date" required value={data.reservation.event_date.slice(0, 10)} />
+					</div>
+					<div class="field">
+						<label for="ed-guests">{t.resOps.guests}</label>
+						<input id="ed-guests" name="numGuests" type="number" min="1" max={data.reservation.hall_max_people || undefined} value={data.reservation.num_guests ?? ''} />
+					</div>
+					<div class="field">
+						<label for="ed-start">{t.resOps.startTime}</label>
+						<input id="ed-start" name="startTime" type="time" value={data.reservation.start_time?.slice(0, 5) ?? ''} />
+					</div>
+					<div class="field">
+						<label for="ed-end">{t.resOps.endTime}</label>
+						<input id="ed-end" name="endTime" type="time" value={data.reservation.end_time?.slice(0, 5) ?? ''} />
+					</div>
+				</div>
+				<div class="field">
+					<label for="ed-desc">{t.resOps.notesClient}</label>
+					<textarea id="ed-desc" name="description" rows="3" maxlength="2000" value={data.reservation.description ?? ''}></textarea>
+				</div>
+				<div class="field">
+					<label for="ed-internal">{t.resOps.internalNotes}</label>
+					<textarea id="ed-internal" name="internalNotes" rows="3" maxlength="2000" value={data.reservation.internal_notes ?? ''}></textarea>
+				</div>
+				<p class="assign-hint">{t.resOps.editHint}</p>
+				{#if form?.detailsError}<div class="alert-error" role="alert">{form.detailsError}</div>{/if}
+				<div class="dialog-actions">
+					<button type="button" class="btn-outline btn-sm" onclick={() => (editOpen = false)}>{t.common.cancel}</button>
+					<button type="submit" class="btn-action btn-sm">{t.common.save}</button>
+				</div>
+			</form>
+		</div>
+	</div>
+{/if}
+
 
 <!-- Hidden forms -->
 <form method="POST" action="?/resetLayout" use:enhance bind:this={resetFormRef} style="display:none"></form>
@@ -541,7 +773,8 @@
 <!-- Template dialog -->
 {#if templateDialogOpen}
 	<div class="dialog-backdrop" onclick={() => (templateDialogOpen = false)} role="presentation">
-		<div class="card card--raised dialog-card" onclick={(e) => e.stopPropagation()} role="dialog">
+		<div class="card card--raised dialog-card" onclick={(e) => e.stopPropagation()} role="dialog" aria-modal="true"
+			use:dialog={{ onclose: () => (templateDialogOpen = false) }}>
 			<div class="dialog-header">
 				<h2>{t.event.loadTemplate}</h2>
 				<button type="button" class="dialog-close" onclick={() => (templateDialogOpen = false)}>
@@ -688,6 +921,7 @@
 		background: var(--bg-hover); color: var(--text-muted); max-width: 640px;
 	}
 	.assign-toast.ok { color: var(--success); }
+	.assign-toast.warn { color: var(--text-base); background: var(--warning-dim); }
 	.assign-form-wrap > summary {
 		cursor: pointer; font-size: 12.5px; font-weight: 600; color: var(--accent-ink);
 		list-style: none; user-select: none;
@@ -711,7 +945,51 @@
 		line-height: 1.6;
 		margin: 0;
 		max-width: 68ch;
+		/* Notes are typed with line breaks; keep them. */
+		white-space: pre-line;
+		overflow-wrap: anywhere;
 	}
+
+	/* ── Status feedback, decision bar, cancellation notice ── */
+	.status-error { margin: 0 0 14px; }
+	.status-ok { font-size: 12.5px; font-weight: 600; color: var(--success); margin: 0 0 12px; }
+	.decision {
+		display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap;
+		margin-bottom: 16px;
+	}
+	.decision-text { display: flex; flex-direction: column; gap: 2px; font-size: 13px; color: var(--text-muted); }
+	.decision-text strong { color: var(--text-base); font-weight: 650; }
+	.decision-actions { display: flex; gap: 8px; align-items: center; }
+	.decline-btn { color: var(--danger); }
+	.cancel-notice { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
+	.cancel-reason { display: block; font-size: 13px; color: var(--text-base); white-space: pre-line; overflow-wrap: anywhere; }
+	.detail-tag {
+		display: inline-block; margin-left: 6px; padding: 1px 6px; border-radius: 3px;
+		font-size: 10px; font-weight: 600; color: var(--text-muted); background: var(--bg-hover); vertical-align: middle;
+	}
+	.details-foot { display: flex; justify-content: flex-end; align-items: center; gap: 10px; margin-top: 12px; }
+
+	/* ── History ── */
+	.history { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; max-width: 68ch; }
+	.history li { display: flex; flex-direction: column; gap: 2px; padding-left: 14px; border-left: 2px solid var(--border); }
+	.history-text { font-size: 13px; color: var(--text-base); }
+	.history-time { font-size: 11.5px; color: var(--text-subtle); }
+
+	/* ── Dialog forms (decline, edit details) ── */
+	.dialog-card--wide { max-width: 560px; }
+	.dialog-form { display: flex; flex-direction: column; gap: 10px; padding: 16px 20px 20px; }
+	.dialog-form label { font-size: 12.5px; font-weight: 600; color: var(--text-base); }
+	.dialog-form .field { display: flex; flex-direction: column; gap: 4px; }
+	.dialog-form textarea, .dialog-form input {
+		width: 100%; box-sizing: border-box; font: inherit; font-size: 13px;
+		padding: 8px 11px; border: 1px solid var(--border); border-radius: var(--radius);
+		background: var(--bg-panel); color: var(--text-base);
+	}
+	.dialog-form textarea { resize: vertical; line-height: 1.5; }
+	.dialog-form textarea:focus, .dialog-form input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-dim); }
+	.dialog-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+	.dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
+	@media (max-width: 520px) { .dialog-grid { grid-template-columns: 1fr; } }
 
 	.status-form {
 		display: flex;
