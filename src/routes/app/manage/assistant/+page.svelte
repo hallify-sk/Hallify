@@ -258,7 +258,7 @@
           <textarea rows="2" bind:value={text} onkeydown={onKey} placeholder={t.ai.placeholder}
             disabled={busy || !data.available} aria-label={t.ai.placeholder}></textarea>
           <div class="composer-bar">
-            <input type="file" accept=".xlsx,.csv,.tsv,.txt,.pdf,.jpg,.jpeg,.png,.webp,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/pdf,image/jpeg,image/png,image/webp" class="sr-only" bind:this={fileInput} onchange={upload} />
+            <input type="file" accept=".xlsx,.csv,.tsv,.txt,.pdf,.jpg,.jpeg,.png,.webp,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/pdf,image/jpeg,image/png,image/webp" class="sr-only" tabindex="-1" aria-hidden="true" bind:this={fileInput} onchange={upload} />
             <button type="button" class="btn-outline btn-sm" onclick={() => fileInput?.click()} disabled={busy || uploading || !data.available}>
               {uploading ? t.ai.uploading : t.ai.attach}
             </button>

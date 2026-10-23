@@ -1208,15 +1208,15 @@
               <div class="hours-row">
                 <span class="hours-day">{day.label}</span>
                 <label class="toggle-switch" style="cursor:pointer;flex-shrink:0">
-                  <input type="checkbox" checked={dh.open}
+                  <input type="checkbox" checked={dh.open} aria-label={t.hallProfile.openOnDay(day.label)}
                     onchange={(e) => setDayHours(day.id, { open: e.currentTarget.checked })} />
                   <span class="toggle-slider"></span>
                 </label>
                 {#if dh.open}
-                  <input class="field-input time-input" type="time" value={dh.from}
+                  <input class="field-input time-input" type="time" value={dh.from} aria-label={t.hallProfile.opensAt(day.label)}
                     onchange={(e) => setDayHours(day.id, { from: e.currentTarget.value })} />
                   <span class="hours-sep">–</span>
-                  <input class="field-input time-input" type="time" value={dh.to}
+                  <input class="field-input time-input" type="time" value={dh.to} aria-label={t.hallProfile.closesAt(day.label)}
                     onchange={(e) => setDayHours(day.id, { to: e.currentTarget.value })} />
                 {:else}
                   <span class="hours-closed">{t.createEvent.closed}</span>
@@ -1928,7 +1928,7 @@
           </div>
         {:else}
           <p class="step-label">{t.halls.reason} <span class="step-optional">({t.hallAdmin.optionalWord})</span></p>
-          <input class="field-input" type="text" bind:value={blockReason} placeholder={t.halls.reasonPlaceholder} />
+          <input class="field-input" type="text" bind:value={blockReason} placeholder={t.halls.reasonPlaceholder} aria-label={t.halls.reason} />
           <p class="step-hint">{t.hallAdmin.visibleToAdminsOnly}</p>
         {/if}
       </div>

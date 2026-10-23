@@ -135,7 +135,7 @@
 							return async ({ update }) => { await update(); editingId = null; };
 						}}>
 							<input type="hidden" name="messageId" value={msg.id} />
-							<input type="text" name="body" class="edit-input" value={editBody} />
+							<input type="text" name="body" class="edit-input" value={editBody} aria-label={t.messaging.editMessageText} />
 							<div class="edit-actions">
 								<button type="submit" class="btn-edit-save">{t.common.save}</button>
 								<button type="button" class="btn-edit-cancel" onclick={() => editingId = null}>{t.common.cancel}</button>
@@ -205,7 +205,7 @@
 			<input type="hidden" name="attachmentUrl" value={pendingFile?.url ?? ''} />
 			<input type="hidden" name="attachmentName" value={pendingFile?.name ?? ''} />
 			<input type="hidden" name="attachmentType" value={pendingFile?.type ?? ''} />
-			<input type="file" bind:this={fileInput} onchange={handleFileSelect} class="sr-only"
+			<input type="file" bind:this={fileInput} onchange={handleFileSelect} class="sr-only" tabindex="-1" aria-hidden="true"
 				accept="image/jpeg,image/png,image/webp,image/gif" />
 			<button type="button" class="btn-attach" aria-label={t.messagesAdmin.attachment} onclick={() => fileInput?.click()} disabled={uploading}>
 				<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -213,7 +213,7 @@
 				</svg>
 			</button>
 			<input type="text" name="body" bind:value={msgBody} maxlength="5000"
-				placeholder={t.messaging.writeMessage} autocomplete="off" />
+				placeholder={t.messaging.writeMessage} aria-label={t.messaging.writeMessage} autocomplete="off" />
 			<!-- Disabled while sending: a double click stored the message twice. -->
 			<button type="submit" class="btn-send" aria-label={t.messaging.send} disabled={(!msgBody.trim() && !pendingFile) || sending || uploading}>
 				<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">

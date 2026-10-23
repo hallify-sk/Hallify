@@ -2881,7 +2881,7 @@
 						<div class="pop-empty">{tr.editor.unassigned}</div>
 					{/if}
 					<!-- svelte-ignore a11y_autofocus -->
-					<input class="pop-search" type="text" placeholder={tr.editor.searchGuests} bind:value={guestSearch} autofocus
+					<input class="pop-search" type="text" placeholder={tr.editor.searchGuests} aria-label={tr.editor.searchGuests} bind:value={guestSearch} autofocus
 						onkeydown={(e) => { if (e.key === 'Enter' && filteredPopoverGuests[0]) { const g = filteredPopoverGuests[0]; popoverCurrentId === g.id ? clearChairAssignment() : assignGuest(g.id); } }} />
 					<div class="pop-list">
 						{#each filteredPopoverGuests as g}

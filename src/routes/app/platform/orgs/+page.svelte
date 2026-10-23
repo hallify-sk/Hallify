@@ -42,7 +42,7 @@
         {#if data.orgs.length > SEARCH_THRESHOLD}
           <div class="search-wrap">
             <svg class="search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-            <input class="search-input" type="text" placeholder={t.platformOrgs.searchPlaceholder} bind:value={search} autocomplete="off" spellcheck="false" />
+            <input class="search-input" type="text" placeholder={t.platformOrgs.searchPlaceholder} aria-label={t.platformOrgs.searchPlaceholder} bind:value={search} autocomplete="off" spellcheck="false" />
             {#if search}
               <button class="search-clear" type="button" onclick={() => search = ''} aria-label={t.platformOrgs.clearSearch}>
                 <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>

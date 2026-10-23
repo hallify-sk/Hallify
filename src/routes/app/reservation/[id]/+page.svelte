@@ -468,10 +468,10 @@
 				<summary>{(data.clientOwner || data.pendingInvite) ? t.reservationAdmin.assignReassign : t.reservationAdmin.assignCta}</summary>
 				<form method="POST" action="?/assignClient" use:enhance class="assign-form">
 					<div class="assign-names">
-						<input name="firstName" placeholder={t.reservationAdmin.assignFirstName} required />
-						<input name="lastName" placeholder={t.reservationAdmin.assignLastName} required />
+						<input name="firstName" placeholder={t.reservationAdmin.assignFirstName} aria-label={t.reservationAdmin.assignFirstName} required />
+						<input name="lastName" placeholder={t.reservationAdmin.assignLastName} aria-label={t.reservationAdmin.assignLastName} required />
 					</div>
-					<input name="email" type="email" placeholder={t.reservationAdmin.assignEmail} required />
+					<input name="email" type="email" placeholder={t.reservationAdmin.assignEmail} aria-label={t.reservationAdmin.assignEmail} required />
 					<p class="assign-hint">{t.reservationAdmin.assignHint}</p>
 					{#if form?.assignError}<span class="assign-err">{form.assignError}</span>{/if}
 					<button type="submit" class="btn-action btn-sm">{t.reservationAdmin.assignSubmit}</button>
@@ -533,7 +533,8 @@
 				{/if}
 				<form method="POST" action="?/messageClient" use:enhance={() => { sendingMessage = true; return async ({ update, result }) => { await update({ reset: result.type === 'success' }); if (result.type === 'success') messageBody = ''; sendingMessage = false; }; }}>
 					<textarea name="body" rows="3" maxlength="5000" bind:value={messageBody}
-						placeholder="{t.reservationAdmin.messageComposePrefix} {data.reservation.user_first_name}{t.reservationAdmin.messageComposeSuffix}"></textarea>
+						placeholder="{t.reservationAdmin.messageComposePrefix} {data.reservation.user_first_name}{t.reservationAdmin.messageComposeSuffix}"
+						aria-label="{t.reservationAdmin.messageComposePrefix} {data.reservation.user_first_name}"></textarea>
 					<div class="msg-client-actions">
 						{#if form?.error}<span class="msg-err">{form.error}</span>{/if}
 						<button type="submit" class="btn-action btn-sm" disabled={!messageBody.trim() || sendingMessage}>{t.reservationAdmin.sendMessage}</button>

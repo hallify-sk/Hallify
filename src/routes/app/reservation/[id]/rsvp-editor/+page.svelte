@@ -165,7 +165,7 @@
 						<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
 						<polyline points="14 2 14 8 20 8"/>
 					</svg>
-					<select class="template-select"
+					<select class="template-select" aria-label={t.rsvpEditor.loadTemplate}
 						onchange={(e) => {
 							const val = (e.target as HTMLSelectElement).value;
 							if (val) { loadTemplate(val); (e.target as HTMLSelectElement).value = ''; }
@@ -185,22 +185,22 @@
 			<h3 class="section-title">{t.rsvpEditor.primaryColor} / {t.rsvpEditor.bgColor}</h3>
 			<div class="color-row">
 				<div class="color-picker-group">
-					<label>{t.rsvpEditor.primaryColor}</label>
+					<label for="rsvp-primary-color">{t.rsvpEditor.primaryColor}</label>
 					<div class="color-picker">
 						<label class="color-swatch" style="background:{primaryColor}">
-							<input type="color" bind:value={primaryColor} />
+							<input id="rsvp-primary-color" type="color" bind:value={primaryColor} />
 						</label>
-						<input type="text" class="color-hex" value={primaryColor}
+						<input type="text" class="color-hex" value={primaryColor} aria-label="{t.rsvpEditor.primaryColor} ({t.rsvpEditor.hexCode})"
 							oninput={(e) => { primaryColor = (e.target as HTMLInputElement).value; }} />
 					</div>
 				</div>
 				<div class="color-picker-group">
-					<label>{t.rsvpEditor.bgColor}</label>
+					<label for="rsvp-bg-color">{t.rsvpEditor.bgColor}</label>
 					<div class="color-picker">
 						<label class="color-swatch" style="background:{bgColor}">
-							<input type="color" bind:value={bgColor} />
+							<input id="rsvp-bg-color" type="color" bind:value={bgColor} />
 						</label>
-						<input type="text" class="color-hex" value={bgColor}
+						<input type="text" class="color-hex" value={bgColor} aria-label="{t.rsvpEditor.bgColor} ({t.rsvpEditor.hexCode})"
 							oninput={(e) => { bgColor = (e.target as HTMLInputElement).value; }} />
 					</div>
 				</div>
@@ -232,7 +232,7 @@
 		<div class="section">
 			<h3 class="section-title">{t.rsvpEditor.description}</h3>
 			<div class="field compact">
-				<textarea id="description" bind:value={description} rows="3"
+				<textarea id="description" bind:value={description} rows="3" aria-label={t.rsvpEditor.description}
 					placeholder={t.rsvpEditor.descriptionPlaceholder}></textarea>
 			</div>
 			<div class="field compact">
@@ -263,26 +263,26 @@
 						<span class="field-num">{idx + 1}</span>
 						<div class="field-card-actions">
 							<button type="button" class="btn-icon" onclick={() => moveField(idx, -1)}
-								disabled={idx === 0} title="Move up">
+								disabled={idx === 0} title={t.rsvpEditor.moveFieldUp} aria-label={t.rsvpEditor.moveFieldUp}>
 								<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 15l-6-6-6 6"/></svg>
 							</button>
 							<button type="button" class="btn-icon" onclick={() => moveField(idx, 1)}
-								disabled={idx === fields.length - 1} title="Move down">
+								disabled={idx === fields.length - 1} title={t.rsvpEditor.moveFieldDown} aria-label={t.rsvpEditor.moveFieldDown}>
 								<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
 							</button>
-							{#if !isNameField(idx)}<button type="button" class="btn-icon danger" onclick={() => removeField(idx)} title={t.common.delete}>
+							{#if !isNameField(idx)}<button type="button" class="btn-icon danger" onclick={() => removeField(idx)} title={t.rsvpEditor.removeField} aria-label={t.rsvpEditor.removeField}>
 								<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
 							</button>{/if}
 						</div>
 					</div>
 					<div class="field-row">
 						<div class="field">
-							<label>{t.rsvpEditor.fieldLabel}</label>
-							<input type="text" bind:value={field.label} placeholder="napr. Meno" />
+							<label for="rsvp-field-{idx}-label">{t.rsvpEditor.fieldLabel}</label>
+							<input id="rsvp-field-{idx}-label" type="text" bind:value={field.label} placeholder="napr. Meno" />
 						</div>
 						<div class="field" style="max-width:130px">
-							<label>{t.rsvpEditor.fieldType}</label>
-							<select bind:value={field.type} disabled={isNameField(idx)}>
+							<label for="rsvp-field-{idx}-type">{t.rsvpEditor.fieldType}</label>
+							<select id="rsvp-field-{idx}-type" bind:value={field.type} disabled={isNameField(idx)}>
 								<option value="text">{t.rsvpEditor.text}</option>
 								<option value="email">{t.rsvpEditor.emailType}</option>
 								<option value="select">{t.rsvpEditor.select}</option>
@@ -293,12 +293,12 @@
 					</div>
 					<div class="field-row">
 						<div class="field">
-							<label>{t.rsvpEditor.fieldName}</label>
-							<input type="text" bind:value={field.name} placeholder="field_name" disabled={isNameField(idx)} />
+							<label for="rsvp-field-{idx}-name">{t.rsvpEditor.fieldName}</label>
+							<input id="rsvp-field-{idx}-name" type="text" bind:value={field.name} placeholder="field_name" disabled={isNameField(idx)} />
 						</div>
 						<div class="field toggle-field">
-							<label>{t.rsvpEditor.fieldRequired}</label>
-							<button type="button" class="toggle-switch" class:on={field.required}
+							<label for="rsvp-field-{idx}-required">{t.rsvpEditor.fieldRequired}</label>
+							<button id="rsvp-field-{idx}-required" type="button" class="toggle-switch" class:on={field.required}
 								onclick={() => { if (!isNameField(idx)) { field.required = !field.required; fields = [...fields]; } }}
 								role="switch" aria-checked={field.required}
 								disabled={isNameField(idx)}>
@@ -308,8 +308,8 @@
 					</div>
 					{#if field.type === 'select'}
 						<div class="field">
-							<label>{t.rsvpEditor.options}</label>
-							<input type="text" value={field.options?.join(', ') ?? ''}
+							<label for="rsvp-field-{idx}-options">{t.rsvpEditor.options}</label>
+							<input id="rsvp-field-{idx}-options" type="text" value={field.options?.join(', ') ?? ''}
 								oninput={(e) => {
 									field.options = (e.target as HTMLInputElement).value.split(',').map(s => s.trim()).filter(Boolean);
 									fields = [...fields];
@@ -318,8 +318,8 @@
 						</div>
 					{:else if field.type === 'allergies'}
 						<div class="field">
-							<label>{t.rsvpEditor.allergiesOptions}</label>
-							<input type="text" value={field.options?.join(', ') ?? t.rsvpEditor.defaultAllergens}
+							<label for="rsvp-field-{idx}-allergens">{t.rsvpEditor.allergiesOptions}</label>
+							<input id="rsvp-field-{idx}-allergens" type="text" value={field.options?.join(', ') ?? t.rsvpEditor.defaultAllergens}
 								oninput={(e) => {
 									field.options = (e.target as HTMLInputElement).value.split(',').map(s => s.trim()).filter(Boolean);
 									fields = [...fields];
@@ -385,7 +385,7 @@
 							<div class="preview-field">
 								{#if field.type === 'checkbox'}
 									<div class="checkbox-row">
-										<input type="checkbox" disabled />
+										<input type="checkbox" disabled aria-label={field.label || field.name} />
 										<span class="checkbox-label">{field.label || field.name}
 											{#if field.required}<span style="color:{primaryColor}">*</span>{/if}
 										</span>
@@ -406,7 +406,7 @@
 												<input type="checkbox" disabled />
 												<span>{t.rsvpEditor.allergiesOther}</span>
 											</label>
-											<input type="text" disabled placeholder={t.rsvpEditor.allergiesOtherPlaceholder} class="allergy-other-input" />
+											<input type="text" disabled placeholder={t.rsvpEditor.allergiesOtherPlaceholder} class="allergy-other-input" aria-label={t.rsvpEditor.allergiesOther} />
 										</div>
 									</div>
 								{:else}
@@ -414,11 +414,11 @@
 										{#if field.required}<span style="color:{primaryColor}">*</span>{/if}
 									</label>
 									{#if field.type === 'select'}
-										<select disabled>
+										<select disabled aria-label={field.label || field.name}>
 											<option>{field.options?.[0] ?? '...'}</option>
 										</select>
 									{:else}
-										<input type={field.type} disabled placeholder={field.label} />
+										<input type={field.type} disabled placeholder={field.label} aria-label={field.label || field.name} />
 									{/if}
 								{/if}
 							</div>
@@ -454,7 +454,7 @@
 						<div class="preview-field">
 							{#if field.type === 'checkbox'}
 								<div class="checkbox-row">
-									<input type="checkbox" disabled />
+									<input type="checkbox" disabled aria-label={field.label || field.name} />
 									<span class="checkbox-label">{field.label || field.name}
 										{#if field.required}<span style="color:{primaryColor}">*</span>{/if}
 									</span>
@@ -475,7 +475,7 @@
 											<input type="checkbox" disabled />
 											<span>{t.rsvpEditor.allergiesOther}</span>
 										</label>
-										<input type="text" disabled placeholder={t.rsvpEditor.allergiesOtherPlaceholder} class="allergy-other-input" />
+										<input type="text" disabled placeholder={t.rsvpEditor.allergiesOtherPlaceholder} class="allergy-other-input" aria-label={t.rsvpEditor.allergiesOther} />
 									</div>
 								</div>
 							{:else}
@@ -483,11 +483,11 @@
 									{#if field.required}<span style="color:{primaryColor}">*</span>{/if}
 								</label>
 								{#if field.type === 'select'}
-									<select disabled>
+									<select disabled aria-label={field.label || field.name}>
 										<option>{field.options?.[0] ?? '...'}</option>
 									</select>
 								{:else}
-									<input type={field.type} disabled placeholder={field.label} />
+									<input type={field.type} disabled placeholder={field.label} aria-label={field.label || field.name} />
 								{/if}
 							{/if}
 						</div>

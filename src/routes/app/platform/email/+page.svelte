@@ -110,7 +110,7 @@
 				await update({ reset: false });
 			};
 		}}>
-			<input name="testEmail" type="email" placeholder="you@example.com" required />
+			<input name="testEmail" type="email" placeholder="you@example.com" aria-label={t.platformMisc.testEmailRecipient} required />
 			<button type="submit" class="btn-action" disabled={testStatus.type === 'loading'}>
 				{testStatus.type === 'loading' ? t.platformMisc.sending : t.platformMisc.sendTest}
 			</button>

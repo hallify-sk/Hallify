@@ -145,7 +145,7 @@
 												<input type="checkbox" name="{field.name}_other_check" value="other" />
 												<span>{t.rsvpEditor.allergiesOther}</span>
 											</label>
-											<input type="text" name="{field.name}_other" placeholder={t.rsvpEditor.allergiesOtherPlaceholder} class="allergy-other-input" />
+											<input type="text" name="{field.name}_other" placeholder={t.rsvpEditor.allergiesOtherPlaceholder} class="allergy-other-input" aria-label={t.rsvpEditor.allergiesOther} />
 										</div>
 									</div>
 								{:else}

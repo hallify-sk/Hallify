@@ -557,7 +557,7 @@
 						<button onclick={clearChairAssignment} class="unassign-btn">{tr.components.remove}</button>
 					</div>
 				{/if}
-				<input type="text" bind:value={guestSearch} placeholder={tr.components.searchGuests} class="pop-search" />
+				<input type="text" bind:value={guestSearch} placeholder={tr.components.searchGuests} aria-label={tr.components.searchGuests} class="pop-search" />
 				<div class="pop-list">
 					{#each filteredPopoverGuests as g}
 						<button onclick={() => assignGuest(g.id)} class="pop-guest"
@@ -614,8 +614,8 @@
 		<!-- Add guest manually -->
 		<div class="add-section">
 			<div class="section-label">{tr.components.addGuest}</div>
-			<input type="text" bind:value={newFirst} placeholder={tr.components.firstName} />
-			<input type="text" bind:value={newLast} placeholder={tr.components.lastName} style="margin-top:4px"/>
+			<input type="text" bind:value={newFirst} placeholder={tr.components.firstName} aria-label={tr.components.firstName} />
+			<input type="text" bind:value={newLast} placeholder={tr.components.lastName} aria-label={tr.components.lastName} style="margin-top:4px"/>
 			<button onclick={addGuest} class="add-btn" disabled={!newFirst.trim() || !newLast.trim()}>{tr.components.add}</button>
 		</div>
 

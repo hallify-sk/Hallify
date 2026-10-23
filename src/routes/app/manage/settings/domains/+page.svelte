@@ -57,6 +57,7 @@
             type="text"
             name="domain"
             placeholder="bookings.myvenue.com"
+            aria-label={t.settingsPages.addCustomDomain}
             bind:value={domainInput}
             required
             autocomplete="off"

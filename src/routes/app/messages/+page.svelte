@@ -221,7 +221,7 @@
             <span id="new-ch-hint" class="inline-hint">
               {#if newChannelName.trim() && channelName(newChannelName)}{tr.teamChat.savedAs} #{channelName(newChannelName)}{:else}{tr.teamChat.nameHint}{/if}
             </span>
-            <input name="description" placeholder={tr.memberMessages.descriptionPlaceholder} maxlength={CHANNEL_DESC_MAX} class="inline-input" />
+            <input name="description" placeholder={tr.memberMessages.descriptionPlaceholder} aria-label={tr.memberMessages.descriptionPlaceholder} maxlength={CHANNEL_DESC_MAX} class="inline-input" />
             <label class="inline-check"><input type="checkbox" name="type" value="announcement" /> {tr.teamChat.announcementType}</label>
             {#if f?.channelError}<span class="inline-error" role="alert">{f.channelError}</span>{/if}
             <div class="inline-actions">
@@ -267,7 +267,7 @@
                 <option value={r.id}>{r.hall_name} – {formatDate(r.event_date, getLocale())}</option>
               {/each}
             </select>
-            <textarea name="body" placeholder={tr.memberMessages.ticketBodyPlaceholder} rows="2" required maxlength="5000" class="inline-input inline-textarea"></textarea>
+            <textarea name="body" placeholder={tr.memberMessages.ticketBodyPlaceholder} aria-label={tr.memberMessages.ticketBodyPlaceholder} rows="2" required maxlength="5000" class="inline-input inline-textarea"></textarea>
             <div class="inline-actions">
               <button type="submit" class="btn-xs btn-accent">{tr.messaging.send}</button>
               <button type="button" class="btn-xs" onclick={() => showNewTicket = false}>{tr.common.cancel}</button>
@@ -382,7 +382,7 @@
               {#if editingId === msg.id}
                 <form method="POST" action="?/editChannel" use:enhance={() => { editingId = null; return async ({ update }) => update(); }}>
                   <input type="hidden" name="msg_id" value={msg.id} />
-                  <textarea class="edit-input" name="body" rows="2" maxlength="5000" bind:value={editBody} onkeydown={(e) => { if (e.key === 'Escape') cancelEdit(); else submitOnEnter(e); }}></textarea>
+                  <textarea class="edit-input" name="body" rows="2" maxlength="5000" aria-label={tr.messaging.editMessageText} bind:value={editBody} onkeydown={(e) => { if (e.key === 'Escape') cancelEdit(); else submitOnEnter(e); }}></textarea>
                   <div class="edit-actions">
                     <button type="submit" class="btn-xs btn-accent">{tr.common.save}</button>
                     <button type="button" class="btn-xs" onclick={cancelEdit}>{tr.common.cancel}</button>
@@ -427,7 +427,7 @@
           <input type="hidden" name="attachment_url" value={pendingFile?.url ?? ''} />
           <input type="hidden" name="attachment_name" value={pendingFile?.name ?? ''} />
           <input type="hidden" name="attachment_type" value={pendingFile?.type ?? ''} />
-          <input type="file" bind:this={fileInput} onchange={handleFileSelect} class="sr-only" tabindex="-1"
+          <input type="file" bind:this={fileInput} onchange={handleFileSelect} class="sr-only" tabindex="-1" aria-hidden="true"
             accept="image/jpeg,image/png,image/webp,image/gif" />
           <button type="button" class="compose-attach" aria-label={tr.teamChat.attachImage} title={tr.teamChat.attachImage}
             onclick={() => fileInput?.click()} disabled={uploading}>
@@ -499,7 +499,7 @@
               {#if editingId === msg.id}
                 <form method="POST" action="?/editTicket" use:enhance={() => { editingId = null; return async ({ update }) => update(); }}>
                   <input type="hidden" name="msg_id" value={msg.id} />
-                  <textarea class="edit-input" name="body" rows="2" maxlength="5000" bind:value={editBody} onkeydown={(e) => { if (e.key === 'Escape') cancelEdit(); else submitOnEnter(e); }}></textarea>
+                  <textarea class="edit-input" name="body" rows="2" maxlength="5000" aria-label={tr.messaging.editMessageText} bind:value={editBody} onkeydown={(e) => { if (e.key === 'Escape') cancelEdit(); else submitOnEnter(e); }}></textarea>
                   <div class="edit-actions">
                     <button type="submit" class="btn-xs btn-accent">{tr.common.save}</button>
                     <button type="button" class="btn-xs" onclick={cancelEdit}>{tr.common.cancel}</button>

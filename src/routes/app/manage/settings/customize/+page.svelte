@@ -237,7 +237,7 @@
 			<p>{t.settingsPages.accentColorHint}</p>
 		</div>
 		<div class="color-row">
-			<input id="brand-primary" name="primaryColor" type="color" bind:value={primaryColor} />
+			<input id="brand-primary" name="primaryColor" type="color" bind:value={primaryColor} aria-label={t.settingsPages.accentColor} />
 			<div class="color-meta">
 				<span class="color-hex">{primaryColor}</span>
 				<span class="color-hint">{t.settingsPages.clickToChange}</span>

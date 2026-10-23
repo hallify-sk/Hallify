@@ -375,7 +375,7 @@
 	{#if form?.msgError}<div class="toast err small">{form.msgError}</div>{/if}
 
 	<form method="POST" action="?/sendMessage" class="compose" use:enhance={() => { sendingMsg = true; return async ({ update }) => { await update(); sendingMsg = false; scrollThread(); }; }}>
-		<textarea name="body" rows="2" maxlength="5000" placeholder="{t.myRes.composePlaceholder} {orgName}…" required></textarea>
+		<textarea name="body" rows="2" maxlength="5000" placeholder="{t.myRes.composePlaceholder} {orgName}…" aria-label="{t.myRes.composePlaceholder} {orgName}" required></textarea>
 		<!-- Disabled while sending: a double click stored the message twice. -->
 		<button type="submit" class="btn-primary send" disabled={sendingMsg}>
 			<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>

@@ -157,7 +157,7 @@
 			</div>
 			{#if noteEditId === g.id}
 				<div class="note-edit">
-					<textarea rows="2" placeholder={tr.editor.notePlaceholder} value={g.note ?? ''}
+					<textarea rows="2" placeholder={tr.editor.notePlaceholder} aria-label={tr.editor.notePlaceholder} value={g.note ?? ''}
 						oninput={(e) => onNote(g.id, e.currentTarget.value)}
 						onkeydown={(e) => { if (e.key === 'Escape') noteEditId = null; }}></textarea>
 				</div>

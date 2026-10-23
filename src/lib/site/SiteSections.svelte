@@ -122,7 +122,7 @@
   {#if section === 'search'}
     <section class="section sx-search">
       <div class="sx-filters">
-        <input type="search" placeholder={labels.searchPlaceholder} bind:value={search} disabled={inert} />
+        <input type="search" placeholder={labels.searchPlaceholder} aria-label={labels.searchPlaceholder} bind:value={search} disabled={inert} />
         <label>
           <span class="sr-only">{labels.minGuests}</span>
           <input type="number" min="0" step="10" bind:value={minCap} placeholder={labels.minGuests} disabled={inert} />
