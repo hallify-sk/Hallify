@@ -20,6 +20,13 @@ function makeR2() {
 	};
 }
 
+const SIGNATURES: Record<string, number[]> = {
+	'image/jpeg': [0xff, 0xd8, 0xff, 0xe0],
+	'image/png': [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a],
+	'image/gif': [0x47, 0x49, 0x46, 0x38, 0x39, 0x61],
+	'image/webp': [0x52, 0x49, 0x46, 0x46, 0, 0, 0, 0, 0x57, 0x45, 0x42, 0x50],
+};
+
 function makeEvent(overrides: {
 	type?: string;
 	size?: number;
@@ -39,7 +46,10 @@ function makeEvent(overrides: {
 
 	const formData = new FormData();
 	if (!noFile) {
-		const file = new File([new Uint8Array(size).fill(0)], 'photo.jpg', { type });
+		// Real signatures: the endpoint checks the bytes, not just the declared type.
+		const bytes = new Uint8Array(size).fill(0);
+		bytes.set(SIGNATURES[type] ?? [], 0);
+		const file = new File([bytes], 'photo.jpg', { type });
 		formData.append('file', file);
 	}
 
@@ -77,6 +87,27 @@ describe('R2 upload – file validation', () => {
 			const res = await POST(ev as never);
 			expect(res.status).toBe(200);
 		}
+	});
+
+	// B151: anything declared as an image used to be stored as one.
+	it('rejects bytes that are not an image, whatever the declared type', async () => {
+		const formData = new FormData();
+		formData.append('file', new File(['<!doctype html><script>alert(1)</script>'], 'x.png', { type: 'image/png' }));
+		const ev = { ...makeEvent(), request: new Request('http://localhost/api/upload/image', { method: 'POST', body: formData }) };
+		await expect(POST(ev as never)).rejects.toMatchObject({ status: 400 });
+		expect(ev.r2.calls).toHaveLength(0);
+	});
+
+	it('stores the type the bytes show, not the declared one', async () => {
+		const r2 = makeR2();
+		const formData = new FormData();
+		const png = new Uint8Array(64);
+		png.set(SIGNATURES['image/png']);
+		formData.append('file', new File([png], 'x.jpg', { type: 'image/jpeg' }));
+		const ev = { ...makeEvent({ r2 }), request: new Request('http://localhost/api/upload/image', { method: 'POST', body: formData }) };
+		await POST(ev as never);
+		expect(r2.calls[0].options?.httpMetadata?.contentType).toBe('image/png');
+		expect(r2.calls[0].key).toMatch(/\.png$/);
 	});
 
 	it('rejects files over 8 MB', async () => {
