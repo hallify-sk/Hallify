@@ -22,3 +22,14 @@
 | B156 | done | Wizard errors carry the step that produced them and only show on that step; the register "Prihláste sa" link keeps ?redirect. (Org switcher part belongs to shell.) |
 | B116 | done | /app is now a home for accounts with no organisation (invitations waiting for them, find a venue, create an organisation, profile) instead of redirecting to /priestory; /app/messages without an org goes there instead of the create-org form; /app/welcome redirects (sign-in or home) instead of a raw 401/403. |
 | B117 | done | /app sends anyone with console access to /app/manage, so sign-in, the logo and Home all reach the real dashboard. |
+
+## Notes for the merge
+
+- Files outside this team's ownership, changed minimally: `src/routes/forgot-password/+page.server.ts` and `src/routes/reset-password/[token]/+page.server.ts` (B46, hashed tokens; hunks kept clear of the venue branch's edits), `src/lib/cleanup.ts` (B91), `src/routes/app/messages/+page.server.ts` (B116, one line in `load`).
+- `src/lib/site/legal-acceptance.ts` and its test are byte-identical copies of the venue branch's files, so the add/add merges cleanly. `migrations/0024_legal_acceptances.sql` repeats 0019's IF NOT EXISTS definition.
+- Wizard and console hall slugs: the wizard uses `uniqueHallSlug` (`src/lib/server/onboarding-hall.ts`); the console's creation is the halls team's.
+
+## Checks
+
+- `npx vitest run`: 34 files, 276 tests passed.
+- svelte-check: 0 errors.
