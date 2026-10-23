@@ -12,6 +12,8 @@ import { assertCanBook, releaseHold } from '$lib/availability';
 import { st } from '$lib/i18n-server';
 import { notifyNewReservation, notifyBookingReceived } from '$lib/email';
 import { postSystemMessage } from '$lib/tickets';
+import { noteMonthUsage, recordTurnedAway } from '$lib/server/cap-notices';
+import { keepAlive } from '$lib/server/background';
 import { dispatchWebhooks } from '$lib/notifications';
 import {
 	CUSTOM_EVENT_TYPE_MAX,
@@ -119,7 +121,11 @@ export async function createReservation(
 	// not stop the venue taking a last-minute booking itself.
 	const bookable = input.byStaff ? { ...hall, min_days_advance: 0 } : hall;
 	const check = await assertCanBook(locals.db, bookable, eventDate, user.id, numGuests, locals.locale);
-	if (!check.ok) return { ok: false, status: 400, error: check.reason ?? e.dateUnavailable };
+	if (!check.ok) {
+		// A client turned away by the plan's monthly cap is the owner's business (M17).
+		if (check.code === 'month_full' && user.account_type === 'client') keepAlive(recordTurnedAway(locals.db, hall, eventDate));
+		return { ok: false, status: 400, error: check.reason ?? e.dateUnavailable };
+	}
 
 	let layoutJson: string | null = null;
 	let templateResolved = false;
@@ -164,6 +170,8 @@ export async function createReservation(
 	}
 
 	await releaseHold(locals.db, hallId, eventDate, user.id);
+	// A booking that fills the month under the plan's cap is announced to the owner.
+	keepAlive(noteMonthUsage(locals.db, hall, eventDate));
 
 	const userName = `${user.first_name} ${user.last_name}`;
 	if (!input.silent) {

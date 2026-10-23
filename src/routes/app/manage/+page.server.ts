@@ -2,6 +2,7 @@ import { dbFirst, dbAll, fromJson } from '$lib/db/index';
 import { ONBOARDING_PROMPT_DAYS, resolveOnboarding } from '$lib/onboarding';
 import type { PageServerLoad } from './$types';
 import { requireOrgConsole } from '$lib/server/access';
+import { loadCapNotices } from '$lib/server/cap-notices';
 
 export const load: PageServerLoad = async ({ locals }) => {
   await requireOrgConsole(locals);
@@ -163,5 +164,7 @@ export const load: PageServerLoad = async ({ locals }) => {
     upcoming,
     recent,
     onlineCount: presenceRow?.online_count ?? 0,
+    // Months the plan's reservation cap has filled: clients can no longer book them.
+    caps: await loadCapNotices(locals.db, orgId),
   };
 };

@@ -11,6 +11,8 @@ import { checkStatusTransition, normalizeTime, todayUtcISO } from '$lib/server/r
 import { extrasChange, loadExtrasSnapshot, saveExtrasSnapshot } from '$lib/server/reservation-extras';
 import { parseExtraIds } from '$lib/extras';
 import { clearReminder } from '$lib/server/reminders';
+import { noteMonthUsage } from '$lib/server/cap-notices';
+import { keepAlive } from '$lib/server/background';
 
 /**
  * What staff can do to a booking, in one place: the reservation page's actions and
@@ -298,7 +300,10 @@ export async function editReservationDetails(
 		kind: 'edited', note: changed.join(','),
 	});
 	// A moved event is reminded again before its new date.
-	if (changed.includes('date')) await clearReminder(locals.db, reservationId);
+	if (changed.includes('date')) {
+		await clearReminder(locals.db, reservationId);
+		if (active) keepAlive(noteMonthUsage(locals.db, hall, eventDate));
+	}
 	// Tell the client what the venue changed (the internal note is not theirs to see).
 	const seen: ReservationChange[] = reservationChanges(res,
 		{ title: res.title, event_date: eventDate, start_time: startTime, end_time: endTime, num_guests: numGuests, description: description || null });

@@ -2,6 +2,7 @@
   import { t, getLocale } from '$lib/i18n.svelte';
   import { formatDate, timeAgo as relTime } from '$lib/format';
   import KpiCard from '$lib/components/KpiCard.svelte';
+  import CapNotices from '$lib/components/CapNotices.svelte';
   import type { PageData } from './$types';
 
   interface Props { data: PageData; }
@@ -118,6 +119,8 @@
       </span>
     </a>
   {/if}
+
+  <CapNotices caps={data.caps} canUpgrade={data.navPermissions.includes('billing.manage')} />
 
   <!-- ─── KPI row ───────────────────────────────────────────────────────── -->
   <!-- Four even columns of one component, so the tiles, the numbers and the

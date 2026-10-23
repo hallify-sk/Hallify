@@ -9,6 +9,8 @@ import { dispatchWebhooks } from '$lib/notifications';
 import { st } from '$lib/i18n-server';
 import { loadBookableExtras } from '$lib/site/bookable-extras';
 import { saveExtrasSnapshot } from '$lib/server/reservation-extras';
+import { noteMonthUsage, recordTurnedAway } from '$lib/server/cap-notices';
+import { keepAlive } from '$lib/server/background';
 
 const RANGE_DAYS = 540;
 
@@ -72,6 +74,8 @@ export const actions: Actions = {
 			// client's hold on it is released instead of blocking it for 15 minutes,
 			// and the form is told to drop the date.
 			await releaseHold(locals.db, hall.id, eventDate, locals.user.id);
+			// A client turned away by the plan's monthly cap: the owner hears about it.
+			if (check.code === 'month_full') keepAlive(recordTurnedAway(locals.db, hall, eventDate));
 			return fail(400, { error: check.reason, dateRejected: true });
 		}
 
@@ -107,6 +111,8 @@ export const actions: Actions = {
 		await releaseHold(locals.db, hall.id, eventDate, locals.user.id);
 		// The prices the extras were booked at, so a later price edit leaves this total alone.
 		if (extrasIds.length) await saveExtrasSnapshot(locals.db, reservationId, hall.id, extrasIds);
+		// This booking may have filled the month under the plan's cap: tell the owner.
+		keepAlive(noteMonthUsage(locals.db, hall, eventDate));
 
 		// Let the venue's owners/admins know a guest has requested a booking.
 		const guestName = `${locals.user.first_name} ${locals.user.last_name}`;

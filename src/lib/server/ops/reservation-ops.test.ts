@@ -10,6 +10,7 @@ vi.mock('$lib/email', async (importOriginal) => ({
 	notifyVenueChange: vi.fn(async () => true),
 }));
 vi.mock('$lib/server/reminders', () => ({ clearReminder: vi.fn(async () => {}) }));
+vi.mock('$lib/server/cap-notices', () => ({ noteMonthUsage: vi.fn(async () => {}) }));
 vi.mock('$lib/notifications', () => ({ dispatchWebhooks: vi.fn(async () => {}) }));
 
 import { testD1 } from '../test-d1';

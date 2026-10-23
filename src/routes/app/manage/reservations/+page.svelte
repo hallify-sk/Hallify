@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
+	import CapNotices from '$lib/components/CapNotices.svelte';
 	import { untrack } from 'svelte';
 	import { page } from '$app/stores';
 	import { t, getLocale } from '$lib/i18n.svelte';
@@ -95,6 +96,8 @@
 			{t.manualReservation.open}
 		</button>
 	</div>
+
+	<CapNotices caps={data.caps} canUpgrade={data.navPermissions.includes('billing.manage')} />
 
 	{#if showManual}
 		<section id="manual-panel" class="section section--lead">

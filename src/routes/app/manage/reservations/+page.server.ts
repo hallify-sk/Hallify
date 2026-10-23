@@ -8,6 +8,7 @@ import { earliestBookableISO, todayISO } from '$lib/availability';
 import { createReservation, STAFF_INITIAL_STATUSES } from '$lib/server/reservations';
 import { parseListFilters, listReservations } from '$lib/server/reservation-list';
 import { todayUtcISO } from '$lib/server/reservation-rules';
+import { loadCapNotices } from '$lib/server/cap-notices';
 
 /** Caps on the customer details an operator types in. They are stored in staff-only
  *  columns nothing else bounds — the UI's maxlength is a convenience, this is the rule. */
@@ -48,6 +49,8 @@ export const load: PageServerLoad = async ({ locals, url }) => {
   );
 
   return {
+    // Months the plan's reservation cap has filled (M17).
+    caps: await loadCapNotices(locals.db, orgId),
     reservations: list.rows,
     total: list.total,
     page: list.page,

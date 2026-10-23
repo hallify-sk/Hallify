@@ -5,6 +5,8 @@ import type { HallRow, HallBlockRow, ReservationRow } from '$lib/db/index';
 import { parseExtraIds, parseExtrasSnapshot, withBookedPrices } from '$lib/extras';
 import { extrasChange, saveExtrasSnapshot } from '$lib/server/reservation-extras';
 import { clearReminder } from '$lib/server/reminders';
+import { noteMonthUsage, recordTurnedAway } from '$lib/server/cap-notices';
+import { keepAlive } from '$lib/server/background';
 import { dispatchWebhooks } from '$lib/notifications';
 import { notifyGuestMessage, notifyGuestCancel, notifyGuestEdit, notifyClientEdited, notifyClientCancelled, reservationChanges } from '$lib/email';
 import {
@@ -195,7 +197,10 @@ export const actions: Actions = {
 
 		if (eventDate !== reservation.event_date) {
 			const check = await assertCanBook(locals.db, hall, eventDate, userId, numGuests, locals.locale, params.id);
-			if (!check.ok) return fail(400, { scope: 'update', error: check.reason });
+			if (!check.ok) {
+				if (check.code === 'month_full') keepAlive(recordTurnedAway(locals.db, hall, eventDate));
+				return fail(400, { scope: 'update', error: check.reason });
+			}
 		}
 
 		try {
@@ -212,7 +217,10 @@ export const actions: Actions = {
 		// Shown in the booking's history on the staff page.
 		await logReservationActivity(locals.db, { reservationId: params.id, orgId, actorId: userId, actorName: guestName, kind: 'edited', note: 'client' });
 		const changes = reservationChanges(reservation, { title, description, event_date: eventDate, start_time: startTime, end_time: endTime, num_guests: numGuests });
-		if (eventDate !== reservation.event_date) await clearReminder(locals.db, params.id);
+		if (eventDate !== reservation.event_date) {
+			await clearReminder(locals.db, params.id);
+			keepAlive(noteMonthUsage(locals.db, hall, eventDate));
+		}
 		notifyGuestEdit(locals.db, orgId, guestName, title, hall.name, eventDate, {
 			reservationId: params.id,
 			changes,

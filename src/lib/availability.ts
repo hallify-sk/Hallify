@@ -130,7 +130,7 @@ export async function getUnavailableDates(
 }
 
 /** The plan's per-hall monthly reservation cap for an org; -1 = unlimited. */
-async function monthlyCap(db: D1Database, orgId: string): Promise<number> {
+export async function monthlyCap(db: D1Database, orgId: string): Promise<number> {
 	const sub = await dbFirst<{ plan: string | null }>(db, 'SELECT plan FROM subscriptions WHERE org_id = ?', orgId);
 	return getPlan((sub?.plan ?? 'free') as PlanId).limits.maxReservationsPerHallMonth;
 }
@@ -314,7 +314,7 @@ export async function assertCanBook(
 	/** When rescheduling, the reservation being moved — excluded from the monthly cap
 	 *  and the taken-date check so an edit never conflicts with itself. */
 	excludeReservationId: string | null = null
-): Promise<{ ok: boolean; reason?: string }> {
+): Promise<{ ok: boolean; reason?: string; code?: 'month_full' }> {
 	const e = st(locale).serverErrors;
 	if (hall.plan_locked) return { ok: false, reason: e.hallUnavailable };
 	if (!hall.allow_reservations) return { ok: false, reason: e.hallNotAcceptingBookings };
@@ -330,7 +330,8 @@ export async function assertCanBook(
 			"SELECT COUNT(*) AS n FROM reservations WHERE hall_id = ? AND status != 'cancelled' AND substr(event_date, 1, 7) = ? AND id IS NOT ?",
 			hall.id, eventDate.slice(0, 7), excludeReservationId);
 		if ((mc?.n ?? 0) >= monthLimit) {
-			return { ok: false, reason: e.hallFullyBookedMonth(monthName(eventDate.slice(0, 7), locale)) };
+			// `code` lets a client-facing caller record the refusal for the owner (M17).
+			return { ok: false, reason: e.hallFullyBookedMonth(monthName(eventDate.slice(0, 7), locale)), code: 'month_full' };
 		}
 	}
 
