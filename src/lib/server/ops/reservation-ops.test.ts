@@ -1,0 +1,100 @@
+import { describe, expect, it, beforeEach, vi } from 'vitest';
+import type { D1Database } from '@cloudflare/workers-types';
+
+// No e-mail or webhook leaves a test run.
+vi.mock('$lib/email', () => ({
+	notifyStatusChange: vi.fn(async () => {}),
+	notifyNewMessage: vi.fn(async () => {}),
+	notifyHallCancellation: vi.fn(async () => {}),
+}));
+vi.mock('$lib/notifications', () => ({ dispatchWebhooks: vi.fn(async () => {}) }));
+
+import { testD1 } from '../test-d1';
+import { changeReservationStatus, editReservationDetails, messageReservationClient } from './reservation-ops';
+import { notifyHallCancellation, notifyStatusChange } from '$lib/email';
+
+let db: D1Database;
+let exec: (sql: string) => void;
+const actor = { id: 'staff', first_name: 'Sta', last_name: 'Ff' };
+const locals = () => ({ db, locale: 'sk' }) as unknown as App.Locals;
+const future = (days: number) => new Date(Date.now() + days * 86400000).toISOString().slice(0, 10);
+
+beforeEach(async () => {
+	vi.clearAllMocks();
+	({ db, exec } = await testD1());
+	exec(`
+		INSERT INTO organizations (id, name, slug) VALUES ('o1', 'Org', 'org');
+		INSERT INTO users (id, email, password_hash, first_name, last_name, account_type) VALUES
+		  ('client', 'c@x.sk', 'x', 'Cli', 'Ent', 'client'), ('staff', 's@x.sk', 'x', 'Sta', 'Ff', 'organization');
+		INSERT INTO halls (id, org_id, name, max_people, allow_reservations) VALUES ('h1', 'o1', 'Sála', 100, 1);
+		INSERT INTO reservations (id, org_id, hall_id, user_id, title, event_date, status, invite_code) VALUES
+		  ('r1', 'o1', 'h1', 'client', 'Svadba', '${future(30)}', 'pending', 'A'),
+		  ('r2', 'o1', 'h1', 'client', 'Iná', '${future(40)}', 'approved', 'B'),
+		  ('old', 'o1', 'h1', 'client', 'Stará', '2020-01-01', 'pending', 'C');
+	`);
+});
+
+const row = (id: string) => db.prepare('SELECT * FROM reservations WHERE id = ?').bind(id).first<Record<string, unknown>>();
+
+describe('changeReservationStatus', () => {
+	it('refuses a change made from a stale view', async () => {
+		const res = await changeReservationStatus(locals(), 'o1', 'r1', 'approved', actor, { expectedFrom: 'approved' });
+		expect(res.ok).toBe(false);
+		expect((await row('r1'))?.status).toBe('pending');
+	});
+
+	it('approves, logs the history and e-mails the client', async () => {
+		const res = await changeReservationStatus(locals(), 'o1', 'r1', 'approved', actor, { expectedFrom: 'pending' });
+		expect(res.ok).toBe(true);
+		expect((await row('r1'))?.status).toBe('approved');
+		expect(notifyStatusChange).toHaveBeenCalledOnce();
+		const act = await db.prepare("SELECT kind, status FROM reservation_activity WHERE reservation_id = 'r1'").first();
+		expect(act).toMatchObject({ kind: 'status', status: 'approved' });
+	});
+
+	it('declines with a reason the client sees in the thread and the e-mail', async () => {
+		const res = await changeReservationStatus(locals(), 'o1', 'r1', 'cancelled', actor, { reason: 'Obsadené.' });
+		expect(res.ok).toBe(true);
+		expect(await row('r1')).toMatchObject({ status: 'cancelled', status_reason: 'Obsadené.', cancelled_by: 'venue' });
+		expect(notifyHallCancellation).toHaveBeenCalledOnce();
+		expect(notifyStatusChange).not.toHaveBeenCalled();
+		const msg = await db.prepare(`SELECT m.body FROM messages m JOIN tickets t ON t.id = m.ticket_id WHERE t.reservation_id = 'r1'`).first();
+		expect(msg).toMatchObject({ body: 'Obsadené.' });
+	});
+
+	it('will not complete a future event or approve a passed request', async () => {
+		expect((await changeReservationStatus(locals(), 'o1', 'r2', 'completed', actor)).ok).toBe(false);
+		expect((await changeReservationStatus(locals(), 'o1', 'old', 'approved', actor)).ok).toBe(false);
+	});
+
+	it('does nothing (and e-mails nobody) when the status is unchanged', async () => {
+		expect((await changeReservationStatus(locals(), 'o1', 'r1', 'pending', actor)).ok).toBe(true);
+		expect(notifyStatusChange).not.toHaveBeenCalled();
+	});
+});
+
+describe('editReservationDetails', () => {
+	const base = { startTime: '18:00', endTime: '', numGuests: '50', description: 'Pre klienta', internalNotes: 'Len pre tím' };
+
+	it('moves a booking to a free date and records what changed', async () => {
+		const res = await editReservationDetails(locals(), 'o1', 'r1', { ...base, eventDate: future(31) }, actor);
+		expect(res.ok).toBe(true);
+		expect(await row('r1')).toMatchObject({ event_date: future(31), start_time: '18:00', num_guests: 50, internal_notes: 'Len pre tím' });
+	});
+
+	it('refuses a date another booking holds, and too many guests', async () => {
+		expect((await editReservationDetails(locals(), 'o1', 'r1', { ...base, eventDate: future(40) }, actor)).ok).toBe(false);
+		expect((await editReservationDetails(locals(), 'o1', 'r1', { ...base, eventDate: future(30), numGuests: '500' }, actor)).ok).toBe(false);
+	});
+});
+
+describe('messageReservationClient', () => {
+	it('keeps one thread per booking', async () => {
+		await Promise.all([
+			messageReservationClient(locals(), 'o1', 'r1', 'a', actor),
+			messageReservationClient(locals(), 'o1', 'r1', 'b', actor),
+		]);
+		const n = await db.prepare(`SELECT COUNT(*) AS n FROM tickets WHERE reservation_id = 'r1'`).first<{ n: number }>();
+		expect(n?.n).toBe(1);
+	});
+});
