@@ -1,5 +1,8 @@
 import { requireOrgPermission } from '$lib/server/access';
 import { fail } from '@sveltejs/kit';
+import bcrypt from 'bcryptjs';
+import { requireOrg } from '$lib/guards';
+import { rateLimit, rateLimitKey, tooManyAttemptsMessage, RATE_LIMITS } from '$lib/rateLimit';
 import { dbAll, dbFirst, dbRun } from '$lib/db/index';
 import type { OrgMemberRow } from '$lib/db/index';
 import { orgMemberCount } from '$lib/orgLifecycle';
@@ -131,6 +134,8 @@ export const load: PageServerLoad = async ({ locals }) => {
 		// What the caller may put on somebody else. Anything outside this set is
 		// rendered read-only and refused server side.
 		actor: { isOwner: actor.isOwner, grantable, canGrantAdmin: canGrantAdminAccess(actor) },
+		// Only the real owner, never a platform admin viewing as one.
+		canTransfer: org.role === 'owner' && !org.impersonated,
 		totalPermissions: PERMISSIONS.length,
 		currentOrg: org
 	};
@@ -336,6 +341,77 @@ export const actions: Actions = {
 		// Administrator's rank (and a demoted one keeps neither).
 		await syncAdministratorRole(locals.db, orgId, userId, role === 'admin');
 		return { success: true, message: T.peopleArea.errors.accessSaved };
+	},
+
+	/**
+	 * Hand the organisation to another member. They become the owner; the caller
+	 * becomes an administrator (flag and Administrator role row). The subscription
+	 * and billing belong to the organisation, not to a person, so nothing there moves.
+	 *
+	 * Owner only, and only with the owner's password: it is the one change in the
+	 * People area that cannot be undone by the person making it. Password attempts
+	 * share the sign-in bucket for this account, so this is no side door for guessing.
+	 */
+	transferOwnership: async ({ request, locals }) => {
+		const T = st(locals.locale);
+		const org = requireOrg(locals);
+		const me = locals.user!;
+		if (org.impersonated) return fail(403, { transferError: T.serverErrors.impersonationBlockThisOrg });
+		if (org.role !== 'owner') return fail(403, { transferError: T.peopleArea.errors.onlyOwnerTransfers });
+
+		const data = await request.formData();
+		const userId = String(data.get('user_id') ?? '');
+		const password = String(data.get('password') ?? '');
+		if (!userId || !password) return fail(400, { transferError: T.serverErrors.allFieldsRequired });
+
+		const rl = await rateLimit(locals.db, rateLimitKey('login_email', me.email), RATE_LIMITS.loginEmail);
+		if (!rl.ok) {
+			return fail(429, { transferError: tooManyAttemptsMessage(T.serverErrors.tooManyAttempts, rl.retryAfterMinutes) });
+		}
+		const mine = await dbFirst<{ password_hash: string | null }>(
+			locals.db,
+			'SELECT password_hash FROM users WHERE id = ?',
+			me.id
+		);
+		if (!mine?.password_hash || !(await bcrypt.compare(password, mine.password_hash))) {
+			return fail(400, { transferError: T.serverErrors.currentPasswordIncorrect });
+		}
+
+		const target = await dbFirst<{ role: string; account_type: string | null; first_name: string | null; last_name: string | null; email: string }>(
+			locals.db,
+			`SELECT m.role, u.account_type, u.first_name, u.last_name, u.email
+			   FROM organization_members m JOIN users u ON u.id = m.user_id
+			  WHERE m.org_id = ? AND m.user_id = ?`,
+			org.id,
+			userId
+		);
+		if (!target || userId === me.id || target.role === 'owner' || target.account_type === 'client') {
+			return fail(400, { transferError: T.peopleArea.errors.notMember });
+		}
+
+		// One batch, so the org is never left with two owners or none. Each statement
+		// is guarded on the role it expects, so a second submit changes nothing.
+		await locals.db.batch([
+			locals.db
+				.prepare("UPDATE organization_members SET role = 'owner' WHERE org_id = ? AND user_id = ? AND role <> 'owner'")
+				.bind(org.id, userId),
+			locals.db
+				.prepare("UPDATE organization_members SET role = 'admin' WHERE org_id = ? AND user_id = ? AND role = 'owner'")
+				.bind(org.id, me.id)
+		]);
+
+		// The owner is not a role and holds no role rows or overrides; the old owner
+		// gets the Administrator role that goes with the admin flag.
+		try {
+			await dbRun(locals.db, 'DELETE FROM org_member_roles WHERE org_id = ? AND user_id = ?', org.id, userId);
+			await dbRun(locals.db, 'DELETE FROM org_member_overrides WHERE org_id = ? AND user_id = ?', org.id, userId);
+		} catch {
+			/* pre-migration 0007: no role tables */
+		}
+		await syncAdministratorRole(locals.db, org.id, me.id, true);
+
+		const name = `${target.first_name ?? ''} ${target.last_name ?? ''}`.trim() || target.email;
+		return { success: true, message: T.peopleArea.errors.ownershipTransferred(name) };
 	},
 
 	/** Remove a member. Validation unchanged from the old Members page, plus the

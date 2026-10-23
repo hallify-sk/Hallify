@@ -45,6 +45,13 @@
   const groupLabel = (key: string) => (t.peopleArea.permGroups as Record<string, string>)[key] ?? key;
   const grantable = $derived(new Set<string>(data.actor.grantable));
 
+  // Anyone in the org but the owner themself can be handed the organisation.
+  const transferCandidates = $derived(data.people.filter((p) => !p.isOwner && !p.isMe));
+  function personLabel(p: { firstName: string; lastName: string; email: string }) {
+    const name = `${p.firstName} ${p.lastName}`.trim();
+    return name ? `${name} · ${p.email}` : p.email;
+  }
+
   function overrideState(p: { allow: string[]; deny: string[] }, perm: Permission) {
     if (p.deny.includes(perm)) return 'deny';
     if (p.allow.includes(perm)) return 'allow';
@@ -285,6 +292,51 @@
   </div>
 </section>
 
+{#if data.canTransfer}
+  <section class="section">
+    <div class="section-head">
+      <h2>{t.peopleArea.transferTitle}</h2>
+      <p>{t.peopleArea.transferSub}</p>
+    </div>
+
+    {#if transferCandidates.length === 0}
+      <p class="hint">{t.peopleArea.transferNoCandidates}</p>
+    {:else}
+      <form
+        method="POST"
+        action="?/transferOwnership"
+        class="transfer card--inset"
+        use:enhance={confirmFirst(() => t.peopleArea.transferConfirm, async ({ result, update }) => {
+          await update();
+          // The section is gone once they are no longer the owner; the confirmation
+          // is at the top of the page.
+          if (result.type === 'success') window.scrollTo({ top: 0, behavior: 'smooth' });
+        })}
+      >
+        {#if form?.transferError}
+          <div class="alert-error transfer-error" role="alert">{form.transferError}</div>
+        {/if}
+        <div class="t-grid">
+          <div class="t-f">
+            <label for="transfer-to">{t.peopleArea.transferTo}</label>
+            <select id="transfer-to" name="user_id" required>
+              <option value="" selected disabled>{t.peopleArea.transferChoose}</option>
+              {#each transferCandidates as c (c.userId)}
+                <option value={c.userId}>{personLabel(c)}</option>
+              {/each}
+            </select>
+          </div>
+          <div class="t-f">
+            <label for="transfer-password">{t.peopleArea.transferPassword}</label>
+            <input id="transfer-password" name="password" type="password" required autocomplete="current-password" />
+          </div>
+        </div>
+        <div><button type="submit" class="btn-outline btn-sm">{t.peopleArea.transferSubmit}</button></div>
+      </form>
+    {/if}
+  </section>
+{/if}
+
 <style>
   .page {
     /* Roster tints — deep fills that hold white text, so they do not flip with the
@@ -475,6 +527,24 @@
   .tri-allow input:checked + span { background: var(--success); color: var(--on-success); }
   .tri-deny input:checked + span { background: var(--danger); color: var(--on-danger); }
   .perm-row.locked .tri { opacity: .72; }
+
+  /* ── Ownership transfer ─────────────────────────────────────────────────── */
+  .transfer { display: flex; flex-direction: column; gap: 14px; padding: 20px; }
+  .transfer-error { margin: 0; }
+  .t-grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+  .t-f { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+  .t-f label {
+    font-size: var(--meta-size); font-weight: 600; text-transform: uppercase;
+    letter-spacing: .12em; color: var(--text-muted);
+  }
+  .t-f input, .t-f select {
+    height: var(--control-h); box-sizing: border-box; min-width: 0;
+    padding: 0 11px; border: 1px solid var(--border); border-radius: var(--radius-sm);
+    background: var(--bg-panel); font-size: 13px;
+    color: var(--text-base); font-family: inherit; outline: none;
+    transition: border-color .15s, box-shadow .15s;
+  }
+  .t-f input:focus, .t-f select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-dim); }
 
   /* ── Responsive ─────────────────────────────────────────────────────────── */
   @media (max-width: 860px) {
