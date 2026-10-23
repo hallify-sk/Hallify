@@ -60,7 +60,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 		       u.first_name AS inviter_first, u.last_name AS inviter_last, u.email AS inviter_email
 		  FROM organization_invites i
 		  LEFT JOIN users u ON u.id = i.invited_by
-		 WHERE i.org_id = ? AND i.accepted_at IS NULL AND i.expires_at > datetime('now')
+		 WHERE i.org_id = ? AND i.accepted_at IS NULL AND datetime(i.expires_at) > datetime('now')
 		 ORDER BY i.created_at DESC`;
 
 	let rows: InviteRow[];
