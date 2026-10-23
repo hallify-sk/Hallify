@@ -10,6 +10,7 @@ import type { PlanId } from '$lib/plans';
 import { rateLimit, rateLimitKey, tooManyAttemptsMessage, RATE_LIMITS } from '$lib/rateLimit';
 import type { D1Database } from '@cloudflare/workers-types';
 import { syncAdministratorRole } from '$lib/server/people';
+import { notifyOrg } from '$lib/server/notification-centre';
 
 /**
  * Accepting an invitation into an organisation.
@@ -168,6 +169,9 @@ async function seatLimitHit(
  *  organisation with nobody who can close it or pay for it. */
 async function joinOrg(db: D1Database, invite: InviteRow, userId: string): Promise<void> {
 	const memberRole = invite.role === 'admin' ? 'admin' : 'member';
+	// Somebody already in the organisation is only changing their access level.
+	const wasMember = await dbFirst<{ id: string }>(db,
+		'SELECT id FROM organization_members WHERE org_id = ? AND user_id = ?', invite.org_id, userId);
 
 	await dbRun(
 		db,
@@ -220,6 +224,17 @@ async function joinOrg(db: D1Database, invite: InviteRow, userId: string): Promi
 		  WHERE id = ? AND accepted_at IS NULL`,
 		invite.id
 	);
+
+	// The notification centre (D12): the team hears that somebody joined.
+	if (!wasMember) {
+		const who = await dbFirst<{ first_name: string | null; last_name: string | null; email: string }>(db,
+			'SELECT first_name, last_name, email FROM users WHERE id = ?', userId);
+		const name = `${who?.first_name ?? ''} ${who?.last_name ?? ''}`.trim() || who?.email || '';
+		await notifyOrg(db, {
+			orgId: invite.org_id, kind: 'member.joined', params: { name },
+			link: '/app/manage/members', actorId: userId,
+		});
+	}
 }
 
 /**

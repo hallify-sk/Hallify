@@ -1,4 +1,4 @@
-import { requireOrgPermission } from '$lib/server/access';
+import { requireOrgArea } from '$lib/server/access';
 import { fail } from '@sveltejs/kit';
 import bcrypt from 'bcryptjs';
 import { requireOrg } from '$lib/guards';
@@ -52,7 +52,9 @@ function denied(locals: App.Locals) {
 }
 
 export const load: PageServerLoad = async ({ locals }) => {
-	await requireOrgPermission(locals, 'members.manage');
+	// members.view opens the list read-only: every row's controls follow
+	// canManageMember, which needs members.manage.
+	await requireOrgArea(locals, 'members');
 	const org = locals.currentOrg!;
 	const orgId = org.id;
 	const meId = locals.user?.id ?? '';

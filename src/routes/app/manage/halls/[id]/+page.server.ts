@@ -11,7 +11,12 @@ import { st } from '$lib/i18n-server';
 import type { Actions, PageServerLoad } from './$types';
 import { sendEmail } from '$lib/email';
 import { OPERATOR } from '$lib/legal';
-import { requireOrgPermission } from '$lib/server/access';
+import { requireOrgAnyPermission, requireOrgArea, requireOrgPermission } from '$lib/server/access';
+import type { Permission } from '$lib/permissions';
+
+/** The table inventory the templates are laid out from: templates.manage edits it
+ *  too, as its description promises (see `areaAccess`). */
+const TABLE_TYPE_EDITORS: Permission[] = ['halls.manage', 'templates.manage'];
 import { canManageSettings } from '$lib/server/settings-access';
 import { parseCoordinates } from '$lib/venue-location';
 import { geocodeAddress } from '$lib/server/geocode';
@@ -120,7 +125,10 @@ function extraFromForm(data: FormData): ExtraInput {
 }
 
 export const load: PageServerLoad = async ({ params, locals }) => {
-	await requireOrgPermission(locals, 'halls.manage');
+	// halls.view opens the hall read-only, and so do floorplans.manage and
+	// templates.manage: the plan and the templates live on this page, and their
+	// editors lead back here. Every action below still asks for its own permission.
+	const { access } = await requireOrgArea(locals, 'halls');
 	const orgId = locals.currentOrg!.id;
 	// price_band arrived with 0006 and is not on HallRow yet; widen it here rather
 	// than wait for the shared type.
@@ -144,11 +152,14 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		'SELECT * FROM table_types WHERE hall_id = ? ORDER BY name',
 		params.id
 	);
-	const reservations = await dbAll<Pick<ReservationRow, 'id' | 'title' | 'event_date' | 'status'>>(
-		locals.db,
-		"SELECT id, title, event_date, status FROM reservations WHERE hall_id = ? AND status != 'cancelled' ORDER BY event_date",
-		params.id
-	);
+	// The hall's bookings are shown to those who may see bookings.
+	const reservations = access.reservations.view
+		? await dbAll<Pick<ReservationRow, 'id' | 'title' | 'event_date' | 'status'>>(
+			locals.db,
+			"SELECT id, title, event_date, status FROM reservations WHERE hall_id = ? AND status != 'cancelled' ORDER BY event_date",
+			params.id
+		)
+		: [];
 
 	const extras = await dbAll<HallExtraRow>(locals.db,
 		'SELECT * FROM hall_extras WHERE hall_id = ? ORDER BY created_at', params.id);
@@ -184,7 +195,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 	}
 
 	// What stands between this hall and being retired (see $lib/server/hall-archive).
-	const blocking = hall.archived_at ? [] : await blockingReservations(locals.db, hall.id);
+	const blocking = hall.archived_at || !access.halls.manage ? [] : await blockingReservations(locals.db, hall.id);
 	const unused = await hallIsUnused(locals.db, hall.id);
 
 	// A hall suspended by a downgrade, with the plan full: the halls that could be
@@ -216,7 +227,8 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 	const canOrderAddons = await canManageSettings(locals);
 	// Clients' ratings of events in this hall (D5): private to the team.
 	const feedback = await hallFeedback(locals.db, orgId, hall.id);
-	return { hall, templates: templates.map((tm) => ({ ...tm, problems: parseProblems((tm as { layout_problems?: unknown }).layout_problems).length })), problemEvents, blocks, tableTypes, reservations, extras, plan, orgAmenities, floorplanRequest, blocking, unused, planFull, swapCandidates, canOrderAddons, feedback };
+	const hallAccess = { manage: access.halls.manage, floorplans: access.halls.floorplans, templates: access.halls.templates, tableTypes: access.halls.tableTypes };
+	return { hall, templates: templates.map((tm) => ({ ...tm, problems: parseProblems((tm as { layout_problems?: unknown }).layout_problems).length })), problemEvents, blocks, tableTypes, reservations, extras, plan, orgAmenities, floorplanRequest, blocking, unused, planFull, swapCandidates, canOrderAddons, feedback, hallAccess };
 };
 
 /** The hall in the URL must belong to the acting organization. Every action below
@@ -368,14 +380,14 @@ export const actions: Actions = {
 	},
 
 	addTableType: async ({ request, params, locals }) => {
-		const org = await requireOrgPermission(locals, 'halls.manage');
+		const { org } = await requireOrgAnyPermission(locals, TABLE_TYPE_EDITORS);
 		const res = await addTableType(locals.db, org.id, params.id, tableTypeFromForm(await request.formData()), locals.locale);
 		if (!res.ok) return fail(res.status, { tableTypeError: res.error });
 		return { tableTypeSuccess: true };
 	},
 
 	updateTableType: async ({ request, params, locals }) => {
-		const org = await requireOrgPermission(locals, 'halls.manage');
+		const { org } = await requireOrgAnyPermission(locals, TABLE_TYPE_EDITORS);
 		const data = await request.formData();
 		const id = String(data.get('id') ?? '');
 		if (!id) return fail(400, { tableTypeError: st(locals.locale).serverErrors.missingTableType });
@@ -385,7 +397,7 @@ export const actions: Actions = {
 	},
 
 	deleteTableType: async ({ request, params, locals }) => {
-		const org = await requireOrgPermission(locals, 'halls.manage');
+		const { org } = await requireOrgAnyPermission(locals, TABLE_TYPE_EDITORS);
 		await removeTableType(locals.db, org.id, params.id, String((await request.formData()).get('id') ?? ''));
 		return { success: true };
 	},

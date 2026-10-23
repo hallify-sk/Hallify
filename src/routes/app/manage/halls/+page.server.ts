@@ -5,7 +5,7 @@ import { getPlan } from '$lib/plans';
 import { activeHallCount } from '$lib/limits';
 import { st } from '$lib/i18n-server';
 import type { Actions, PageServerLoad } from './$types';
-import { requireOrgPermission } from '$lib/server/access';
+import { requireOrgArea, requireOrgPermission } from '$lib/server/access';
 import { createHall } from '$lib/server/ops/hall-ops';
 import { nextUntitledHallName } from '$lib/server/hall-naming';
 
@@ -13,7 +13,8 @@ import { nextUntitledHallName } from '$lib/server/hall-naming';
 const MAX_NAME_LENGTH = 120;
 
 export const load: PageServerLoad = async ({ locals, url }) => {
-  await requireOrgPermission(locals, 'halls.manage');
+  // halls.view (or a floor-plan / template permission) opens the list read-only.
+  const { access } = await requireOrgArea(locals, 'halls');
   const orgId = locals.currentOrg!.id;
   const halls = await dbAll<HallRow & { reservation_count: string }>(
     locals.db,
@@ -27,6 +28,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
     activeHalls: await activeHallCount(locals.db, orgId),
     // Set by the hall page after a permanent delete, which lands here (I15).
     deleted: url.searchParams.get('deleted') === '1',
+    canManage: access.halls.manage,
   };
 };
 

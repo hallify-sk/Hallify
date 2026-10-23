@@ -7,6 +7,7 @@
 	import { setLocale } from '$lib/i18n.svelte';
 	import { playSound } from '$lib/sounds';
 	import ConsentBanner from '$lib/components/ConsentBanner.svelte';
+	import NotificationBell from '$lib/components/NotificationBell.svelte';
 	import AssistantWidget from '$lib/components/assistant/AssistantWidget.svelte';
 	import { setUserContext } from '$lib/analytics';
 	import { cameFromHallify } from '$lib/analytics-referral';
@@ -50,6 +51,10 @@
 	let liveUnreadAnnouncements = $state(0);
 	$effect(() => { liveUnreadMessages = data.unreadMessages ?? 0; });
 	$effect(() => { liveUnreadAnnouncements = data.unreadAnnouncements ?? 0; });
+	// The notification centre's bell (D12).
+	let liveUnreadNotifications = $state(0);
+	$effect(() => { liveUnreadNotifications = data.unreadNotifications ?? 0; });
+	const setUnreadNotifications = (n: number) => { liveUnreadNotifications = n; };
 
 	onMount(() => {
 		if (!data.user) return;
@@ -61,12 +66,13 @@
 			try {
 				const res = await fetch('/api/notifications', { headers: { accept: 'application/json' } });
 				if (!res.ok) return;
-				const n = await res.json() as { unreadMessages: number; unreadAnnouncements: number; announcements: { id: string }[] };
+				const n = await res.json() as { unreadMessages: number; unreadAnnouncements: number; announcements: { id: string }[]; unreadNotifications?: number };
 
 				// New message while the tab is in the background → ticket sound.
 				if (primed && n.unreadMessages > prevMessages && document.hidden) playSound('ticket');
 				prevMessages = n.unreadMessages;
 				liveUnreadMessages = n.unreadMessages;
+				liveUnreadNotifications = n.unreadNotifications ?? 0;
 
 				// A freshly-received announcement → announcement sound (once per id).
 				liveUnreadAnnouncements = n.unreadAnnouncements;
@@ -228,6 +234,9 @@
 			unreadAnnouncements={liveUnreadAnnouncements}
 			permissions={data.navPermissions ?? []}
 			venueSiteUrl={data.venueSiteUrl ?? null}
+			notificationCentre={data.notificationCentre ?? false}
+			unreadNotifications={liveUnreadNotifications}
+			onNotificationsChange={setUnreadNotifications}
 			{inDrawer}
 			onclose={inDrawer ? closeNav : undefined}
 		/>
@@ -257,6 +266,9 @@
 					<span>{branding?.appName || 'Hallify'}</span>
 				</a>
 				{#if data.currentOrg}<span class="mobile-org">{data.currentOrg.name}</span>{/if}
+				{#if data.notificationCentre}
+					<span class="mobile-bell"><NotificationBell placement="bar" unread={liveUnreadNotifications} onchange={setUnreadNotifications} /></span>
+				{/if}
 			</header>
 
 			{#if navOpen}
@@ -401,6 +413,9 @@
 			font-weight: 600;
 			color: var(--text-muted);
 		}
+		.mobile-bell { flex-shrink: 0; display: inline-flex; }
+		/* Without an organisation name the bell still sits at the far end. */
+		.mobile-brand + .mobile-bell { margin-left: auto; }
 	}
 	/* A drawer left open while the window widens past the breakpoint. */
 	@media (min-width: 900px) {

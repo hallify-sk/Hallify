@@ -1,12 +1,15 @@
 import { dbFirst, dbAll, fromJson } from '$lib/db/index';
 import { ONBOARDING_PROMPT_DAYS, resolveOnboarding } from '$lib/onboarding';
 import type { PageServerLoad } from './$types';
-import { requireOrgConsole } from '$lib/server/access';
+import { redirect } from '@sveltejs/kit';
+import { hasConsoleAccess } from '$lib/server/access';
 import { loadCapNotices } from '$lib/server/cap-notices';
 import { canManageSettings } from '$lib/server/settings-access';
 
 export const load: PageServerLoad = async ({ locals }) => {
-  await requireOrgConsole(locals);
+  // The dashboard belongs to the people who run the venue (a manage permission).
+  // A member who is in the console on a view permission alone has their own home.
+  if (!locals.currentOrg || !(await hasConsoleAccess(locals))) redirect(303, '/app/');
   const orgId = locals.currentOrg!.id;
 
   // ─── Summary stats ───────────────────────────────────────────────────────

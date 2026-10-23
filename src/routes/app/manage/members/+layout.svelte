@@ -9,11 +9,13 @@
 	// route so the back button and a bookmarked tab behave the way an operator
 	// expects. `exact` is needed for Members because it is the index route —
 	// a prefix match would leave it lit on /roles and /invites too.
+	// Each tab shows when its page would open for this member (D3).
+	const held = $derived(new Set<string>($page.data.navPermissions ?? []));
 	const tabs = $derived([
-		{ href: '/app/manage/members',         label: t.peopleArea.tabMembers, exact: true },
-		{ href: '/app/manage/members/roles',   label: t.peopleArea.tabRoles,   exact: false },
-		{ href: '/app/manage/members/invites', label: t.peopleArea.tabInvites, exact: false },
-	]);
+		{ href: '/app/manage/members',         label: t.peopleArea.tabMembers, exact: true,  show: held.has('members.view') || held.has('members.manage') },
+		{ href: '/app/manage/members/roles',   label: t.peopleArea.tabRoles,   exact: false, show: held.has('roles.manage') },
+		{ href: '/app/manage/members/invites', label: t.peopleArea.tabInvites, exact: false, show: held.has('invites.manage') },
+	].filter((tab) => tab.show));
 
 	const path = $derived($page.url.pathname);
 	const isActive = (tab: { href: string; exact: boolean }) =>

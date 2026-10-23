@@ -9,9 +9,22 @@ import { formatDate } from '$lib/format';
 import { channelName, channelNameProblem, CHANNEL_DESC_MAX } from '$lib/channels';
 import { channelUnreadCountSql, ticketUnreadSql, markChannelRead, markTicketRead } from '$lib/unread';
 import { findOrCreateReservationThread, MESSAGE_MAX } from '$lib/server/threads';
+import { orgPermissions } from '$lib/server/access';
+import { areaAccess, type AreaAccess } from '$lib/permissions';
+import { mayPostInChannel, mayReadChannel } from '$lib/team-chat-access';
+import { notifyOrg } from '$lib/server/notification-centre';
+import { excerpt } from '$lib/notification-centre';
 
 const ATTACHMENT_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
 const isAdminRole = (role: string | undefined) => role === 'owner' || role === 'admin';
+
+/** What the caller may do in the team channels (D3): read on messages.view, write
+ *  on messages.send, and post in an announcement channel on announcements.manage.
+ *  Announcements are published to the whole organisation, so every member reads the
+ *  announcement channels, messages.view or not. */
+async function chatAccess(locals: App.Locals): Promise<AreaAccess> {
+  return areaAccess(await orgPermissions(locals));
+}
 
 /** An uploaded image from the form, or null; `false` when the fields are malformed. */
 function attachmentFrom(data: FormData): { url: string; name: string | null; type: string } | null | false {
@@ -32,6 +45,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
   const channelId = url.searchParams.get('c');
   const ticketId  = url.searchParams.get('t');
   const isAdmin = isAdminRole(org.role);
+  const access = await chatAccess(locals);
 
   // ─── Channels ────────────────────────────────────────────────────────────
   // Same unread rule as the sidebar badge ($lib/unread), so the two always agree.
@@ -47,7 +61,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
     WHERE c.org_id = ? AND (c.archived_at IS NULL OR ? = 1)
     ORDER BY c.created_at`,
     user.id, org.id, user.id, user.id, org.id, isAdmin ? 1 : 0
-  );
+  ).then((rows) => (user.account_type === 'client' ? [] : rows.filter((c) => mayReadChannel(access, c))));
 
   // ─── Client tickets (user's own, with reservation info) ──────────────────
   const tickets = await dbAll<{
@@ -159,8 +173,12 @@ export const load: PageServerLoad = async ({ locals, url }) => {
     activeChannel, activeTicket, channelMessages, ticketMessages,
     currentUserId: user.id, orgRole: org.role,
     canManageChannels: isAdmin,
-    // Announcement channels are read-only for members.
-    canPostInChannel: !!activeChannel && !activeChannel.archived_at && (activeChannel.type !== 'announcement' || isAdmin),
+    canReadChannels: access.messages.view,
+    // Announcement channels take posts from announcements.manage; the others from
+    // messages.send.
+    canPostInChannel: !!activeChannel && mayPostInChannel(access, activeChannel),
+    // A member who may only announce may still open an announcement channel.
+    canCreateChannel: isAdmin || access.announcements.post,
   };
 };
 
@@ -185,7 +203,9 @@ export const actions: Actions = {
     );
     if (!ch) return fail(404, { chatError: d.serverErrors.notFound });
     if (ch.archived_at) return fail(409, { chatError: d.teamChat.channelArchived });
-    if (ch.type === 'announcement' && !isAdminRole(org.role)) return fail(403, { chatError: d.teamChat.announcementReadOnly });
+    if (!mayPostInChannel(await chatAccess(locals), ch)) {
+      return fail(403, { chatError: ch.type === 'announcement' ? d.teamChat.announcementReadOnly : d.accessUi.cannotSend });
+    }
 
     await dbRun(
       locals.db,
@@ -201,6 +221,14 @@ export const actions: Actions = {
       sender_name: `${user.first_name} ${user.last_name}`.trim(),
       message: body,
     }).catch(() => {});
+    // An announcement is published to the whole organisation: everybody's bell.
+    if (ch.type === 'announcement') {
+      await notifyOrg(locals.db, {
+        orgId: org.id, kind: 'announcement.posted',
+        params: { channel: ch.name, excerpt: excerpt(body), name: `${user.first_name} ${user.last_name}`.trim() },
+        link: `/app/messages?c=${channelId}`, actorId: user.id,
+      });
+    }
 
     redirect(303, `/app/messages?c=${channelId}`);
   },
@@ -214,6 +242,12 @@ export const actions: Actions = {
     const body = String(data.get('body') ?? '').trim();
     if (!body || !msgId) return;
     if (body.length > MESSAGE_MAX) return fail(400, { chatError: st(locals.locale).resOps.messageTooLong(MESSAGE_MAX) });
+    // Editing one's own message is posting it again: the same rule as sending.
+    const ch = await dbFirst<{ type: string; archived_at: string | null }>(locals.db,
+      `SELECT c.type, c.archived_at FROM channel_messages cm JOIN channels c ON c.id = cm.channel_id
+        WHERE cm.id = ? AND cm.org_id = ?`, msgId, org.id);
+    if (!ch) return fail(404, { chatError: st(locals.locale).serverErrors.notFound });
+    if (!mayPostInChannel(await chatAccess(locals), ch)) return fail(403, { chatError: st(locals.locale).accessUi.cannotSend });
     await dbRun(
       locals.db,
       `UPDATE channel_messages SET body = ?, edited_at = datetime('now') WHERE id = ? AND sender_id = ? AND org_id = ? AND deleted_at IS NULL`,
@@ -243,12 +277,14 @@ export const actions: Actions = {
     const org = locals.currentOrg;
     if (!org) redirect(303, '/app/org/new');
     const d = st(locals.locale);
-    // Used to return "success" and do nothing for a member.
-    if (!isAdminRole(org.role)) return fail(403, { channelError: d.teamChat.onlyAdminsCreate });
+    // Used to return "success" and do nothing for a member. Owners and admins open
+    // any channel; announcements.manage opens announcement channels only.
+    const canAnnounce = (await chatAccess(locals)).announcements.post;
+    if (!isAdminRole(org.role) && !canAnnounce) return fail(403, { channelError: d.teamChat.onlyAdminsCreate });
     const data = await request.formData();
     const rawName = String(data.get('name') ?? '');
     const description = String(data.get('description') ?? '').trim();
-    const type = (String(data.get('type') ?? 'general') === 'announcement' ? 'announcement' : 'general') as 'general' | 'announcement';
+    const type = (!isAdminRole(org.role) || String(data.get('type') ?? 'general') === 'announcement' ? 'announcement' : 'general') as 'general' | 'announcement';
 
     const problem = channelNameProblem(rawName);
     if (problem === 'empty') return fail(400, { channelError: d.teamChat.nameEmpty, name: rawName });
@@ -352,6 +388,11 @@ export const actions: Actions = {
     }).catch(() => {});
     // The venue's staff hear about it like any client message (they did not before).
     notifyGuestMessage(locals.db, org.id, senderName, ticket.subject, body).catch(() => {});
+    await notifyOrg(locals.db, {
+      orgId: org.id, kind: 'message.received',
+      params: { client: senderName, excerpt: excerpt(body), subject: ticket.subject },
+      link: `/app/manage/messages/${ticketId}`, actorId: user.id, dedupeKey: `message:${ticketId}`,
+    });
 
     redirect(303, `/app/messages?t=${ticketId}`);
   },
@@ -420,6 +461,11 @@ export const actions: Actions = {
       ticket_id: thread.id, ticket_subject: thread.subject, sender_name: senderName, message: body,
     }).catch(() => {});
     notifyGuestMessage(locals.db, org.id, senderName, thread.subject, body).catch(() => {});
+    await notifyOrg(locals.db, {
+      orgId: org.id, kind: 'message.received',
+      params: { client: senderName, excerpt: excerpt(body), subject: thread.subject, title: res.title },
+      link: `/app/manage/messages/${thread.id}`, actorId: user.id, dedupeKey: `message:${thread.id}`,
+    });
 
     redirect(303, `/app/messages?t=${thread.id}`);
   },

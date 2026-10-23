@@ -7,6 +7,8 @@ import { loadPlatformAnalytics } from '$lib/server/platform-settings';
 import { container, cspOrigins, type AnalyticsContainer } from '$lib/analytics-servers';
 import { assistantVisible } from '$lib/server/ai/credits';
 import { orgPermissionList } from '$lib/server/nav-access';
+import { unreadNotificationCount } from '$lib/server/notification-centre';
+import { notificationAreas } from '$lib/notification-centre';
 import { orgPublicBaseUrl } from '$lib/orgUrl';
 
 /** The GTM containers on THIS page, in load order.
@@ -44,15 +46,30 @@ async function resolveContainers(locals: App.Locals): Promise<AnalyticsContainer
 export const load: LayoutServerLoad = async ({ locals, url }) => {
   let unreadMessages = 0;
   let unreadAnnouncements = 0;
+  let unreadNotifications = 0;
+  let notificationCentre = false;
   let orgs: { id: string; name: string; slug: string; role: string }[] = [];
   let allOrgs: { id: string; name: string; slug: string }[] = [];
+
+  // The console sidebar shows each link by the permission its page requires.
+  const navPermissions = await orgPermissionList(locals);
 
   if (locals.user) {
     const orgId = locals.currentOrg?.id ?? null;
     const isStaff = locals.currentOrg?.role === 'owner' || locals.currentOrg?.role === 'admin';
-    unreadMessages = await unreadMessageCount(locals.db, locals.user.id, orgId, isStaff);
+    // The client inbox and the team channels both open on messages.view (D3).
+    const readsMessages = navPermissions.includes('messages.view');
+    unreadMessages = await unreadMessageCount(locals.db, locals.user.id, orgId, readsMessages, readsMessages);
     if (isStaff && orgId) {
       unreadAnnouncements = await unreadAnnouncementCount(locals.db, locals.user.id, orgId);
+    }
+
+    // The notification centre (D12): the bell, for every member of the organisation.
+    if (orgId && locals.user.account_type !== 'client') {
+      notificationCentre = true;
+      unreadNotifications = await unreadNotificationCount(locals.db, {
+        orgId, userId: locals.user.id, areas: notificationAreas(navPermissions),
+      });
     }
 
     orgs = await dbAll<{ id: string; name: string; slug: string; role: string }>(
@@ -97,9 +114,6 @@ export const load: LayoutServerLoad = async ({ locals, url }) => {
     locale: locals.locale,
   };
 
-  // The console sidebar shows each link by the permission its page requires.
-  const navPermissions = await orgPermissionList(locals);
-
   // "Public site" in the sidebar: on the venue's own host that is its /halls; on the
   // apex it is the venue's own domain (null on localhost, where there is none).
   let venueSiteUrl: string | null = null;
@@ -131,6 +145,8 @@ export const load: LayoutServerLoad = async ({ locals, url }) => {
     allOrgs,
     unreadMessages,
     unreadAnnouncements,
+    unreadNotifications,
+    notificationCentre,
     navPermissions,
     venueSiteUrl,
     // The floating AI assistant (bottom right of every console page).

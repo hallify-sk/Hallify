@@ -96,6 +96,14 @@
   // for the hall's name typed back, the one confirmation that can't be clicked
   // through on autopilot.
   const archived = $derived(!!data.hall.archived_at);
+
+  // What this member may change here (D3). halls.view, floorplans.manage and
+  // templates.manage open the page; the controls show only to those whose action
+  // the server would accept. A read-only area sits in a disabled fieldset.
+  const canEditHall = $derived(data.hallAccess.manage);
+  const canFloorplans = $derived(data.hallAccess.floorplans);
+  const canTemplates = $derived(data.hallAccess.templates);
+  const canTableTypes = $derived(data.hallAccess.tableTypes);
   let showBulkCancel = $state(false);
   let cancelNote = $state('');
   let retireDialog = $state<'archive' | 'delete' | null>(null);
@@ -734,7 +742,7 @@
     </p>
     {#if req.note}<p class="fp-request-note">{req.note}</p>{/if}
     {#if form?.fpError}<div class="inline-err" role="alert">{form.fpError}</div>{/if}
-    {#if data.canOrderAddons}
+    {#if data.canOrderAddons && canEditHall}
       <form method="POST" action="?/cancelFloorplanRequest" use:enhance={confirmFirst(() => t.hallAdmin.mappingCancelConfirm)}>
         <input type="hidden" name="id" value={req.id} />
         <button type="submit" class="btn-ghost btn-ghost-sm">{t.hallAdmin.mappingCancel}</button>
@@ -773,7 +781,7 @@
         <strong>{t.hallAdmin.suspendedTitle}</strong>
         <span>{t.hallAdmin.suspendedDesc}</span>
       </div>
-      {#if !data.planFull}
+      {#if !data.planFull && canEditHall}
         <form method="POST" action="?/reactivate" use:enhance>
           <button type="submit" class="btn-action btn-sm">{t.hallAdmin.reactivate}</button>
         </form>
@@ -784,7 +792,7 @@
     {#if data.planFull && !archived}
       <div class="swap-box">
         <p>{t.hallAdmin.swapIntro(data.plan.limits.maxHalls)}</p>
-        {#if data.swapCandidates.length}
+        {#if data.swapCandidates.length && canEditHall}
           <form method="POST" action="?/swapActive" use:enhance class="swap-form">
             <label class="field-label" for="swap-hall">{t.hallAdmin.swapPauseLabel}</label>
             <div class="swap-row">
@@ -808,9 +816,11 @@
         <strong>{t.hallAdmin.archivedBannerTitle}</strong>
         <span>{t.hallAdmin.archivedBannerDesc}</span>
       </div>
+      {#if canEditHall}
       <form method="POST" action="?/restore" use:enhance>
         <button type="submit" class="btn-action btn-sm">{t.hallAdmin.restoreHall}</button>
       </form>
+      {/if}
     </div>
     {#if form?.archiveError}<div class="inline-err">{form.archiveError}</div>{/if}
   {/if}
@@ -867,6 +877,10 @@
       {/each}
     </div>
 
+    {#if !canEditHall}
+      <p class="ro-note" role="note">{t.accessUi.hallReadOnly}</p>
+    {/if}
+
     <!-- Two-column editor -->
     <div class="profile-editor-wrap" data-panel="profile media pricing">
 
@@ -883,6 +897,7 @@
         }}
         class="profile-form"
       >
+      <fieldset class="ro-set" disabled={!canEditHall}>
 
         {#if form?.profileError}
           <div class="alert alert-error" style="margin:16px 18px 0 0">{form.profileError}</div>
@@ -1225,6 +1240,7 @@
           </div>
           <input type="hidden" name="openingHours" value={JSON.stringify(profileHours)} />
         </div>
+      </fieldset>
       </form>
 
       <!-- ── Right: live preview ── -->
@@ -1343,6 +1359,7 @@
 
   <!-- ─── Extras (sits with pricing — add-ons guests can order) ─────────────────── -->
   <section class="section extras-block" data-panel="pricing">
+    <fieldset class="ro-set" disabled={!canEditHall}>
     <div class="section-head section-head--row">
       <div class="extras-head-text">
         <p class="eyebrow">{t.hallProfile.pricing}</p>
@@ -1427,6 +1444,7 @@
     {:else if data.extras.length > 0}
       <p class="extras-count">{data.extras.length}{extrasLimit === -1 ? '' : ` ${t.common.of} ${extrasLimit}`} {t.units.extras(extrasLimit === -1 ? data.extras.length : extrasLimit)}</p>
     {/if}
+    </fieldset>
   </section>
 
   <!-- ─── Activity row: Upcoming + Blocked side by side ──────────────────────── -->
@@ -1471,10 +1489,12 @@
           <p class="eyebrow">{t.hallAdmin.blockedPeriods}</p>
           <h2>{t.halls.blockedDates}</h2>
         </div>
+        {#if canEditHall}
         <button class="btn-accent-sm" type="button" onclick={openBlockDialog}>
           <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
           {t.halls.addBlock}
         </button>
+        {/if}
       </div>
       {#if form?.blockSuccess}
         <div class="alert alert-success" style="margin:0 0 10px">{t.hallAdmin.blockCreated}</div>
@@ -1506,6 +1526,7 @@
                 </span>
                 {#if b.reason}<span class="block-reason">{b.reason}</span>{/if}
               </div>
+              {#if canEditHall}
               <form method="POST" action="?/deleteBlock" use:enhance style="margin-left:auto;flex-shrink:0">
                 <input type="hidden" name="id" value={b.id} />
                 <button class="btn-del" type="submit" aria-label={t.common.delete}
@@ -1513,6 +1534,7 @@
                   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
                 </button>
               </form>
+              {/if}
             </div>
           {/each}
         </div>
@@ -1575,6 +1597,7 @@
   <div class="settings-row" data-panel="settings">
 
     <section class="section settings-block">
+      <fieldset class="ro-set" disabled={!canEditHall}>
       <form
         bind:this={settingsFormEl}
         onchange={() => settingsDirty = true}
@@ -1673,6 +1696,7 @@
           </div>
         </div>
       </form>
+      </fieldset>
     </section>
 
 
@@ -1707,7 +1731,7 @@
           {@const floor0  = mfState.floors[0]}
           {@const vb = computeViewBox(floor0).split(' ').map(Number)}
           {@const parts = roomParts(floor0)}
-          <a class="fp-preview" href="/app/manage/halls/{data.hall.id}/editor" style="--ar:{(vb[2] / vb[3]).toFixed(3)}" aria-label={t.event.openLayoutEditor}>
+          <a class="fp-preview" href={canFloorplans ? `/app/manage/halls/${data.hall.id}/editor` : undefined} style="--ar:{(vb[2] / vb[3]).toFixed(3)}" aria-label={t.event.openLayoutEditor}>
             <svg viewBox={computeViewBox(floor0)} preserveAspectRatio="xMidYMid meet">
                 {#if floor0.bounds}
                   <path d={roomOutlinePath(roomParts(floor0), 10)}
@@ -1771,12 +1795,14 @@
           {#if mappingOpen && data.floorplanRequest}
             {@render mappingStatus(data.floorplanRequest)}
           {/if}
+          {#if canFloorplans}
           <footer class="fp-step-foot">
             <a href="/app/manage/halls/{data.hall.id}/editor" class="btn-primary btn-sm">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
               {t.event.openLayoutEditor}
             </a>
           </footer>
+          {/if}
         {:else}
           <!-- No plan yet: draw it now, or ask us to measure it (a quoted add-on, so it
                only starts a conversation and never shows a price we have not agreed). -->
@@ -1787,7 +1813,7 @@
             {#if data.floorplanRequest?.status === 'delivered'}
               <p class="fp-text fp-text--done">✓ {t.hallAdmin.mappingDeliveredOn(fmtDbDate(data.floorplanRequest.updated_at, getLocale()))}</p>
             {/if}
-            {#if data.canOrderAddons}
+            {#if data.canOrderAddons && canEditHall}
             <details class="fp-mapping">
               <summary>{t.hallAdmin.mappingOffer}</summary>
               <form method="POST" action="?/requestFloorplanService" use:enhance={() => async ({ update }) => { await update({ reset: false }); }}>
@@ -1800,9 +1826,11 @@
             </details>
             {/if}
           {/if}
+          {#if canFloorplans}
           <footer class="fp-step-foot">
             <a href="/app/manage/halls/{data.hall.id}/editor" class="btn-primary btn-sm">{t.hallAdmin.drawYourselfTitle}</a>
           </footer>
+          {/if}
         {/if}
       </article>
 
@@ -1819,10 +1847,11 @@
           <ul class="fp-list">
             {#each data.tableTypes as tt}
               <li>
-                <button type="button" class="fp-row" onclick={() => openTtEdit(tt)} aria-label="{t.common.edit} {tt.name}">
+                <button type="button" class="fp-row" onclick={() => openTtEdit(tt)} aria-label="{t.common.edit} {tt.name}" disabled={!canTableTypes}>
                   <span class="fp-thumb">{@render tablePreview(tt.shape, tt.width, tt.height, tt.max_chairs, tt.color || '#9a6512')}</span>
                   <span class="fp-row-text"><b>{tt.name}</b><span>{ttMeta(tt)}</span></span>
                 </button>
+                {#if canTableTypes}
                 <form method="POST" action="?/deleteTableType" use:enhance>
                   <input type="hidden" name="id" value={tt.id} />
                   <button type="submit" class="fp-del" title={t.common.delete} aria-label="{t.common.delete} {tt.name}"
@@ -1830,13 +1859,16 @@
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
                   </button>
                 </form>
+                {/if}
               </li>
             {/each}
           </ul>
         {/if}
+        {#if canTableTypes}
         <footer class="fp-step-foot">
           <button type="button" class={data.tableTypes.length ? 'btn-outline btn-sm' : 'btn-primary btn-sm'} onclick={openTtNew}>+ {t.halls.addTableType}</button>
         </footer>
+        {/if}
       </article>
 
       <!-- 3 · Templates: those tables arranged on this plan -->
@@ -1854,7 +1886,7 @@
             {#each data.templates as tmpl}
               {@const tmplFloor = migrateToMultiFloor(tmpl.layout_json).floors[0]}
               <li>
-                <a class="fp-row" href="/app/manage/halls/{data.hall.id}/templates/{tmpl.id}" aria-label="{t.common.edit} {tmpl.name}">
+                <a class="fp-row" href={canTemplates ? `/app/manage/halls/${data.hall.id}/templates/${tmpl.id}` : undefined} aria-label="{t.common.edit} {tmpl.name}">
                   <span class="fp-thumb fp-thumb--plan">
                     <svg viewBox={computeViewBox(tmplFloor)} preserveAspectRatio="xMidYMid meet" aria-hidden="true">
                       <path d={roomOutlinePath(roomParts(tmplFloor), 10)} fill="none" stroke="var(--text-subtle)" stroke-width="1.5"/>
@@ -1874,6 +1906,7 @@
                   </span>
                   {#if tmpl.problems > 0}<span class="fp-fit" title={t.editor.layoutFit.badgeTitle(tmpl.problems)}>{t.editor.layoutFit.badge}</span>{/if}
                 </a>
+                {#if canTemplates}
                 <form method="POST" action="?/deleteTemplate" use:enhance>
                   <input type="hidden" name="id" value={tmpl.id} />
                   <button type="submit" class="fp-del" title={t.common.delete} aria-label="{t.common.delete} {tmpl.name}"
@@ -1881,18 +1914,22 @@
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
                   </button>
                 </form>
+                {/if}
               </li>
             {/each}
           </ul>
         {/if}
+        {#if canTemplates}
         <footer class="fp-step-foot">
           <button type="button" class={data.templates.length || !data.tableTypes.length ? 'btn-outline btn-sm' : 'btn-primary btn-sm'} onclick={openTmplNew}>+ {t.hallAdmin.createTemplate}</button>
         </footer>
+        {/if}
       </article>
     </div>
   </section>
 
   <!-- ─── Retire: archive (or delete, if never booked) ──────────────────────── -->
+  {#if canEditHall}
   <section class="section retire-block" data-panel="settings">
     <div class="section-head">
       <p class="eyebrow">{t.hallAdmin.retireEyebrow}</p>
@@ -1945,6 +1982,7 @@
     </div>
     {#if data.unused}<p class="retire-hint">{t.hallAdmin.deleteUnusedHint}</p>{/if}
   </section>
+  {/if}
 
 </div><!-- /page -->
 
@@ -2645,6 +2683,9 @@
   }
 
   .page { padding-block: 24px; animation: pageFadeIn 0.15s ease both; }
+  /* A read-only area (D3): the fieldset only carries `disabled`; it adds no box. */
+  .ro-set { display: contents; border: 0; margin: 0; padding: 0; min-width: 0; }
+  .ro-note { margin: 0 0 12px; font-size: 13px; color: var(--text-muted); }
 
   /* ── Tabs ── Panels are hidden, never removed (see the script). */
   .hall-tabs {

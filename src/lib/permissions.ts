@@ -91,6 +91,13 @@ export const DEFAULT_ROLE_PERMISSIONS: Permission[] = [
  * `calendar.view`, `messages.view` and `members.view`, so admitting a single view
  * permission here would hand the operator console to every ordinary member of
  * every organisation on the platform. The test next to this file holds that line.
+ *
+ * View permissions open their own read-only pages instead (see AREA_OPENERS and
+ * `consoleEntryPermissions`); they never open the dashboard, which is the console's
+ * home for the people who run the venue. `announcements.manage` is not here either:
+ * what it promises (posting to the organisation's announcement channels) lives in
+ * the team chat, outside the console, so on its own it opened nothing but the
+ * dashboard.
  */
 export const CONSOLE_PERMISSIONS: Permission[] = [
 	'reservations.manage',
@@ -98,13 +105,81 @@ export const CONSOLE_PERMISSIONS: Permission[] = [
 	'floorplans.manage',
 	'templates.manage',
 	'ai.use',
-	'announcements.manage',
 	'members.manage',
 	'roles.manage',
 	'invites.manage',
 	'settings.manage',
 	'billing.manage'
 ];
+
+/**
+ * The permissions that open each area, view or manage (D3). Every page load in the
+ * area asks for ANY of its list; every action asks for the one manage permission it
+ * needs. Navigation reads the same lists, so a link shows when, and only when, the
+ * page behind it opens.
+ *
+ *  * halls: the hall pages are where a floor plan and the event templates live, so
+ *    whoever may edit those may open the hall they belong to. Their editors' back
+ *    links led to a 403 before.
+ *  * calendar: `calendar.view` shows occupancy; managing reservations has always
+ *    included the calendar.
+ *  * messages: the client inbox and the team channels both open on `messages.view`.
+ */
+export const AREA_OPENERS = {
+	reservations: ['reservations.view', 'reservations.manage'],
+	calendar: ['calendar.view', 'reservations.manage'],
+	halls: ['halls.view', 'halls.manage', 'floorplans.manage', 'templates.manage'],
+	members: ['members.view', 'members.manage'],
+	messages: ['messages.view']
+} as const satisfies Record<string, readonly Permission[]>;
+
+export type ConsoleArea = keyof typeof AREA_OPENERS;
+
+/** Everything that lets a member through the /app/manage door: a manage permission
+ *  (the dashboard and their pages) or a permission that opens a read-only page. */
+export function consoleEntryPermissions(): Permission[] {
+	const out = new Set<Permission>(CONSOLE_PERMISSIONS);
+	for (const list of Object.values(AREA_OPENERS)) for (const p of list) out.add(p);
+	return [...out];
+}
+
+/**
+ * What a member may do in each area, from their effective permission set. The
+ * permission matrix in one place: page loads, actions and the sidebar all read it.
+ */
+export interface AreaAccess {
+	reservations: { view: boolean; manage: boolean };
+	calendar: { view: boolean; openReservations: boolean; create: boolean };
+	/** `tableTypes`: the hall's table inventory, which the templates are laid out
+	 *  from, so templates.manage edits it too (as its description says). */
+	halls: { view: boolean; manage: boolean; floorplans: boolean; templates: boolean; tableTypes: boolean };
+	members: { view: boolean; manage: boolean };
+	messages: { view: boolean; send: boolean };
+	/** Post in the organisation's announcement channels and create new ones. */
+	announcements: { post: boolean };
+}
+
+export function areaAccess(permissions: Iterable<string>): AreaAccess {
+	const held = new Set<string>(permissions);
+	const has = (p: Permission) => held.has(p);
+	const opens = (area: ConsoleArea) => AREA_OPENERS[area].some((p) => held.has(p));
+	const reservationsView = opens('reservations');
+	return {
+		reservations: { view: reservationsView, manage: has('reservations.manage') },
+		calendar: { view: opens('calendar'), openReservations: reservationsView, create: has('reservations.manage') },
+		halls: {
+			view: opens('halls'),
+			manage: has('halls.manage'),
+			floorplans: has('floorplans.manage'),
+			templates: has('templates.manage'),
+			tableTypes: has('halls.manage') || has('templates.manage')
+		},
+		members: { view: opens('members'), manage: has('members.manage') },
+		// Sending without reading would be posting blind into threads one cannot open.
+		messages: { view: has('messages.view'), send: has('messages.view') && has('messages.send') },
+		announcements: { post: has('announcements.manage') }
+	};
+}
 
 /** Grouping drives the tabbed role editor; it has no effect on evaluation. */
 export const PERMISSION_GROUPS: { key: string; permissions: Permission[] }[] = [

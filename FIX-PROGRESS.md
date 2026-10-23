@@ -361,4 +361,19 @@ existing accounts marked verified). Additive. Design: DESIGN-identity.md.
 ## Checks
 
 - npx vitest run: all pass.
+
+# Fix progress: access (permissions that work, notification centre; branch fix/access-r2)
+
+Migration: `0033_notification_centre.sql` (org_notifications, org_notification_reads,
+org_notification_marks). Additive; apply before deploying (the code tolerates its absence:
+no bell count, no rows written).
+
+| id | status | note |
+|----|--------|------|
+| D3 | done | One matrix (`areaAccess`/`AREA_OPENERS` in $lib/permissions) read by page loads (`requireOrgArea`), actions (`requireOrgPermission` / `requireOrgAnyPermission`) and the sidebar (`consoleNav`). reservations.view: list, export, booking pages read-only, calendar may open bookings. halls.view (and floorplans.manage / templates.manage): hall list and hall page read-only, so the editors' back links open. calendar.view: occupancy without booker names, no quick-create. members.view: People list read-only, tabs only for pages that open. messages.view: client inbox + team channels read; messages.send: reply/close/reopen/edit. announcements.manage: posts in announcement channels and opens new ones; announcement channels are read by every member (published to the whole organisation) and each post rings everybody's bell. templates.manage: templates and table types (its description no longer mentions RSVP). Dashboard and help stay on manage permissions. View-only members are let into /app/manage; the dashboard sends them home. Matrix test: src/lib/permission-matrix.test.ts. |
+| D12 | partial | Bell in the desktop sidebar header (works in rail mode) and in the phone top bar, unread count kept live by the existing 15 s poll; panel with time, text, link, mark one / mark all read; per-member reads (single reads + a "read until" mark). Visibility per area from the reader's permissions at read time; never your own doing; nothing from before you joined; 90-day retention; repeats within an hour collapse (chatty client = one row, unread again). `notifyOrg()` is called for: booking request / booking auto-confirmed (app and venue site), client changed booking (details, extras, seating), client cancelled, client message (venue site and /app/messages), member joined (invite accepted), announcement posted. Feedback (D5), payment status (D6) and layout problems (D2) are built and tested as `notifyFeedback` / `notifyPayment` / `notifyLayoutProblems` in $lib/server/notification-centre, but their event points live on fix/bookings and fix/sync: after merging, call `notifyFeedback` where a client saves feedback (saveFeedback's action), `notifyPayment` in the staff deposit/paid mark action (status 'deposit_received' / 'paid') and any overdue job ('overdue'), and `notifyLayoutProblems` after the hall plan save computes its problem counts. |
+
+## Checks
+
+- npx vitest run: all files pass.
 - svelte-check (check.sh): 0 errors.

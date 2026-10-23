@@ -206,11 +206,11 @@
           </a>
         {:else}
           <!-- Members used to see an empty "Team" with no word on why. -->
-          <p class="nav-empty">{canManage ? tr.teamChat.noChannelsAdmin : tr.teamChat.noChannelsMember}</p>
+          <p class="nav-empty">{!data.canReadChannels ? tr.accessUi.noChannelAccess : canManage ? tr.teamChat.noChannelsAdmin : tr.teamChat.noChannelsMember}</p>
         {/each}
       </div>
 
-      {#if canManage}
+      {#if data.canCreateChannel}
         <button class="nav-new-btn" type="button" aria-expanded={showNewChannel} onclick={() => { showNewChannel = !showNewChannel; showNewTicket = false; }}>
           {tr.memberMessages.newChannel}
         </button>
@@ -223,7 +223,13 @@
               {#if newChannelName.trim() && channelName(newChannelName)}{tr.teamChat.savedAs} #{channelName(newChannelName)}{:else}{tr.teamChat.nameHint}{/if}
             </span>
             <input name="description" placeholder={tr.memberMessages.descriptionPlaceholder} aria-label={tr.memberMessages.descriptionPlaceholder} maxlength={CHANNEL_DESC_MAX} class="inline-input" />
-            <label class="inline-check"><input type="checkbox" name="type" value="announcement" /> {tr.teamChat.announcementType}</label>
+            {#if canManage}
+              <label class="inline-check"><input type="checkbox" name="type" value="announcement" /> {tr.teamChat.announcementType}</label>
+            {:else}
+              <!-- announcements.manage without owner/admin rights opens announcement channels only. -->
+              <input type="hidden" name="type" value="announcement" />
+              <span class="inline-hint">{tr.accessUi.announcementChannelOnly}</span>
+            {/if}
             {#if f?.channelError}<span class="inline-error" role="alert">{f.channelError}</span>{/if}
             <div class="inline-actions">
               <button type="submit" class="btn-xs btn-accent">{tr.common.create}</button>
@@ -441,7 +447,7 @@
           </button>
         </form>
       {:else}
-        <div class="compose-closed">{activeChannel.archived_at ? tr.teamChat.channelArchived : tr.teamChat.announcementReadOnly}</div>
+        <div class="compose-closed">{activeChannel.archived_at ? tr.teamChat.channelArchived : activeChannel.type === 'announcement' ? tr.teamChat.announcementReadOnly : tr.accessUi.cannotSend}</div>
       {/if}
 
     {:else if activeTicket}
@@ -559,7 +565,7 @@
             <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
           </div>
           <p>{tr.memberMessages.selectToStart}</p>
-          {#if channels.length === 0}<p class="empty-hint">{canManage ? tr.teamChat.noChannelsAdmin : tr.teamChat.noChannelsMember}</p>{/if}
+          {#if channels.length === 0}<p class="empty-hint">{!data.canReadChannels ? tr.accessUi.noChannelAccess : canManage ? tr.teamChat.noChannelsAdmin : tr.teamChat.noChannelsMember}</p>{/if}
         </div>
       </div>
     {/if}

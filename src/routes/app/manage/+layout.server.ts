@@ -1,6 +1,6 @@
 import { redirect } from '@sveltejs/kit';
 import { loginUrl } from '$lib/login-redirect';
-import { hasConsoleAccess } from '$lib/server/access';
+import { hasConsoleEntry } from '$lib/server/access';
 import type { LayoutServerLoad } from './$types';
 
 /**
@@ -23,8 +23,10 @@ export const load: LayoutServerLoad = async ({ locals, url }) => {
   if (!locals.currentOrg) redirect(303, '/app/org/new');
 
   // A member holding no console permission at all is sent to their own area
-  // rather than shown a 403: for them this is not a page that failed.
-  if (!(await hasConsoleAccess(locals))) redirect(303, '/app/');
+  // rather than shown a 403: for them this is not a page that failed. A view
+  // permission (reservations.view, halls.view, ...) is a way in too: it opens that
+  // area's pages read-only, and nothing else.
+  if (!(await hasConsoleEntry(locals))) redirect(303, '/app/');
 
   return { currentOrg: locals.currentOrg };
 };

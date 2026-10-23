@@ -1,17 +1,23 @@
 import type { PageServerLoad, Actions } from './$types';
 import { dbAll, dbRun } from '$lib/db/index';
-import { fail } from '@sveltejs/kit';
-// NOT converted to requireOrgPermission on purpose. The staff ticket console has
-// no `messages.manage` in the catalogue, and the two permissions that exist —
-// messages.view and messages.send — both sit in the seeded default "Member" role
-// (migration 0007), which loadMemberAccess applies to every member whether it was
-// assigned or not. Gating here on either one would let any ordinary member read
-// every customer thread and POST directly to the actions below. Left on
-// requireOrgStaff until a `messages.manage` permission exists.
-import { requireOrgStaff } from '$lib/guards';
+import { error, fail } from '@sveltejs/kit';
+// The client inbox follows the two message permissions, as the role editor
+// describes them (D3): messages.view reads the client threads, messages.send
+// answers, closes and reopens them. Both sit in the default Member role, so an
+// organisation that wants its members out of the client threads takes them off
+// that role.
+import { requireOrgArea } from '$lib/server/access';
+
+/** Answering, closing or reopening a client thread. */
+async function requireSend(locals: App.Locals) {
+  const { org, access } = await requireOrgArea(locals, 'messages');
+  if (!access.messages.send) error(403, 'Forbidden');
+  return org;
+}
 
 export const load: PageServerLoad = async ({ locals }) => {
-  const orgId = requireOrgStaff(locals).id;
+  const { org, access } = await requireOrgArea(locals, 'messages');
+  const orgId = org.id;
 
   const tickets = await dbAll<{
     id: string; subject: string; status: string; updated_at: string;
@@ -41,21 +47,19 @@ export const load: PageServerLoad = async ({ locals }) => {
     locals.user!.id, orgId
   );
 
-  return { tickets };
+  return { tickets, canSend: access.messages.send };
 };
 
 export const actions: Actions = {
   close: async ({ request, locals }) => {
-    requireOrgStaff(locals);
-    const orgId = locals.currentOrg!.id;
+    const orgId = (await requireSend(locals)).id;
     const data = await request.formData();
     const id = String(data.get('id') ?? '');
     if (!id) return fail(400);
     await dbRun(locals.db, `UPDATE tickets SET status = 'closed', updated_at = datetime('now') WHERE id = ? AND org_id = ?`, id, orgId);
   },
   reopen: async ({ request, locals }) => {
-    requireOrgStaff(locals);
-    const orgId = locals.currentOrg!.id;
+    const orgId = (await requireSend(locals)).id;
     const data = await request.formData();
     const id = String(data.get('id') ?? '');
     if (!id) return fail(400);

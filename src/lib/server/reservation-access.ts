@@ -10,8 +10,8 @@
 // Both now follow the member's effective permissions, the same way the list does.
 
 import { error } from '@sveltejs/kit';
-import { loadMemberAccess } from '$lib/server/access';
-import { ADMINISTRATOR_PERMISSIONS, effectivePermissions, type Permission } from '$lib/permissions';
+import { orgPermissions } from '$lib/server/access';
+import type { Permission } from '$lib/permissions';
 
 export interface ReservationAccess {
 	/** May open bookings that belong to someone else in the organisation. */
@@ -20,21 +20,10 @@ export interface ReservationAccess {
 	canManage: boolean;
 }
 
-/** The caller's effective permissions in the active organisation (owner: all of them). */
+/** The caller's effective permissions in the active organisation (owner: all of them),
+ *  resolved by the same `orgPermissions` every console guard uses. */
 export async function memberPermissions(locals: App.Locals): Promise<Set<Permission>> {
-	const org = locals.currentOrg;
-	const user = locals.user;
-	if (!org || !user) return new Set();
-	const access = await loadMemberAccess(locals.db, org.id, user.id, { isOwner: org.role === 'owner' });
-	// The legacy admin flag keeps meaning what it always meant (see requireOrgPermission):
-	// added as a role, so a per-member deny override still wins.
-	if (org.role === 'admin') {
-		access.roles = [
-			...access.roles,
-			{ id: 'legacy-admin', name: 'Administrator', position: -1, permissions: ADMINISTRATOR_PERMISSIONS }
-		];
-	}
-	return effectivePermissions(access);
+	return orgPermissions(locals);
 }
 
 export async function reservationAccess(locals: App.Locals): Promise<ReservationAccess> {

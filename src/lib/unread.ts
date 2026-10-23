@@ -45,11 +45,18 @@ export function channelUnreadCountSql(alias = 'c'): string {
 		  AND cmu.sender_id != ?)`;
 }
 
+/**
+ * `isStaff` reads "may read the organisation's client inbox" and `canReadChannels`
+ * "may read the team channels": both are messages.view since D3, so a member
+ * denied it is not pinged for threads they cannot open (announcement channels
+ * still count: they are for everyone).
+ */
 export async function unreadMessageCount(
 	db: D1Database,
 	userId: string,
 	orgId: string | null,
-	isStaff: boolean
+	isStaff: boolean,
+	canReadChannels = true
 ): Promise<number> {
 	let n = 0;
 
@@ -85,11 +92,13 @@ export async function unreadMessageCount(
 
 	if (orgId) {
 		// (3) Team channels with unread messages (counted per channel, like threads).
+		// Announcement channels are for the whole organisation, messages.view or not.
 		try {
 			const ch = await dbFirst<{ n: number }>(db,
 				`SELECT COUNT(*) AS n FROM channels c
-				 WHERE c.org_id = ? AND c.archived_at IS NULL AND ${channelUnreadCountSql('c')} > 0`,
-				orgId, userId, orgId, userId, userId);
+				 WHERE c.org_id = ? AND (? = 1 OR c.type = 'announcement')
+				   AND c.archived_at IS NULL AND ${channelUnreadCountSql('c')} > 0`,
+				orgId, canReadChannels ? 1 : 0, userId, orgId, userId, userId);
 			n += ch?.n ?? 0;
 		} catch { /* channels missing on a very old database */ }
 	}

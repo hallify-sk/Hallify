@@ -98,7 +98,9 @@
 			</div>
 		</div>
 		<div class="chat-actions">
-			{#if data.ticket.status === 'open'}
+			{#if !data.canSend}
+				<!-- Read-only: closing and reopening need messages.send. -->
+			{:else if data.ticket.status === 'open'}
 				<form method="POST" action="?/close" use:enhance>
 					<button type="submit" class="btn-outline">{t.messaging.close}</button>
 				</form>
@@ -158,6 +160,7 @@
 								{/if}
 							</div>
 						{/if}
+						{#if data.canSend && (msg.sender_id === currentUserId || data.canModerate)}
 						<div class="msg-actions">
 							{#if msg.sender_id === currentUserId}
 								<button type="button" class="msg-action-btn" onclick={() => { editingId = msg.id; editBody = msg.body ?? ''; }}>
@@ -169,6 +172,7 @@
 								<button type="submit" class="msg-action-btn danger">{t.messaging.deleteMessage}</button>
 							</form>
 						</div>
+						{/if}
 					{/if}
 				</div>
 			{/if}
@@ -183,7 +187,9 @@
 		<div bind:this={chatEnd}></div>
 	</div>
 
-	{#if data.ticket.status === 'open'}
+	{#if !data.canSend}
+		<div class="chat-closed">{t.accessUi.messagesReadOnly}</div>
+	{:else if data.ticket.status === 'open'}
 		{#if pendingFile}
 			<div class="pending-file">
 				{#if isImage(pendingFile.type)}

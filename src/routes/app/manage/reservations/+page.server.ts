@@ -3,7 +3,7 @@ import { dbAll } from '$lib/db/index';
 import type { HallRow, ReservationStatus } from '$lib/db/index';
 import { fail, redirect } from '@sveltejs/kit';
 import { st } from '$lib/i18n-server';
-import { requireOrgPermission } from '$lib/server/access';
+import { requireOrgArea, requireOrgPermission } from '$lib/server/access';
 import { earliestBookableISO, todayISO } from '$lib/availability';
 import { createReservation, STAFF_INITIAL_STATUSES } from '$lib/server/reservations';
 import { parseListFilters, listReservations } from '$lib/server/reservation-list';
@@ -18,7 +18,9 @@ const CUSTOMER_CONTACT_MAX = 160;
 const NOTES_MAX = 2000;
 
 export const load: PageServerLoad = async ({ locals, url }) => {
-  const orgId = (await requireOrgPermission(locals, 'reservations.manage')).id;
+  // reservations.view opens the list read-only; entering a booking needs manage.
+  const { org, access } = await requireOrgArea(locals, 'reservations');
+  const orgId = org.id;
 
   // Search, filters, sort and paging come from the URL and run in the database
   // (the list used to load every booking at once, newest request first).
@@ -73,6 +75,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
     // Staff are not bound by the clients' notice period: the earliest date is today.
     today: todayISO(),
     staffStatuses: STAFF_INITIAL_STATUSES,
+    canManage: access.reservations.manage,
   };
 };
 
