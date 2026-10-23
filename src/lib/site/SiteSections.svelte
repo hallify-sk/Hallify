@@ -12,6 +12,8 @@
    * is renamed.
    */
   import type { SectionType } from '$lib/site-sections';
+  import { displayWebsite } from '$lib/site/display-url';
+  import { amenityLabel } from '$lib/site/amenities';
 
   export interface SiteHall {
     id: string;
@@ -84,7 +86,10 @@
   const contact = $derived({
     phone: halls.find((h) => h.contact_phone)?.contact_phone ?? null,
     email: halls.find((h) => h.contact_email)?.contact_email ?? null,
-    website: halls.find((h) => h.contact_website)?.contact_website ?? null,
+    // Only an http(s) address is ever linked: a website saved as javascript: ran in
+    // the venue's origin for anyone who clicked it. Shown shortened, so a long URL
+    // cannot push the page wider than the screen.
+    website: halls.map((h) => displayWebsite(h.contact_website)).find((w) => w !== null) ?? null,
     address: halls.find((h) => h.address)?.address ?? null
   });
 
@@ -178,7 +183,7 @@
     <section class="section">
       <div class="section-head"><h2>{labels.amenities}</h2></div>
       <ul class="sx-amenities">
-        {#each allAmenities as a (a)}<li>{amenityLabels[a] ?? a}</li>{/each}
+        {#each allAmenities as a (a)}<li>{amenityLabel(a, amenityLabels)}</li>{/each}
       </ul>
     </section>
   {/if}
@@ -189,7 +194,7 @@
       <div class="row-list sx-contact">
         {#if contact.phone}<div class="row-item"><a href={inert ? undefined : `tel:${contact.phone}`}>{contact.phone}</a></div>{/if}
         {#if contact.email}<div class="row-item"><a href={inert ? undefined : `mailto:${contact.email}`}>{contact.email}</a></div>{/if}
-        {#if contact.website}<div class="row-item"><a href={inert ? undefined : contact.website} rel="noopener">{contact.website}</a></div>{/if}
+        {#if contact.website}<div class="row-item"><a href={inert ? undefined : contact.website.href} target="_blank" rel="noopener noreferrer" title={contact.website.href}>{contact.website.label}</a></div>{/if}
         {#if contact.address}<div class="row-item muted">{contact.address}</div>{/if}
       </div>
     </section>
@@ -232,7 +237,7 @@
   .sx-amenities { display: flex; flex-wrap: wrap; gap: 8px; list-style: none; padding: 0; margin: 0; }
   .sx-amenities li { font-size: 11px; font-weight: 600; padding: 7px 13px; border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text-muted); }
 
-  .sx-contact a { color: var(--accent-ink); }
+  .sx-contact a { color: var(--accent-ink); min-width: 0; overflow-wrap: anywhere; }
   .sx-cta { text-align: center; }
   .sx-cta p { color: var(--text-muted); margin: 8px 0 18px; }
   .sx-empty { color: var(--text-muted); font-size: var(--body-size); }

@@ -1,26 +1,26 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
 	import { t } from '$lib/i18n.svelte';
-	import AuthShell from '$lib/components/AuthShell.svelte';
-	import type { ActionData } from './$types';
+	import VenueAuthCard from '$lib/site/VenueAuthCard.svelte';
+	import type { PageData, ActionData } from './$types';
 
-	interface Props { form: ActionData; }
-	const { form }: Props = $props();
+	interface Props { data: PageData; form: ActionData; }
+	const { data, form }: Props = $props();
 </script>
 
-<svelte:head><title>{t.forgotPassword.title} – Hallify</title></svelte:head>
+<svelte:head><title>{t.forgotPassword.title} – {data.domainOrg.name}</title></svelte:head>
 
-<AuthShell>
+<VenueAuthCard org={data.domainOrg}>
 	<div class="auth-header">
 		<h1>{t.forgotPassword.title}</h1>
 		<p class="subtitle">{t.forgotPassword.subtitle}</p>
 	</div>
 
 	{#if form?.sent}
-		<div class="notice notice-success">{t.forgotPassword.sent}</div>
+		<div class="notice notice-success" role="status">{t.forgotPassword.sent}</div>
 	{/if}
 	{#if form?.error}
-		<div class="notice notice-error">{form.error}</div>
+		<div class="notice notice-error" role="alert">{form.error}</div>
 	{/if}
 
 	<form method="POST" use:enhance class="auth-form">
@@ -39,7 +39,7 @@
 			{t.forgotPassword.backToLogin}
 		</a>
 	</p>
-</AuthShell>
+</VenueAuthCard>
 
 <style>
 	.auth-header { margin-bottom: 32px; }

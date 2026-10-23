@@ -3,12 +3,15 @@
   import { booking } from '$lib/analytics';
   import { reveal } from '$lib/reveal';
   import type { PageData } from './$types';
-  import type { HallDayHours } from '$lib/db/index';
   import { migrateToMultiFloor } from '$lib/floorplan-types';
   import { roomOutlinePath, roomParts } from '$lib/floorplan-geometry';
   import type { FloorData } from '$lib/floorplan-types';
-  import { t } from '$lib/i18n.svelte';
+  import { t, getLocale } from '$lib/i18n.svelte';
+  import { safeHref } from '$lib/safe-url';
+  import { amenityLabel, amenityLabelMap } from '$lib/site/amenities';
+  import { resolveOpeningHours } from '$lib/site/opening-hours';
   import Lightbox from '$lib/components/Lightbox.svelte';
+  import MiniCalendar from '$lib/components/MiniCalendar.svelte';
 
   interface Props { data: PageData; }
   const { data }: Props = $props();
@@ -19,7 +22,11 @@
   const user = data.user;
   const booked = data.booked;
   const amenities = (hall.amenities as string[]) ?? [];
-  const openingHours = (hall.opening_hours as Record<string, HallDayHours>) ?? {};
+  // Days the operator never edited follow the console's default (open 09:00–22:00)
+  // instead of showing as '—' or closed.
+  const openingHours = resolveOpeningHours(hall.opening_hours);
+  // Only an http(s) website is linked: a javascript: one would run in this origin.
+  const websiteHref = safeHref(hall.contact_website);
   const galleryImages = (hall.gallery_images as string[]) ?? [];
   // Visitors could not open a gallery photo here at all — the grid was the whole
   // feature. Now it opens full size and pages through like the signed-in page.
@@ -31,24 +38,14 @@
       : `/login?redirect=${encodeURIComponent(`/halls/${hall.slug}/book`)}`
   );
 
-  const AMENITY_LABELS: Record<string, () => string> = {
-    parking: () => t.hallProfile.amenityParking, catering: () => t.hallProfile.amenityCatering, av: () => t.hallProfile.amenityAv,
-    wifi: () => t.hallProfile.amenityWifi, ac: () => t.hallProfile.amenityAc, accessible: () => t.hallProfile.amenityAccessible,
-    outdoor: () => t.hallProfile.amenityOutdoor, stage: () => t.hallProfile.amenityStage, dancefloor: () => t.hallProfile.amenityDancefloor, bar: () => t.hallProfile.amenityBar,
-  };
+  // Built-ins are translated; the venue's own amenities come with their own labels.
+  const AMENITY_LABELS = $derived(amenityLabelMap({
+    parking: t.hallProfile.amenityParking, catering: t.hallProfile.amenityCatering, av: t.hallProfile.amenityAv,
+    wifi: t.hallProfile.amenityWifi, ac: t.hallProfile.amenityAc, accessible: t.hallProfile.amenityAccessible,
+    outdoor: t.hallProfile.amenityOutdoor, stage: t.hallProfile.amenityStage, dancefloor: t.hallProfile.amenityDancefloor, bar: t.hallProfile.amenityBar,
+  }, data.customAmenities, getLocale()));
 
-  const DAYS = [
-    { id: 'mon', idx: 0 },
-    { id: 'tue', idx: 1 },
-    { id: 'wed', idx: 2 },
-    { id: 'thu', idx: 3 },
-    { id: 'fri', idx: 4 },
-    { id: 'sat', idx: 5 },
-    { id: 'sun', idx: 6 },
-  ];
-
-  const hasHours = Object.keys(openingHours).length > 0;
-  const hasContact = hall.contact_phone || hall.contact_email || hall.contact_website;
+  const hasContact = hall.contact_phone || hall.contact_email || websiteHref;
 
   function computeViewBox(floor: FloorData): string {
     if (floor.bounds) {
@@ -157,6 +154,24 @@
           <a href={bookHref} class="cta-btn">{t.hallProfile.signInToBook}</a>
         {/if}
       </section>
+
+      {#if data.availability}
+        <section class="section" use:reveal>
+          <div class="section-head">
+            <h2>{t.hallProfile.availabilityTitle}</h2>
+            <p>{t.hallProfile.availabilityHint}</p>
+          </div>
+          <div class="avail-cal">
+            <MiniCalendar
+              takenDates={data.availability.taken}
+              blockedDates={data.availability.unavailable}
+              fullMonths={data.availability.fullMonths}
+              minDate={data.availability.earliest}
+              showLegend={true}
+            />
+          </div>
+        </section>
+      {/if}
     {:else}
       <section class="section" use:reveal>
         <div class="section-head">
@@ -177,7 +192,7 @@
           {#each amenities as a}
             <div class="amenity-item">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
-              <span>{AMENITY_LABELS[a]?.() ?? a}</span>
+              <span>{amenityLabel(a, AMENITY_LABELS)}</span>
             </div>
           {/each}
         </div>
@@ -272,8 +287,8 @@
               {hall.contact_email}
             </a>
           {/if}
-          {#if hall.contact_website}
-            <a href={hall.contact_website} target="_blank" rel="noopener" class="row-item contact-item">
+          {#if websiteHref}
+            <a href={websiteHref} target="_blank" rel="noopener noreferrer" class="row-item contact-item">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
               {t.hallProfile.website}
             </a>
@@ -283,21 +298,18 @@
     {/if}
 
     <!-- Opening hours -->
-    {#if hasHours}
+    {#if openingHours}
       <section class="section" use:reveal>
         <div class="section-head">
           <h2>{t.hallProfile.openingHours}</h2>
         </div>
         <div class="row-list hours-list">
-          {#each DAYS as day}
-            {@const dh = openingHours[day.id]}
-            <div class="row-item hours-row" class:hours-closed={dh && !dh.open}>
-              <span class="hours-day">{t.dayNamesFull[day.idx]}</span>
+          {#each openingHours as { hours }, idx}
+            <div class="row-item hours-row" class:hours-closed={!hours.open}>
+              <span class="hours-day">{t.dayNamesFull[idx]}</span>
               <span class="hours-val">
-                {#if !dh || dh.open === undefined}
-                  —
-                {:else if dh.open}
-                  {dh.from} – {dh.to}
+                {#if hours.open}
+                  {hours.from} – {hours.to}
                 {:else}
                   {t.status.closed}
                 {/if}
@@ -401,6 +413,8 @@
   }
   .cta-btn:hover { background: var(--accent-hover); transform: translateY(-2px); text-decoration: none; }
   .cta-btn:active { transform: translateY(0); }
+
+  .avail-cal { max-width: 360px; }
 
   /* Amenities — ticked lines, no chips */
   .amenities-grid {

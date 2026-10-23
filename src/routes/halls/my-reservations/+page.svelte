@@ -3,12 +3,16 @@
   import type { PageData } from './$types';
   import { statusLabel, statusClass, fmtDate } from '$lib/reservationStatus';
   import { reveal } from '$lib/reveal';
-  import { t } from '$lib/i18n.svelte';
+  import { t, getLocale } from '$lib/i18n.svelte';
 
   interface Props { data: PageData; }
   const { data }: Props = $props();
 
-  const justBooked = $derived($page.url.searchParams.get('booked') === '1');
+  // '?booked=approved' when the hall auto-approves: the booking is confirmed, and
+  // saying "the venue will review it" was wrong.
+  const bookedParam = $derived($page.url.searchParams.get('booked'));
+  const justBooked = $derived(bookedParam === '1' || bookedParam === 'approved');
+  const justConfirmed = $derived(bookedParam === 'approved');
 
   const today = new Date(); today.setHours(0, 0, 0, 0);
   function isPast(d: string) { return new Date(d + 'T00:00:00') < today; }
@@ -56,9 +60,13 @@
   </div>
 
   {#if justBooked}
-    <div class="toast">
+    <div class="toast" role="status">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
-      {t.myRes.requestSent} {data.domainOrg.name} {t.myRes.requestSentTail}
+      {#if justConfirmed}
+        {t.myRes.bookingConfirmed}
+      {:else}
+        {t.myRes.requestSent} {data.domainOrg.name} {t.myRes.requestSentTail}
+      {/if}
     </div>
   {/if}
 </section>
@@ -100,14 +108,14 @@
                   <div class="res-sub">{r.hall_name}</div>
                 </div>
                 <div class="res-badges">
-                  <span class="badge {statusClass(r.status)}">{statusLabel(r.status)}</span>
+                  <span class="badge {statusClass(r.status)}">{statusLabel(r.status, getLocale())}</span>
                   {#if r.status !== 'cancelled' && isPast(r.event_date)}<span class="badge st-past">{t.event.past}</span>{/if}
                 </div>
               </div>
               <div class="res-meta">
                 <span class="meta-item">
                   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
-                  {fmtDate(r.event_date)}
+                  {fmtDate(r.event_date, getLocale())}
                 </span>
                 {#if r.start_time}
                   <span class="meta-item">
@@ -152,7 +160,8 @@
   }
   .toast svg { flex-shrink: 0; }
 
-  .tabs { display: flex; gap: 4px; }
+  /* Wraps on a phone: four tabs with counts in one row made the page 476px wide. */
+  .tabs { display: flex; flex-wrap: wrap; gap: 4px; min-width: 0; max-width: 100%; }
   .tab {
     display: inline-flex; align-items: center; gap: 7px; padding: 8px 13px;
     background: none; border: none; border-bottom: 2px solid transparent; cursor: pointer;
@@ -199,5 +208,9 @@
 
   @media (prefers-reduced-motion: reduce) {
     .btn-primary:hover { transform: none; }
+  }
+
+  @media (max-width: 520px) {
+    .tab { padding: 8px 9px; }
   }
 </style>

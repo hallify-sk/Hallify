@@ -1,14 +1,17 @@
 import { error, fail, redirect } from '@sveltejs/kit';
 import { dbAll, dbFirst, dbRun, fromJsonArr } from '$lib/db/index';
-import type { HallRow, HallBlockRow, ReservationRow, HallExtraRow } from '$lib/db/index';
+import type { HallRow, HallBlockRow, ReservationRow } from '$lib/db/index';
 import { parseExtraIds } from '$lib/extras';
 import { dispatchWebhooks } from '$lib/notifications';
 import { notifyGuestMessage, notifyGuestCancel, notifyGuestEdit, reservationChanges } from '$lib/email';
 import {
-	assertCanBook, getTakenDates, getHeldDatesByOthers,
+	assertCanBook, getTakenDates, getHeldDatesByOthers, getUnavailableDates, getFullMonths,
 	earliestBookableISO, isoLocal, addDays,
 } from '$lib/availability';
+import { loadBookableExtras } from '$lib/site/bookable-extras';
+import { withinCancelNotice, cancelDeadline } from '$lib/site/cancellation';
 import { st } from '$lib/i18n-server';
+import { formatDate } from '$lib/format';
 import { hasEventStarted, isEventPast } from '$lib/reservationStatus';
 import type { Actions, PageServerLoad } from './$types';
 import { markTicketRead } from '$lib/unread';
@@ -19,8 +22,9 @@ const RANGE_DAYS = 540;
 const EDITABLE = new Set(['pending']);
 const CANCELLABLE = new Set(['pending', 'waiting_payment', 'approved', 'planned']);
 
-function subjectFor(hallName: string, eventDate: string): string {
-	return `${hallName} – ${new Date(eventDate + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}`;
+/** Ticket subject: hall and date, the date in the client's language (it was en-GB). */
+function subjectFor(hallName: string, eventDate: string, locale: App.Locals['locale']): string {
+	return `${hallName} – ${formatDate(eventDate, locale)}`;
 }
 
 async function loadReservation(db: App.Locals['db'], id: string, userId: string, orgId: string) {
@@ -76,24 +80,36 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 	// Once the event has STARTED the client can no longer change anything about it.
 	const started = hasEventStarted(reservation.event_date, reservation.start_time);
 	const past = isEventPast(reservation.event_date, reservation.end_time);
+	const selectedExtras = parseExtraIds(reservation.extras_json);
+	// The venue's notice period decides whether Cancel is offered at all; offering it
+	// and then refusing on confirm was the old behaviour.
+	const noticeOk = withinCancelNotice(reservation.event_date, reservation.hall_min_cancel_days);
 
 	return {
 		reservation,
 		hasStarted: started,
 		isPast: past,
 		editable: EDITABLE.has(reservation.status) && !started,
-		cancellable: CANCELLABLE.has(reservation.status) && !started,
+		cancellable: CANCELLABLE.has(reservation.status) && !started && noticeOk,
+		// Past the notice period but otherwise cancellable: say until when it was possible.
+		cancelWindowClosed: CANCELLABLE.has(reservation.status) && !started && !noticeOk,
+		cancelDeadline: cancelDeadline(reservation.event_date, reservation.hall_min_cancel_days),
 		// Once approved, the client can self-serve the seating tools (until the event starts).
 		canManageEvent: new Set(['approved', 'planned']).has(reservation.status) && !started,
 		// The read-only seating sheet stays available even after the event starts / once completed.
 		canViewSeating: !!hall?.floorplan_json && new Set(['approved', 'planned', 'completed']).has(reservation.status),
 		hasFloorplan: !!hall?.floorplan_json,
 		// Extras: clients can change their selection until the booking is approved (and before it starts).
-		extras: await dbAll<HallExtraRow>(locals.db, 'SELECT * FROM hall_extras WHERE hall_id = ? ORDER BY created_at', reservation.hall_id),
-		selectedExtras: parseExtraIds(reservation.extras_json),
+		// Within the plan's extras limit, plus whatever this client already ordered.
+		extras: await loadBookableExtras(locals.db, reservation.hall_id, orgId, selectedExtras),
+		selectedExtras,
 		extrasEditable: new Set(['pending', 'waiting_payment']).has(reservation.status) && !started,
 		hall: hall ? { id: hall.id, max_people: hall.max_people, min_days_advance: hall.min_days_advance, allow_reservations: hall.allow_reservations } : null,
 		blocks: blocksRaw.map(b => ({ ...b, days_of_week: fromJsonArr(b.days_of_week as string | null) })),
+		// Closed weekdays and blocks (server-side, the rule the update check uses), and
+		// months at the plan's cap not counting this booking itself.
+		unavailableDates: hall ? await getUnavailableDates(locals.db, hall, fromISO, toISO) : [],
+		fullMonths: hall ? await getFullMonths(locals.db, hall, fromISO, toISO, reservation.id) : [],
 		takenDates: hall ? (await getTakenDates(locals.db, hall.id, fromISO, toISO)).filter(d => d !== reservation.event_date) : [],
 		heldDates: hall ? await getHeldDatesByOthers(locals.db, hall.id, userId) : [],
 		earliestDate: earliestBookableISO(hall?.min_days_advance ?? 0),
@@ -107,14 +123,15 @@ export const actions: Actions = {
 		if (!locals.user || !locals.domainOrg) return fail(401, { error: st(locals.locale).serverErrors.notSignedIn });
 		const orgId = locals.domainOrg.id;
 		const reservation = await loadReservation(locals.db, params.id, locals.user.id, orgId);
-		if (!reservation) return fail(404, { error: st(locals.locale).serverErrors.reservationNotFoundDot });
-		if (hasEventStarted(reservation.event_date, reservation.start_time)) return fail(400, { error: st(locals.locale).serverErrors.eventNoLongerEditable });
+		if (!reservation) return fail(404, { error: st(locals.locale).serverErrors.reservationNotFoundDot, scope: 'extras' });
+		if (hasEventStarted(reservation.event_date, reservation.start_time)) return fail(400, { error: st(locals.locale).serverErrors.eventNoLongerEditable, scope: 'extras' });
 		if (!new Set(['pending', 'waiting_payment']).has(reservation.status)) {
-			return fail(400, { error: st(locals.locale).serverErrors.extrasNoLongerChangeable });
+			return fail(400, { error: st(locals.locale).serverErrors.extrasNoLongerChangeable, scope: 'extras' });
 		}
 		const data = await request.formData();
 		const requested = data.getAll('extras').map(String);
-		const valid = (await dbAll<{ id: string }>(locals.db, 'SELECT id FROM hall_extras WHERE hall_id = ?', reservation.hall_id)).map(e => e.id);
+		// Extras above the plan's limit can be kept (if already chosen) but not added.
+		const valid = (await loadBookableExtras(locals.db, reservation.hall_id, orgId, parseExtraIds(reservation.extras_json))).map(e => e.id);
 		const ids = requested.filter(id => valid.includes(id));
 		await dbRun(locals.db, 'UPDATE reservations SET extras_json = ? WHERE id = ? AND user_id = ? AND org_id = ?',
 			ids.length ? JSON.stringify(ids) : null, params.id, locals.user.id, orgId);
@@ -122,17 +139,17 @@ export const actions: Actions = {
 	},
 
 	update: async ({ params, request, locals }) => {
-		if (!locals.user) return fail(401, { error: st(locals.locale).serverErrors.notSignedIn });
-		if (!locals.domainOrg) return fail(400, { error: st(locals.locale).serverErrors.noOrganisationContext });
+		if (!locals.user) return fail(401, { scope: 'update', error: st(locals.locale).serverErrors.notSignedIn });
+		if (!locals.domainOrg) return fail(400, { scope: 'update', error: st(locals.locale).serverErrors.noOrganisationContext });
 		const orgId = locals.domainOrg.id;
 		const userId = locals.user.id;
 		const reservation = await loadReservation(locals.db, params.id, userId, orgId);
-		if (!reservation) return fail(404, { error: st(locals.locale).serverErrors.reservationNotFoundDot });
-		if (hasEventStarted(reservation.event_date, reservation.start_time)) return fail(400, { error: st(locals.locale).serverErrors.eventNoLongerEditable });
-		if (!EDITABLE.has(reservation.status)) return fail(400, { error: st(locals.locale).serverErrors.reservationNoLongerEditable });
+		if (!reservation) return fail(404, { scope: 'update', error: st(locals.locale).serverErrors.reservationNotFoundDot });
+		if (hasEventStarted(reservation.event_date, reservation.start_time)) return fail(400, { scope: 'update', error: st(locals.locale).serverErrors.eventNoLongerEditable });
+		if (!EDITABLE.has(reservation.status)) return fail(400, { scope: 'update', error: st(locals.locale).serverErrors.reservationNoLongerEditable });
 
 		const hall = await dbFirst<HallRow>(locals.db, 'SELECT * FROM halls WHERE id = ?', reservation.hall_id);
-		if (!hall) return fail(404, { error: st(locals.locale).serverErrors.hallNotFoundDot });
+		if (!hall) return fail(404, { scope: 'update', error: st(locals.locale).serverErrors.hallNotFoundDot });
 
 		const data = await request.formData();
 		const title = String(data.get('title') ?? '').trim();
@@ -141,16 +158,18 @@ export const actions: Actions = {
 		const endTime = String(data.get('endTime') ?? '').trim() || null;
 		const description = String(data.get('description') ?? '').trim() || null;
 		const numGuests = parseInt(String(data.get('numGuests') ?? ''), 10) || null;
+		// A negative count was accepted and stored.
+		if (numGuests != null && numGuests < 1) return fail(400, { scope: 'update', error: st(locals.locale).serverErrors.invalidGuestCount });
 
-		if (!title) return fail(400, { error: st(locals.locale).serverErrors.eventNameRequired });
-		if (!eventDate) return fail(400, { error: st(locals.locale).serverErrors.pleaseChooseDate });
+		if (!title) return fail(400, { scope: 'update', error: st(locals.locale).serverErrors.eventNameRequired });
+		if (!eventDate) return fail(400, { scope: 'update', error: st(locals.locale).serverErrors.pleaseChooseDate });
 		if (numGuests != null && hall.max_people && hall.max_people > 0 && numGuests > hall.max_people) {
-			return fail(400, { error: `${st(locals.locale).serverErrors.hallMaxCapacityPrefix} ${hall.max_people} ${st(locals.locale).serverErrors.hallMaxCapacitySuffix}` });
+			return fail(400, { scope: 'update', error: `${st(locals.locale).serverErrors.hallMaxCapacityPrefix} ${hall.max_people} ${st(locals.locale).serverErrors.hallMaxCapacitySuffix}` });
 		}
 
 		if (eventDate !== reservation.event_date) {
 			const check = await assertCanBook(locals.db, hall, eventDate, userId, numGuests, locals.locale, params.id);
-			if (!check.ok) return fail(400, { error: check.reason });
+			if (!check.ok) return fail(400, { scope: 'update', error: check.reason });
 		}
 
 		try {
@@ -160,7 +179,7 @@ export const actions: Actions = {
 				title, description, eventDate, startTime, endTime, numGuests, params.id, userId, orgId
 			);
 		} catch {
-			return fail(409, { error: st(locals.locale).serverErrors.dateJustTaken });
+			return fail(409, { scope: 'update', error: st(locals.locale).serverErrors.dateJustTaken });
 		}
 
 		const guestName = `${locals.user.first_name} ${locals.user.last_name}`;
@@ -175,24 +194,23 @@ export const actions: Actions = {
 	},
 
 	cancel: async ({ params, locals }) => {
-		if (!locals.user) return fail(401, { error: st(locals.locale).serverErrors.notSignedIn });
-		if (!locals.domainOrg) return fail(400, { error: st(locals.locale).serverErrors.noOrganisationContext });
+		if (!locals.user) return fail(401, { scope: 'cancel', error: st(locals.locale).serverErrors.notSignedIn });
+		if (!locals.domainOrg) return fail(400, { scope: 'cancel', error: st(locals.locale).serverErrors.noOrganisationContext });
 		const orgId = locals.domainOrg.id;
 		const userId = locals.user.id;
 		const reservation = await loadReservation(locals.db, params.id, userId, orgId);
-		if (!reservation) return fail(404, { error: st(locals.locale).serverErrors.reservationNotFoundDot });
-		if (hasEventStarted(reservation.event_date, reservation.start_time)) return fail(400, { error: st(locals.locale).serverErrors.reservationNoLongerCancellable });
-		if (!CANCELLABLE.has(reservation.status)) return fail(400, { error: st(locals.locale).serverErrors.reservationNoLongerCancellable });
+		if (!reservation) return fail(404, { scope: 'cancel', error: st(locals.locale).serverErrors.reservationNotFoundDot });
+		if (hasEventStarted(reservation.event_date, reservation.start_time)) return fail(400, { scope: 'cancel', error: st(locals.locale).serverErrors.reservationNoLongerCancellable });
+		if (!CANCELLABLE.has(reservation.status)) return fail(400, { scope: 'cancel', error: st(locals.locale).serverErrors.reservationNoLongerCancellable });
 
 		// The venue's minimum cancellation notice. This is the ONLY cancel path a client
 		// can reach, so without this the setting had no effect on the people it exists
 		// for — staff already enforced it on their own path.
+		// Same rule the page uses to decide whether to offer Cancel at all.
 		if (reservation.hall_min_cancel_days > 0) {
-			const daysUntil = Math.ceil(
-				(new Date(reservation.event_date).getTime() - Date.now()) / (1000 * 60 * 60 * 24)
-			);
-			if (daysUntil < reservation.hall_min_cancel_days) {
+			if (!withinCancelNotice(reservation.event_date, reservation.hall_min_cancel_days)) {
 				return fail(400, {
+					scope: 'cancel',
 					error: st(locals.locale).serverErrors.cannotCancelBeforeEvent.replace('{days}', String(reservation.hall_min_cancel_days)),
 				});
 			}
@@ -234,7 +252,7 @@ export const actions: Actions = {
 		// One thread per booking: parallel first sends join the same thread (unique index, migration 0018).
 		const thread = await findOrCreateReservationThread(locals.db, {
 			orgId, reservationId: reservation.id, userId: user.id,
-			subject: subjectFor(reservation.hall_name, reservation.event_date),
+			subject: subjectFor(reservation.hall_name, reservation.event_date, locals.locale),
 		});
 		const ticket = { id: thread.id };
 		const isNew = thread.created;
@@ -245,12 +263,12 @@ export const actions: Actions = {
 		await dbRun(locals.db, `UPDATE tickets SET updated_at = datetime('now'), status = 'open' WHERE id = ?`, ticket.id);
 
 		dispatchWebhooks(locals.db, orgId, isNew ? 'ticket.new' : 'ticket.reply', {
-			ticket_id: ticket.id, ticket_subject: subjectFor(reservation.hall_name, reservation.event_date),
+			ticket_id: ticket.id, ticket_subject: subjectFor(reservation.hall_name, reservation.event_date, locals.locale),
 			sender_name: `${user.first_name} ${user.last_name}`.trim(), message: body,
 		}).catch(() => {});
 
 		notifyGuestMessage(locals.db, orgId, `${user.first_name} ${user.last_name}`,
-			subjectFor(reservation.hall_name, reservation.event_date), body, { reservationId: reservation.id, ticketId: ticket.id }).catch(() => {});
+			subjectFor(reservation.hall_name, reservation.event_date, locals.locale), body, { reservationId: reservation.id, ticketId: ticket.id }).catch(() => {});
 
 		return { msgSent: true };
 	},

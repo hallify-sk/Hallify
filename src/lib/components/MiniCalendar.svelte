@@ -1,5 +1,7 @@
 <script lang="ts">
-	import { t } from '$lib/i18n.svelte';
+	import { tick } from 'svelte';
+	import { t, getLocale } from '$lib/i18n.svelte';
+	import { localeTag } from '$lib/format';
 
 	interface Props {
 		selectedDate?: string;
@@ -8,12 +10,13 @@
 		takenDates?: string[];       // already booked (filled, non-selectable)
 		heldDates?: string[];        // held by someone else right now (amber, non-selectable)
 		minDate?: string;            // earliest selectable day (YYYY-MM-DD); earlier days are disabled
+		fullMonths?: string[];       // 'YYYY-MM' months with no dates left (plan's monthly cap)
 		showLegend?: boolean;
 		onselect?: (date: string) => void;
 	}
 	const {
 		selectedDate, events = [], blockedDates = [], takenDates = [], heldDates = [],
-		minDate, showLegend = false, onselect,
+		minDate, fullMonths = [], showLegend = false, onselect,
 	}: Props = $props();
 
 	let viewYear = $state(new Date().getFullYear());
@@ -72,7 +75,7 @@
 				isToday: iso === todayStr,
 				isSunday: dow === 0,
 				hasEvent: events.includes(iso),
-				isBlocked: blockedDates.includes(iso),
+				isBlocked: blockedDates.includes(iso) || fullMonths.includes(iso.slice(0, 7)),
 				isTaken: takenDates.includes(iso),
 				isHeld: heldDates.includes(iso),
 				isPast: !!minDate && iso < minDate,
@@ -104,6 +107,74 @@
 		if (!onselect || !cell.inMonth || isLocked(cell)) return;
 		onselect(cell.iso);
 	}
+
+	const viewKey = $derived(`${viewYear}-${String(viewMonth + 1).padStart(2, '0')}`);
+	const monthIsFull = $derived(fullMonths.includes(viewKey));
+
+	// ── Keyboard: one tab stop for the whole grid (a roving tabindex) ──
+	// Every day used to be its own tab stop, so reaching the submit button meant
+	// tabbing through a month of days. Now Tab enters the grid once, on the selected
+	// day (or today, or the 1st), and the arrow keys move between days: Left/Right a
+	// day, Up/Down a week, Home/End the week's ends, PageUp/PageDown a month. Days that
+	// cannot be picked stay reachable so their state is announced; they just don't
+	// select. Only for a pickable calendar; a read-only one has no tab stops.
+	let focusIso = $state('');
+	const rovingIso = $derived.by(() => {
+		const inView = (iso: string) => !!iso && iso.slice(0, 7) === viewKey;
+		if (inView(focusIso)) return focusIso;
+		if (selectedDate && inView(selectedDate)) return selectedDate;
+		if (inView(todayStr)) return todayStr;
+		return `${viewKey}-01`;
+	});
+	let gridEl: HTMLTableElement | null = $state(null);
+
+	function shiftIso(iso: string, days: number, months = 0): string {
+		const [y, m, d] = iso.split('-').map(Number);
+		if (months) {
+			const first = new Date(y, m - 1 + months, 1);
+			const last = new Date(first.getFullYear(), first.getMonth() + 1, 0).getDate();
+			return toIso(first.getFullYear(), first.getMonth(), Math.min(d, last));
+		}
+		const dt = new Date(y, m - 1, d + days);
+		return toIso(dt.getFullYear(), dt.getMonth(), dt.getDate());
+	}
+
+	async function onGridKey(e: KeyboardEvent) {
+		if (!onselect) return;
+		const from = rovingIso;
+		const dow = (new Date(from + 'T00:00:00').getDay() + 6) % 7; // Monday = 0
+		let next: string | null = null;
+		switch (e.key) {
+			case 'ArrowLeft': next = shiftIso(from, -1); break;
+			case 'ArrowRight': next = shiftIso(from, 1); break;
+			case 'ArrowUp': next = shiftIso(from, -7); break;
+			case 'ArrowDown': next = shiftIso(from, 7); break;
+			case 'Home': next = shiftIso(from, -dow); break;
+			case 'End': next = shiftIso(from, 6 - dow); break;
+			case 'PageUp': next = shiftIso(from, 0, -1); break;
+			case 'PageDown': next = shiftIso(from, 0, 1); break;
+		}
+		if (!next) return;
+		e.preventDefault();
+		focusIso = next;
+		const [ny, nm] = next.split('-').map(Number);
+		viewYear = ny;
+		viewMonth = nm - 1;
+		await tick();
+		gridEl?.querySelector<HTMLButtonElement>(`button[data-iso="${next}"]`)?.focus();
+	}
+
+	function dayLabel(cell: (typeof cells)[0][0]): string {
+		const date = new Date(cell.iso + 'T00:00:00').toLocaleDateString(localeTag(getLocale()), {
+			weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
+		});
+		const state = cell.isTaken ? t.components.calBooked
+			: cell.isHeld ? t.components.calBeingBooked
+			: cell.isBlocked || cell.isPast ? t.components.calUnavailable
+			: cell.isSelected ? t.components.calSelected
+			: '';
+		return state ? `${date}, ${state}` : date;
+	}
 </script>
 
 <div class="mini-cal">
@@ -125,7 +196,10 @@
 		</div>
 	</div>
 
-	<table class="cal-grid">
+	{#if monthIsFull}<p class="cal-full">{t.components.calMonthFull}</p>{/if}
+
+	<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+	<table class="cal-grid" bind:this={gridEl} onkeydown={onGridKey}>
 		<thead>
 			<tr>
 				{#each t.dayNames as dn}
@@ -137,10 +211,17 @@
 			{#each cells as row}
 				<tr>
 					{#each row as cell}
+						{@const roving = !!onselect && cell.inMonth}
 						<td>
 							<button
 								type="button"
 								class="cal-day"
+								data-iso={cell.iso}
+								tabindex={roving ? (cell.iso === rovingIso ? 0 : -1) : undefined}
+								aria-label={cell.inMonth ? dayLabel(cell) : undefined}
+								aria-pressed={roving ? cell.isSelected : undefined}
+								aria-disabled={roving && isLocked(cell) ? 'true' : undefined}
+								onfocus={() => { if (roving) focusIso = cell.iso; }}
 								class:out={!cell.inMonth}
 								class:today={cell.isToday}
 								class:sunday={cell.isSunday && cell.inMonth}
@@ -151,7 +232,7 @@
 								class:selected={cell.isSelected}
 								class:clickable={!!onselect && cell.inMonth && !isLocked(cell)}
 								onclick={() => onDayClick(cell)}
-								disabled={!onselect || !cell.inMonth || isLocked(cell)}
+								disabled={!onselect || !cell.inMonth}
 								title={cell.isTaken ? t.components.calBooked : cell.isHeld ? t.components.calBeingBooked : cell.isBlocked ? t.components.calUnavailable : ''}
 							>
 								{cell.day}
@@ -340,6 +421,17 @@
 	/* Same problem one step lighter: on the selected day's --accent-dim wash an
 	   accent dot is 2.6:1. The ink is 6.2:1. */
 	.cal-day.selected:not(.today) .event-dot { background: var(--accent-ink); }
+
+	.cal-full {
+		margin: 0 0 10px;
+		font-size: 12px;
+		color: var(--text-muted);
+	}
+
+	.cal-day:focus-visible {
+		outline: 2px solid var(--accent);
+		outline-offset: 1px;
+	}
 
 	.cal-legend {
 		display: flex;

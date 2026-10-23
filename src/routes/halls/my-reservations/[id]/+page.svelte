@@ -3,9 +3,10 @@
 	import { tick } from 'svelte';
 	import MiniCalendar from '$lib/components/MiniCalendar.svelte';
 	import { statusLabel, statusClass, fmtDate } from '$lib/reservationStatus';
-	import { computeExtras, eur } from '$lib/extras';
+	import { computeExtras } from '$lib/extras';
 	import { reveal } from '$lib/reveal';
-	import { t } from '$lib/i18n.svelte';
+	import { t, getLocale } from '$lib/i18n.svelte';
+	import { formatDate, formatDateTime, formatMoney } from '$lib/format';
 	import type { PageData, ActionData } from './$types';
 
 	interface Props { data: PageData; form: ActionData; }
@@ -46,7 +47,9 @@
 
 	function isoLocal(d: Date) { return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; }
 
+	// Server-computed: blocks AND the days the venue is closed (they used to look free).
 	const blockedStrings = $derived.by(() => {
+		if (data.unavailableDates) return data.unavailableDates;
 		const out: string[] = [];
 		for (const b of data.blocks) {
 			if (b.block_type === 'date_range' && b.date_from && b.date_to) {
@@ -63,9 +66,29 @@
 
 	const overCapacity = $derived(!!eGuests && !!data.hall?.max_people && Number(eGuests) > data.hall.max_people);
 
-	function fmtTime(ts: string) {
-		const iso = ts.includes('T') ? ts : ts.replace(' ', 'T') + 'Z';
-		return new Date(iso).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+	const fmtTime = (ts: string) =>
+		formatDateTime(ts, getLocale(), { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+	const eur = (cents: number) => formatMoney(cents, getLocale());
+
+	/** The venue member's role, in words ('owner' was printed as the raw key). */
+	const roleLabel = (role: string) =>
+		role === 'owner' ? t.membersAdmin.roleOwner
+		: role === 'admin' ? t.membersAdmin.roleAdmin
+		: t.membersAdmin.roleMember;
+
+	// An error is shown next to the control that caused it, and scrolled into view:
+	// at the top of the page it was drawn far above where the client was looking.
+	// Falls back to the top of the page when the control it belongs to is gone.
+	const errorScope = $derived.by(() => {
+		if (!form?.error) return null;
+		const scope = (form as { scope?: string }).scope ?? 'page';
+		if (scope === 'update' && !editing) return 'page';
+		if (scope === 'cancel' && !data.cancellable) return 'page';
+		if (scope === 'extras' && !data.extrasEditable) return 'page';
+		return scope;
+	});
+	function errorInView(node: HTMLElement) {
+		node.scrollIntoView({ block: 'center', behavior: 'smooth' });
 	}
 
 	let threadEl: HTMLDivElement | null = $state(null);
@@ -90,7 +113,7 @@
 			<p class="head-sub">{r.hall_name}</p>
 		</div>
 		<div class="head-badges">
-			<span class="badge {statusClass(r.status)}">{statusLabel(r.status)}</span>
+			<span class="badge {statusClass(r.status)}">{statusLabel(r.status, getLocale())}</span>
 			{#if data.isPast}
 				<span class="badge st-past">{t.event.past}</span>
 			{:else if data.hasStarted}
@@ -101,7 +124,7 @@
 
 	{#if form?.updated}<div class="toast ok"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> {t.myRes.reservationUpdated}</div>{/if}
 	{#if form?.cancelled}<div class="toast ok"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> {t.myRes.reservationCancelled}</div>{/if}
-	{#if form?.error}<div class="toast err">{form.error}</div>{/if}
+	{#if errorScope === 'page'}<div class="toast err" role="alert">{form?.error}</div>{/if}
 </section>
 
 <!-- ── The reservation itself ── -->
@@ -139,6 +162,7 @@
 					takenDates={data.takenDates}
 					heldDates={data.heldDates}
 					minDate={data.earliestDate}
+					fullMonths={data.fullMonths}
 					selectedDate={eDate}
 					onselect={(d) => eDate = d}
 					showLegend={true}
@@ -171,6 +195,9 @@
 				<textarea id="e-notes" name="description" rows="3" bind:value={eNotes} placeholder={t.myRes.notesPlaceholder}></textarea>
 			</div>
 
+			{#if errorScope === 'update'}
+				{#key form}<div class="toast err" role="alert" use:errorInView>{form?.error}</div>{/key}
+			{/if}
 			<div class="edit-actions">
 				<button type="button" class="btn-ghost" onclick={() => editing = false}>{t.common.cancel}</button>
 				<button type="submit" class="btn-primary" disabled={!eTitle || !eDate || overCapacity}>{t.myRes.saveChanges}</button>
@@ -179,7 +206,7 @@
 	{:else}
 		<dl class="detail-list">
 			<div><dt>{t.dashboard.hall}</dt><dd>{r.hall_name}</dd></div>
-			<div><dt>{t.common.date}</dt><dd>{fmtDate(r.event_date)}</dd></div>
+			<div><dt>{t.common.date}</dt><dd>{fmtDate(r.event_date, getLocale())}</dd></div>
 			<div><dt>{t.createEvent.time}</dt><dd>{r.start_time ? `${r.start_time}${r.end_time ? ` – ${r.end_time}` : ''}` : t.calendar.allDay}</dd></div>
 			<div><dt>{t.common.guests}</dt><dd>{r.num_guests ?? '—'}</dd></div>
 			<div><dt>{t.myRes.reference}</dt><dd class="mono">{r.invite_code}</dd></div>
@@ -233,6 +260,9 @@
 						</div>
 					</form>
 					{#if form?.extrasSaved}<span class="x-saved">{t.myRes.saved}</span>{/if}
+					{#if errorScope === 'extras'}
+						{#key form}<div class="toast err small" role="alert" use:errorInView>{form?.error}</div>{/key}
+					{/if}
 				{:else if extrasOverview.lines.length > 0}
 					<div class="row-list">
 						{#each extrasOverview.lines as l}
@@ -243,7 +273,11 @@
 						{/each}
 						<div class="row-item x-line x-line-total"><span>{t.myRes.total}</span><b>{eur(extrasOverview.totalCents)}</b></div>
 					</div>
-					<p class="x-note">{t.myRes.changeExtrasNote}</p>
+					<!-- Only while there is still something to change: not on a finished or
+					     cancelled booking. -->
+					{#if r.status !== 'cancelled' && r.status !== 'completed' && !data.hasStarted}
+						<p class="x-note">{t.myRes.changeExtrasNote}</p>
+					{/if}
 				{:else}
 					<p class="x-empty">{t.myRes.noExtrasSelected}</p>
 				{/if}
@@ -257,6 +291,9 @@
 						<div>
 							<span class="dz-title">{t.myRes.cancelThisReservation}</span>
 							<span class="dz-sub">{t.myRes.cancelFreesDate} {orgName}.</span>
+							{#if data.cancelDeadline}
+								<span class="dz-sub">{t.myRes.freeCancelUntil} {formatDate(data.cancelDeadline, getLocale(), { day: 'numeric', month: 'long', year: 'numeric' })}.</span>
+							{/if}
 						</div>
 						<button type="button" class="btn-danger-outline" onclick={() => confirmCancel = true}>{t.event.cancelReservation}</button>
 					</div>
@@ -271,13 +308,23 @@
 						</div>
 					</div>
 				{/if}
+				{#if errorScope === 'cancel'}
+					{#key form}<div class="toast err" role="alert" use:errorInView>{form?.error}</div>{/key}
+				{/if}
 			</div>
 		{:else if r.status === 'cancelled'}
 			<p class="status-note">{t.myRes.reservationWasCancelled}</p>
+		{:else if r.status === 'completed' || data.isPast}
+			<!-- "This event has already started" read oddly on a finished event. -->
+			<p class="status-note">{t.myRes.eventFinished}</p>
 		{:else if data.hasStarted}
 			<p class="status-note">{t.event.startedLocked}</p>
+		{:else if data.cancelWindowClosed && data.cancelDeadline}
+			<!-- The notice period has passed: say so instead of offering a Cancel button
+			     that the server would refuse. -->
+			<p class="status-note">{t.myRes.cancelWindowClosed.replace('{date}', formatDate(data.cancelDeadline, getLocale(), { day: 'numeric', month: 'long', year: 'numeric' }))}</p>
 		{:else if !data.editable}
-			<p class="status-note">{t.myRes.lockedNotePrefix} {statusLabel(r.status).toLowerCase()} {t.myRes.lockedNoteMid} {orgName} {t.myRes.lockedNoteSuffix}</p>
+			<p class="status-note">{t.myRes.lockedNotePrefix} {statusLabel(r.status, getLocale()).toLowerCase()} {t.myRes.lockedNoteMid} {orgName} {t.myRes.lockedNoteSuffix}</p>
 		{/if}
 	{/if}
 </section>
@@ -305,7 +352,7 @@
 					{@const mine = m.sender_id === r.user_id}
 					<div class="msg" class:mine>
 						<div class="bubble">
-							{#if !mine}<span class="msg-name">{m.sender_first_name} {m.sender_last_name}{#if m.sender_role}<span class="msg-role">{m.sender_role}</span>{/if}</span>{/if}
+							{#if !mine}<span class="msg-name">{m.sender_first_name} {m.sender_last_name}{#if m.sender_role}<span class="msg-role">{roleLabel(m.sender_role)}</span>{/if}</span>{/if}
 							{#if m.body}<span class="msg-body">{m.body}</span>{/if}
 							{#if m.attachment_url?.startsWith('/uploads/')}
 								<!-- Attachments the venue sends (images uploaded from the staff inbox). -->

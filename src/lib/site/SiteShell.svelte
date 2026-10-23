@@ -103,7 +103,9 @@
               <span class="b-acct-name">{user.first_name} {user.last_name}</span>
               <span class="b-acct-sub">{t.bubble.signedIn}</span>
             </div>
-            <a href={to('/logout')} class="b-signout" title={t.nav.signOut} aria-label={t.nav.signOut} tabindex={tab}>
+            <!-- A full page load: signing out client-side left the root layout's data
+                 (name, "Moje rezervácie") on screen until the next reload. -->
+            <a href={to('/logout')} class="b-signout" title={t.nav.signOut} aria-label={t.nav.signOut} tabindex={tab} data-sveltekit-reload>
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
             </a>
           </div>
@@ -199,7 +201,9 @@
   .b-signin:hover { background: var(--accent-hover); transform: translateY(-2px); text-decoration: none; }
   .b-signin:active { transform: translateY(0); }
 
-  .b-main-wrap { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  /* --consent-space is set by the cookie banner while it is open, so the last
+     thing on a page (the booking form's submit button) can scroll above it. */
+  .b-main-wrap { flex: 1; min-width: 0; display: flex; flex-direction: column; padding-bottom: var(--consent-space, 0px); }
   .b-main { flex: 1; max-width: 1080px; width: 100%; margin: 0 auto; padding: 30px 28px 48px; }
   .b-pwr { text-align: center; padding: 16px; font-size: 11px; color: var(--text-subtle); border-top: 1px solid var(--border); }
   .b-pwr strong { color: var(--text-muted); }
@@ -211,18 +215,32 @@
     .b-signin:hover { transform: none; }
   }
 
+  /* Phones: two rows. The venue and the account controls on top, and the
+     navigation as a full-width tab bar underneath. A single row squeezed the nav
+     into a 169px strip that scrolled sideways with no cue, so "Moje rezervácie"
+     read "Mo" and "Správy" (with its unread badge) was off-screen. */
   @container b-shell (max-width: 760px) {
     .b-frame { flex-direction: column; }
-    .b-sidebar { width: auto; height: auto; position: static; flex-direction: row; align-items: center; border-right: none; border-bottom: 1px solid var(--border); padding: 0 8px; gap: 4px; overflow-x: auto; }
-    .b-brand { padding: 10px 8px; }
-    .b-name { display: none; }
-    .b-nav { flex-direction: row; flex: 1; padding: 6px 4px; gap: 2px; overflow-x: auto; }
-    .b-item { white-space: nowrap; padding: 7px 9px; }
+    .b-sidebar { width: auto; height: auto; position: static; flex-direction: row; flex-wrap: wrap; align-items: center; border-right: none; border-bottom: 1px solid var(--border); padding: 0 8px; gap: 0 4px; }
+    .b-brand { padding: 10px 8px; flex: 1; min-width: 0; }
+    .b-name { font-size: 14px; }
     .b-foot { display: flex; align-items: center; gap: 4px; }
+    .b-nav { order: 3; flex: 1 1 100%; flex-direction: row; padding: 2px 0 6px; gap: 2px; overflow: visible; border-top: 1px solid var(--border-subtle); }
+    .b-item { flex: 1 1 0; min-width: 0; position: relative; flex-direction: column; justify-content: center; gap: 3px; padding: 7px 4px; font-size: 11.5px; text-align: center; line-height: 1.25; }
+    .b-badge { position: absolute; top: 3px; left: calc(50% + 6px); margin-left: 0; }
     .b-langs { padding: 4px; }
     .b-account { border-top: none; padding: 6px 8px; }
     .b-acct-info { display: none; }
     .b-signin { margin: 6px 8px; padding: 8px 14px; }
     .b-main { padding: 22px 18px 40px; }
+  }
+
+  /* Printing a page (the client's seating sheet) prints the page, not the rail. */
+  @media print {
+    .b-shell { min-height: 0; background: none; }
+    .b-frame { display: block; min-height: 0; }
+    .b-sidebar, .b-pwr { display: none; }
+    .b-main-wrap { padding-bottom: 0; }
+    .b-main { max-width: none; padding: 0; }
   }
 </style>

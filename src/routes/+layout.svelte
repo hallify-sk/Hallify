@@ -147,7 +147,9 @@
 			: ''
 	);
 
-	const AUTH_PATHS = ['/app/login', '/app/register', '/app/forgot-password', '/app/reset-password', '/app/invite', '/login'];
+	const orgTheme = $derived(branding?.theme ?? 'slate');
+
+	const AUTH_PATHS = ['/app/login', '/app/register', '/app/forgot-password', '/app/reset-password', '/app/invite', '/login', '/forgot-password', '/reset-password'];
 	const isAuthPage = $derived(AUTH_PATHS.some(p => $page.url.pathname.startsWith(p)));
 	const isLandingPage = $derived(['/', '/pre-prevadzkovatelov', '/priestory'].includes($page.url.pathname));
 	const isPublicHallsPage = $derived($page.url.pathname.startsWith('/halls'));

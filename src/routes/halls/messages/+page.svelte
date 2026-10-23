@@ -1,15 +1,15 @@
 <script lang="ts">
 	import type { PageData } from './$types';
 	import { fmtDate } from '$lib/reservationStatus';
-	import { t as tr } from '$lib/i18n.svelte';
+	import { t as tr, getLocale } from '$lib/i18n.svelte';
+	import { formatDate } from '$lib/format';
 
 	interface Props { data: PageData; }
 	const { data }: Props = $props();
 
-	function fmtWhen(ts: string) {
-		const iso = ts.includes('T') ? ts : ts.replace(' ', 'T') + 'Z';
-		return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
-	}
+	// Stored in UTC without a zone; formatDate reads it as UTC and prints it in the
+	// visitor's language (it was always English: '23 Oct').
+	const fmtWhen = (ts: string) => formatDate(ts, getLocale(), { day: 'numeric', month: 'short' });
 </script>
 
 <svelte:head><title>{tr.nav.messages} – {data.domainOrg.name}</title></svelte:head>
@@ -41,10 +41,10 @@
 								<span class="thread-title">{t.res_title}</span>
 								<span class="thread-when">{fmtWhen(t.updated_at)}</span>
 							</div>
-							<span class="thread-date">{fmtDate(t.event_date)}</span>
+							<span class="thread-date">{fmtDate(t.event_date, getLocale())}</span>
 							<span class="thread-last">{t.last_message ?? tr.bubble.noMessagesYet}</span>
 						</div>
-						{#if t.unread}<span class="dot" title="Unread"></span>{/if}
+						{#if t.unread}<span class="dot" title={tr.bubble.unread} aria-label={tr.bubble.unread}></span>{/if}
 					</a>
 				{/each}
 			</div>

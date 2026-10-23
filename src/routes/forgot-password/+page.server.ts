@@ -5,6 +5,7 @@ import type { UserRow } from '$lib/db/index';
 import { sendPasswordResetEmail, emailServiceDown } from '$lib/email';
 import { st } from '$lib/i18n-server';
 import { rateLimit, rateLimitKey, tooManyAttemptsMessage, RATE_LIMITS } from '$lib/rateLimit';
+import { venueIdentity } from '$lib/site/brand.server';
 
 /** Password recovery for CLIENT accounts, on their own org's bubble.
  *
@@ -14,10 +15,10 @@ import { rateLimit, rateLimitKey, tooManyAttemptsMessage, RATE_LIMITS } from '$l
  *
  *  Scoped to the bubble's org, mirroring how client login works: the same address can
  *  be a client of several venues, and each is a separate account. */
-export const load: PageServerLoad = ({ locals }) => {
+export const load: PageServerLoad = async ({ locals }) => {
   if (!locals.domainOrg) redirect(303, '/app/forgot-password');
   if (locals.user) redirect(303, '/halls');
-  return { domainOrg: locals.domainOrg };
+  return { domainOrg: await venueIdentity(locals.db, locals.domainOrg) };
 };
 
 export const actions: Actions = {
