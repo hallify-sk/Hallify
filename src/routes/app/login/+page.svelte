@@ -49,12 +49,13 @@
 			<label for="email">{t.auth.email}</label>
 			<input id="email" name="email" type="email" placeholder="you@example.com" required autocomplete="email" />
 		</div>
-		<div class="field">
-			<label for="password">
-				{t.auth.password}
-				<a href="/app/forgot-password" class="label-link">{t.forgotPassword.title}</a>
-			</label>
+		<!-- The recovery link comes AFTER the input in the DOM, so Tab goes from the
+		     email straight to the password; the grid still shows it beside the label.
+		     Inside the label it took the Tab stop, and Enter then opened recovery. -->
+		<div class="field field--password">
+			<label for="password">{t.auth.password}</label>
 			<input id="password" name="password" type="password" placeholder="••••••••" required autocomplete="current-password" />
+			<a href="/app/forgot-password" class="label-link">{t.forgotPassword.title}</a>
 		</div>
 		<button type="submit" class="submit-btn">{t.auth.signIn}</button>
 	</form>
@@ -102,6 +103,16 @@
 		font-weight: 600;
 		color: var(--text-muted);
 	}
+
+	.field--password {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) auto;
+		align-items: center;
+		row-gap: 5px;
+	}
+	.field--password label { grid-column: 1; grid-row: 1; }
+	.field--password input { grid-column: 1 / -1; grid-row: 2; }
+	.field--password .label-link { grid-column: 2; grid-row: 1; }
 
 	.label-link {
 		font-size: 11px;

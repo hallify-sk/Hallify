@@ -1,17 +1,43 @@
 import { redirect } from '@sveltejs/kit';
 import { dbAll, dbFirst } from '$lib/db/index';
 import type { ReservationRow } from '$lib/db/index';
+import { hasConsoleAccess } from '$lib/server/access';
 import type { PageServerLoad } from './$types';
+
+/** What /app shows for an organisation member, empty for everyone else. */
+const NO_DASHBOARD = {
+  reservations: [] as ReservationRow[],
+  stats: { total: 0, upcoming: 0, finished: 0, halls: 0 },
+  eventDates: [] as string[],
+};
 
 export const load: PageServerLoad = async ({ locals }) => {
   if (!locals.user) redirect(303, '/app/login');
   if (locals.user.account_type === 'client') redirect(303, '/app/client');
-  // No organisation is now a normal, permanent state: most accounts belong to
-  // people looking for a venue, not running one. This page is an org dashboard,
-  // so they go to the directory instead — NOT to /app/org/new, which would make
-  // creating an organisation feel compulsory. Operators reach that form from the
-  // sign-in page's "list your venue" link, or straight at /app/org/new.
-  if (!locals.currentOrg) redirect(303, '/priestory');
+  // No organisation is a normal, permanent state: most accounts belong to people
+  // looking for a venue, not running one. They used to be sent to /priestory, whose
+  // "go to the app" led straight back here — a loop with no home in it. They get
+  // their own home: the directory, any invitations waiting for them, creating an
+  // organisation as an option rather than a demand, and their profile.
+  if (!locals.currentOrg) {
+    const invites = await dbAll<{ token: string; orgName: string }>(
+      locals.db,
+      `SELECT i.token, o.name AS orgName
+         FROM organization_invites i
+         JOIN organizations o ON o.id = i.org_id
+        WHERE lower(i.email) = lower(?) AND i.accepted_at IS NULL
+          AND datetime(i.expires_at) > datetime('now')
+        ORDER BY i.created_at DESC`,
+      locals.user.email
+    ).catch(() => []);
+    return { ...NO_DASHBOARD, personal: { firstName: locals.user.first_name, invites } };
+  }
+
+  // Owners and anyone else who runs the venue belong on the console dashboard, not on
+  // this personal one, which only lists events they booked themselves and so told an
+  // owner with a full calendar "you have no events yet". Sign-in, the logo and "Home"
+  // all land here, so this one redirect covers them.
+  if (await hasConsoleAccess(locals)) redirect(303, '/app/manage');
 
   const orgId = locals.currentOrg.id;
 
@@ -57,6 +83,7 @@ export const load: PageServerLoad = async ({ locals }) => {
     });
 
   return {
+    personal: null,
     reservations,
     stats: {
       total: Number(stats?.total ?? 0),

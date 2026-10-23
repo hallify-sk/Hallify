@@ -1,7 +1,8 @@
 // Test-only D1 helpers over node:sqlite with the real migrations applied, so SQL the
 // app sends to D1 can be exercised in vitest. Never imported by app code.
 //  - testD1(): a fresh database with every migration, plus a raw exec.
-//  - migratedSqlite(upTo) + d1(sqlite): migrations up to a given number, and a D1
+//  - sqliteWithSchema(extra) / migratedSqlite(upTo) + d1(sqlite): baseline plus named
+//    migrations, or migrations up to a given number, and a D1
 //    binding over a sqlite handle the test keeps (prepare → bind → all/first/run).
 import { DatabaseSync } from 'node:sqlite';
 import { readdirSync, readFileSync } from 'node:fs';
@@ -49,6 +50,15 @@ export function migratedSqlite(upTo = '9999'): DatabaseSync {
 	const sqlite = new DatabaseSync(':memory:');
 	const files = readdirSync(MIGRATIONS).filter((f) => /^\d{4}[a-z]?_.*\.sql$/.test(f) && f.slice(0, 5) <= `${upTo}~`).sort();
 	for (const f of files) sqlite.exec(readFileSync(new URL(f, MIGRATIONS), 'utf8'));
+	return sqlite;
+}
+
+/** A fresh in-memory database with the baseline schema plus any extra migrations. */
+export function sqliteWithSchema(extraMigrations: string[] = []): DatabaseSync {
+	const sqlite = new DatabaseSync(':memory:');
+	for (const name of ['0001_baseline.sql', ...extraMigrations]) {
+		sqlite.exec(readFileSync(new URL(name, MIGRATIONS), 'utf8'));
+	}
 	return sqlite;
 }
 

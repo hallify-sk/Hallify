@@ -5,6 +5,10 @@
   import type { ActionData } from './$types';
   let { form }: { form: ActionData } = $props();
 
+  // Bound so a duplicate-name warning can disappear as soon as the name is edited.
+  let name = $state(form?.name ?? '');
+  const duplicateOf = $derived(form?.duplicate ? String(form.name ?? '').trim().toLowerCase() : null);
+
   onMount(() => saas.signUpCompleted());
 </script>
 
@@ -23,11 +27,21 @@
       <div class="field">
         <label for="name">{t.accountExtra.orgNameLabel}</label>
         <input id="name" name="name" type="text" required minlength="2" maxlength="80"
-               placeholder={t.accountExtra.orgNamePlaceholder} value={form?.name ?? ''} />
+               placeholder={t.accountExtra.orgNamePlaceholder} bind:value={name} />
       </div>
-      <button type="submit" class="btn-action" style="width:100%;margin-top:.5rem">
-        {t.accountExtra.createOrgTitle}
-      </button>
+      {#if duplicateOf !== null && duplicateOf === name.trim().toLowerCase()}
+        <!-- Shown only while the name is still the one the server flagged; editing it
+             goes back to the ordinary button. -->
+        <div class="alert-warning" role="alert">{t.accountExtra.orgDuplicateWarning}</div>
+        <input type="hidden" name="confirmDuplicate" value="1" />
+        <button type="submit" class="btn-action" style="width:100%;margin-top:.5rem">
+          {t.accountExtra.orgDuplicateConfirm}
+        </button>
+      {:else}
+        <button type="submit" class="btn-action" style="width:100%;margin-top:.5rem">
+          {t.accountExtra.createOrgTitle}
+        </button>
+      {/if}
     </form>
   </section>
 </div>

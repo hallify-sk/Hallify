@@ -4,6 +4,8 @@ import { dbFirst, dbRun } from '$lib/db/index';
 import { createSession } from '$lib/auth';
 import { st } from '$lib/i18n-server';
 import { rateLimit, rateLimitKey, tooManyAttemptsMessage, RATE_LIMITS } from '$lib/rateLimit';
+import { isValidEmail, normaliseEmail } from '$lib/server/account';
+import { acceptedTerms, recordLegalAcceptance } from '$lib/site/legal-acceptance';
 import type { Actions, PageServerLoad } from './$types';
 
 /** Where a venue-seeker lands once the account exists — Hallify is a discovery
@@ -55,33 +57,45 @@ const formShape = { firstName: '', lastName: '', email: '', intent: 'guest' as R
 export const actions: Actions = {
 	default: async ({ request, cookies, locals, getClientAddress }) => {
 		const data = await request.formData();
-		const email = String(data.get('email') ?? '').toLowerCase().trim();
+		const email = normaliseEmail(data.get('email'));
 		const password = String(data.get('password') ?? '');
 		const firstName = String(data.get('firstName') ?? '').trim();
 		const lastName = String(data.get('lastName') ?? '').trim();
 		const intent = readIntent(data.get('intent'));
 		const next = safeNext(data.get('redirect'));
 		const entered = { ...formShape, firstName, lastName, email, intent };
+		const errors = st(locals.locale).serverErrors;
 
 		if (!email || !password || !firstName || !lastName) {
-			return fail(400, { ...entered, error: st(locals.locale).serverErrors.allFieldsRequired });
+			return fail(400, { ...entered, error: errors.allFieldsRequired });
+		}
+		// The browser's type="email" is a convenience; a posted form need not have it.
+		if (!isValidEmail(email)) {
+			return fail(400, { ...entered, error: errors.enterValidEmail });
+		}
+		if (password.length < 6) {
+			return fail(400, { ...entered, error: errors.passwordMin6 });
+		}
+		// The Terms and the Privacy Policy are linked on the form; agreeing is required.
+		if (!acceptedTerms(data)) {
+			return fail(400, { ...entered, error: st(locals.locale).authPages.registerTermsRequired });
 		}
 
+		// Counted once the form is valid: a typo in the form is not an attempt to create
+		// an account, and used to eat into the hourly allowance. Still before the
+		// existence check below, so the limit also caps probing which addresses exist.
 		const rl = await rateLimit(locals.db, rateLimitKey('register', getClientAddress()), RATE_LIMITS.register);
 		if (!rl.ok) {
 			return fail(429, {
 				...entered,
-				error: tooManyAttemptsMessage(st(locals.locale).serverErrors.tooManyAttempts, rl.retryAfterMinutes),
+				error: tooManyAttemptsMessage(errors.tooManyAttempts, rl.retryAfterMinutes),
 			});
-		}
-		if (password.length < 6) {
-			return fail(400, { ...entered, error: st(locals.locale).serverErrors.passwordMin6 });
 		}
 
 		// org/platform users are globally unique by email (org_id IS NULL).
 		const existing = await dbFirst<{ id: string }>(locals.db, 'SELECT id FROM users WHERE email = ? AND org_id IS NULL', email);
 		if (existing) {
-			return fail(400, { ...entered, error: st(locals.locale).serverErrors.accountEmailExists });
+			return fail(400, { ...entered, error: errors.accountEmailExists });
 		}
 
 		const countRow = await dbFirst<{ count: number }>(locals.db, 'SELECT COUNT(*) AS count FROM users WHERE org_id IS NULL');
@@ -95,6 +109,7 @@ export const actions: Actions = {
 			"INSERT INTO users (id, email, password_hash, first_name, last_name, role, account_type) VALUES (?, ?, ?, ?, ?, ?, 'organization')",
 			userId, email, hash, firstName, lastName, role
 		);
+		await recordLegalAcceptance(locals.db, { userId, context: 'register' });
 
 		await createSession(userId, cookies, locals.db);
 		// An operator asked to set their venue up now, so we hand them the org

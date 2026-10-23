@@ -25,7 +25,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
   if (!locals.user) redirect(303, '/app/login');
   const user = locals.user;
   const org = locals.currentOrg;
-  if (!org) redirect(303, '/app/org/new');
+  if (!org) redirect(303, '/app/'); // home offers creating an org; the form itself felt compulsory
 
   const channelId = url.searchParams.get('c');
   const ticketId  = url.searchParams.get('t');

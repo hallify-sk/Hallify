@@ -17,15 +17,19 @@ export interface CleanupResult {
   error?: string;
 }
 
-/** Each entry is independent: one failing must not stop the rest. */
+/** Each entry is independent: one failing must not stop the rest.
+ *
+ *  Sessions, resets and invites store expires_at as an ISO string with a 'T' and a 'Z';
+ *  compared as text with datetime('now') ('YYYY-MM-DD HH:MM:SS') a row expiring today
+ *  looked alive until midnight UTC. Those columns go through datetime() first. */
 const TASKS: { task: string; sql: string }[] = [
   // Sessions carry a 30-day TTL; getSessionUser already ignores expired ones.
-  { task: 'sessions', sql: "DELETE FROM sessions WHERE expires_at <= datetime('now')" },
+  { task: 'sessions', sql: "DELETE FROM sessions WHERE datetime(expires_at) <= datetime('now')" },
   // One-hour reset tokens, and any already consumed.
-  { task: 'password_resets', sql: "DELETE FROM password_resets WHERE expires_at <= datetime('now') OR used = 1" },
+  { task: 'password_resets', sql: "DELETE FROM password_resets WHERE datetime(expires_at) <= datetime('now') OR used = 1" },
   // 14-day invites, plus accepted ones that no longer serve a purpose.
-  { task: 'organization_invites', sql: "DELETE FROM organization_invites WHERE expires_at <= datetime('now') OR accepted_at IS NOT NULL" },
-  { task: 'reservation_invites', sql: "DELETE FROM reservation_invites WHERE expires_at <= datetime('now')" },
+  { task: 'organization_invites', sql: "DELETE FROM organization_invites WHERE datetime(expires_at) <= datetime('now') OR accepted_at IS NOT NULL" },
+  { task: 'reservation_invites', sql: "DELETE FROM reservation_invites WHERE datetime(expires_at) <= datetime('now')" },
   // Holds are swept inline too, but a stuck request could leave strays.
   { task: 'reservation_holds', sql: "DELETE FROM reservation_holds WHERE expires_at <= datetime('now')" },
   // Rate-limit windows are minutes/hours long; anything a day old is dead weight.

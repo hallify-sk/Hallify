@@ -1,7 +1,7 @@
 import { redirect, fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import { dbFirst, dbRun } from '$lib/db/index';
-import { isReservedSubdomain } from '$lib/reserved-subdomains';
+import { uniqueOrgSlug } from '$lib/server/org-slug';
 import { seedBuiltInRoles } from '$lib/server/people';
 import { st } from '$lib/i18n-server';
 
@@ -31,14 +31,6 @@ export const load: PageServerLoad = ({ locals }) => {
   return {};
 };
 
-function toSlug(name: string): string {
-  return name
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 48);
-}
-
 export const actions: Actions = {
   default: async ({ request, locals, cookies }) => {
     const away = orgFormGuard(locals);
@@ -51,27 +43,32 @@ export const actions: Actions = {
     const name = (data.get('name') as string)?.trim();
 
     if (!name || name.length < 2) {
-      return fail(400, { name, error: st(locals.locale).serverErrors.orgNameMin2 });
+      return fail(400, { name, duplicate: false, error: st(locals.locale).serverErrors.orgNameMin2 });
     }
     // The input carries maxlength="80"; a posted form need not.
     if (name.length > 80) {
-      return fail(400, { name, error: st(locals.locale).serverErrors.orgNameMax80 });
+      return fail(400, { name, duplicate: false, error: st(locals.locale).serverErrors.orgNameMax80 });
     }
 
-    // Derive a unique slug. The slug doubles as the org's free subdomain
-    // (<slug>.hallify.sk), so it must avoid reserved labels and collisions.
-    const baseSlug = toSlug(name) || 'org';
-    let slug = baseSlug;
-    let attempt = 1;
-    while (true) {
-      const exists = await dbFirst<{ id: string }>(
+    // Several organisations with one name are allowed (two branches of a chain), but
+    // an account that already has one by this name is far more likely to have pressed
+    // the button twice or forgotten. Ask once; the second submit says "yes, another".
+    if (data.get('confirmDuplicate') !== '1') {
+      const same = await dbFirst<{ id: string }>(
         locals.db,
-        'SELECT id FROM organizations WHERE slug = ?',
-        slug
+        `SELECT o.id FROM organizations o
+           JOIN organization_members m ON m.org_id = o.id
+          WHERE m.user_id = ? AND lower(trim(o.name)) = lower(?)
+          LIMIT 1`,
+        userId,
+        name
       );
-      if (!exists && !isReservedSubdomain(slug)) break;
-      slug = `${baseSlug}-${++attempt}`;
+      if (same) return fail(409, { name, duplicate: true, error: '' });
     }
+
+    // The slug doubles as the org's free subdomain (<slug>.hallify.sk): Slovak letters
+    // transliterated, reserved labels avoided, never one in use or once used.
+    const slug = await uniqueOrgSlug(locals.db, name);
 
     const orgId = crypto.randomUUID();
 

@@ -29,11 +29,12 @@ export interface RateLimitRule {
 /** Tuned per surface. Generous enough for a person who mistypes, tight enough that
  *  automated guessing is pointless. */
 export const RATE_LIMITS = {
-  /** Sign-in attempts from one IP. */
+  /** Failed sign-in attempts from one IP (successful ones are not counted). */
   loginIp:          { limit: 20, windowSeconds: 15 * 60 },
-  /** Sign-in attempts against one account — stops slow credential stuffing. */
+  /** Failed sign-in attempts against one account — stops slow credential stuffing.
+      Also guards the current-password check in the profile. */
   loginEmail:       { limit: 8,  windowSeconds: 15 * 60 },
-  /** Account creation from one IP. */
+  /** Account creations from one IP, counted once the form is valid. */
   register:         { limit: 5,  windowSeconds: 60 * 60 },
   /** Address lookups from one IP. Nominatim is a donated service and asks callers to
       stay near one request a second; this also stops the endpoint being used as a
@@ -82,20 +83,47 @@ export async function rateLimit(
     }
 
     if (row.count <= rule.limit) return allow();
-
-    // window_start is 'YYYY-MM-DD HH:MM:SS' UTC from SQLite's datetime().
-    const startedAt = Date.parse(row.window_start.replace(' ', 'T') + 'Z');
-    const elapsed = Number.isNaN(startedAt) ? 0 : Math.floor((Date.now() - startedAt) / 1000);
-    const retryAfter = Math.max(1, rule.windowSeconds - elapsed);
-
-    return {
-      ok: false,
-      retryAfter,
-      retryAfterMinutes: Math.max(1, Math.ceil(retryAfter / 60)),
-    };
+    return blocked(row.window_start, rule);
   } catch {
     return allow();
   }
+}
+
+/** Is `key` already over its limit? Reads the counter without adding to it.
+ *
+ *  For surfaces that count only failures (sign-in): check this before the attempt,
+ *  and call `rateLimit` only when the attempt fails. A person who signs in correctly
+ *  never uses up their allowance, while guessing still stops after `limit` misses.
+ *  Never throws, for the same reason `rateLimit` doesn't. */
+export async function rateLimitStatus(
+  db: D1Database,
+  key: string,
+  rule: RateLimitRule
+): Promise<RateLimitResult> {
+  try {
+    const row = await dbFirst<{ count: number; window_start: string }>(
+      db,
+      `SELECT count, window_start FROM rate_limits WHERE key = ? AND window_start > datetime('now', ?)`,
+      key, `-${rule.windowSeconds} seconds`
+    );
+    if (!row || row.count < rule.limit) return allow();
+    return blocked(row.window_start, rule);
+  } catch {
+    return allow();
+  }
+}
+
+/** The refusal for a window that started at `windowStart`. */
+function blocked(windowStart: string, rule: RateLimitRule): RateLimitResult {
+  // window_start is 'YYYY-MM-DD HH:MM:SS' UTC from SQLite's datetime().
+  const startedAt = Date.parse(windowStart.replace(' ', 'T') + 'Z');
+  const elapsed = Number.isNaN(startedAt) ? 0 : Math.floor((Date.now() - startedAt) / 1000);
+  const retryAfter = Math.max(1, rule.windowSeconds - elapsed);
+  return {
+    ok: false,
+    retryAfter,
+    retryAfterMinutes: Math.max(1, Math.ceil(retryAfter / 60)),
+  };
 }
 
 function allow(): RateLimitResult {

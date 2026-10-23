@@ -1,6 +1,6 @@
 import type { PageServerLoad, Actions } from './$types';
 import { fail, redirect } from '@sveltejs/kit';
-import { dbFirst, dbRun } from '$lib/db/index';
+import { completePasswordReset, findPasswordResetRow } from '$lib/server/account';
 import { st } from '$lib/i18n-server';
 import bcrypt from 'bcryptjs';
 import { rateLimit, rateLimitKey, tooManyAttemptsMessage, RATE_LIMITS } from '$lib/rateLimit';
@@ -12,14 +12,8 @@ import { venueIdentity } from '$lib/site/brand.server';
  *  separate client accounts at several venues, so a token issued by one venue must not
  *  be redeemable on another's domain. */
 async function loadReset(db: App.Locals['db'], token: string, orgId: string) {
-  return dbFirst<{ id: string; user_id: string; expires_at: string; used: number }>(
-    db,
-    `SELECT pr.id, pr.user_id, pr.expires_at, pr.used
-     FROM password_resets pr
-     JOIN users u ON u.id = pr.user_id
-     WHERE pr.token = ? AND u.org_id = ? AND u.account_type = 'client'`,
-    token, orgId
-  );
+  // Looked up by the token's hash (tokens are no longer stored as mailed).
+  return findPasswordResetRow(db, token, { kind: 'client', orgId });
 }
 
 export const load: PageServerLoad = async ({ params, locals }) => {
@@ -62,8 +56,10 @@ export const actions: Actions = {
     }
 
     const hash = await bcrypt.hash(password, 12);
-    await dbRun(locals.db, 'UPDATE users SET password_hash = ? WHERE id = ?', hash, reset.user_id);
-    await dbRun(locals.db, 'UPDATE password_resets SET used = 1 WHERE id = ?', reset.id);
+    // Spends every other link for the account and signs it out everywhere.
+    if (!(await completePasswordReset(locals.db, reset, hash))) {
+      return fail(400, { error: st(locals.locale).serverErrors.invalidOrExpiredResetLink });
+    }
 
     redirect(303, '/login?reset=success');
   },

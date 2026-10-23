@@ -18,20 +18,20 @@
     </div>
 
     <div class="brand-body">
-      <h2 class="brand-headline brand-anim" style="animation-delay: 80ms">Venue management<br />for modern teams.</h2>
+      <h2 class="brand-headline brand-anim" style="animation-delay: 80ms">{t.auth.brandHeadline1}<br />{t.auth.brandHeadline2}</h2>
 
       <ul class="brand-features">
         <li class="brand-anim" style="animation-delay: 200ms">
           <span class="icon-tile"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg></span>
-          Manage every hall, seat, and layout
+          {t.auth.brandFeature1}
         </li>
         <li class="brand-anim" style="animation-delay: 280ms">
           <span class="icon-tile"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg></span>
-          Streamline bookings and seating
+          {t.auth.brandFeature2}
         </li>
         <li class="brand-anim" style="animation-delay: 360ms">
           <span class="icon-tile"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg></span>
-          Collaborate across your organization
+          {t.auth.brandFeature3}
         </li>
       </ul>
     </div>

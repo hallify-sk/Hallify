@@ -43,7 +43,10 @@ export async function getSessionUser(
   const sessionId = cookies.get(COOKIE);
   if (!sessionId) return null;
 
-  const row = await dbFirst<SessionUser & { current_org_id: string | null }>(db, 'SELECT u.id, u.email, u.first_name, u.last_name, u.is_platform_admin, u.account_type, u.org_id, s.current_org_id FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.id = ? AND s.expires_at > datetime(\'now\')', sessionId);
+  // expires_at is an ISO string ('2026-11-22T10:00:00.000Z') and datetime('now') is
+  // '2026-11-22 10:00:00'. Compared as text, 'T' sorts after ' ', so on its last day
+  // a session stayed valid until midnight UTC. datetime() puts both in one format.
+  const row = await dbFirst<SessionUser & { current_org_id: string | null }>(db, 'SELECT u.id, u.email, u.first_name, u.last_name, u.is_platform_admin, u.account_type, u.org_id, s.current_org_id FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.id = ? AND datetime(s.expires_at) > datetime(\'now\')', sessionId);
   if (!row) return null;
 
   // Tenant isolation (defense-in-depth on top of host-scoped cookies):
