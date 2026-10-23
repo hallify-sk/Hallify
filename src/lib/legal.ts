@@ -415,6 +415,7 @@ const privacySk: LegalDoc = {
         { p: 'Analytické cookies (len s vaším súhlasom): používame Google Tag Manager a Google Analytics, aby sme videli, ako sa služba používa a kde sa používatelia strácajú. Bez vášho súhlasu sa nenačítajú vôbec — nejde len o ich vypnutie, skript sa vôbec nespustí. Súhlas môžete kedykoľvek zmeniť alebo odvolať cez odkaz „Nastavenia cookies“ v pätičke stránky — rovnako jednoducho, ako ste ho udelili.' },
         { p: 'Na verejných stránkach priestorov sa môžu načítať dva kontajnery: náš a vlastný kontajner priestoru. Lišta súhlasu na to upozorňuje a vaša voľba platí pre oba. Ktorýkoľvek z nich môže bežať cez serverový kontajner (server-side Google Tag Manager) na doméne jeho prevádzkovateľa — údaje potom najprv prijme tento server a ten rozhodne, čo postúpi spoločnosti Google.' },
         { p: 'Analytické a marketingové cookies sú samostatné kategórie — môžete povoliť len jednu z nich. Do analytiky neposielame e-maily, mená ani obsah rezervácií — len pseudonymné identifikátory a údaje ako typ účtu, rola a plán, a pri návšteve stránky priestoru aj identifikátor priestoru a to, či návšteva prišla z Hallify.' },
+        { p: 'Marketingové cookies (len s vaším súhlasom s marketingovými cookies): používame Google Ads od spoločnosti Google Ireland Limited na meranie konverzií (či návšteva z reklamy skončila registráciou alebo rezerváciou) a na remarketing (zobrazenie reklám Hallify ľuďom, ktorí našu stránku už navštívili). Google na to používa cookies a identifikátory prehliadača a môže údaje spracúvať aj v USA na základe rámca EÚ – USA na ochranu osobných údajov (Data Privacy Framework). Bez súhlasu s marketingovými cookies sa nič z toho nenačíta. Súhlas môžete kedykoľvek odvolať cez „Nastavenia cookies“ v pätičke; reklamy od Google môžete obmedziť aj na adssettings.google.com.' },
       ],
     },
     {
@@ -428,6 +429,7 @@ const privacySk: LegalDoc = {
           'Google Ireland Limited — Google Tag Manager a Google Analytics, len ak ste udelili súhlas s analytickými cookies.',
           'OpenAI, L.L.C. — AI asistent, len ak ho organizácia používa. Posielame mu obsah, s ktorým asistent práve pracuje (napr. údaje o sále alebo rezervácii); OpenAI ho podľa svojich podmienok pre API nepoužíva na trénovanie modelov.',
         ] },
+        { p: 'Mapy: mapy na stránkach (napríklad v zozname priestorov) načítavajú mapové dlaždice priamo zo serverov OpenStreetMap, ktoré prevádzkuje OpenStreetMap Foundation (Spojené kráľovstvo). Pri tom váš prehliadač odošle OpenStreetMap Foundation svoju IP adresu a technické údaje prehliadača, bez ktorých sa mapa nedá zobraziť. OpenStreetMap Foundation ich spracúva ako samostatný prevádzkovateľ podľa svojich zásad (osmfoundation.org/wiki/Privacy_Policy). Pre Spojené kráľovstvo platí rozhodnutie Európskej komisie o primeranej ochrane osobných údajov.' },
         { p: 'Prenos mimo EÚ/EHP prebieha na základe štandardných zmluvných doložiek alebo iného vhodného právneho mechanizmu. Údaje inak neposkytujeme tretím osobám, s výnimkou zákonnej povinnosti.' },
       ],
     },
@@ -543,6 +545,7 @@ const privacyEn: LegalDoc = {
         { p: 'Analytics cookies (only with your consent): we use Google Tag Manager and Google Analytics to understand how the service is used and where people get stuck. Without your consent they are not loaded at all — the script never runs, rather than merely being disabled. You can change or withdraw consent at any time via the “Cookie settings” link in the page footer — as easily as you gave it.' },
         { p: 'On venues’ public pages two containers may load: ours and the venue’s own. The consent banner says so, and your choice applies to both. Either may run through a server container (server-side Google Tag Manager) on its owner’s domain — the data then reaches that server first, and it decides what is passed on to Google.' },
         { p: 'Analytics and marketing are separate categories — you can allow one without the other. We never send emails, names or reservation content to analytics — only pseudonymous identifiers and attributes such as account type, role and plan, and on a venue’s page the venue’s identifier and whether the visit came from Hallify.' },
+        { p: 'Marketing cookies (only with your consent to marketing cookies): we use Google Ads from Google Ireland Limited to measure conversions (whether a visit from an ad ended in a sign-up or booking) and for remarketing (showing Hallify ads to people who have visited our site before). Google uses cookies and browser identifiers for this and may process the data in the USA under the EU–US Data Privacy Framework. Without consent to marketing cookies none of this is loaded. You can withdraw consent at any time via “Cookie settings” in the footer, and limit Google’s ads at adssettings.google.com.' },
       ],
     },
     {
@@ -556,6 +559,7 @@ const privacyEn: LegalDoc = {
           'Google Ireland Limited — Google Tag Manager and Google Analytics, only where analytics consent has been given.',
           'OpenAI, L.L.C. — the AI assistant, only where an organization uses it. It receives the content the assistant is working with (for example hall or reservation details); under its API terms OpenAI does not use it to train models.',
         ] },
+        { p: 'Maps: the maps on our pages (for example in the venue directory) load map tiles directly from OpenStreetMap servers, run by the OpenStreetMap Foundation (United Kingdom). Your browser therefore sends the OpenStreetMap Foundation its IP address and the technical browser details needed to show the map. The OpenStreetMap Foundation processes them as an independent controller under its own policy (osmfoundation.org/wiki/Privacy_Policy). The United Kingdom is covered by a European Commission adequacy decision.' },
         { p: 'Any transfer outside the EU/EEA relies on Standard Contractual Clauses or another valid mechanism. We do not otherwise disclose data to third parties except where legally required.' },
       ],
     },
