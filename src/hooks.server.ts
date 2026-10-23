@@ -9,6 +9,7 @@ import type { PlanId } from '$lib/plans';
 import { env } from '$env/dynamic/private';
 import { runInRequestScope, keepAlive } from '$lib/server/background';
 import { syncUserLocale } from '$lib/server/user-locale';
+import { suspendedResponse } from '$lib/server/suspended-page';
 import { canonicalRedirect, needsOriginCheck, originAllowed, redirectStatus } from '$lib/server/edge';
 import { sequence } from '@sveltejs/kit/hooks';
 import type { Handle } from '@sveltejs/kit';
@@ -39,8 +40,9 @@ async function loadPlatformBranding(db: D1Database): Promise<Branding> {
 }
 
 /** Load org context (org info + user's role + subscription) for a given org + user.
- *  Platform admins who are NOT members can still load any non-suspended org with a
- *  synthetic owner role ("view as" / impersonation), flagged via `impersonated`. */
+ *  Platform admins who are NOT members can still load any org, suspended ones
+ *  included (so "view as" can inspect what was suspended), with a synthetic owner
+ *  role ("view as" / impersonation), flagged via `impersonated`. */
 async function loadOrgContext(orgId: string, userId: string, db: D1Database, isPlatformAdmin = false): Promise<OrgContext | null> {
   const r = await dbFirst<{
     org_id: string; org_name: string; org_slug: string; org_logo_url: string | null;
@@ -73,7 +75,7 @@ async function loadOrgContext(orgId: string, userId: string, db: D1Database, isP
       org_id: string; org_name: string; org_slug: string; org_logo_url: string | null;
       sub_plan: string | null; sub_status: string | null; stripe_customer_id: string | null; current_period_end: string | null;
     }>(db,
-      'SELECT o.id AS org_id, o.name AS org_name, o.slug AS org_slug, o.logo_url AS org_logo_url, s.plan AS sub_plan, s.status AS sub_status, s.stripe_customer_id, s.current_period_end FROM organizations o LEFT JOIN subscriptions s ON s.org_id = o.id WHERE o.id = ? AND o.suspended_at IS NULL',
+      'SELECT o.id AS org_id, o.name AS org_name, o.slug AS org_slug, o.logo_url AS org_logo_url, s.plan AS sub_plan, s.status AS sub_status, s.stripe_customer_id, s.current_period_end FROM organizations o LEFT JOIN subscriptions s ON s.org_id = o.id WHERE o.id = ?',
       orgId);
     if (p) {
       return {
@@ -128,6 +130,25 @@ async function loadOrgLanguage(orgId: string, db: D1Database): Promise<'sk' | 'e
 }
 
 type HandleArgs = Parameters<Handle>[0];
+
+/** The language a visitor explicitly chose (?lang or the cookie), if any. */
+function chosenLocale(event: HandleArgs['event']): 'sk' | 'en' | null {
+  const param = event.url.searchParams.get('lang');
+  if (isLocale(param)) return param;
+  const cookie = event.cookies.get('hallify-lang');
+  return isLocale(cookie) ? cookie : null;
+}
+
+/** The marketing site's origin, keeping a dev port. */
+function apexOrigin(url: URL, appDomain: string): string {
+  const port = url.port ? `:${url.port}` : '';
+  return `${url.protocol}//${appDomain}${port}`;
+}
+
+/** Console pages that need a current organisation (where a suspended owner lands). */
+function isConsolePath(pathname: string): boolean {
+  return pathname === '/app' || pathname === '/app/' || pathname === '/app/manage' || pathname.startsWith('/app/manage/');
+}
 
 /** Resolve the request locale (?lang > 'hallify-lang' cookie > org default > 'sk'),
  *  expose it on locals, persist an explicit ?lang choice as a cookie, and stamp the
@@ -205,13 +226,16 @@ const appHandle: Handle = async ({ event, resolve }) => {
   // but no such org exists — we bounce these to the apex rather than serving the
   // marketing app on an unclaimed subdomain.
   let unmatchedSubdomain = false;
+  // The venue exists but is suspended: visitors get an explanation, not a bounce.
+  let suspendedVenue: string | null = null;
   try {
     if (host.endsWith(`.${appDomain}`)) {
       // Free bubble: <slug>.hallify.sk — single-level, non-reserved label.
       const sub = host.slice(0, -(appDomain.length + 1));
       if (sub && !sub.includes('.') && !isReservedSubdomain(sub)) {
-        const r = await dbFirst<{ id: string; name: string; slug: string; logo_url: string | null }>(db, 'SELECT id, name, slug, logo_url FROM organizations WHERE slug = ? AND suspended_at IS NULL LIMIT 1', sub);
-        if (r) domainOrg = { id: r.id, name: r.name, slug: r.slug, logoUrl: r.logo_url };
+        const r = await dbFirst<{ id: string; name: string; slug: string; logo_url: string | null; suspended_at: string | null }>(db, 'SELECT id, name, slug, logo_url, suspended_at FROM organizations WHERE slug = ? LIMIT 1', sub);
+        if (r?.suspended_at) suspendedVenue = r.name;
+        else if (r) domainOrg = { id: r.id, name: r.name, slug: r.slug, logoUrl: r.logo_url };
         else unmatchedSubdomain = true;
       }
     } else if (
@@ -225,14 +249,20 @@ const appHandle: Handle = async ({ event, resolve }) => {
       // Paid bubble: external custom domain. Only resolves while the org's plan
       // includes custom domains — a downgrade quietly stops serving it (the domain
       // config is kept and resumes on re-upgrade).
-      const r = await dbFirst<{ org_id: string; name: string; slug: string; logo_url: string | null; plan: string | null }>(db,
-        'SELECT cd.org_id, o.name, o.slug, o.logo_url, s.plan FROM custom_domains cd JOIN organizations o ON o.id = cd.org_id LEFT JOIN subscriptions s ON s.org_id = cd.org_id WHERE cd.domain = ? LIMIT 1', host);
+      const r = await dbFirst<{ org_id: string; name: string; slug: string; logo_url: string | null; plan: string | null; suspended_at: string | null }>(db,
+        'SELECT cd.org_id, o.name, o.slug, o.logo_url, o.suspended_at, s.plan FROM custom_domains cd JOIN organizations o ON o.id = cd.org_id LEFT JOIN subscriptions s ON s.org_id = cd.org_id WHERE cd.domain = ? LIMIT 1', host);
       if (r && getPlan((r.plan ?? 'free') as PlanId).limits.customDomains) {
-        domainOrg = { id: r.org_id, name: r.name, slug: r.slug, logoUrl: r.logo_url };
+        // A suspended venue's custom domain used to keep serving the site.
+        if (r.suspended_at) suspendedVenue = r.name;
+        else domainOrg = { id: r.org_id, name: r.name, slug: r.slug, logoUrl: r.logo_url };
       }
     }
   } catch { /* DB unavailable — serve without domain context */ }
   event.locals.domainOrg = domainOrg;
+
+  if (suspendedVenue) {
+    return suspendedResponse('venue', suspendedVenue, chosenLocale(event) ?? 'sk', apexOrigin(event.url, appDomain));
+  }
 
   // Unclaimed org subdomain → send to the apex instead of serving the app here.
   if (unmatchedSubdomain) {
@@ -313,6 +343,28 @@ const appHandle: Handle = async ({ event, resolve }) => {
 
   if (orgId) {
     event.locals.currentOrg = await loadOrgContext(orgId, session.id, db, !!session.is_platform_admin);
+
+    // Their organisation is suspended. Move them to another organisation of theirs if
+    // they have one; otherwise the console explains the suspension instead of
+    // falling through to "create an organisation".
+    if (!event.locals.currentOrg) {
+      const suspended = await dbFirst<{ name: string }>(db,
+        `SELECT o.name FROM organizations o JOIN organization_members m ON m.org_id = o.id AND m.user_id = ?
+          WHERE o.id = ? AND o.suspended_at IS NOT NULL`, session.id, orgId);
+      if (suspended) {
+        const other = await dbFirst<{ org_id: string }>(db,
+          `SELECT m.org_id FROM organization_members m JOIN organizations o ON o.id = m.org_id
+            WHERE m.user_id = ? AND o.suspended_at IS NULL ORDER BY m.joined_at LIMIT 1`, session.id);
+        if (other) {
+          orgId = other.org_id;
+          await switchOrg(session.sessionId, orgId, db);
+          event.locals.currentOrg = await loadOrgContext(orgId, session.id, db, !!session.is_platform_admin);
+        } else if (isConsolePath(event.url.pathname)) {
+          event.locals.locale = chosenLocale(event) ?? 'sk';
+          return suspendedResponse('console', suspended.name, event.locals.locale, apexOrigin(event.url, appDomain));
+        }
+      }
+    }
     event.locals.branding = event.locals.currentOrg
       ? await loadOrgBranding(orgId, platformBranding, db)
       : platformBranding;
