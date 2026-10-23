@@ -1,5 +1,10 @@
 import { dbAll, dbFirst, dbRun, fromJson, fromJsonArr, toJson } from '$lib/db/index';
 import { geocodeAddress } from '$lib/server/geocode';
+import { normaliseWebsite } from '$lib/safe-url';
+import { completeOpeningHours, DAY_KEYS, type DayHours } from '$lib/opening-hours';
+import { isOwnHallImage } from '$lib/server/hall-images';
+
+export { DAY_KEYS, type DayHours };
 
 /**
  * A hall's public profile — the part the assistant may propose changes to.
@@ -16,10 +21,6 @@ export const BUILT_IN_AMENITIES = [
 	'parking', 'catering', 'av', 'wifi', 'ac',
 	'accessible', 'outdoor', 'stage', 'dancefloor', 'bar'
 ] as const;
-
-export const DAY_KEYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const;
-
-export interface DayHours { open: boolean; from: string; to: string }
 
 export interface HallPatch {
 	name?: string;
@@ -44,9 +45,6 @@ export const HALL_FIELDS: HallField[] = [
 	'cover_image_url', 'gallery_images'
 ];
 
-/** Our own stored photo: what the upload endpoint and importImage produce. */
-const OWN_IMAGE = /^\/uploads\/halls\/[\w-]+\/[\w.-]+\.(jpg|png|webp|gif)$/;
-
 type Db = App.Locals['db'];
 
 /** Amenity keys this organisation may use: the built-ins plus its own. */
@@ -61,6 +59,19 @@ export async function allowedAmenityKeys(db: Db, orgId: string): Promise<string[
 }
 
 const TIME = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+/**
+ * A venue's website as typed ("www.reduta.sk", "https://reduta.sk/sala"), as an
+ * http(s) URL a page may link to, or null. Anything else — javascript:, data:, an
+ * internal address — is refused: the venue site renders it as a link (B14).
+ */
+export function hallWebsite(raw: unknown): string | null {
+	const url = normaliseWebsite(String(raw ?? '').trim().slice(0, 300));
+	if (!url) return null;
+	const u = new URL(url);
+	// "https://reduta.sk/" reads as "https://reduta.sk"; a path, query or hash stays.
+	return u.pathname === '/' && !u.search && !u.hash ? url.replace(/\/$/, '') : url;
+}
 
 /**
  * Check a proposed patch with the same rules the hall form applies, and normalise
@@ -110,14 +121,9 @@ export async function validateHallPatch(
 	}
 	const site = text('contact_website', 300);
 	if (site !== undefined) {
-		const withScheme = /^https?:\/\//i.test(site) ? site : `https://${site}`;
-		try {
-			const u = new URL(withScheme);
-			if (!/^https?:$/.test(u.protocol) || !u.hostname.includes('.')) throw new Error();
-			patch.contact_website = u.toString().replace(/\/$/, '');
-		} catch {
-			return { ok: false, error: 'That website address does not look valid.' };
-		}
+		const url = hallWebsite(site);
+		if (!url) return { ok: false, error: 'That website address does not look valid.' };
+		patch.contact_website = url;
 	}
 
 	if (Array.isArray(raw.amenities)) {
@@ -140,12 +146,12 @@ export async function validateHallPatch(
 	}
 
 	if (typeof raw.cover_image_url === 'string' && raw.cover_image_url) {
-		if (!OWN_IMAGE.test(raw.cover_image_url)) return { ok: false, error: 'The cover photo must be imported first.' };
+		if (!isOwnHallImage(raw.cover_image_url)) return { ok: false, error: 'The cover photo must be imported first.' };
 		patch.cover_image_url = raw.cover_image_url;
 	}
 	if (Array.isArray(raw.gallery_images)) {
 		const gallery = [...new Set(raw.gallery_images.map(String))];
-		if (gallery.some((u) => !OWN_IMAGE.test(u))) return { ok: false, error: 'Gallery photos must be imported first.' };
+		if (gallery.some((u) => !isOwnHallImage(u))) return { ok: false, error: 'Gallery photos must be imported first.' };
 		const max = opts.maxGallery ?? -1;
 		if (max !== -1 && gallery.length > max) return { ok: false, error: `The plan allows up to ${max} gallery photos.` };
 		patch.gallery_images = gallery;
@@ -204,7 +210,10 @@ export async function applyHallPatch(db: Db, orgId: string, hall: HallProfileRow
 	const params: unknown[] = [];
 	for (const field of HALL_FIELDS) {
 		if (!(field in patch)) continue;
-		const v = patch[field];
+		// A patch may name only some days; the row always holds all seven (B74).
+		const v = field === 'opening_hours'
+			? completeOpeningHours({ ...(fromJson<Record<string, DayHours>>(hall.opening_hours) ?? {}), ...patch.opening_hours })
+			: patch[field];
 		sets.push(`${field} = ?`);
 		params.push(field === 'amenities' || field === 'opening_hours' || field === 'gallery_images' ? toJson(v) : v);
 	}

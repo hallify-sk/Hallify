@@ -53,6 +53,9 @@ const ALL_EVENTS = [
   'ticket.reply',
   'reservation.new',
   'reservation.status_changed',
+  'hall.archived',
+  'hall.restored',
+  'hall.deleted',
 ] as const;
 
 /** The fields of the create and edit forms, validated. `values` is echoed back on an

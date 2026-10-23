@@ -29,6 +29,9 @@
     { id: 'ticket.reply',               label: t.settingsPages.eventTicketReply },
     { id: 'reservation.new',            label: t.settingsPages.eventReservationNew },
     { id: 'reservation.status_changed', label: t.settingsPages.eventReservationStatus },
+    { id: 'hall.archived',              label: t.settingsPages.eventHallArchived },
+    { id: 'hall.restored',              label: t.settingsPages.eventHallRestored },
+    { id: 'hall.deleted',               label: t.settingsPages.eventHallDeleted },
   ]);
   const eventLabel = (id: string) =>
     id === 'webhook.test' ? t.settingsPages.eventWebhookTest : (ALL_EVENTS.find((e) => e.id === id)?.label ?? id);

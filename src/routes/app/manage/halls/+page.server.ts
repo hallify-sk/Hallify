@@ -7,11 +7,12 @@ import { st } from '$lib/i18n-server';
 import type { Actions, PageServerLoad } from './$types';
 import { requireOrgPermission } from '$lib/server/access';
 import { createHall } from '$lib/server/ops/hall-ops';
+import { nextUntitledHallName } from '$lib/server/hall-naming';
 
 /** A name can only arrive here from a POST, so it is bounded server-side. */
 const MAX_NAME_LENGTH = 120;
 
-export const load: PageServerLoad = async ({ locals }) => {
+export const load: PageServerLoad = async ({ locals, url }) => {
   await requireOrgPermission(locals, 'halls.manage');
   const orgId = locals.currentOrg!.id;
   const halls = await dbAll<HallRow & { reservation_count: string }>(
@@ -24,6 +25,8 @@ export const load: PageServerLoad = async ({ locals }) => {
     halls,
     hallLimit: plan.limits.maxHalls,
     activeHalls: await activeHallCount(locals.db, orgId),
+    // Set by the hall page after a permanent delete, which lands here (I15).
+    deleted: url.searchParams.get('deleted') === '1',
   };
 };
 
@@ -37,7 +40,8 @@ export const actions: Actions = {
     const org = await requireOrgPermission(locals, 'halls.manage');
     const data = await request.formData();
     const typedName = String(data.get('name') ?? '').trim().slice(0, MAX_NAME_LENGTH);
-    const name = typedName || st(locals.locale).halls.untitledHall;
+    // Untitled halls are numbered (Nová sála, Nová sála 2, …) so they can be told apart.
+    const name = typedName || await nextUntitledHallName(locals.db, org.id, st(locals.locale).halls.untitledHall);
 
     // The plan's active-hall limit and the new-hall defaults live in createHall.
     const res = await createHall(locals.db, org.id, org.subscription.plan, name, null, locals.locale);

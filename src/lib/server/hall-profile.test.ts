@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { validateHallPatch } from './hall-profile';
+import { hallWebsite, validateHallPatch } from './hall-profile';
 
 // No org_amenities table: only the built-in amenities are allowed.
 const db = { prepare: () => { throw new Error('no table'); } } as unknown as App.Locals['db'];
@@ -34,5 +34,16 @@ describe('validateHallPatch', () => {
 			sun: { open: false, from: '09:00', to: '22:00' }
 		} } });
 		expect((await validateHallPatch(db, 'org', { opening_hours: [{ day: 'mon', open: true, from: '8', to: '16:00' }] })).ok).toBe(false);
+	});
+});
+
+describe('hallWebsite', () => {
+	it('keeps http(s) addresses and refuses everything a link must not be', () => {
+		expect(hallWebsite('www.reduta.sk')).toBe('https://www.reduta.sk');
+		expect(hallWebsite('https://reduta.sk/sala?x=1')).toBe('https://reduta.sk/sala?x=1');
+		expect(hallWebsite("javascript:fetch('/x?d='+document.domain)")).toBeNull();
+		expect(hallWebsite('data:text/html,hi')).toBeNull();
+		expect(hallWebsite('http://localhost:8080')).toBeNull();
+		expect(hallWebsite('not a site')).toBeNull();
 	});
 });
