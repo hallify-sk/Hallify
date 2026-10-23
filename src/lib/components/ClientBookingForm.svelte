@@ -126,7 +126,7 @@
 			if (!selectedDate) return;
 			const r = await postHold(hall.id, selectedDate);
 			if (r.ok) holdSeconds = r.ttl ?? holdSeconds;
-			else { holdError = t.publicBooking.holdExpired; selectedDate = ''; clearTimers(); }
+			else { holdError = r.message ?? t.publicBooking.holdExpired; selectedDate = ''; clearTimers(); }
 		}, 60_000);
 	}
 
@@ -136,9 +136,13 @@
 		const r = await postHold(hall.id, date);
 		acquiring = false;
 		if (!r.ok) {
+			// The server says why when it is not simply "someone else has it": a past
+			// or closed day, or too many holds at once.
 			holdError = r.reason === 'taken'
 				? t.publicBooking.holdTaken
-				: t.publicBooking.holdInProgress;
+				: r.reason === 'held' || !r.message
+					? t.publicBooking.holdInProgress
+					: r.message;
 			selectedDate = '';
 			clearTimers();
 			return;
