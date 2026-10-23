@@ -305,6 +305,16 @@
   .msg--assistant :global(p:last-child) { margin-bottom: 0; }
   .msg--assistant :global(ul) { margin: 4px 0 6px; padding-left: 18px; }
   .msg--assistant :global(code) { font-size: 12px; padding: 1px 4px; border-radius: 3px; background: var(--bg-panel); }
+  .msg--assistant :global(ol) { margin: 4px 0 6px; padding-left: 20px; }
+  .msg--assistant :global(.reply-heading) { margin-top: 10px; }
+  .msg--assistant :global(.reply-heading:first-child) { margin-top: 0; }
+  .msg--assistant :global(hr) { border: none; border-top: 1px solid var(--border); margin: 8px 0; }
+  .msg--assistant :global(.reply-table) { overflow-x: auto; margin: 4px 0 8px; }
+  .msg--assistant :global(.reply-table:last-child) { margin-bottom: 0; }
+  .msg--assistant :global(table) { border-collapse: collapse; font-size: 12px; line-height: 1.45; }
+  .msg--assistant :global(th), .msg--assistant :global(td) { text-align: left; vertical-align: top; padding: 4px 8px; border-bottom: 1px solid var(--border); }
+  .msg--assistant :global(th) { font-weight: 600; color: var(--text-muted); white-space: nowrap; }
+  .msg--assistant :global(tr:last-child td) { border-bottom: none; }
   .thinking { color: var(--text-muted); animation: pulse 1.4s ease-in-out infinite; }
   @keyframes pulse { 50% { opacity: .45; } }
 

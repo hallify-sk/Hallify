@@ -362,6 +362,16 @@
   .aw-msg--assistant :global(p:last-child) { margin-bottom: 0; }
   .aw-msg--assistant :global(ul) { margin: 4px 0 6px; padding-left: 18px; }
   .aw-msg--assistant :global(code) { font-size: 12px; padding: 1px 4px; border-radius: 3px; background: var(--bg-panel); }
+  .aw-msg--assistant :global(ol) { margin: 4px 0 6px; padding-left: 20px; }
+  .aw-msg--assistant :global(.reply-heading) { margin-top: 10px; }
+  .aw-msg--assistant :global(.reply-heading:first-child) { margin-top: 0; }
+  .aw-msg--assistant :global(hr) { border: none; border-top: 1px solid var(--border); margin: 8px 0; }
+  .aw-msg--assistant :global(.reply-table) { overflow-x: auto; margin: 4px 0 8px; }
+  .aw-msg--assistant :global(.reply-table:last-child) { margin-bottom: 0; }
+  .aw-msg--assistant :global(table) { border-collapse: collapse; font-size: 12px; line-height: 1.45; }
+  .aw-msg--assistant :global(th), .aw-msg--assistant :global(td) { text-align: left; vertical-align: top; padding: 4px 8px; border-bottom: 1px solid var(--border); }
+  .aw-msg--assistant :global(th) { font-weight: 600; color: var(--text-muted); white-space: nowrap; }
+  .aw-msg--assistant :global(tr:last-child td) { border-bottom: none; }
   .aw-thinking { color: var(--text-muted); animation: aw-pulse 1.4s ease-in-out infinite; }
   @keyframes aw-pulse { 50% { opacity: .45; } }
 
