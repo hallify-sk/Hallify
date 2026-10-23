@@ -65,18 +65,61 @@ export async function canAddExtra(db: D1Database, hallId: string, plan: PlanId):
   return (row?.n ?? 0) < limit;
 }
 
-/** Apply hall limits after a (possible) plan change: if the org now has more
- *  ACTIVE halls than the plan allows, lock ALL of them (private + suspended) so
- *  the owner can deliberately reactivate up to the new limit. No-op otherwise. */
-export async function enforcePlanLimits(db: D1Database, orgId: string, plan: PlanId): Promise<void> {
-  const limit = getPlan(plan).limits.maxHalls;
-  if (limit === -1) return;
-  const active = await activeHallCount(db, orgId);
-  if (active <= limit) return;
-  await dbRun(db, 'UPDATE halls SET plan_locked = 1, is_public = 0 WHERE org_id = ?', orgId);
+export interface PlanLimitChange {
+  /** Halls suspended by this call (they were active, the plan has no room for them). */
+  locked: { id: string; name: string }[];
+  /** Halls brought back by this call (the plan has room for them again). */
+  unlocked: { id: string; name: string }[];
 }
 
-/** Lock a single hall (used when an owner reactivates and we want to swap). */
+/** Apply hall limits after a (possible) plan change, in both directions.
+ *
+ *  - More active halls than the plan allows: the plan's number of halls stay active
+ *    (public ones first, then the oldest) and only the rest are suspended. Locking
+ *    every hall used to take the whole venue site down, even the hall Free allows.
+ *  - Room under the plan and halls suspended by an earlier downgrade: they come back
+ *    (up to the limit), public again if they were public when suspended.
+ *
+ *  A suspended hall is made private, because venue-site queries read `is_public`;
+ *  `public_before_lock` remembers what it was. Archived halls are never touched. */
+export async function enforcePlanLimits(db: D1Database, orgId: string, plan: PlanId): Promise<PlanLimitChange> {
+  const limit = getPlan(plan).limits.maxHalls;
+  const change: PlanLimitChange = { locked: [], unlocked: [] };
+  const active = await dbAll<{ id: string; name: string }>(db,
+    `SELECT id, name FROM halls WHERE org_id = ? AND plan_locked = 0 AND archived_at IS NULL
+      ORDER BY is_public DESC, created_at ASC, id ASC`, orgId);
+
+  if (limit !== -1 && active.length > limit) {
+    for (const hall of active.slice(limit)) {
+      await dbRun(db,
+        `UPDATE halls SET plan_locked = 1, public_before_lock = is_public, is_public = 0
+          WHERE id = ? AND org_id = ? AND plan_locked = 0`, hall.id, orgId);
+      change.locked.push(hall);
+    }
+    return change;
+  }
+
+  const room = limit === -1 ? Infinity : limit - active.length;
+  if (room <= 0) return change;
+  const locked = await dbAll<{ id: string; name: string }>(db,
+    `SELECT id, name FROM halls WHERE org_id = ? AND plan_locked = 1 AND archived_at IS NULL
+      ORDER BY COALESCE(public_before_lock, 0) DESC, created_at ASC, id ASC`, orgId);
+  for (const hall of locked.slice(0, room)) {
+    await unlockHall(db, orgId, hall.id);
+    change.unlocked.push(hall);
+  }
+  return change;
+}
+
+/** Lift a plan lock and restore the hall's visibility from before the lock. Callers
+ *  check the plan's room first (canAddHall). */
+export async function unlockHall(db: D1Database, orgId: string, hallId: string): Promise<void> {
+  await dbRun(db,
+    `UPDATE halls SET plan_locked = 0, is_public = COALESCE(public_before_lock, is_public), public_before_lock = NULL
+      WHERE id = ? AND org_id = ? AND plan_locked = 1`, hallId, orgId);
+}
+
+/** Halls currently suspended by the plan. */
 export async function lockedHalls(db: D1Database, orgId: string): Promise<{ id: string; name: string }[]> {
   return dbAll<{ id: string; name: string }>(db,
     'SELECT id, name FROM halls WHERE org_id = ? AND plan_locked = 1 AND archived_at IS NULL ORDER BY name', orgId);

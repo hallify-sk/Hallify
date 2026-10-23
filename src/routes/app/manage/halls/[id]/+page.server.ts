@@ -2,7 +2,7 @@ import { error, fail, redirect } from '@sveltejs/kit';
 import { dbAll, dbFirst, dbRun, toJson, fromJson, fromJsonArr } from '$lib/db/index';
 import type { HallRow, HallBlockRow, TemplateRow, TableTypeRow, ReservationRow, HallExtraRow } from '$lib/db/index';
 import { getPlan } from '$lib/plans';
-import { canAddHall, canAddExtra } from '$lib/limits';
+import { canAddHall, canAddExtra, unlockHall } from '$lib/limits';
 import { serializeEventTypes } from '$lib/eventTypes';
 import { st } from '$lib/i18n-server';
 import type { Actions, PageServerLoad } from './$types';
@@ -574,7 +574,8 @@ export const actions: Actions = {
 			const limit = getPlan(locals.currentOrg!.subscription.plan).limits.maxHalls;
 			return fail(403, { error: `Your plan allows ${limit} active hall${limit === 1 ? '' : 's'}. Upgrade to reactivate more.` });
 		}
-		await dbRun(locals.db, 'UPDATE halls SET plan_locked = 0 WHERE id = ? AND org_id = ?', params.id, orgId);
+		// Restores the hall's visibility from before the lock (it used to stay a draft).
+		await unlockHall(locals.db, orgId, params.id);
 		return { reactivated: true };
 	},
 
