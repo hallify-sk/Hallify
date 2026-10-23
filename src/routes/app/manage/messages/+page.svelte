@@ -1,6 +1,7 @@
 <script lang="ts">
   import { enhance } from '$app/forms';
-  import { t } from '$lib/i18n.svelte';
+  import { t, getLocale } from '$lib/i18n.svelte';
+  import { timeAgo as relTime, formatDate } from '$lib/format';
   import type { PageData } from './$types';
 
   interface Props { data: PageData; }
@@ -15,19 +16,14 @@
     filter === 'all' ? data.tickets : data.tickets.filter(tk => tk.status === filter)
   );
 
-  function timeAgo(d: Date | string) {
-    const diff = Date.now() - new Date(d).getTime();
-    const mins = Math.floor(diff / 60000);
-    if (mins < 1) return 'now';
-    if (mins < 60) return `${mins}m`;
-    const hrs = Math.floor(mins / 60);
-    if (hrs < 24) return `${hrs}h`;
-    return `${Math.floor(hrs / 24)}d`;
+  // Stored times are UTC without a zone: read them as UTC ("2 h ago" for a new message before).
+  function timeAgo(d: string) {
+    return relTime(d, getLocale());
   }
 
-  function fmtDate(d: Date | string | null) {
+  function fmtDate(d: string | null) {
     if (!d) return null;
-    return new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+    return formatDate(d, getLocale());
   }
 
   function initials(first: string, last: string) {
@@ -54,6 +50,8 @@
         <div class="page-header-left">
           <h1 class="page-title">{t.messagesAdmin.pageTitle}</h1>
           <span class="total-badge">{data.tickets.length}</span>
+          <!-- The team chat lives at /app/messages; nothing in the console led there. -->
+          <a class="team-chat-link" href="/app/messages">{t.teamChat.openTeamChat}</a>
         </div>
 
         <div class="filters">
@@ -83,6 +81,8 @@
             <div class="thread-body">
               <div class="thread-row1">
                 <span class="thread-name">{ticket.user_first_name} {ticket.user_last_name}</span>
+                {#if ticket.user_is_member}<span class="member-tag">{t.teamChat.teamMemberTag}</span>{/if}
+                {#if ticket.unread}<span class="unread-dot" title={t.teamChat.unread}><span class="sr-only">{t.teamChat.unread}</span></span>{/if}
                 <span class="status-pill" class:open={ticket.status === 'open'} class:closed={ticket.status === 'closed'}>
                   {ticket.status === 'open' ? t.messaging.openTickets : t.messaging.closedTickets}
                 </span>
@@ -150,7 +150,15 @@
 
 <style>
   /* Header */
-  .page-header-left { display: flex; align-items: center; gap: 10px; }
+  .page-header-left { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .team-chat-link { font-size: 12.5px; font-weight: 600; color: var(--accent-ink); text-decoration: none; }
+  .team-chat-link:hover { text-decoration: underline; }
+  .member-tag {
+    font-size: 10px; font-weight: 650; text-transform: uppercase; letter-spacing: .08em;
+    color: var(--accent-ink); background: var(--accent-dim); padding: 1px 6px; border-radius: 3px;
+  }
+  .unread-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); flex-shrink: 0; }
+  .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
   .page-title { font-size: var(--display-size); font-weight: 550; color: var(--text-base); letter-spacing: -.055em; line-height: 1.08; margin: 0; }
   .total-badge {
     font-size: 12px; font-weight: 650; color: var(--text-muted);
