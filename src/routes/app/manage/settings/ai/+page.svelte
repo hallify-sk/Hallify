@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { pageTitle } from '$lib/page-title';
   import { CREDITS_PER_EUR } from '$lib/ai-credits';
   import { creditAmount } from '$lib/assistant/credits';
   import { enhance } from '$app/forms';
@@ -37,7 +38,7 @@
   let toggleForm = $state<HTMLFormElement | null>(null);
 </script>
 
-<svelte:head><title>{t.ai.settingsTitle} – {t.settings.title} – Hallify</title></svelte:head>
+<svelte:head><title>{pageTitle(t.ai.settingsTitle, t.settings.title)}</title></svelte:head>
 
 <section class="section section--lead">
   <div class="section-head">

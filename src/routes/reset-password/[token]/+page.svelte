@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { venueTitle } from '$lib/page-title';
 	import { enhance } from '$app/forms';
 	import { t } from '$lib/i18n.svelte';
 	import VenueAuthCard from '$lib/site/VenueAuthCard.svelte';
@@ -8,7 +9,7 @@
 	const { data, form }: Props = $props();
 </script>
 
-<svelte:head><title>{t.forgotPassword.resetTitle} – {data.domainOrg.name}</title></svelte:head>
+<svelte:head><title>{venueTitle(data.domainOrg.name, t.forgotPassword.resetTitle)}</title></svelte:head>
 
 <VenueAuthCard org={data.domainOrg}>
 	{#if !data.valid}

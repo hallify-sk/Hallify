@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { pageTitle } from '$lib/page-title';
   import { enhance } from '$app/forms';
   import { slide } from 'svelte/transition';
   import { t, getLocale } from '$lib/i18n.svelte';
@@ -713,7 +714,7 @@
   }
 </script>
 
-<svelte:head><title>{data.hall.name} – Hallify</title></svelte:head>
+<svelte:head><title>{pageTitle(data.hall.name)}</title></svelte:head>
 
 <!-- The mapping request as the owner sees it: where it stands, and a way to withdraw
      it while we have not delivered yet (M25). -->

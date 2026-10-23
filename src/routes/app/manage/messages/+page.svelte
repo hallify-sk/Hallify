@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { pageTitle } from '$lib/page-title';
   import { enhance } from '$app/forms';
   import { t, getLocale } from '$lib/i18n.svelte';
   import { timeAgo as relTime, formatDate } from '$lib/format';
@@ -39,7 +40,7 @@
   }
 </script>
 
-<svelte:head><title>{t.messagesAdmin.pageTitle} – Hallify</title></svelte:head>
+<svelte:head><title>{pageTitle(t.messagesAdmin.pageTitle)}</title></svelte:head>
 
 <div class="wrap">
   <section class="section section--lead">

@@ -1,8 +1,9 @@
 <script lang="ts">
+	import { pageTitle } from '$lib/page-title';
 	import { t } from '$lib/i18n.svelte';
 </script>
 
-<svelte:head><title>{t.nav.signOut} – Hallify</title></svelte:head>
+<svelte:head><title>{pageTitle(t.nav.signOut)}</title></svelte:head>
 
 <div class="logout-shell">
 	<section class="section section--lead logout-card">

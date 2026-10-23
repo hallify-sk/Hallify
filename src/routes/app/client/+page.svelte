@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { pageTitle } from '$lib/page-title';
 	import { reveal } from '$lib/reveal';
 	import { t, getLocale } from '$lib/i18n.svelte';
 	import { statusLabel } from '$lib/reservationStatus';
@@ -22,7 +23,7 @@
 	}
 </script>
 
-<svelte:head><title>{t.nav.dashboard} – Hallify</title></svelte:head>
+<svelte:head><title>{pageTitle(t.nav.dashboard)}</title></svelte:head>
 
 <div class="page">
 

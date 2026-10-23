@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { pageTitle } from '$lib/page-title';
   import { enhance } from '$app/forms';
   import { t, getLocale } from '$lib/i18n.svelte';
   import { searchArticles } from '$lib/knowledgebase';
@@ -24,7 +25,7 @@
   });
 </script>
 
-<svelte:head><title>{t.membersAdmin.helpTitle} – Hallify</title></svelte:head>
+<svelte:head><title>{pageTitle(t.membersAdmin.helpTitle)}</title></svelte:head>
 
 <div class="wrap page">
   <div class="page-head">

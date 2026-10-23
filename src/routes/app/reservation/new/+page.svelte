@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { pageTitle } from '$lib/page-title';
 	import { enhance } from '$app/forms';
 	import { goto, beforeNavigate } from '$app/navigation';
 	import { untrack, onDestroy } from 'svelte';
@@ -185,7 +186,7 @@
 	onDestroy(clearTimers);
 </script>
 
-<svelte:head><title>{t.createEvent.title} – Hallify</title></svelte:head>
+<svelte:head><title>{pageTitle(t.createEvent.title)}</title></svelte:head>
 
 <div class="page">
 <div class="wrap">

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { pageTitle } from '$lib/page-title';
 	import { goto } from '$app/navigation';
 	import { t, getLocale } from '$lib/i18n.svelte';
 	import SectionHeader from '$lib/components/SectionHeader.svelte';
@@ -226,7 +227,7 @@
 	function bookerName(e: Ev): string { return [e.booker_first, e.booker_last].filter(Boolean).join(' '); }
 </script>
 
-<svelte:head><title>{t.calendar.title} – Hallify</title></svelte:head>
+<svelte:head><title>{pageTitle(t.calendar.title)}</title></svelte:head>
 
 <div class="page wrap">
 	<!-- ── Header ── -->

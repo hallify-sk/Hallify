@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { venueTitle } from '$lib/page-title';
   import { onMount } from 'svelte';
   import { booking } from '$lib/analytics';
   import { reveal } from '$lib/reveal';
@@ -71,7 +72,7 @@
 </script>
 
 <svelte:head>
-  <title>{hall.name} – {data.domainOrg.name}</title>
+  <title>{venueTitle(data.domainOrg.name, hall.name)}</title>
   <meta name="description" content={hall.description ?? `${t.hallProfile.metaBookPrefix} ${hall.name} ${t.hallProfile.metaBookSuffix}`} />
 </svelte:head>
 

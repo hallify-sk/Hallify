@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { pageTitle } from '$lib/page-title';
 	import { enhance } from '$app/forms';
 	import CapNotices from '$lib/components/CapNotices.svelte';
 	import { untrack } from 'svelte';
@@ -79,7 +80,7 @@
 	};
 </script>
 
-<svelte:head><title>{t.adminReservations.title} – Hallify</title></svelte:head>
+<svelte:head><title>{pageTitle(t.adminReservations.title)}</title></svelte:head>
 
 <div class="page wrap">
 

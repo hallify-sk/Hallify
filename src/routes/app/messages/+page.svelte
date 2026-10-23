@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { pageTitle } from '$lib/page-title';
   import { enhance } from '$app/forms';
   import { invalidateAll } from '$app/navigation';
   import { t as tr, getLocale } from '$lib/i18n.svelte';
@@ -151,7 +152,7 @@
 </script>
 
 <svelte:head>
-  <title>{activeChannel ? `#${activeChannel.name}` : activeTicket ? activeTicket.subject : tr.memberMessages.pageTitle} – Hallify</title>
+  <title>{pageTitle(activeChannel ? `#${activeChannel.name}` : activeTicket ? activeTicket.subject : tr.memberMessages.pageTitle)}</title>
 </svelte:head>
 
 {#snippet richText(text: string)}

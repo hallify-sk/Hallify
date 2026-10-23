@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { venueTitle } from '$lib/page-title';
   /**
    * Errors on the venue's site stay inside the venue's site. The app-wide error page
    * showed Hallify's logo and a generic 403 text, dropping the specific reason the
@@ -20,7 +21,7 @@
   );
 </script>
 
-<svelte:head><title>{isNotFound ? t.errorPage.notFoundTitle : t.errorPage.genericTitle}</title></svelte:head>
+<svelte:head><title>{venueTitle($page.data.domainOrg?.name, isNotFound ? t.errorPage.notFoundTitle : t.errorPage.genericTitle)}</title></svelte:head>
 
 <section class="section section--lead site-error">
   <p class="eyebrow">{status}</p>

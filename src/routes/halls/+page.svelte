@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { venueTitle } from '$lib/page-title';
   import { onMount } from 'svelte';
   import { booking } from '$lib/analytics';
   import { t, getLocale } from '$lib/i18n.svelte';
@@ -58,7 +59,7 @@
   });
 </script>
 
-<svelte:head><title>{data.domainOrg.name}</title></svelte:head>
+<svelte:head><title>{venueTitle(data.domainOrg.name)}</title></svelte:head>
 
 {#if data.domainOrg.logoUrl}
   <img class="site-logo" src={data.domainOrg.logoUrl} alt={data.domainOrg.name} width="56" height="56" />

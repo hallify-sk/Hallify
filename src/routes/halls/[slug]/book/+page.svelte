@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { venueTitle } from '$lib/page-title';
 	import ClientBookingForm from '$lib/components/ClientBookingForm.svelte';
 	import { t } from '$lib/i18n.svelte';
 	import type { PageData, ActionData } from './$types';
@@ -7,7 +8,7 @@
 	const { data, form }: Props = $props();
 </script>
 
-<svelte:head><title>{t.publicBooking.requestReservation} – {data.hall.name}</title></svelte:head>
+<svelte:head><title>{venueTitle(data.domainOrg?.name, t.publicBooking.requestReservation, data.hall.name)}</title></svelte:head>
 
 <div class="page">
 	<ClientBookingForm

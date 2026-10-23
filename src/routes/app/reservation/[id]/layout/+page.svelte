@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { pageTitle } from '$lib/page-title';
 	import MapEditor from '$lib/MapEditor.svelte';
 	import { enhance } from '$app/forms';
 	import type { SubmitFunction } from '@sveltejs/kit';
@@ -164,7 +165,7 @@
 	const errorText = $derived(tmplError ?? saver.error);
 </script>
 
-<svelte:head><title>{data.reservation.title} — {t.event.layoutEditorTitle} – Hallify</title></svelte:head>
+<svelte:head><title>{pageTitle(data.reservation.title, t.event.layoutEditorTitle)}</title></svelte:head>
 
 <div class="layout-page fill-main">
 	<div class="layout-toolbar">

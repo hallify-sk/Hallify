@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { pageTitle } from '$lib/page-title';
 	import { enhance } from '$app/forms';
 	import type { PageData, ActionData } from './$types';
 	import { t, getLocale } from '$lib/i18n.svelte';
@@ -47,7 +48,7 @@
 	const previewDoc = (k: string) => `<!doctype html><meta charset="utf-8"><body style="font-family:system-ui,sans-serif;font-size:14px;color:#202322;padding:12px;margin:0">${previewTemplate(drafts[k] ?? '')}</body>`;
 </script>
 
-<svelte:head><title>{t.platformMisc.emailTitle} – {t.platformOrgs.platformAdmin} – Hallify</title></svelte:head>
+<svelte:head><title>{pageTitle(t.platformMisc.emailTitle, t.platformOrgs.platformAdmin)}</title></svelte:head>
 
 <div class="wrap page">
 	<section class="section section--lead">

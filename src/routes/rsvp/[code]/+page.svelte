@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { pageTitle } from '$lib/page-title';
 	import { enhance } from '$app/forms';
 	import { t, getLocale } from '$lib/i18n.svelte';
 	import { formatDate as fmtLocaleDate } from '$lib/format';
@@ -37,7 +38,7 @@
 	}
 </script>
 
-<svelte:head><title>RSVP – {data.reservation.title}</title></svelte:head>
+<svelte:head><title>{pageTitle('RSVP', data.reservation.title)}</title></svelte:head>
 
 <div class="rsvp-wrap rsvp-style-{styleName}" style={bgStyle()}>
 	<!-- The invitation is the one surface here that is NOT the app's own language:

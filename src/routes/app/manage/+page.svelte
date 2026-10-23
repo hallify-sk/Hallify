@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { pageTitle } from '$lib/page-title';
   import { t, getLocale } from '$lib/i18n.svelte';
   import { formatDate, timeAgo as relTime } from '$lib/format';
   import KpiCard from '$lib/components/KpiCard.svelte';
@@ -91,7 +92,7 @@
   }
 </script>
 
-<svelte:head><title>{t.nav.dashboard} – Hallify</title></svelte:head>
+<svelte:head><title>{pageTitle(t.nav.dashboard)}</title></svelte:head>
 
 <div class="page wrap">
 

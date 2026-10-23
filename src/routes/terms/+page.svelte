@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { pageTitle } from '$lib/page-title';
   import LegalDocument from '$lib/components/LegalDocument.svelte';
   import { TERMS } from '$lib/legal';
   import { getLocale } from '$lib/i18n.svelte';
@@ -8,7 +9,7 @@
 </script>
 
 <svelte:head>
-  <title>{doc.title} · Hallify</title>
+  <title>{pageTitle(doc.title)}</title>
   <meta name="description" content={doc.subtitle} />
   <link rel="canonical" href={getLocale() === 'en' ? data.canonicalEn : data.canonicalSk} />
   <link rel="alternate" hreflang="sk" href={data.canonicalSk} />

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { pageTitle } from '$lib/page-title';
   import { enhance } from '$app/forms';
   import type { PageData, ActionData } from './$types';
   import { t, getLocale } from '$lib/i18n.svelte';
@@ -48,7 +49,7 @@
   });
 </script>
 
-<svelte:head><title>{t.platformMisc.announcementsHeadTitle}</title></svelte:head>
+<svelte:head><title>{pageTitle(t.platformMisc.announcementsHeadTitle)}</title></svelte:head>
 
 {#snippet preview(lvl: string, ttl: string, txt: string)}
   <div class="pv ann-row row-{lvl}">

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { venueTitle } from '$lib/page-title';
   import { page } from '$app/stores';
   import { enhance } from '$app/forms';
   import { t } from '$lib/i18n.svelte';
@@ -13,7 +14,7 @@
   const resetSuccess = $derived($page.url.searchParams.get('reset') === 'success');
 </script>
 
-<svelte:head><title>{t.publicBooking.signInTitle} – {org.name}</title></svelte:head>
+<svelte:head><title>{venueTitle(org.name, t.publicBooking.signInTitle)}</title></svelte:head>
 
 <div class="auth-root">
   <section class="section section--lead auth-card">

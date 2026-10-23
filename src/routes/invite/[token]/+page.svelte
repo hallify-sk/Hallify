@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { pageTitle, venueTitle } from '$lib/page-title';
 	import { enhance } from '$app/forms';
 	import { t, getLocale } from '$lib/i18n.svelte';
 	import { formatDate } from '$lib/format';
@@ -25,7 +26,7 @@
 </script>
 
 <svelte:head>
-	<title>{data.invite ? `${t.inviteAccept.invitedHeading} – ${data.invite.orgName}` : t.inviteAccept.unavailableTitle}</title>
+	<title>{data.invite ? venueTitle(data.invite.orgName, t.inviteAccept.invitedHeading) : pageTitle(t.inviteAccept.unavailableTitle)}</title>
 	<meta name="robots" content="noindex" />
 </svelte:head>
 

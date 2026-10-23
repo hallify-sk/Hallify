@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { pageTitle } from '$lib/page-title';
   import { enhance } from '$app/forms';
   import { goto, invalidateAll } from '$app/navigation';
   import { tick } from 'svelte';
@@ -139,7 +140,7 @@
 
 </script>
 
-<svelte:head><title>{t.ai.title} – Hallify</title></svelte:head>
+<svelte:head><title>{pageTitle(t.ai.title)}</title></svelte:head>
 
 <div class="wrap page">
   <div class="head">

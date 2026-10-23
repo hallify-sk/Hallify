@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { pageTitle } from '$lib/page-title';
 	import { goto, invalidateAll } from '$app/navigation';
 	import { t } from '$lib/i18n.svelte';
 	import MapEditor from '$lib/MapEditor.svelte';
@@ -122,7 +123,7 @@
 	const saveLabel = $derived(draft ? t.ai.draftSave : `${t.common.save} ${t.halls.floorplan.toLowerCase()}`);
 </script>
 
-<svelte:head><title>{t.halls.floorplan} – {data.hall.name} – Hallify</title></svelte:head>
+<svelte:head><title>{pageTitle(t.halls.floorplan, data.hall.name)}</title></svelte:head>
 
 <div class="editor-page fill-main">
 	<!-- Top bar -->

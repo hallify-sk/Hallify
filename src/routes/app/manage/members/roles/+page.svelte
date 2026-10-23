@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { pageTitle } from '$lib/page-title';
 	import { enhance } from '$app/forms';
 	import type { SubmitFunction } from '@sveltejs/kit';
 	import { t } from '$lib/i18n.svelte';
@@ -74,7 +75,7 @@
 	};
 </script>
 
-<svelte:head><title>{t.rolesAdmin.pageTitle} – {t.membersAdmin.title} – Hallify</title></svelte:head>
+<svelte:head><title>{pageTitle(t.rolesAdmin.pageTitle, t.membersAdmin.title)}</title></svelte:head>
 
 {#if form?.error}
 	<div class="alert-error">{form.error}</div>

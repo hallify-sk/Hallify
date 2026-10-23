@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { pageTitle } from '$lib/page-title';
 	import { enhance } from '$app/forms';
 	import { t } from '$lib/i18n.svelte';
 	import { dialog } from '$lib/actions/dialog';
@@ -84,7 +85,7 @@
 	}
 </script>
 
-<svelte:head><title>{t.rsvpTemplates.editTemplate} – Hallify</title></svelte:head>
+<svelte:head><title>{pageTitle(t.rsvpTemplates.editTemplate)}</title></svelte:head>
 
 <!-- Sticky toolbar -->
 <div class="toolbar">

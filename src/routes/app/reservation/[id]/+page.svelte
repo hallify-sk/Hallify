@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { pageTitle } from '$lib/page-title';
 	import { RSVP_ENABLED } from '$lib/features';
 	import { enhance } from '$app/forms';
 	import { page } from '$app/stores';
@@ -195,7 +196,7 @@
 	});
 </script>
 
-<svelte:head><title>{data.reservation.title} – Hallify</title></svelte:head>
+<svelte:head><title>{pageTitle(data.reservation.title)}</title></svelte:head>
 
 <div class="page">
 <div class="wrap">

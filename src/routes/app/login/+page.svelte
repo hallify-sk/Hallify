@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { pageTitle } from '$lib/page-title';
 	import { enhance } from '$app/forms';
 	import { page } from '$app/stores';
 	import { t } from '$lib/i18n.svelte';
@@ -25,7 +26,7 @@
 	);
 </script>
 
-<svelte:head><title>{t.auth.signIn} – Hallify</title></svelte:head>
+<svelte:head><title>{pageTitle(t.auth.signIn)}</title></svelte:head>
 
 <AuthShell>
 	<div class="section-head auth-header">

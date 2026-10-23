@@ -1,11 +1,12 @@
 <script lang="ts">
+	import { pageTitle } from '$lib/page-title';
 	import { t } from '$lib/i18n.svelte';
 	import type { PageData } from './$types';
 
 	const { data }: { data: PageData } = $props();
 </script>
 
-<svelte:head><title>{t.membersAdmin.orgClosedTitle} – Hallify</title></svelte:head>
+<svelte:head><title>{pageTitle(t.membersAdmin.orgClosedTitle)}</title></svelte:head>
 
 <div class="wrap page">
 	<div class="closed" role="status">

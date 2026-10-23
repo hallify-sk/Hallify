@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { pageTitle } from '$lib/page-title';
 	import { onMount } from 'svelte';
 	import { saas } from '$lib/analytics';
 	import { enhance } from '$app/forms';
@@ -25,7 +26,7 @@
 	onMount(() => saas.signUpStarted());
 </script>
 
-<svelte:head><title>{t.auth.createAccount} – Hallify</title></svelte:head>
+<svelte:head><title>{pageTitle(t.auth.createAccount)}</title></svelte:head>
 
 <AuthShell>
 	<div class="section-head auth-header">

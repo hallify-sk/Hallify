@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { pageTitle } from '$lib/page-title';
   import { enhance } from '$app/forms';
   import { planName } from '$lib/plans';
   import { t, getLocale } from '$lib/i18n.svelte';
@@ -38,7 +39,7 @@
   }
 </script>
 
-<svelte:head><title>{t.floorplanService.queueTitle} – Hallify</title></svelte:head>
+<svelte:head><title>{pageTitle(t.floorplanService.queueTitle)}</title></svelte:head>
 
 <div class="wrap page">
   <section class="section section--lead">

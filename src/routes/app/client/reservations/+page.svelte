@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { pageTitle } from '$lib/page-title';
 	import { reveal } from '$lib/reveal';
 	import { t, getLocale } from '$lib/i18n.svelte';
 	import { statusLabel } from '$lib/reservationStatus';
@@ -22,7 +23,7 @@
 	}
 </script>
 
-<svelte:head><title>{t.clientArea.myReservations} – Hallify</title></svelte:head>
+<svelte:head><title>{pageTitle(t.clientArea.myReservations)}</title></svelte:head>
 
 <div class="page">
 	<section class="section section--lead section--flush">

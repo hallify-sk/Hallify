@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { pageTitle } from '$lib/page-title';
   import { t, getLocale } from '$lib/i18n.svelte';
   import { formatDateTime } from '$lib/format';
   import type { PageData } from './$types';
@@ -16,7 +17,7 @@
   const fmtDate = (d: string) => formatDateTime(d, getLocale());
 </script>
 
-<svelte:head><title>{t.accountExtra.announcementsTitle} – Hallify</title></svelte:head>
+<svelte:head><title>{pageTitle(t.accountExtra.announcementsTitle)}</title></svelte:head>
 
 <div class="wrap">
   <section class="section section--lead">

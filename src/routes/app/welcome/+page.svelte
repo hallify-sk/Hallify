@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { pageTitle } from '$lib/page-title';
   /**
    * First run, rendered inside the console like any other page.
    *
@@ -144,7 +145,7 @@
   });
 </script>
 
-<svelte:head><title>{t.onboarding.title} – Hallify</title></svelte:head>
+<svelte:head><title>{pageTitle(t.onboarding.title)}</title></svelte:head>
 
 <div class="ob">
   <header class="ob-head">

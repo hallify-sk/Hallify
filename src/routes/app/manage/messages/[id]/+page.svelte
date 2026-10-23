@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { pageTitle } from '$lib/page-title';
 	import { enhance } from '$app/forms';
 	import { invalidateAll } from '$app/navigation';
 	import { page } from '$app/stores';
@@ -79,7 +80,7 @@
 	}
 </script>
 
-<svelte:head><title>{data.ticket.subject} – Hallify</title></svelte:head>
+<svelte:head><title>{pageTitle(data.ticket.subject)}</title></svelte:head>
 
 <div class="page">
 	<div class="chat-header">

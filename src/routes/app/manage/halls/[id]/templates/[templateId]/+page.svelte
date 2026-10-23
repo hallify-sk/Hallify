@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { pageTitle } from '$lib/page-title';
 	import MapEditor from '$lib/MapEditor.svelte';
 	import { enhance } from '$app/forms';
 	import { dialog } from '$lib/actions/dialog';
@@ -34,7 +35,7 @@
 	}
 </script>
 
-<svelte:head><title>{data.template.name} — {t.halls.templates} – Hallify</title></svelte:head>
+<svelte:head><title>{pageTitle(data.template.name, t.halls.templates)}</title></svelte:head>
 
 <div class="layout-page fill-main">
 	<div class="layout-toolbar">

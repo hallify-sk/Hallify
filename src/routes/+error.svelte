@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { pageTitle } from '$lib/page-title';
   import { page } from '$app/stores';
   import { t } from '$lib/i18n.svelte';
   import MarketingShell from '$lib/marketing/MarketingShell.svelte';
@@ -18,7 +19,7 @@
   const marketing = $derived(!($page.data as { onBubble?: boolean }).onBubble && !$page.url.pathname.startsWith('/app'));
 </script>
 
-<svelte:head><title>{status} · Hallify</title></svelte:head>
+<svelte:head><title>{pageTitle(status)}</title></svelte:head>
 
 {#if marketing}
 <MarketingShell audience="customer">

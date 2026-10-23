@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { venueTitle } from '$lib/page-title';
   /**
    * The builder's preview, rendered inside an iframe on the public-site settings
    * page.
@@ -103,7 +104,7 @@
 </script>
 
 <svelte:head>
-  <title>{data.org.name}</title>
+  <title>{venueTitle(data.org.name)}</title>
   <!-- Never let a search engine index the preview as if it were the live site. -->
   <meta name="robots" content="noindex, nofollow" />
 </svelte:head>

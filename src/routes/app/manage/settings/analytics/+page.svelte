@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { pageTitle } from '$lib/page-title';
   import { enhance } from '$app/forms';
   import { t, getLocale } from '$lib/i18n.svelte';
   import { ANALYTICS_EVENTS, USER_DIMENSIONS } from '$lib/analytics-catalogue';
@@ -13,7 +14,7 @@
   ]);
 </script>
 
-<svelte:head><title>{t.settingsPages.analyticsTitle} – {t.settings.title} – Hallify</title></svelte:head>
+<svelte:head><title>{pageTitle(t.settingsPages.analyticsTitle, t.settings.title)}</title></svelte:head>
 
 <!-- ══ Analytics ══════════════════════════════════════════════════ -->
 <section class="section section--lead" id="analytics">

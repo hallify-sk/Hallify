@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { pageTitle } from '$lib/page-title';
   import { enhance } from '$app/forms';
   import StatusBadge from '$lib/components/StatusBadge.svelte';
   import { t, getLocale } from '$lib/i18n.svelte';
@@ -47,7 +48,7 @@
   );
 </script>
 
-<svelte:head><title>{t.halls.manageHalls} – Hallify</title></svelte:head>
+<svelte:head><title>{pageTitle(t.halls.manageHalls)}</title></svelte:head>
 
 {#snippet createButton()}
   <form method="POST" action="?/create" use:enhance={createHall}>

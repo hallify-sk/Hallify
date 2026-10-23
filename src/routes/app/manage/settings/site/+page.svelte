@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { pageTitle } from '$lib/page-title';
   import { enhance } from '$app/forms';
   import { t, getLocale } from '$lib/i18n.svelte';
   import { sectionDefinition, type SectionType, type SiteSection } from '$lib/site-sections';
@@ -166,7 +167,7 @@
   });
 </script>
 
-<svelte:head><title>{t.settings.title} – Hallify</title></svelte:head>
+<svelte:head><title>{pageTitle(t.settings.title)}</title></svelte:head>
 
 <!-- Success is reported in the save bar, beside the button that was pressed.
      A second banner up here would only be read by someone who had scrolled back. -->

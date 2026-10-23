@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { pageTitle } from '$lib/page-title';
 	import { enhance } from '$app/forms';
 	import { t, getLocale } from '$lib/i18n.svelte';
 	import { formatDate as fmtLocaleDate } from '$lib/format';
@@ -20,7 +21,7 @@
 	}
 </script>
 
-<svelte:head><title>{t.rsvpTemplates.title} – Hallify</title></svelte:head>
+<svelte:head><title>{pageTitle(t.rsvpTemplates.title)}</title></svelte:head>
 
 <div class="wrap page">
 	<SectionHeader overline={t.rsvpTemplates.manage} title={t.rsvpTemplates.title} />

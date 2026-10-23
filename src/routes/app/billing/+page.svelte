@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { pageTitle } from '$lib/page-title';
   import { onMount } from 'svelte';
   import { enhance } from '$app/forms';
   import type { SubmitFunction } from '@sveltejs/kit';
@@ -77,7 +78,7 @@
   const pct = (used: number, limit: number) => Math.min(100, Math.round((used / Math.max(1, limit)) * 100));
 </script>
 
-<svelte:head><title>{t.accountPages.billingTitle} – Hallify</title></svelte:head>
+<svelte:head><title>{pageTitle(t.accountPages.billingTitle)}</title></svelte:head>
 
 <div class="wrap page">
   <div class="page-header">

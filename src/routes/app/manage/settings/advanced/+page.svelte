@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { pageTitle } from '$lib/page-title';
   import { enhance } from '$app/forms';
   import { t, getLocale } from '$lib/i18n.svelte';
   import { confirmFirst } from '$lib/forms';
@@ -84,7 +85,7 @@
   ].filter(Boolean).join('\n\n');
 </script>
 
-<svelte:head><title>{t.settingsPages.tabAdvanced} – {t.settings.title} – Hallify</title></svelte:head>
+<svelte:head><title>{pageTitle(t.settingsPages.tabAdvanced, t.settings.title)}</title></svelte:head>
 
 {#if data.canManage}
   <p class="tab-intro">{t.settingsPages.advancedSub}</p>

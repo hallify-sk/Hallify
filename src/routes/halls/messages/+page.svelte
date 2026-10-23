@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { venueTitle } from '$lib/page-title';
 	import type { PageData } from './$types';
 	import { fmtDate } from '$lib/reservationStatus';
 	import { t as tr, getLocale } from '$lib/i18n.svelte';
@@ -12,7 +13,7 @@
 	const fmtWhen = (ts: string) => formatDate(ts, getLocale(), { day: 'numeric', month: 'short' });
 </script>
 
-<svelte:head><title>{tr.nav.messages} – {data.domainOrg.name}</title></svelte:head>
+<svelte:head><title>{venueTitle(data.domainOrg.name, tr.nav.messages)}</title></svelte:head>
 
 <div class="page">
 	<section class="section section--lead section--flush">

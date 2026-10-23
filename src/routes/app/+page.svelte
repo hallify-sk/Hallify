@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { pageTitle } from '$lib/page-title';
 	import { goto } from '$app/navigation';
 	import { t, getLocale } from '$lib/i18n.svelte';
 	import { formatDate } from '$lib/format';
@@ -17,7 +18,7 @@
 	}
 </script>
 
-<svelte:head><title>{data.personal ? t.nav.home : t.dashboard.eventOverview} – Hallify</title></svelte:head>
+<svelte:head><title>{pageTitle(data.personal ? t.nav.home : t.dashboard.eventOverview)}</title></svelte:head>
 
 <!-- An account with no organisation gets a home of its own; members get their events. -->
 {#if data.personal}

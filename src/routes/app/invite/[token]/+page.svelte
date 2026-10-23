@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { pageTitle } from '$lib/page-title';
   import { enhance } from '$app/forms';
   import { t } from '$lib/i18n.svelte';
   import { reveal } from '$lib/reveal';
@@ -38,7 +39,7 @@
 </script>
 
 <svelte:head>
-  <title>{data.invite ? `${t.authPages.inviteTitle} – ${data.invite.orgName}` : `${t.authPages.inviteUnavailableTitle} – Hallify`}</title>
+  <title>{data.invite ? pageTitle(t.authPages.inviteTitle, data.invite.orgName) : pageTitle(t.authPages.inviteUnavailableTitle)}</title>
   <meta name="robots" content="noindex" />
 </svelte:head>
 

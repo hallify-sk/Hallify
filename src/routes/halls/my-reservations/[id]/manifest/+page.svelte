@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { venueTitle } from '$lib/page-title';
 	import FloorplanPrint from '$lib/FloorplanPrint.svelte';
 	import type { Guest } from '$lib/floorplan-types';
 	import { tableNumbers } from '$lib/floorplan-layout';
@@ -39,7 +40,7 @@
 	const floors = $derived(manifestFloors(data.layout, (i) => `${t.manifest.csvFloor} ${i + 1}`));
 </script>
 
-<svelte:head><title>{data.reservation.title} — {t.manifest.seatingManifest}</title></svelte:head>
+<svelte:head><title>{venueTitle(data.domainOrg?.name, data.reservation.title, t.manifest.seatingManifest)}</title></svelte:head>
 
 <div class="manifest-page">
 <div class="manifest">

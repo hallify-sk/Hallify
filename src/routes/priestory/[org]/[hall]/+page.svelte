@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { pageTitle } from '$lib/page-title';
   import { DOW_KEYS } from '$lib/availability';
   import { getLocale, t } from '$lib/i18n.svelte';
   import { safeHref } from '$lib/safe-url';
@@ -20,7 +21,7 @@
   const website = $derived(safeHref(hall.contact_website));
   const canonical = $derived(en ? data.canonicalEn : data.canonicalSk);
   const description = $derived(metaDescription(hall.description, t.appHalls.metaFallback(hall.name, hall.max_people)));
-  const title = $derived(`${hall.name}${hall.address ? ` – ${hall.address.split(',').at(-1)?.trim() || hall.address}` : ''} | Hallify`);
+  const title = $derived(pageTitle(hall.name, hall.address ? (hall.address.split(',').at(-1)?.trim() || hall.address) : null));
   const images = $derived([hall.cover_image_url, ...hall.gallery_images]
     .map(src => absoluteUrl(src, data.origin)).filter((src): src is string => !!src));
   const jsonLd = $derived(venueJsonLd({

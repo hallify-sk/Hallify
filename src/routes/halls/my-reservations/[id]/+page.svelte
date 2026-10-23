@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { venueTitle } from '$lib/page-title';
 	import { enhance } from '$app/forms';
 	import { tick } from 'svelte';
 	import MiniCalendar from '$lib/components/MiniCalendar.svelte';
@@ -97,7 +98,7 @@
 	$effect(() => { if (data.thread.messages.length) scrollThread(); });
 </script>
 
-<svelte:head><title>{r.title} – {orgName}</title></svelte:head>
+<svelte:head><title>{venueTitle(orgName, r.title)}</title></svelte:head>
 
 <!-- ── Lead: where you are, what this is, and how it stands ── -->
 <section class="section section--lead" use:reveal>

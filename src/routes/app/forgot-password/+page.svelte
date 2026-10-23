@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { pageTitle } from '$lib/page-title';
 	import { enhance } from '$app/forms';
 	import { t } from '$lib/i18n.svelte';
 	import AuthShell from '$lib/components/AuthShell.svelte';
@@ -8,7 +9,7 @@
 	const { form }: Props = $props();
 </script>
 
-<svelte:head><title>{t.forgotPassword.title} – Hallify</title></svelte:head>
+<svelte:head><title>{pageTitle(t.forgotPassword.title)}</title></svelte:head>
 
 <AuthShell>
 	<div class="auth-header">

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { pageTitle } from '$lib/page-title';
 	import { enhance } from '$app/forms';
 	import { t, getLocale } from '$lib/i18n.svelte';
 	import { formatDate } from '$lib/format';
@@ -22,7 +23,7 @@
 	const emailChanged = $derived(email.trim().toLowerCase() !== profile.email);
 </script>
 
-<svelte:head><title>{t.nav.profile} – Hallify</title></svelte:head>
+<svelte:head><title>{pageTitle(t.nav.profile)}</title></svelte:head>
 
 <div class="wrap profile-wrap">
 	<div class="section section--lead profile-header">

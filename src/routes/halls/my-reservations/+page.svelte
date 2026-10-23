@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { venueTitle } from '$lib/page-title';
   import { page } from '$app/stores';
   import type { PageData } from './$types';
   import { statusLabel, statusClass, fmtDate } from '$lib/reservationStatus';
@@ -44,7 +45,7 @@
   ];
 </script>
 
-<svelte:head><title>{t.myRes.title}</title></svelte:head>
+<svelte:head><title>{venueTitle(data.domainOrg?.name, t.myRes.title)}</title></svelte:head>
 
 <!-- ── Lead: the page heading and its one action ── -->
 <section class="section section--lead" use:reveal>

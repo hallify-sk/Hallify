@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { pageTitle } from '$lib/page-title';
   import { enhance } from '$app/forms';
   import { t, getLocale } from '$lib/i18n.svelte';
   import { formatDate as fmt } from '$lib/format';
@@ -13,7 +14,7 @@
   const formatDate = (d: string) => fmt(d, getLocale());
 </script>
 
-<svelte:head><title>{t.settingsPages.domains} – {t.settings.title} – Hallify</title></svelte:head>
+<svelte:head><title>{pageTitle(t.settingsPages.domains, t.settings.title)}</title></svelte:head>
 
 <p class="tab-intro">{t.settingsPages.domainsSub}</p>
 

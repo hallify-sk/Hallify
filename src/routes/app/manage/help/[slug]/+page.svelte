@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { pageTitle } from '$lib/page-title';
   import { t, getLocale } from '$lib/i18n.svelte';
   import type { PageData } from './$types';
   let { data }: { data: PageData } = $props();
@@ -7,7 +8,7 @@
   const related = $derived(view.related);
 </script>
 
-<svelte:head><title>{article.title} – {t.membersAdmin.helpTitle} – Hallify</title></svelte:head>
+<svelte:head><title>{pageTitle(article.title, t.membersAdmin.helpTitle)}</title></svelte:head>
 
 <div class="wrap page">
   <a href="/app/manage/help" class="back">

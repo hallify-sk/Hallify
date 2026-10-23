@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { pageTitle } from '$lib/page-title';
 	import { t, getLocale } from '$lib/i18n.svelte';
 	import { formatDateTime } from '$lib/format';
 	import type { PageData } from './$types';
@@ -21,7 +22,7 @@
 	}
 </script>
 
-<svelte:head><title>{t.platformOrgs.auditTitle} – Hallify</title></svelte:head>
+<svelte:head><title>{pageTitle(t.platformOrgs.auditTitle)}</title></svelte:head>
 
 <div class="wrap page">
 	<section class="section section--lead">

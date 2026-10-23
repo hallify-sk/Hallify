@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { pageTitle } from '$lib/page-title';
   import { enhance } from '$app/forms';
   import { confirmFirst } from '$lib/forms';
   import { formatDate } from '$lib/format';
@@ -43,7 +44,7 @@
   }
 </script>
 
-<svelte:head><title>{t.peopleArea.tabInvites} – Hallify</title></svelte:head>
+<svelte:head><title>{pageTitle(t.peopleArea.tabInvites)}</title></svelte:head>
 
 {#if form?.error}
   <div class="alert-error top-alert">{form.error}</div>

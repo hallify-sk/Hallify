@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { pageTitle } from '$lib/page-title';
   import { enhance } from '$app/forms';
   import { t, getLocale } from '$lib/i18n.svelte';
   import { formatDateTime } from '$lib/format';
@@ -27,7 +28,7 @@
   const fmt = (d: string | null) => formatDateTime(d, getLocale());
 </script>
 
-<svelte:head><title>{t.platformSettings.title} – Hallify</title></svelte:head>
+<svelte:head><title>{pageTitle(t.platformSettings.title)}</title></svelte:head>
 
 <div class="wrap page">
   <section class="section section--lead">

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { venueTitle } from '$lib/page-title';
 	import MapEditor from '$lib/MapEditor.svelte';
 	import { enhance } from '$app/forms';
 	import type { SubmitFunction } from '@sveltejs/kit';
@@ -113,7 +114,7 @@
 	const errorText = $derived(tmplError ?? saver.error);
 </script>
 
-<svelte:head><title>{data.reservation.title} — {t.event.tableLayout}</title></svelte:head>
+<svelte:head><title>{venueTitle(data.domainOrg?.name, data.reservation.title, t.event.tableLayout)}</title></svelte:head>
 
 <div class="layout-page">
 	<div class="layout-toolbar">

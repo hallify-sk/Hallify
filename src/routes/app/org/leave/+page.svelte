@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { pageTitle } from '$lib/page-title';
 	import { enhance } from '$app/forms';
 	import { t } from '$lib/i18n.svelte';
 	import { confirmFirst } from '$lib/forms';
@@ -7,7 +8,7 @@
 	const { data, form }: { data: PageData; form: ActionData } = $props();
 </script>
 
-<svelte:head><title>{t.membersAdmin.leaveOrg} – Hallify</title></svelte:head>
+<svelte:head><title>{pageTitle(t.membersAdmin.leaveOrg)}</title></svelte:head>
 
 <div class="wrap page">
 	<div class="leave">

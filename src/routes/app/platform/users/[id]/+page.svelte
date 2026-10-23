@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { pageTitle } from '$lib/page-title';
   import { enhance } from '$app/forms';
   import { planName } from '$lib/plans';
   import { t, getLocale } from '$lib/i18n.svelte';
@@ -15,7 +16,7 @@
   }
 </script>
 
-<svelte:head><title>{u.first_name} {u.last_name} — {t.platformOrgs.platformAdmin}</title></svelte:head>
+<svelte:head><title>{pageTitle(`${u.first_name} ${u.last_name}`, t.platformOrgs.platformAdmin)}</title></svelte:head>
 
 <div class="wrap page">
   <a href="/app/platform/users" class="back">

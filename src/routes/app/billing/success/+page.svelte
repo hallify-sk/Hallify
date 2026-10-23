@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { pageTitle } from '$lib/page-title';
   import { onMount } from 'svelte';
   import { saas } from '$lib/analytics';
   import { t } from '$lib/i18n.svelte';
@@ -41,7 +42,7 @@
   );
 </script>
 
-<svelte:head><title>{title} – Hallify</title></svelte:head>
+<svelte:head><title>{pageTitle(title)}</title></svelte:head>
 
 <div class="success-page">
   <div class="confetti" aria-hidden="true">
