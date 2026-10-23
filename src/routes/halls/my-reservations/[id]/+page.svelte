@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { venueTitle } from '$lib/page-title';
 	import { enhance } from '$app/forms';
-	import { tick } from 'svelte';
+	import { tick, untrack } from 'svelte';
 	import MiniCalendar from '$lib/components/MiniCalendar.svelte';
 	import { statusLabel, statusClass, fmtDate } from '$lib/reservationStatus';
 	import { computeExtras } from '$lib/extras';
@@ -27,9 +27,9 @@
 	let editing = $state(false);
 
 	// Rating the finished event (D5): stars picked here, sent with the comment.
-	let fbRating = $state(data.feedback?.row?.rating ?? 0);
+	let fbRating = $state(untrack(() => data.feedback?.row?.rating ?? 0));
 	let fbHover = $state(0);
-	let fbEditing = $state(!data.feedback?.row);
+	let fbEditing = $state(untrack(() => !data.feedback?.row));
 	const fbShown = $derived(fbHover || fbRating);
 	const longDate = (d: string) => formatDate(d, getLocale(), { day: 'numeric', month: 'long', year: 'numeric' });
 
