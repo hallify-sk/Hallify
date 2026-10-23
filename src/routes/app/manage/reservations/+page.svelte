@@ -306,20 +306,22 @@
 				<div class="res-head">
 					<span>{t.adminReservations.event}</span>
 					<span>{t.adminReservations.user}</span>
-					<span>{t.adminReservations.hall}</span>
+					<span class="h-hall">{t.adminReservations.hall}</span>
 					<span>{t.adminReservations.date}</span>
 					<span>{t.adminReservations.status}</span>
 					<span></span>
 				</div>
 				{#each data.reservations as res (res.id)}
 					{@const sc = STATUS_COLOR[res.status] ?? '--s-slate'}
-					<a href="/app/reservation/{res.id}" class="row-item res-row" class:is-past={isPastEvent(res.event_date) && res.status !== 'cancelled'}>
+					<a href="/app/reservation/{res.id}" class="row-item row-item--bleed res-row" class:is-past={isPastEvent(res.event_date) && res.status !== 'cancelled'}>
 						<div class="td-title">
 							<span class="res-title">{res.title}</span>
 							{#if isPastEvent(res.event_date) && res.status !== 'cancelled'}<span class="past-tag">{t.event.past}</span>{/if}
 							{#if typeLabel(res.event_type)}
 								<span class="res-type">{typeLabel(res.event_type)}</span>
 							{/if}
+							<!-- The hall, here instead of in its own column when the list is narrow. -->
+							<span class="res-type res-hall-inline">{res.hall_name}</span>
 						</div>
 						<div class="td-user">
 							{#if res.customer_name}
@@ -447,7 +449,11 @@
 	}
 
 	/* ── Hairline rows ── */
-	.res-list { overflow-x: auto; }
+	/* Laid out by the width the list actually gets, not the window's: with the
+	   sidebar open, a 900 px window leaves the list about 610 px, and the six fixed
+	   columns ran off its edge (the status was cut off behind a scrollbar). */
+	.res-list { container-type: inline-size; }
+	.res-hall-inline { display: none; }
 
 	.res-head {
 		display: grid;
@@ -538,8 +544,15 @@
 		.page-header { flex-wrap: wrap; gap: 12px; }
 	}
 
-	@media (max-width: 760px) {
-		.res-head { display: none; }
+	/* Narrower: the hall moves under the event name, the other columns shrink. */
+	@container (max-width: 760px) {
+		.res-head, .res-row { grid-template-columns: minmax(0, 2fr) minmax(0, 1.5fr) 96px 112px 16px; gap: 12px; }
+		.h-hall, .td-hall { display: none; }
+		.res-hall-inline { display: block; }
+	}
+	/* Phone: two columns, label-less. */
+	@container (max-width: 520px) {
+		.res-head, .td-arrow { display: none; }
 		.res-row { grid-template-columns: 1fr auto; row-gap: 6px; }
 	}
 </style>
