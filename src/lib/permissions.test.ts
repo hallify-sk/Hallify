@@ -13,6 +13,7 @@ import {
 	grantablePermissions,
 	parsePermissions,
 	rankOf,
+	sameRoleName,
 	sanitize,
 	type MemberAccess,
 	type MemberRole,
@@ -289,5 +290,12 @@ describe('granting the Admin access level', () => {
 
 	it('is refused to a custom role that only manages members', () => {
 		expect(canGrantAdminAccess(member([role('People', 5, ['members.manage', 'invites.manage'])]))).toBe(false);
+	});
+});
+
+describe('role names', () => {
+	it('treat case and surrounding spaces as the same name', () => {
+		expect(sameRoleName('Čašník', ' čašník ')).toBe(true);
+		expect(sameRoleName('Čašník', 'Čašníčka')).toBe(false);
 	});
 });

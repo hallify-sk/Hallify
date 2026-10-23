@@ -215,6 +215,13 @@ export function can(access: MemberAccess, permission: Permission): boolean {
  */
 export const LEGACY_ADMIN_ROLE_ID = 'legacy-admin';
 
+/** Two roles called the same are two chips nobody can tell apart on the Members tab
+ *  or in the invite form, so a role name is unique within an org, ignoring case and
+ *  surrounding spaces. */
+export function sameRoleName(a: string, b: string): boolean {
+	return a.trim().toLowerCase() === b.trim().toLowerCase();
+}
+
 export function withLegacyAdmin(access: MemberAccess, legacyRole: string | null | undefined): MemberAccess {
 	if (access.isOwner || legacyRole !== 'admin') return access;
 	if (access.roles.some((r) => r.id === LEGACY_ADMIN_ROLE_ID)) return access;

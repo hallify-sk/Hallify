@@ -2,7 +2,7 @@
 	import { enhance } from '$app/forms';
 	import type { SubmitFunction } from '@sveltejs/kit';
 	import { t } from '$lib/i18n.svelte';
-	import { ELEVATED, PERMISSION_GROUPS, PERMISSIONS, type Permission } from '$lib/permissions';
+	import { ELEVATED, PERMISSION_GROUPS, PERMISSIONS, sameRoleName, type Permission } from '$lib/permissions';
 	import type { PageData, ActionData } from './$types';
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
@@ -55,8 +55,16 @@
 		if (result.type === 'success' && typeof result.data?.openId === 'string') {
 			openId = result.data.openId;
 			showCreate = false;
+			newName = '';
 		}
 	};
+
+	// Warn while typing when the name is already used; the server refuses it too.
+	let newName = $state('');
+	let editName = $state<{ id: string; value: string } | null>(null);
+	function nameTaken(name: string, exceptId: string | null): boolean {
+		return name.trim() !== '' && data.roles.some((r) => r.id !== exceptId && sameRoleName(r.name, name));
+	}
 
 	/** Save, delete and reorder all post from the editor's own form; a delete simply
 	 *  takes the row away, so nothing has to close the panel by hand. */
@@ -97,10 +105,15 @@
 						maxlength="40"
 						autocomplete="off"
 						placeholder={t.rolesAdmin.roleNamePlaceholder}
+						bind:value={newName}
+						aria-describedby={nameTaken(newName, null) ? 'new-role-taken' : undefined}
 					/>
 				</div>
 				<button type="submit" class="btn-action btn-sm create-submit">{t.common.create}</button>
 			</div>
+			{#if nameTaken(newName, null)}
+				<p id="new-role-taken" class="alert-warning name-warn">{t.serverErrors.roleNameTaken}</p>
+			{/if}
 			<div class="fld">
 				<span class="fld-label">{t.rolesAdmin.color}</span>
 				{@render colorPicker(null, false)}
@@ -209,6 +222,7 @@
 									autocomplete="off"
 									value={role.name}
 									disabled={!role.canManage}
+									oninput={(e) => (editName = { id: role.id, value: e.currentTarget.value })}
 								/>
 							</div>
 							<div class="fld">
@@ -216,6 +230,9 @@
 								{@render colorPicker(role.color, !role.canManage)}
 							</div>
 						</div>
+						{#if editName?.id === role.id && !sameRoleName(editName.value, role.name) && nameTaken(editName.value, role.id)}
+							<p class="alert-warning name-warn">{t.serverErrors.roleNameTaken}</p>
+						{/if}
 
 						{#if role.isDefault}
 							<p class="editor-note">{t.rolesAdmin.defaultRoleHint}</p>
@@ -331,6 +348,7 @@
 		padding-block: 0;
 		flex-shrink: 0;
 	}
+	.name-warn { margin: 0; max-width: 60ch; }
 	.create-hint {
 		margin: 0;
 		font-size: 12px;

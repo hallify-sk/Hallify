@@ -9,6 +9,7 @@ import {
 	grantablePermissions,
 	parsePermissions,
 	rankOf,
+	sameRoleName,
 	sanitize,
 	type MemberAccess,
 	type Permission
@@ -174,6 +175,7 @@ export const actions: Actions = {
 		if (color === false) return fail(400, { error: e.invalidRoleColor });
 
 		const existing = await listRoles(locals.db, orgId); // lowest rank first
+		if (existing.some((r) => sameRoleName(r.name, name))) return fail(400, { error: e.roleNameTaken });
 		const defaultAt = existing.findIndex((r) => r.is_default === 1);
 		const slot = defaultAt >= 0 ? defaultAt + 1 : 0;
 
@@ -235,6 +237,14 @@ export const actions: Actions = {
 		if (name.length > NAME_MAX) return fail(400, { error: e.roleNameMax });
 		const color = readColor(data.get('color'));
 		if (color === false) return fail(400, { error: e.invalidRoleColor });
+		// Only a rename is checked: an org that already has two roles of one name must
+		// still be able to save their permissions.
+		if (!sameRoleName(name, role.name)) {
+			const others = await listRoles(locals.db, orgId);
+			if (others.some((r) => r.id !== role.id && sameRoleName(r.name, name))) {
+				return fail(400, { error: e.roleNameTaken });
+			}
+		}
 
 		const submitted = new Set(sanitize(data.getAll('perm').map((v) => String(v))));
 		const grantable = grantablePermissions(access);
