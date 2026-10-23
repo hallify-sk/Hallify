@@ -24,3 +24,9 @@ Branch: `fix/editors`
 | B67 | done | Below 760 px the editor shows a read-only plan per floor with a "needs a bigger screen" note instead of a 0-px canvas; editor toolbars wrap. |
 | I23 | done | Pillar size and square/round options (round = 24-gon wall); width/depth fields for a selected axis-aligned wall (thickness); live length of the side being drawn; measurement labels placed by priority without overlapping (`label-layout.ts`). |
 | I24 | done | Re-import skips guests already on the list (name + group) and says who; export headers localised, `;` for Slovak. |
+
+Foreign file: `src/routes/+layout.svelte` (shell team) — `isDocPage` also matches the two new print routes.
+No migration was needed (B111 compares a content hash of `halls.floorplan_json`).
+
+Checks at the end: `npx vitest run` 33 files / 293 tests pass; svelte-check 0 errors.
+Not verified in a browser (per instructions): the narrow view, label placement, the print sheets and the client editor height.

@@ -35,8 +35,9 @@ export interface LayoutSaverOptions {
 	failedMessage: () => string;
 }
 
-/** The layout JSON a keepalive request may still carry (browsers cap it at 64 kB). */
-const KEEPALIVE_MAX = 60_000;
+/** The layout JSON a keepalive request may still carry: browsers cap the whole body
+ *  at 64 kB, and a name with diacritics takes two bytes per letter. */
+const KEEPALIVE_MAX = 48_000;
 
 export class LayoutSaver {
 	/** The editor's current layout, as it last reported it. */
