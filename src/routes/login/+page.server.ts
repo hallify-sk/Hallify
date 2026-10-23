@@ -5,6 +5,7 @@ import type { UserRow } from '$lib/db/index';
 import { createSession } from '$lib/auth';
 import { st } from '$lib/i18n-server';
 import { rateLimit, rateLimitKey, tooManyAttemptsMessage, RATE_LIMITS } from '$lib/rateLimit';
+import { venueIdentity } from '$lib/site/brand.server';
 import type { Actions, PageServerLoad } from './$types';
 
 /** Only a same-origin absolute path may be followed after sign-in or sign-up.
@@ -32,7 +33,8 @@ export const load: PageServerLoad = async ({ locals, url }) => {
   // Already signed in — org members manage on the bubble, clients book.
   if (locals.user) redirect(303, locals.user.account_type === 'client' ? '/halls' : '/app/manage');
   return {
-    domainOrg: locals.domainOrg,
+    // Branded like the rest of the venue's site (display name and logo).
+    domainOrg: await venueIdentity(locals.db, locals.domainOrg),
     redirectTo: safeNext(url.searchParams.get('redirect')),
   };
 };
