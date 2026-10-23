@@ -45,11 +45,14 @@
       const msg = e.data as { type?: string; draft?: Partial<Draft> } | null;
       if (msg?.type !== 'hallify:site-draft' || !msg.draft) return;
 
+      // Without a paid plan the live site shows the default page with no texts
+      // (src/routes/halls/+layout.server.ts), so the preview does the same rather
+      // than showing an arrangement no visitor will see.
       draft = {
         template: String(msg.draft.template ?? draft.template),
-        tagline: String(msg.draft.tagline ?? ''),
-        intro: String(msg.draft.intro ?? ''),
-        sections: resolveSections(msg.draft.sections)
+        tagline: data.allowPremium ? String(msg.draft.tagline ?? '') : '',
+        intro: data.allowPremium ? String(msg.draft.intro ?? '') : '',
+        sections: resolveSections(data.allowPremium ? msg.draft.sections : null)
       };
     }
 

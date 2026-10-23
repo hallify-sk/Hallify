@@ -21,6 +21,11 @@
    *  hiding it makes the feature invisible to the people most likely to buy it. */
   const locked = (premium: boolean) => premium && !data.allowPremium;
 
+  /** Arranging sections is part of the paid site, like the texts: the live site of
+   *  a free organisation shows the default page. The controls used to work anyway,
+   *  so a free owner saved an arrangement nobody would ever see. */
+  const canArrange = $derived(data.allowPremium);
+
   const enabled = $derived(sections.filter((s) => s.enabled));
   const available = $derived(sections.filter((s) => !s.enabled));
 
@@ -128,10 +133,18 @@
   let device = $state<'desktop' | 'phone'>('desktop');
 
   function push() {
-    frame?.contentWindow?.postMessage(
-      { type: 'hallify:site-draft', draft: { template, tagline, intro, sections } },
-      window.location.origin
-    );
+    // A $state proxy cannot be structured-cloned: posting `sections` directly threw
+    // DataCloneError inside the effect below, which stopped every later update — the
+    // preview stayed on the defaults, clicks did not repaint and Save never finished.
+    // Post a plain snapshot, and never let a preview problem break the builder.
+    try {
+      frame?.contentWindow?.postMessage(
+        { type: 'hallify:site-draft', draft: $state.snapshot({ template, tagline, intro, sections }) },
+        window.location.origin
+      );
+    } catch (e) {
+      console.warn('[site preview] could not post the draft', e);
+    }
   }
 
   // Re-posts whenever any part of the draft changes. `current` is read so the
@@ -179,6 +192,10 @@
         <p>{t.settingsPages.siteLayoutHint}</p>
       </div>
 
+      {#if !canArrange}
+        <p class="alert-warning">{t.settingsPages.siteSectionsPaid}</p>
+      {/if}
+
       <h3 class="sb-sub">{t.settingsPages.siteSectionsOn}</h3>
       <ul class="sb-list">
         {#each enabled as s, i (s.type)}
@@ -187,7 +204,7 @@
             class="sb-item"
             class:is-dragging={dragging === s.type}
             class:is-over={dragOver === s.type && dragging !== s.type}
-            draggable="true"
+            draggable={canArrange}
             ondragstart={() => (dragging = s.type)}
             ondragend={() => { dragging = null; dragOver = null; }}
             ondragover={(e) => { e.preventDefault(); dragOver = s.type; }}
@@ -205,21 +222,21 @@
 
             <span class="sb-controls">
               <button
-                type="button" class="sb-icon" disabled={i === 0}
+                type="button" class="sb-icon" disabled={!canArrange || i === 0}
                 aria-label={t.settingsPages.siteMoveUp} title={t.settingsPages.siteMoveUp}
                 onclick={() => move(s.type, -1)}
               >
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="18 15 12 9 6 15"/></svg>
               </button>
               <button
-                type="button" class="sb-icon" disabled={i === enabled.length - 1}
+                type="button" class="sb-icon" disabled={!canArrange || i === enabled.length - 1}
                 aria-label={t.settingsPages.siteMoveDown} title={t.settingsPages.siteMoveDown}
                 onclick={() => move(s.type, 1)}
               >
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="6 9 12 15 18 9"/></svg>
               </button>
               <button
-                type="button" class="sb-icon sb-icon--off"
+                type="button" class="sb-icon sb-icon--off" disabled={!canArrange}
                 aria-label={t.settingsPages.siteSectionRemove} title={t.settingsPages.siteSectionRemove}
                 onclick={() => disable(s.type)}
               >
@@ -243,7 +260,7 @@
                 <strong>{labelOf(s.type)}</strong>
                 <span class="sb-desc">{descOf(s.type)}</span>
               </span>
-              <button type="button" class="sb-add" onclick={() => enable(s.type)}>
+              <button type="button" class="sb-add" disabled={!canArrange} onclick={() => enable(s.type)}>
                 {t.settingsPages.siteSectionAdd}
               </button>
             </li>
@@ -425,7 +442,8 @@
     font-family: inherit; font-size: 12px; font-weight: 600; cursor: pointer;
     transition: background .15s, border-color .15s;
   }
-  .sb-add:hover { background: var(--accent-dim); border-color: var(--accent); color: var(--accent-ink); }
+  .sb-add:hover:not(:disabled) { background: var(--accent-dim); border-color: var(--accent); color: var(--accent-ink); }
+  .sb-add:disabled { opacity: .45; cursor: not-allowed; }
 
   .sb-empty {
     padding: 18px; border: 1px dashed var(--border); border-radius: var(--radius-sm);

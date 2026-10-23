@@ -14,3 +14,5 @@
 | I16 | done | Webhook test send, edit, delivery detail (payload, error), retry, translated statuses. |
 | M10 | done | Owner can download all org data (JSON) or bookings (CSV) from Advanced. |
 | B40 | partial | Webhook delivery log uses parseDbTime-based timeAgo; announcements: see below. |
+| B16 | done | Preview posts a $state.snapshot (the proxy threw DataCloneError and froze the builder); posting is guarded. |
+| B79 | done | On Free the section controls are disabled with a plan notice, saving keeps stored texts/sections, and the preview shows what visitors get. |

@@ -106,18 +106,30 @@ export const actions: Actions = {
     const strip = (v: unknown, max: number) =>
       String(v ?? '').replace(/[<>]/g, '').replace(/\s+\n/g, '\n').trim().slice(0, max);
 
-    const tagline = strip(data.get('tagline'), 140);
-    const intro = strip(data.get('intro'), 600);
+    // Texts and arrangement are part of the paid site. On a plan without them the
+    // inputs are disabled, and a disabled input is not submitted: saving used to
+    // store '' and wipe what the owner had written while they were on a paid plan.
+    // Keep what is stored, so it is all back when they upgrade.
+    const storedRow = allowPremium ? null : await dbFirst<{ value: string | null }>(locals.db,
+      `SELECT value FROM org_settings WHERE org_id = ? AND key = 'site'`, org.id);
+    const stored = fromJson<{ tagline?: string; intro?: string; sections?: unknown }>(storedRow?.value ?? null) ?? {};
+
+    const tagline = allowPremium ? strip(data.get('tagline'), 140) : (stored.tagline ?? '');
+    const intro = allowPremium ? strip(data.get('intro'), 600) : (stored.intro ?? '');
 
     // The arrangement travels as JSON in one hidden field: it is an ordered list,
     // and ordinary form encoding has no faithful way to carry one. It is parsed
     // defensively and run through resolveSections, which drops unknown types and
     // collapses duplicates — the field is client-supplied like any other.
     let sections;
-    try {
-      sections = resolveSections(JSON.parse(String(data.get('sections') ?? 'null')));
-    } catch {
-      sections = resolveSections(null);
+    if (!allowPremium) {
+      sections = resolveSections(stored.sections);
+    } else {
+      try {
+        sections = resolveSections(JSON.parse(String(data.get('sections') ?? 'null')));
+      } catch {
+        sections = resolveSections(null);
+      }
     }
 
     await dbRun(locals.db,
