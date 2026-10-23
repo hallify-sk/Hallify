@@ -63,4 +63,26 @@ describe('venue explorer', () => {
     expect(filterVenues(venues, { ...base, guests: 200 })).toEqual([]);
     expect(filterVenues(venues, { query: '', guests: 0, floorplan: false, booking: false, center: DEFAULT_CENTER, radius: 10 })).toHaveLength(2);
   });
+  it('finds a venue searched for by name or town even when the geocoder places the query elsewhere', () => {
+    const venue = (id: string, name: string, address: string | null, latitude: number | null, longitude: number | null) =>
+      ({ ...demoVenues()[0], id, name, address, latitude, longitude, demo: false });
+    const venues = [
+      venue('reduta', 'Reduta', 'Medená 3, Bratislava', 48.1406, 17.1105),
+      venue('kosice', 'Dom umenia', 'Moyzesova 66, Košice', 48.7194, 21.2577),
+      venue('sala', 'Kaštieľ', 'Hlavná 1, Šaľa', null, null),
+    ];
+    const base = { guests: 0, floorplan: false, booking: false, radius: 50, centerIsQuery: true };
+    // "Reduta" geocodes to Brno; the area must not hide the venue that is called Reduta.
+    expect(filterVenues(venues, { ...base, query: 'Reduta', center: { latitude: 49.19, longitude: 16.6 } }).map(v => v.id)).toEqual(['reduta']);
+    // Typed without diacritics, and geocoded to a Czech village.
+    expect(filterVenues(venues, { ...base, query: 'kosice', center: { latitude: 49.9, longitude: 15.1 } }).map(v => v.id)).toEqual(['kosice']);
+    // No map position, but the address says Šaľa.
+    expect(filterVenues(venues, { ...base, query: 'Šaľa', center: { latitude: 48.15, longitude: 17.88 } }).map(v => v.id)).toEqual(['sala']);
+    // Words in any order, across name and address.
+    expect(filterVenues(venues, { ...base, query: 'reduta bratislava', center: null }).map(v => v.id)).toEqual(['reduta']);
+    // A typed town also brings in what lies around it.
+    expect(filterVenues(venues, { ...base, query: 'Pezinok', center: { latitude: 48.29, longitude: 17.27 } }).map(v => v.id)).toEqual(['reduta']);
+    // Around the visitor's own position the area is a real limit.
+    expect(filterVenues(venues, { ...base, centerIsQuery: false, query: 'kosice', center: { latitude: 48.14, longitude: 17.1 } })).toEqual([]);
+  });
 });

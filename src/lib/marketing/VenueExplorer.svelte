@@ -16,7 +16,11 @@
   let { halls, initialQuery = '', initialGuests = 0, initialDemo = dev, initialFloorplan = false }: { halls: PublicVenue[]; initialQuery?: string; initialGuests?: number; initialDemo?: boolean; initialFloorplan?: boolean } = $props();
   const en = $derived(getLocale() === 'en');
   let query = $state(untrack(() => initialQuery)), guests = $state(untrack(() => initialGuests));
-  let floorplan = $state(untrack(() => initialFloorplan)), booking = $state(false), amenity = $state(''), radius = $state(50), nearby = $state(true);
+  let floorplan = $state(untrack(() => initialFloorplan)), booking = $state(false), amenity = $state(''), radius = $state(50);
+  // Off until the visitor asks for an area (the button, the map's location control or
+  // the radius). It used to start on, so a typed venue name became the centre of a
+  // 50 km circle around wherever the geocoder placed it, and the venue itself vanished.
+  let nearby = $state(false);
   // Read straight from the URL rather than through a prop: the landing page hands the
   // chosen bands over in ?price=, and page.url is the same value on the server render
   // and after a client-side navigation, so the first paint already has the filter on.
@@ -36,7 +40,7 @@
   // Nominatim answers with the full administrative chain; the first part is the place.
   const nearLabel = $derived(searchCenter.center ? (searchCenter.label || query).split(',')[0].trim() || null : null);
   const venues = $derived([...halls, ...(demo ? demoVenues(rankCenter ?? DEFAULT_CENTER, !!rankCenter, en) : [])]);
-  const base = $derived({ query, guests, floorplan, booking, center: nearby ? rankCenter : null, radius });
+  const base = $derived({ query, guests, floorplan, booking, center: nearby ? rankCenter : null, radius, centerIsQuery: !!searchCenter.center });
   const matching = $derived(filterVenues(venues, base).filter(v => !amenity || v.amenities.includes(amenity)));
   const visible = $derived(filterVenues(venues, { ...base, bands }).filter(v => !amenity || v.amenities.includes(amenity)));
   // A venue that never stated a price cannot satisfy a band filter, so say how many

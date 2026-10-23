@@ -3,6 +3,7 @@
 | id | status | note |
 |----|--------|------|
 | B4 | done | Venue cards and the venue page send "Rezervovať" to the booking page on the venue's own site (custom domain or org subdomain); old /app/halls/<id>/book redirects there. |
+| B13 | done | Search matches every word of the query in name or address, diacritics-insensitive; a geocoded query widens results (text OR area) instead of filtering them; the area filter starts off. |
 | B71 | done | Apex venue page names built-in and custom amenities (org_amenities labels); unknown keys are dropped. |
 | B73 | done | Directory lists a hall only when public, live, with a slug and an address or a map position (LISTED_HALL_SQL). |
 | B75 | done | Booking CTA only for halls that take bookings; otherwise a "no online booking" note. |

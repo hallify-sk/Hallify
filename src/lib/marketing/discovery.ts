@@ -82,12 +82,47 @@ export function featuredVenues(
   return Array.from({ length: limit }, (_, i) => ordered[(offset + i) % ordered.length]);
 }
 
-export function filterVenues(venues: PublicVenue[], filters: { query: string; guests: number; floorplan: boolean; booking: boolean; center?: MapCenter | null; radius?: number; bands?: number[] }): PublicVenue[] {
-  const normalize = (text: string) => text.toLocaleLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+/** Lower case without diacritics, so "kosice" finds "Ko\u0161ice" and "sala" finds "\u0160a\u013ea". */
+export function normalizeText(text: string): string {
+  return text.toLocaleLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+}
+
+/**
+ * Whether a venue's name or address mentions every word of the query, in any order:
+ * "Reduta Bratislava" finds Reduta on Meden\u00e1 in Bratislava even though the words are
+ * not next to each other in the text.
+ */
+export function matchesQuery(venue: Pick<PublicVenue, 'name' | 'address'>, query: string): boolean {
+  const words = normalizeText(query).split(/[\s,]+/).filter(Boolean);
+  if (!words.length) return true;
+  const text = normalizeText(`${venue.name} ${venue.address ?? ''}`);
+  return words.every(word => text.includes(word));
+}
+
+/**
+ * The directory filters.
+ *
+ * `center` + `radius` is the "around" filter. When the centre is where the typed
+ * query was geocoded to (`centerIsQuery`), the area widens the search rather than
+ * narrowing it: a venue matches by its name or address OR by lying in the area.
+ * Requiring both hid exactly what people searched for -- "Reduta" geocodes to Brno,
+ * "kosice" to a Czech village, and a venue in \u0160a\u013ea without a map position was
+ * dropped by the radius however well its address matched. When the centre is the
+ * visitor's own position, the area is a real constraint and both must hold.
+ */
+export function filterVenues(venues: PublicVenue[], filters: { query: string; guests: number; floorplan: boolean; booking: boolean; center?: MapCenter | null; radius?: number; bands?: number[]; centerIsQuery?: boolean }): PublicVenue[] {
   // An unstated band must not pass a band filter: it is unknown, not cheap.
   const bands = filters.bands?.length ? new Set(filters.bands) : null;
+  const center = filters.center && filters.radius ? filters.center : null;
+  const typed = !!filters.query.trim();
+  const inArea = (venue: PublicVenue) => !!center && venue.latitude !== null && venue.longitude !== null &&
+    distanceKm(center, { latitude: venue.latitude, longitude: venue.longitude }) <= filters.radius!;
+  const place = (venue: PublicVenue) => {
+    const text = matchesQuery(venue, filters.query);
+    if (!center) return text;
+    return filters.centerIsQuery && typed ? text || inArea(venue) : text && inArea(venue);
+  };
   return venues.filter(venue => venue.max_people >= filters.guests && (!filters.floorplan || !!venue.has_floorplan) &&
-    (!filters.booking || !!venue.allow_reservations) && normalize(`${venue.name} ${venue.address ?? ''}`).includes(normalize(filters.query.trim())) &&
-    (!bands || (venue.price_band !== null && bands.has(venue.price_band))) &&
-    (!filters.center || !filters.radius || (venue.latitude !== null && venue.longitude !== null && distanceKm(filters.center, { latitude: venue.latitude, longitude: venue.longitude }) <= filters.radius)));
+    (!filters.booking || !!venue.allow_reservations) && place(venue) &&
+    (!bands || (venue.price_band !== null && bands.has(venue.price_band))));
 }
