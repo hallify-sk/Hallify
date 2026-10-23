@@ -3,6 +3,7 @@ import { articlesFor, searchable, type KbLocale } from '$lib/knowledgebase';
 import type { PageServerLoad, Actions } from './$types';
 import { fail } from '@sveltejs/kit';
 import { requireOrgConsole, requireOrgPermission } from '$lib/server/access';
+import { canManageSettings } from '$lib/server/settings-access';
 import { st } from '$lib/i18n-server';
 import { SETUP_SERVICE_PRICE_CENTS } from '$lib/setup-service';
 import { openSetupRequest, createSetupRequest, cancelSetupRequest } from '$lib/server/setup-requests';
@@ -62,6 +63,9 @@ export const load: PageServerLoad = async ({ locals }) => {
 	const setupRequest = await openSetupRequest(locals.db, orgId);
 
 	return {
+		// The setup checklist, the wizard and the paid setup offer are for whoever can
+		// act on them (settings.manage); everyone else gets the knowledgebase (I29).
+		canSetUp: await canManageSettings(locals),
 		checklist,
 		completed,
 		total: checklist.length,

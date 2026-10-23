@@ -9,6 +9,7 @@ import type { Actions, PageServerLoad } from './$types';
 import { sendEmail } from '$lib/email';
 import { OPERATOR } from '$lib/legal';
 import { requireOrgPermission } from '$lib/server/access';
+import { canManageSettings } from '$lib/server/settings-access';
 import { parseCoordinates } from '$lib/venue-location';
 import { geocodeAddress } from '$lib/server/geocode';
 import { blockingReservations, cancelHallReservations, cancelReservations, hallIsUnused, reservationsInRange } from '$lib/server/hall-archive';
@@ -190,7 +191,9 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 			orgId, hall.id)
 		: [];
 
-	return { hall, templates, blocks, tableTypes, reservations, extras, plan, orgAmenities, floorplanRequest, blocking, unused, planFull, swapCandidates };
+	// Ordering (or withdrawing) the paid mapping add-on needs settings.manage (I29).
+	const canOrderAddons = await canManageSettings(locals);
+	return { hall, templates, blocks, tableTypes, reservations, extras, plan, orgAmenities, floorplanRequest, blocking, unused, planFull, swapCandidates, canOrderAddons };
 };
 
 /** The hall in the URL must belong to the acting organization. Every action below
@@ -731,6 +734,8 @@ export const actions: Actions = {
 	 *  records an enquiry and notifies us. It charges nothing and promises no
 	 *  figure — a number shown here would be one we cannot stand behind. */
 	requestFloorplanService: async ({ request, locals }) => {
+		// A paid add-on is ordered by someone who manages the organisation's settings.
+		await requireOrgPermission(locals, 'settings.manage');
 		const org = await requireOrgPermission(locals, 'halls.manage');
 		const user = locals.user!;
 		const data = await request.formData();
@@ -776,6 +781,7 @@ export const actions: Actions = {
 	/** Withdraw a mapping request we have not delivered yet (M25). We are told, so
 	 *  nobody turns up for a visit that is no longer wanted. */
 	cancelFloorplanRequest: async ({ request, params, locals }) => {
+		await requireOrgPermission(locals, 'settings.manage');
 		const org = await requireOrgPermission(locals, 'halls.manage');
 		const user = locals.user!;
 		const hall = await dbFirst<{ id: string; name: string }>(locals.db,

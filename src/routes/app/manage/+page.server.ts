@@ -3,6 +3,7 @@ import { ONBOARDING_PROMPT_DAYS, resolveOnboarding } from '$lib/onboarding';
 import type { PageServerLoad } from './$types';
 import { requireOrgConsole } from '$lib/server/access';
 import { loadCapNotices } from '$lib/server/cap-notices';
+import { canManageSettings } from '$lib/server/settings-access';
 
 export const load: PageServerLoad = async ({ locals }) => {
   await requireOrgConsole(locals);
@@ -155,8 +156,9 @@ export const load: PageServerLoad = async ({ locals }) => {
   );
 
   return {
+    // Only for someone who can finish it: the wizard needs settings.manage (I29).
     resumeOnboarding:
-      !onboarding.completed && (orgAge?.days ?? 999) <= ONBOARDING_PROMPT_DAYS,
+      !onboarding.completed && (orgAge?.days ?? 999) <= ONBOARDING_PROMPT_DAYS && (await canManageSettings(locals)),
     stats: safeStats,
     monthly,
     byStatus,

@@ -730,10 +730,12 @@
     </p>
     {#if req.note}<p class="fp-request-note">{req.note}</p>{/if}
     {#if form?.fpError}<div class="inline-err" role="alert">{form.fpError}</div>{/if}
-    <form method="POST" action="?/cancelFloorplanRequest" use:enhance={confirmFirst(() => t.hallAdmin.mappingCancelConfirm)}>
-      <input type="hidden" name="id" value={req.id} />
-      <button type="submit" class="btn-ghost btn-ghost-sm">{t.hallAdmin.mappingCancel}</button>
-    </form>
+    {#if data.canOrderAddons}
+      <form method="POST" action="?/cancelFloorplanRequest" use:enhance={confirmFirst(() => t.hallAdmin.mappingCancelConfirm)}>
+        <input type="hidden" name="id" value={req.id} />
+        <button type="submit" class="btn-ghost btn-ghost-sm">{t.hallAdmin.mappingCancel}</button>
+      </form>
+    {/if}
   </div>
 {/snippet}
 
@@ -1701,6 +1703,7 @@
             {#if data.floorplanRequest?.status === 'delivered'}
               <p class="fp-text fp-text--done">✓ {t.hallAdmin.mappingDeliveredOn(fmtDbDate(data.floorplanRequest.updated_at, getLocale()))}</p>
             {/if}
+            {#if data.canOrderAddons}
             <details class="fp-mapping">
               <summary>{t.hallAdmin.mappingOffer}</summary>
               <form method="POST" action="?/requestFloorplanService" use:enhance={() => async ({ update }) => { await update({ reset: false }); }}>
@@ -1711,6 +1714,7 @@
                 <button type="submit" class="btn-outline btn-sm">{t.hallAdmin.mappingRequest}</button>
               </form>
             </details>
+            {/if}
           {/if}
           <footer class="fp-step-foot">
             <a href="/app/manage/halls/{data.hall.id}/editor" class="btn-primary btn-sm">{t.hallAdmin.drawYourselfTitle}</a>

@@ -32,88 +32,90 @@
     <p class="page-sub">{t.membersAdmin.helpSub}</p>
   </div>
 
-  <!-- The permanent door back into the walkthrough. The dashboard prompt only
-       appears while it is unfinished and only for a month; this is here for
-       good, so skipping it is never a one-way decision. -->
-  <a class="rerun" href="/app/welcome?again=1">
-    <span class="icon-tile">
-      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
-    </span>
-    <span class="rerun-copy">
-      <strong>{t.onboarding.rerunTitle}</strong>
-      <span>{t.onboarding.rerunBody}</span>
-    </span>
-  </a>
+  {#if data.canSetUp}
+    <!-- The permanent door back into the walkthrough. The dashboard prompt only
+         appears while it is unfinished and only for a month; this is here for
+         good, so skipping it is never a one-way decision. -->
+    <a class="rerun" href="/app/welcome?again=1">
+      <span class="icon-tile">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+      </span>
+      <span class="rerun-copy">
+        <strong>{t.onboarding.rerunTitle}</strong>
+        <span>{t.onboarding.rerunBody}</span>
+      </span>
+    </a>
 
-  <!-- Onboarding checklist -->
-  <section class="section section--lead">
-    <div class="section-head section-head--row">
-      <div>
-        <h2>{t.membersAdmin.setupChecklist}</h2>
-        <span class="cl-sub">{data.completed} {t.membersAdmin.progressOf} {data.total} {t.membersAdmin.progressDone}</span>
+    <!-- Onboarding checklist -->
+    <section class="section section--lead">
+      <div class="section-head section-head--row">
+        <div>
+          <h2>{t.membersAdmin.setupChecklist}</h2>
+          <span class="cl-sub">{data.completed} {t.membersAdmin.progressOf} {data.total} {t.membersAdmin.progressDone}</span>
+        </div>
+        <div class="cl-progress">
+          <div class="cl-bar"><div class="cl-bar-fill" style="width:{pct}%"></div></div>
+          <span class="cl-pct">{pct}%</span>
+        </div>
       </div>
-      <div class="cl-progress">
-        <div class="cl-bar"><div class="cl-bar-fill" style="width:{pct}%"></div></div>
-        <span class="cl-pct">{pct}%</span>
+
+      {#if data.completed === data.total}
+        <div class="cl-done-banner">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+          {t.membersAdmin.allSetUp}
+        </div>
+      {/if}
+
+      <ul class="row-list cl-list">
+        {#each data.checklist as item}
+          <li class="row-item cl-item" class:done={item.done}>
+            {#if item.auto}
+              <!-- The app can see this is finished, so there is nothing to tick. -->
+              <span class="cl-check" title={t.membersAdmin.stepDetected}>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
+              </span>
+            {:else}
+              <form method="POST" action="?/toggleStep" use:enhance class="cl-check-form">
+                <input type="hidden" name="key" value={item.key} />
+                <button
+                  type="submit"
+                  class="cl-check cl-check-btn"
+                  class:is-checked={item.manual}
+                  aria-pressed={item.manual}
+                  aria-label={item.manual ? t.membersAdmin.markNotDone : t.membersAdmin.markDone}
+                  title={item.manual ? t.membersAdmin.markNotDone : t.membersAdmin.markDone}
+                >
+                  {#if item.manual}
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
+                  {/if}
+                </button>
+              </form>
+            {/if}
+            <div class="cl-text">
+              <span class="cl-label">{item.label}</span>
+              <span class="cl-desc">{item.desc}</span>
+            </div>
+            {#if !item.done}
+              <a href={item.href} class="cl-cta">{item.cta}</a>
+            {:else if item.manual && !item.auto}
+              <span class="cl-manual">{t.membersAdmin.markedDone}</span>
+            {/if}
+          </li>
+        {/each}
+      </ul>
+    </section>
+
+    <!-- Have us do it instead. Placed under the checklist on purpose: this is the
+         page where somebody is looking at everything still to set up. -->
+    <section class="section">
+      <div class="section-head">
+        <h2>{t.setupService.title}</h2>
+        <p>{t.setupService.lead}</p>
       </div>
-    </div>
 
-    {#if data.completed === data.total}
-      <div class="cl-done-banner">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
-        {t.membersAdmin.allSetUp}
-      </div>
-    {/if}
-
-    <ul class="row-list cl-list">
-      {#each data.checklist as item}
-        <li class="row-item cl-item" class:done={item.done}>
-          {#if item.auto}
-            <!-- The app can see this is finished, so there is nothing to tick. -->
-            <span class="cl-check" title={t.membersAdmin.stepDetected}>
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
-            </span>
-          {:else}
-            <form method="POST" action="?/toggleStep" use:enhance class="cl-check-form">
-              <input type="hidden" name="key" value={item.key} />
-              <button
-                type="submit"
-                class="cl-check cl-check-btn"
-                class:is-checked={item.manual}
-                aria-pressed={item.manual}
-                aria-label={item.manual ? t.membersAdmin.markNotDone : t.membersAdmin.markDone}
-                title={item.manual ? t.membersAdmin.markNotDone : t.membersAdmin.markDone}
-              >
-                {#if item.manual}
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
-                {/if}
-              </button>
-            </form>
-          {/if}
-          <div class="cl-text">
-            <span class="cl-label">{item.label}</span>
-            <span class="cl-desc">{item.desc}</span>
-          </div>
-          {#if !item.done}
-            <a href={item.href} class="cl-cta">{item.cta}</a>
-          {:else if item.manual && !item.auto}
-            <span class="cl-manual">{t.membersAdmin.markedDone}</span>
-          {/if}
-        </li>
-      {/each}
-    </ul>
-  </section>
-
-  <!-- Have us do it instead. Placed under the checklist on purpose: this is the
-       page where somebody is looking at everything still to set up. -->
-  <section class="section">
-    <div class="section-head">
-      <h2>{t.setupService.title}</h2>
-      <p>{t.setupService.lead}</p>
-    </div>
-
-    <SetupServiceCard priceCents={data.setupPriceCents} pending={data.setupRequest} />
-  </section>
+      <SetupServiceCard priceCents={data.setupPriceCents} pending={data.setupRequest} />
+    </section>
+  {/if}
 
   <!-- Knowledgebase -->
   <section class="section">
