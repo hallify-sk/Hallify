@@ -544,17 +544,13 @@ const TOOLS: Tool[] = [
 	{
 		name: 'propose_hall_update',
 		description:
-			'Propose changes to a hall\'s public profile — ALL of them in this one call: when setting a hall up from a real ' +
-			'venue, fill every field you found (name, description, capacity, address, contacts, pricing, price band, amenities, ' +
-			'hours and photos) rather than proposing one field at a time. null leaves a field as it is. ' +
-			'Photos: cover_photo_url is one photo URL from read_web_page (the best wide shot of the hall itself); ' +
-			'gallery_photo_urls is the FULL new gallery (keep existing /uploads/ photos by listing them); when the user asks for ' +
-			'several photos, gather them from several pages, and if you found fewer than asked, say so in your reply. They are copied into ' +
-			'Hallify\'s own storage. ' +
-			'Use facts the user gave or that your web search found on reliable pages (the venue\'s own site first) — never ' +
-			'invent a phone number, email, price or capacity; leave it null if you did not find it. List the pages you used ' +
-			'in sources. Write the description in the language of the user, in your own words, 2-4 sentences. ' +
-			'Nothing is saved until the user confirms the preview.',
+			'Propose changes to a hall\'s public profile, ALL in this one call (from a real venue: every field you found, not ' +
+			'one at a time); null leaves a field as it is. Photos come from read_web_page and are copied into Hallify: ' +
+			'cover_photo_url is the best wide shot of the hall itself (not a logo, people or another event); gallery_photo_urls ' +
+			'is the FULL new gallery (list existing /uploads/ photos to keep them), gathered from several pages when several ' +
+			'are wanted; if you found fewer than asked, say so. Never invent a phone, email, price or capacity: use what the ' +
+			'user gave or a reliable page says (the venue\'s own first), else null; list those pages in sources. The ' +
+			'description: the user\'s language, your own words, 2-4 sentences.',
 		permission: 'halls.manage',
 		parameters: obj({
 			hall_id: str('The hall id'),

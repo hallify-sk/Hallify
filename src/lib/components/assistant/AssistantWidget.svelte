@@ -39,6 +39,7 @@
   let threadId = $state<string | null>(null);
   let messages = $state<Message[]>([]);
   let balanceMc = $state<number | null>(null);
+  let questionMc = $state<number | null>(null);
   let text = $state('');
   let files = $state<{ id: string; name: string }[]>([]);
   let busy = $state(false);
@@ -79,6 +80,7 @@
       if (body.ok) {
         messages = body.messages;
         balanceMc = body.balanceMc;
+        questionMc = typeof body.questionMc === 'number' ? body.questionMc : null;
         if (!body.threadId && threadId) setThread(null); // deleted elsewhere
       }
     } catch { /* offline: keep what is shown */ }
@@ -247,7 +249,10 @@
 
     <div class="aw-messages" bind:this={scroller}>
       {#if messages.length === 0 && !pendingText}
-        <p class="aw-empty">{t.ai.widgetEmpty}</p>
+        <div class="aw-empty">
+          <p>{t.ai.widgetEmpty}</p>
+          {#if questionMc !== null}<p class="aw-cost">{t.ai.questionCost(creditAmount(questionMc, getLocale()))}</p>{/if}
+        </div>
       {/if}
       {#each messages as m (m.id)}
         {#if m.text}
@@ -363,6 +368,8 @@
 
   .aw-messages { flex: 1; overflow-y: auto; padding: 14px; display: flex; flex-direction: column; gap: 10px; }
   .aw-empty { margin: auto 8px; text-align: center; font-size: 13px; line-height: 1.55; color: var(--text-muted); }
+  .aw-empty p { margin: 0; }
+  .aw-empty .aw-cost { margin-top: 8px; font-size: 11.5px; color: var(--text-subtle); }
   .aw-msg { max-width: 88%; font-size: 13px; line-height: 1.55; border-radius: var(--radius); padding: 8px 12px; }
   .aw-msg--user { align-self: flex-end; background: var(--accent-dim); white-space: pre-wrap; }
   .aw-msg--assistant { align-self: flex-start; background: var(--bg-hover); }

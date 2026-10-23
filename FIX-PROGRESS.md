@@ -7,6 +7,6 @@
 | B139 | done | one formatter `creditAmount` (src/lib/assistant/credits.ts) for header, widget and settings/ai |
 | B28 | done | recordSavedDraft() measures the saved JSON (seated guests, edited or not); a save carrying none of the proposal withdraws it as "not saved" instead of "applied". Callers in the two editor routes switched (one line each). The editor reload itself is the editors team's part |
 | B149 | done | neutral "Ukladá sa…" on non-import cards; action rows wrap; launcher (and panel) sit above the step buttons on the three full-screen editors; hall card note no longer mentions photos, sources get ", "; composer gets the question back on refusal/failure; failure text no longer claims nothing was charged; propose_hall_update reports the cover-in-gallery drop and the real cover/gallery counts |
-| I1 | not done | |
+| I1 | done | instructions are now identical for every org, page and day (per language) and the org/date/page travel as a developer note in the conversation (only when changed), so the tools+instructions prefix is cached on the first call too; prompt_cache_key per language; hall-update tool description trimmed and duplicated guidance removed from the instructions; expected cost of an ordinary question shown on the assistant page and in the widget (typicalQuestionMc) |
 | I5 | not done | |
 | I26 | not done | |

@@ -25,6 +25,7 @@
 
   // The same formatter as the AI settings page, so the balance reads the same everywhere.
   const credits = $derived(creditAmount(Math.max(0, data.balanceMc), getLocale()));
+  const questionCost = $derived(t.ai.questionCost(creditAmount(data.questionMc, getLocale())));
 
   const errorText = (code: unknown) => errorKey(t.ai.errors, code);
 
@@ -143,7 +144,7 @@
       <p class="beta-line"><span class="beta">{t.ai.beta}</span> {t.ai.betaHint}</p>
     </div>
     {#if data.enabled}
-      <span class="credits" title={t.ai.balanceTitle}>{t.ai.balance(credits)}</span>
+      <span class="credits" title="{t.ai.balanceTitle}. {questionCost}">{t.ai.balance(credits)}</span>
     {/if}
   </div>
 
@@ -193,6 +194,7 @@
             <div class="empty">
               <h2>{t.ai.emptyTitle}</h2>
               <p class="muted">{t.ai.subtitle}</p>
+              <p class="muted small cost-note">{questionCost}</p>
               <div class="suggestions">
                 {#each t.ai.suggestions as s}
                   <button type="button" class="suggestion" onclick={() => (text = s)}>{s}</button>
@@ -309,6 +311,7 @@
   .empty { margin: auto; text-align: center; max-width: 460px; }
   .empty h2 { margin: 0 0 6px; font-size: var(--h2-size); }
   .empty p { margin: 0 0 18px; line-height: 1.5; }
+  .empty p.cost-note { margin-top: -10px; }
   .suggestions { display: flex; flex-direction: column; gap: 6px; }
   .suggestion {
     padding: 9px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm);
