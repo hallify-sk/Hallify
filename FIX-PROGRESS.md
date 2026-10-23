@@ -13,3 +13,6 @@
 | B155 | done | Profile email uniqueness is checked within the account's own namespace (org_id IS NULL for Hallify accounts), so venue clients' addresses no longer leak. |
 | B91 | done | Session check, cleanup (sessions, resets, org and reservation invites) and the pending-invites list compare datetime(expires_at) with datetime('now'), so ISO timestamps expire on time. |
 | B154 | done | GET /app/logout shows a "Sign out?" page with a POST button (signed-out visitors go to sign-in); signing out on GET would be CSRF-able. |
+| B15 | done | New organisation slugs use slugify (Kaštieľ Ťahanovce Žilina -> kastiel-tahanovce-zilina), via a new uniqueOrgSlug helper. |
+| B97 | done | uniqueOrgSlug also refuses any slug in closed_organizations, so a closed venue subdomain is never handed to a new organisation. |
+| I28 | done | Creating an organisation with the name of one you already belong to asks for confirmation first (warning + "Yes, create another"). |
