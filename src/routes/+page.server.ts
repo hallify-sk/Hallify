@@ -1,8 +1,9 @@
 import type { PageServerLoad } from './$types';
+import { MARKETING_THEME_COOKIE, readMarketingTheme } from '$lib/marketing/theme.svelte';
 import { env } from '$env/dynamic/private';
 import { publicVenues } from '$lib/server/public-venues';
 
-export const load: PageServerLoad = async ({ locals, url, setHeaders }) => {
+export const load: PageServerLoad = async ({ locals, url, setHeaders, cookies }) => {
   // On a bubble (org subdomain / custom domain) hooks already redirect "/" → /halls,
   // so this only runs on the main app. Everyone may browse it, signed in or not:
   // the venue search is a working tool, not only a sign-up page. The header offers
@@ -21,6 +22,7 @@ export const load: PageServerLoad = async ({ locals, url, setHeaders }) => {
     canonicalSk: `${origin}/`,
     canonicalEn: `${origin}/?lang=en`,
     ogImage: `${origin}/marketing/venue-example.jpg`,
+    marketingTheme: readMarketingTheme(cookies.get(MARKETING_THEME_COOKIE)),
     q,
     guests,
     halls,

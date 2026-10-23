@@ -12,5 +12,6 @@
 | B76 | done | Apex pages and the sitemap use the listing rule (plan lock, archive, org suspension); venue site list/detail and its sitemap hide plan-locked halls. |
 | B125 | partial | Code side done (same listing gate as B73). Removing the three test venues on production is the owner's call. |
 | B126 | done | Venue links go to indexable /priestory/<org>/<hall>; "Detail" is a link; /app/halls/* redirect there. |
+| B163 | done | Marketing theme choice is kept for the visit (module state) and in a cookie the page loads read, so it survives navigation and reloads without a flash; <html lang> follows chooseLocale and the marketing shell. |
 | M19 | done | Indexable venue page with canonical, hreflang, og:image, JSON-LD EventVenue; og:image on marketing pages; canonical/OG on venue sites (VenueSiteMeta in the halls layout); venue pages in the apex sitemap. |
 | I33 | done | One robots group, Allow /uploads/halls/, client pages disallowed on venue sites; lastmod from halls.updated_at (migration 0020, trigger-maintained). |

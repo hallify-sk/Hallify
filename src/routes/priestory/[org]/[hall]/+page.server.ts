@@ -7,6 +7,7 @@ import { st } from '$lib/i18n-server';
 import { CUSTOM_DOMAIN_SQL, LISTED_HALL_SQL, venueSiteOrigin } from '$lib/server/discovery';
 import { venuePagePath } from '$lib/marketing/types';
 import type { PageServerLoad } from './$types';
+import { MARKETING_THEME_COOKIE, readMarketingTheme } from '$lib/marketing/theme.svelte';
 
 type Row = HallRow & {
   latitude: number | null; longitude: number | null; price_band: 1 | 2 | 3 | null;
@@ -22,7 +23,7 @@ type Row = HallRow & {
  * is indexable, and booking sends the visitor to the venue's own site, where they
  * sign in or register as that venue's client.
  */
-export const load: PageServerLoad = async ({ params, locals, url }) => {
+export const load: PageServerLoad = async ({ params, locals, url, cookies }) => {
   const hall = await dbFirst<Row>(locals.db,
     `SELECT h.*, o.slug AS org_slug, o.name AS org_name, s.plan AS plan, ${CUSTOM_DOMAIN_SQL} AS custom_domain,
         CASE WHEN o.is_hallify_partner = 1
@@ -82,5 +83,6 @@ export const load: PageServerLoad = async ({ params, locals, url }) => {
     canonicalSk: canonical,
     canonicalEn: `${canonical}?lang=en`,
     origin: url.origin,
+    marketingTheme: readMarketingTheme(cookies.get(MARKETING_THEME_COOKIE)),
   };
 };

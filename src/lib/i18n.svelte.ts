@@ -43,6 +43,7 @@ export const t: typeof sk = new Proxy({} as typeof sk, {
 export function chooseLocale(l: Locale): void {
 	setLocale(l);
 	if (typeof document === 'undefined') return;
+	document.documentElement.lang = l;
 	document.cookie = `hallify-lang=${l}; path=/; max-age=${60 * 60 * 24 * 365}; samesite=lax`;
 	try { localStorage.setItem('hallify-lang', l); } catch { /* private mode */ }
 	try {
