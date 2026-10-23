@@ -4,6 +4,7 @@ import {
 	createEmailVerification,
 	isGatedPath,
 	isOn,
+	mailboxProven,
 	markEmailChanged,
 	verificationEmail,
 	verifyEmailToken,
@@ -70,6 +71,34 @@ describe('verification links', () => {
 		expect(verified(sqlite, 'acc')).toBeNull();
 		expect(sqlite.prepare("SELECT email, first_name, email_verified_at FROM users WHERE id = 'linked'").get())
 			.toEqual({ email: 'new@x.sk', first_name: 'Janka', email_verified_at: null });
+	});
+});
+
+describe('a password reset link also proves the mailbox', () => {
+	it('verifies the address and joins the old venue accounts', async () => {
+		const { sqlite, db } = setup();
+		sqlite.exec(`INSERT INTO organizations (id, name, slug) VALUES ('v2', 'Two', 'two');
+			INSERT INTO users (id, email, password_hash, first_name, last_name, account_type, org_id)
+			VALUES ('old', 'jana@x.sk', 'oldhash', 'J', 'N', 'client', 'v2')`);
+		expect(await mailboxProven(db, 'acc')).toBe(1);
+		expect(verified(sqlite, 'acc')).not.toBeNull();
+		expect(verified(sqlite, 'old')).not.toBeNull();
+		expect(sqlite.prepare("SELECT account_id FROM users WHERE id = 'old'").get()).toEqual({ account_id: 'acc' });
+	});
+
+	it('a venue-only account is just verified', async () => {
+		const { sqlite, db } = setup();
+		sqlite.exec(`INSERT INTO users (id, email, password_hash, first_name, last_name, account_type, org_id)
+			VALUES ('solo', 'solo@x.sk', 'h', 'S', 'O', 'client', 'v1')`);
+		expect(await mailboxProven(db, 'solo')).toBe(0);
+		expect(verified(sqlite, 'solo')).not.toBeNull();
+	});
+
+	it('an email change spends reset links mailed to the old address', async () => {
+		const { sqlite, db } = setup();
+		sqlite.exec(`INSERT INTO password_resets (id, user_id, token, expires_at) VALUES ('r', 'acc', 'x', '2999-01-01')`);
+		await markEmailChanged(db, 'acc', { email: 'new@x.sk', firstName: 'Jana', lastName: 'Nová' });
+		expect(sqlite.prepare(`SELECT used FROM password_resets WHERE id = 'r'`).get()).toEqual({ used: 1 });
 	});
 });
 
