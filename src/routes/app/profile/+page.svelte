@@ -55,7 +55,7 @@
 				<label for="email">{t.auth.email}</label>
 				<input id="email" name="email" type="email" bind:value={email} required autocomplete="email" />
 			</div>
-			{#if emailChanged || (form?.section === 'profile' && form?.needsPassword)}
+			{#if emailChanged || (form?.section === 'profile' && 'needsPassword' in form && form.needsPassword)}
 				<div class="field">
 					<label for="emailPassword">{t.profile.currentPassword}</label>
 					<input id="emailPassword" name="currentPassword" type="password" required autocomplete="current-password" />
