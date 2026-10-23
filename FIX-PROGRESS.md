@@ -5,6 +5,7 @@
 | B4 | done | Venue cards and the venue page send "Rezervovať" to the booking page on the venue's own site (custom domain or org subdomain); old /app/halls/<id>/book redirects there. |
 | B13 | done | Search matches every word of the query in name or address, diacritics-insensitive; a geocoded query widens results (text OR area) instead of filtering them; the area filter starts off. |
 | B38 | done | On phones the explorer is a normal scrolling page: map on top at a fixed share of the screen, then search, filters and all results in flow (no inner scroll box, no fixed-height shell). |
+| B45 | partial | All operator-page sign-up links preselect "Prevádzkujem priestor" (intent=operator) and name the chosen plan (plan=<id>). Carrying the plan on through registration and org creation needs the register/org pages (accounts team), which do not read it yet. |
 | B71 | done | Apex venue page names built-in and custom amenities (org_amenities labels); unknown keys are dropped. |
 | B73 | done | Directory lists a hall only when public, live, with a slug and an address or a map position (LISTED_HALL_SQL). |
 | B75 | done | Booking CTA only for halls that take bookings; otherwise a "no online booking" note. |
