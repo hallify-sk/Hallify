@@ -1,8 +1,9 @@
+import { env } from '$env/dynamic/private';
 import { publicVenues } from '$lib/server/public-venues';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ locals, url, setHeaders }) => ({
-  halls: await publicVenues(locals.db, ready => setHeaders({ 'x-hallify-directory-ready': ready ? '1' : '0' })),
+  halls: await publicVenues(locals.db, ready => setHeaders({ 'x-hallify-directory-ready': ready ? '1' : '0' }), { url, appDomain: env.HALLIFY_DOMAIN ?? 'hallify.app' }),
   q: (url.searchParams.get('q') ?? '').trim().slice(0, 150),
   guests: Math.max(0, Math.min(10000, Number(url.searchParams.get('guests')) || 0)),
   floorplan: url.searchParams.get('floorplan') === '1',
