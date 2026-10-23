@@ -54,7 +54,9 @@ async function fetchJson(url: string): Promise<unknown | null> {
 	const timer = setTimeout(() => abort.abort(), TIMEOUT_MS);
 	try {
 		const response = await fetch(url, {
-			headers: { 'User-Agent': USER_AGENT, accept: 'application/json' },
+			// Place names in Slovak ('Slovensko', not 'Slovakia'): without this header the
+			// stored address read in English on the Slovak venue pages.
+			headers: { 'User-Agent': USER_AGENT, accept: 'application/json', 'accept-language': 'sk,cs;q=0.8,en;q=0.5' },
 			signal: abort.signal
 		});
 		if (!response.ok) return null;
