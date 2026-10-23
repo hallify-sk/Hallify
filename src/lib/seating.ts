@@ -14,6 +14,10 @@
  *   4. Otherwise the editor's own auto-seat rule: smallest table that fits the
  *      whole group, else spread across the emptiest tables.
  *
+ * With `spread`, a group goes to the ROOMIEST table that takes it whole instead of
+ * the tightest: the guests are spread over the tables the venue set up rather than
+ * packed 8/8/7 with a fourth table left empty.
+ *
  * Reserved tables (the head table) are never filled automatically: only a group
  * that asks for one by label sits there. Seating cousins at the bride's table
  * because it happened to be the tightest fit is the other failure to avoid.
@@ -73,7 +77,7 @@ const SEARCH_LIMIT = 50_000;
  * first, trying the tightest table first; tables with the same free count are
  * interchangeable, so only one of them is tried at each step.
  */
-function packWhole(freeChairs: number[], sizes: number[]): number[] | null {
+function packWhole(freeChairs: number[], sizes: number[], spread = false): number[] | null {
 	const order = sizes.map((s, i) => [s, i] as const).sort((a, b) => b[0] - a[0]);
 	const room = [...freeChairs];
 	const out: number[] = new Array(sizes.length);
@@ -84,7 +88,7 @@ function packWhole(freeChairs: number[], sizes: number[]): number[] | null {
 		if (++nodes > SEARCH_LIMIT) return false;
 		const [size, gi] = order[k];
 		const tried = new Set<number>();
-		const candidates = room.map((r, t) => [r, t] as const).filter(([r]) => r >= size).sort((a, b) => a[0] - b[0]);
+		const candidates = room.map((r, t) => [r, t] as const).filter(([r]) => r >= size).sort((a, b) => (spread ? b[0] - a[0] : a[0] - b[0]));
 		for (const [r, t] of candidates) {
 			if (tried.has(r)) continue;
 			tried.add(r);
@@ -99,12 +103,12 @@ function packWhole(freeChairs: number[], sizes: number[]): number[] | null {
 }
 
 /** The editor's auto-seat rule, for whatever is left. */
-function greedy(tables: SeatingTable[], groups: Pending[], unseated: string[]) {
+function greedy(tables: SeatingTable[], groups: Pending[], unseated: string[], spread = false) {
 	for (const g of [...groups].sort((a, b) => b.ids.length - a.ids.length)) {
 		let best: SeatingTable | null = null;
 		for (const t of tables) {
 			const f = free(t);
-			if (f >= g.ids.length && (!best || f < free(best))) best = t;
+			if (f >= g.ids.length && (!best || (spread ? f > free(best) : f < free(best)))) best = t;
 		}
 		if (best) {
 			fill(best, g.ids);
@@ -123,7 +127,7 @@ function greedy(tables: SeatingTable[], groups: Pending[], unseated: string[]) {
 export function seatGroups(
 	input: SeatingTable[],
 	groups: SeatingGroup[],
-	opts: { keepExisting: boolean; reserved?: string[] }
+	opts: { keepExisting: boolean; reserved?: string[]; spread?: boolean }
 ): SeatingResult {
 	const tables = input.map((t) => ({
 		...t,
@@ -151,7 +155,7 @@ export function seatGroups(
 	}
 
 	const placeWhole = (subset: Pending[]): boolean => {
-		const plan = packWhole(open.map(free), subset.map((g) => g.ids.length));
+		const plan = packWhole(open.map(free), subset.map((g) => g.ids.length), opts.spread);
 		if (!plan) return false;
 		subset.forEach((g, i) => fill(open[plan[i]], g.ids));
 		return true;
@@ -161,8 +165,8 @@ export function seatGroups(
 	if (!placeWhole(rest)) {
 		const families = rest.filter((g) => g.keepTogether);
 		const others = rest.filter((g) => !g.keepTogether);
-		if (families.length && placeWhole(families)) greedy(open, others, unseated);
-		else greedy(open, rest, unseated);
+		if (families.length && placeWhole(families)) greedy(open, others, unseated, opts.spread);
+		else greedy(open, rest, unseated, opts.spread);
 	}
 
 	const tablesOf = new Map<string, Set<string>>();
