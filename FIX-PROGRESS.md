@@ -66,3 +66,23 @@ Branch: fix/platform
 - /app/platform/email lists template variables; newMessage now also has {{message}}, guestEdit {{changes}}, statusChange {{statusInfo}}. getEmailTemplates(db, locale) takes a locale; isDefaultTemplate() is exported for a reset button.
 - sendAnnouncementEmail now returns { sent, failed } so the announcements page can stop claiming "emailed" blindly.
 - Migration 0016_user_locale.sql must be applied (local, dev, prod); email code falls back gracefully until it is.
+
+# Fix progress: permissions team (fix/permissions)
+
+| id | status | note |
+|----|--------|------|
+| B5 | done | Legacy /app/manage/users and /users/[id] removed; GET on the old paths redirects to /app/manage/members, old POST actions get 405. Nothing linked to it. |
+| B32 | done | Inviting or switching someone to the Admin level now requires the actor to be able to grant every Administrator permission (`canGrantAdminAccess`); the Admin option is disabled in the UI otherwise. |
+| B33 | done | Members `changeRole`/`remove`, Invites `invite`/`revoke` and every Roles action no longer call `requireOrgStaff`; they check members.manage / invites.manage / roles.manage plus rank. |
+| B34 | done | The legacy-admin fallback lives in one place (`withLegacyAdmin`), applied by `loadMemberAccess`, `buildAccess`, `actorContext` and `targetMemberAccess`. Becoming an admin (invite, access-level select) attaches the Administrator role row so admins get its rank; migration 0017 attaches it to existing flag-only admins. |
+| B86 | done | Invites count pending (unexpired, unaccepted) invites against the seat cap (`seatsSpokenFor` in $lib/server/invites), excluding the address being re-invited; also fixed the text comparison that kept expired invites alive until midnight. limits.ts untouched. |
+| B114 | done (invite part) | A failed invite e-mail is reported in an error banner with the invite link and a Copy button, instead of a green success. Assign-client toast and announcements are other teams' scope. |
+| M12 | done | Invites list: Copy link on each pending invite, Resend (new token, fresh 7 days, re-checks rank/roles/seats) on pending and expired ones; expired invites stay listed for 30 days marked "Platnosť vypršala". |
+| B157 | done | Invalid e-mails refused (`enterValidEmail`); revoking an invite that no longer exists returns 404 "Táto pozvánka už neexistuje" (meta.changes); members ordered owner, admins, members. |
+| B103 | done | Both invite pages render a used / expired / revoked invite as their own page state ("Táto pozvánka už neplatí" plus what to do next) instead of throwing into the generic error page; /invite/<token> only resolves on the invite's own venue site (or the apex). +error.svelte (discovery team) untouched. |
+| B26 | done | Client holds: at most 3 active per client, a hold ends 30 min after it was taken however often it is renewed, at most 3 fresh holds of one hall+date per client per 3 h, impossible dates refused (`isRealDateISO`, also used by `assertCanBook`), and the API runs `assertCanBook` first so past, closed, blocked and capped dates cannot be held. Booking form shows the server's reason (small change in ClientBookingForm.svelte and holdClient.ts). Staff holds are not capped, and a client's hold still blocks staff for its (now bounded) life. |
+| B151 | done | /api/upload/image checks the file's signature bytes (JPEG, PNG, GIF, WebP) and stores/serves the detected type; anything else is refused with "Tento súbor nie je obrázok." |
+| I28 | done (role names only) | Creating or renaming a role to a name another role in the org already has (ignoring case and spaces) is refused, and the Roles tab warns while you type. Existing duplicates can still be saved unchanged. |
+| M11 | done | Members tab, owner only (not when impersonating): "Odovzdať vlastníctvo" picks another member, requires the owner's password (attempts share the account's sign-in rate limit), swaps the roles in one batch (new owner loses role rows/overrides, old owner becomes admin with the Administrator role). Billing stays on the org. The leave-org error now points here. |
+
+Checks at the end: `npx vitest run` 32 files / 287 tests pass; svelte-check 0 errors (131 warnings, unchanged). Migration: `migrations/0017_admin_role_rows.sql`.

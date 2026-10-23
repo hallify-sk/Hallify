@@ -1,5 +1,7 @@
 <script lang="ts">
   import { enhance } from '$app/forms';
+  import { confirmFirst } from '$lib/forms';
+  import { formatDate } from '$lib/format';
   import { getLocale, t } from '$lib/i18n.svelte';
   import { ELEVATED, PERMISSION_GROUPS, type Permission } from '$lib/permissions';
   import type { PageData, ActionData } from './$types';
@@ -28,9 +30,9 @@
   }
 
   // Dates follow the interface language, the same way the dashboard does it.
-  const dateLocale = $derived(getLocale() === 'en' ? 'en-GB' : 'sk-SK');
+  // joined_at is a zone-less UTC database timestamp: parsed by formatDate, never new Date().
   function fmtDate(d: string) {
-    return new Date(d).toLocaleDateString(dateLocale, { day: 'numeric', month: 'short', year: 'numeric' });
+    return formatDate(d, getLocale());
   }
 
   // A role's colour is free text in the database. Only a plain hex reaches a style
@@ -42,6 +44,13 @@
   const roleById = $derived(new Map(data.roles.map((r) => [r.id, r])));
   const groupLabel = (key: string) => (t.peopleArea.permGroups as Record<string, string>)[key] ?? key;
   const grantable = $derived(new Set<string>(data.actor.grantable));
+
+  // Anyone in the org but the owner themself can be handed the organisation.
+  const transferCandidates = $derived(data.people.filter((p) => !p.isOwner && !p.isMe));
+  function personLabel(p: { firstName: string; lastName: string; email: string }) {
+    const name = `${p.firstName} ${p.lastName}`.trim();
+    return name ? `${name} · ${p.email}` : p.email;
+  }
 
   function overrideState(p: { allow: string[]; deny: string[] }, perm: Permission) {
     if (p.deny.includes(perm)) return 'deny';
@@ -126,7 +135,12 @@
               title={t.peopleArea.accessLevelHint}
               onchange={(e) => (e.currentTarget as HTMLSelectElement).form?.requestSubmit()}
             >
-              <option value="admin" selected={p.legacyRole === 'admin'}>{t.membersAdmin.roleAdmin}</option>
+              <option
+                value="admin"
+                selected={p.legacyRole === 'admin'}
+                disabled={p.legacyRole !== 'admin' && !data.actor.canGrantAdmin}
+                title={p.legacyRole !== 'admin' && !data.actor.canGrantAdmin ? t.peopleArea.errors.adminBeyondYou : undefined}
+              >{t.membersAdmin.roleAdmin}</option>
               <option value="member" selected={p.legacyRole === 'member'}>{t.membersAdmin.roleMember}</option>
             </select>
           </form>
@@ -149,10 +163,9 @@
           >{openId === p.userId ? t.peopleArea.hide : t.peopleArea.details}</button>
 
           {#if p.canManage}
-            <form method="POST" action="?/remove" use:enhance>
+            <form method="POST" action="?/remove" use:enhance={confirmFirst(() => t.peopleArea.confirmRemove)}>
               <input type="hidden" name="user_id" value={p.userId} />
-              <button type="submit" class="icon-btn icon-danger" title={t.peopleArea.removeMember}
-                onclick={(e) => { if (!confirm(t.peopleArea.confirmRemove)) e.preventDefault(); }}>
+              <button type="submit" class="icon-btn icon-danger" title={t.peopleArea.removeMember} aria-label={t.peopleArea.removeMember}>
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg>
               </button>
             </form>
@@ -278,6 +291,51 @@
     {/each}
   </div>
 </section>
+
+{#if data.canTransfer}
+  <section class="section">
+    <div class="section-head">
+      <h2>{t.peopleArea.transferTitle}</h2>
+      <p>{t.peopleArea.transferSub}</p>
+    </div>
+
+    {#if transferCandidates.length === 0}
+      <p class="hint">{t.peopleArea.transferNoCandidates}</p>
+    {:else}
+      <form
+        method="POST"
+        action="?/transferOwnership"
+        class="transfer card--inset"
+        use:enhance={confirmFirst(() => t.peopleArea.transferConfirm, async ({ result, update }) => {
+          await update();
+          // The section is gone once they are no longer the owner; the confirmation
+          // is at the top of the page.
+          if (result.type === 'success') window.scrollTo({ top: 0, behavior: 'smooth' });
+        })}
+      >
+        {#if form?.transferError}
+          <div class="alert-error transfer-error" role="alert">{form.transferError}</div>
+        {/if}
+        <div class="t-grid">
+          <div class="t-f">
+            <label for="transfer-to">{t.peopleArea.transferTo}</label>
+            <select id="transfer-to" name="user_id" required>
+              <option value="" selected disabled>{t.peopleArea.transferChoose}</option>
+              {#each transferCandidates as c (c.userId)}
+                <option value={c.userId}>{personLabel(c)}</option>
+              {/each}
+            </select>
+          </div>
+          <div class="t-f">
+            <label for="transfer-password">{t.peopleArea.transferPassword}</label>
+            <input id="transfer-password" name="password" type="password" required autocomplete="current-password" />
+          </div>
+        </div>
+        <div><button type="submit" class="btn-outline btn-sm">{t.peopleArea.transferSubmit}</button></div>
+      </form>
+    {/if}
+  </section>
+{/if}
 
 <style>
   .page {
@@ -469,6 +527,24 @@
   .tri-allow input:checked + span { background: var(--success); color: var(--on-success); }
   .tri-deny input:checked + span { background: var(--danger); color: var(--on-danger); }
   .perm-row.locked .tri { opacity: .72; }
+
+  /* ── Ownership transfer ─────────────────────────────────────────────────── */
+  .transfer { display: flex; flex-direction: column; gap: 14px; padding: 20px; }
+  .transfer-error { margin: 0; }
+  .t-grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+  .t-f { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+  .t-f label {
+    font-size: var(--meta-size); font-weight: 600; text-transform: uppercase;
+    letter-spacing: .12em; color: var(--text-muted);
+  }
+  .t-f input, .t-f select {
+    height: var(--control-h); box-sizing: border-box; min-width: 0;
+    padding: 0 11px; border: 1px solid var(--border); border-radius: var(--radius-sm);
+    background: var(--bg-panel); font-size: 13px;
+    color: var(--text-base); font-family: inherit; outline: none;
+    transition: border-color .15s, box-shadow .15s;
+  }
+  .t-f input:focus, .t-f select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-dim); }
 
   /* ── Responsive ─────────────────────────────────────────────────────────── */
   @media (max-width: 860px) {

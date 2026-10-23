@@ -1,4 +1,4 @@
-import { redirect, error, fail } from '@sveltejs/kit';
+import { redirect, fail } from '@sveltejs/kit';
 import bcrypt from 'bcryptjs';
 import type { PageServerLoad, Actions } from './$types';
 import { dbAll, dbFirst, dbRun } from '$lib/db/index';
@@ -9,6 +9,7 @@ import { getPlan } from '$lib/plans';
 import type { PlanId } from '$lib/plans';
 import { rateLimit, rateLimitKey, tooManyAttemptsMessage, RATE_LIMITS } from '$lib/rateLimit';
 import type { D1Database } from '@cloudflare/workers-types';
+import { syncAdministratorRole } from '$lib/server/people';
 
 /**
  * Accepting an invitation into an organisation.
@@ -180,6 +181,20 @@ async function joinOrg(db: D1Database, invite: InviteRow, userId: string): Promi
 		memberRole
 	);
 
+	// An admin also gets the Administrator role row, and with it an Administrator's
+	// rank: the flag alone grants the permissions, and an admin invited with no role
+	// ticked could then act on nobody in the People area. Skipped for an owner, whom
+	// the upsert above left untouched.
+	if (memberRole === 'admin') {
+		const now = await dbFirst<{ role: string }>(
+			db,
+			'SELECT role FROM organization_members WHERE org_id = ? AND user_id = ?',
+			invite.org_id,
+			userId
+		);
+		if (now?.role === 'admin') await syncAdministratorRole(db, invite.org_id, userId, true);
+	}
+
 	for (const role of await resolveRoles(db, invite.org_id, parseRoleIds(invite.role_ids))) {
 		try {
 			await dbRun(
@@ -207,12 +222,32 @@ async function joinOrg(db: D1Database, invite: InviteRow, userId: string): Promi
 	);
 }
 
+/**
+ * Why an invite link no longer leads anywhere. Rendered by the page itself rather
+ * than thrown: the generic error page showed "something went wrong on our side"
+ * for a link that was simply used up, which sends people to support instead of
+ * back to whoever invited them.
+ */
+type Unavailable = 'notFound' | 'used' | 'expired';
+
+function unavailable(reason: Unavailable, token: string) {
+	return {
+		unavailable: reason,
+		invite: null,
+		token,
+		signedInMatches: false,
+		signedInDifferent: false,
+		currentEmail: null,
+		hasAccount: false
+	};
+}
+
 export const load: PageServerLoad = async ({ params, locals }) => {
 	const invite = await loadInvite(locals.db, params.token);
 
-	if (!invite) error(404, st(locals.locale).serverErrors.inviteNotFoundOrExpired);
-	if (invite.accepted_at) error(410, st(locals.locale).serverErrors.inviteAlreadyUsed);
-	if (new Date(invite.expires_at) < new Date()) error(410, st(locals.locale).serverErrors.inviteExpired);
+	if (!invite) return unavailable('notFound', params.token);
+	if (invite.accepted_at) return unavailable('used', params.token);
+	if (new Date(invite.expires_at) < new Date()) return unavailable('expired', params.token);
 
 	const email = invite.email.toLowerCase();
 	const roles = await resolveRoles(locals.db, invite.org_id, parseRoleIds(invite.role_ids));
@@ -234,6 +269,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		&& locals.user.email.toLowerCase() === email;
 
 	return {
+		unavailable: null as Unavailable | null,
 		invite: {
 			orgName: invite.org_name,
 			email: invite.email,

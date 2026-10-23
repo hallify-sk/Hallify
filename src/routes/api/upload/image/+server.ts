@@ -1,5 +1,7 @@
 import { json, error } from '@sveltejs/kit';
 import { rateLimit, rateLimitKey, RATE_LIMITS } from '$lib/rateLimit';
+import { sniffImageType } from '$lib/server/image-sniff';
+import { st } from '$lib/i18n-server';
 import type { RequestHandler } from './$types';
 
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
@@ -31,11 +33,17 @@ export const POST: RequestHandler = async (event) => {
 	if (!ALLOWED_TYPES.includes(file.type)) error(400, 'Only JPEG, PNG, WebP, and GIF images are allowed.');
 	if (file.size > MAX_SIZE) error(400, 'File exceeds 8 MB limit.');
 
-	const ext = file.type.split('/')[1].replace('jpeg', 'jpg');
+	// The declared type is only the browser's (or a script's) word for it. What is
+	// stored, and the Content-Type it is served with, come from the bytes.
+	const bytes = await file.arrayBuffer();
+	const actual = sniffImageType(new Uint8Array(bytes, 0, Math.min(bytes.byteLength, 16)));
+	if (!actual) error(400, st(event.locals.locale).imageDialog.notAnImage);
+
+	const ext = actual.split('/')[1].replace('jpeg', 'jpg');
 	const key = `halls/${event.locals.user.id}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
 
 	try {
-		await r2.put(key, await file.arrayBuffer(), { httpMetadata: { contentType: file.type } });
+		await r2.put(key, bytes, { httpMetadata: { contentType: actual } });
 	} catch (e) {
 		const msg = e instanceof Error ? e.message : String(e);
 		error(502, `Storage error: ${msg}`);

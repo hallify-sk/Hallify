@@ -3,10 +3,10 @@ import { requireOrg } from '$lib/guards';
 import type { OrgContext } from '../../app.d';
 import { dbAll, dbFirst } from '$lib/db/index';
 import {
-	ADMINISTRATOR_PERMISSIONS,
 	CONSOLE_PERMISSIONS,
 	effectivePermissions,
 	parsePermissions,
+	withLegacyAdmin,
 	type MemberAccess,
 	type MemberRole,
 	type Permission
@@ -21,15 +21,25 @@ import {
  * time; until one does, it behaves exactly as it did before.
  */
 
-/** Everything needed to evaluate a permission, for one member of one org. */
+/**
+ * Everything needed to evaluate a permission, for one member of one org.
+ *
+ * Pass `legacyRole` (their `organization_members.role`) wherever it is known: an
+ * admin's flag is part of their access, and every caller has to read it the same way
+ * (see `withLegacyAdmin`).
+ */
 export async function loadMemberAccess(
 	db: App.Locals['db'],
 	orgId: string,
 	userId: string,
-	opts: { isOwner: boolean }
+	opts: { isOwner: boolean; legacyRole?: string | null }
 ): Promise<MemberAccess> {
 	if (opts.isOwner) return { isOwner: true, roles: [] };
+	return withLegacyAdmin(await loadRoleAccess(db, orgId, userId), opts.legacyRole);
+}
 
+/** The member's role rows and overrides alone, without the legacy flag. */
+async function loadRoleAccess(db: App.Locals['db'], orgId: string, userId: string): Promise<MemberAccess> {
 	let roles: MemberRole[] = [];
 	let allow: Permission[] = [];
 	let deny: Permission[] = [];
@@ -141,37 +151,15 @@ export async function requireOrgPermission(
 
 	if (org.role === 'owner') return org;
 
-	const access = await loadMemberAccess(locals.db, org.id, user.id, { isOwner: false });
-
 	// `organization_members.role = 'admin'` must keep meaning what it meant before any
 	// route moved onto permissions, otherwise this conversion NARROWS access instead of
-	// widening it. Migration 0007 attached the Administrator role to every admin that
-	// existed when it ran, but that is not the only way to become one:
-	//
-	//   * the People area's `changeRole` writes `organization_members.role` on its own
-	//     and grants no role row;
-	//   * an invite carries `role` and `role_ids` as independent fields, so `role=admin`
-	//     with no role picked produces an admin holding only the default role;
-	//   * on a database where 0007 has not been applied yet, `loadMemberAccess` returns
-	//     no roles at all by design.
-	//
-	// Each of those admins passes `requireOrgStaff` today and would be refused here. So
-	// the legacy flag is read as the permission set it has always implied: everything
-	// except `billing.manage`, which stays owner-only and is guarded by
-	// `requireOrgOwner` regardless. Nothing widens — an admin already reached every
-	// /app/manage route through `requireOrgStaff`.
-	//
-	// It is added as a ROLE rather than returning early, so a per-member DENY override
-	// is still applied last and still wins, exactly as it does for an admin who holds
-	// the seeded Administrator role.
-	if (org.role === 'admin') {
-		access.roles = [
-			...access.roles,
-			// position -1 is the "below every real role" floor from `rankOf`: this grants
-			// permissions, it must not silently hand anyone seniority over a real role.
-			{ id: 'legacy-admin', name: 'Administrator', position: -1, permissions: ADMINISTRATOR_PERMISSIONS }
-		];
-	}
+	// widening it. An admin may hold no Administrator role row: one minted before
+	// `changeRole` and invites attached it, a role that was renamed, or a database where
+	// 0007 has not been applied yet. Each of those admins passes `requireOrgStaff`, so
+	// the flag is read as the permission set it has always implied — everything except
+	// `billing.manage`, which stays owner-only. `loadMemberAccess` adds it as a role
+	// (`withLegacyAdmin`), so a per-member DENY override still wins.
+	const access = await loadMemberAccess(locals.db, org.id, user.id, { isOwner: false, legacyRole: org.role });
 
 	requirePermission(access, permission);
 	return org;

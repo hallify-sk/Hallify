@@ -21,6 +21,7 @@ import {
 	PERMISSIONS,
 	canManageRole,
 	parsePermissions,
+	withLegacyAdmin,
 	type MemberAccess,
 	type MemberRole,
 	type Permission
@@ -176,14 +177,16 @@ export async function loadOverrides(db: Db, orgId: string): Promise<Map<string, 
  *
  * This MUST agree with `loadMemberAccess`, which is what the server enforces with —
  * including its rule that the default role applies to every member whether or not it
- * was explicitly assigned. A list that disagreed with the enforcer would show an
- * admin one answer and apply another.
+ * was explicitly assigned, and its reading of the legacy admin flag (`legacyRole`).
+ * A list that disagreed with the enforcer would show an admin one answer and apply
+ * another.
  */
 export function buildAccess(opts: {
 	isOwner: boolean;
 	roleIds: readonly string[];
 	roles: readonly OrgRole[];
 	override?: MemberOverride;
+	legacyRole?: string | null;
 }): MemberAccess {
 	if (opts.isOwner) return { isOwner: true, roles: [] };
 
@@ -203,12 +206,69 @@ export function buildAccess(opts: {
 		});
 	}
 
-	return {
-		isOwner: false,
-		roles: held,
-		allow: opts.override?.allow ?? [],
-		deny: opts.override?.deny ?? []
-	};
+	return withLegacyAdmin(
+		{
+			isOwner: false,
+			roles: held,
+			allow: opts.override?.allow ?? [],
+			deny: opts.override?.deny ?? []
+		},
+		opts.legacyRole
+	);
+}
+
+/**
+ * The org's built-in Administrator role: the role row that goes with the legacy
+ * "Admin" access level. Found the way migration 0007 seeded and attached it, by name.
+ *
+ * Making somebody an admin attaches it, so an admin carries an Administrator's rank
+ * and not only its permissions. Without the rank, an admin invited with no role
+ * ticked was let into the People area by the guards and then could act on nobody.
+ * Returns undefined when an org renamed or deleted it; the flag alone then still
+ * grants the permissions (`withLegacyAdmin`).
+ */
+export function findAdministratorRole(roles: readonly OrgRole[]): OrgRole | undefined {
+	return roles
+		.filter((r) => !r.isDefault && r.name === 'Administrator')
+		.sort((a, b) => b.position - a.position)[0];
+}
+
+/**
+ * Keep the Administrator role row in step with the legacy access level: attached
+ * when somebody becomes an admin, removed when they stop being one.
+ *
+ * It is attached only while the role grants nothing beyond what the flag already
+ * implies (ADMINISTRATOR_PERMISSIONS). An owner may have added billing to it; the
+ * flag must not become a way to hand that out.
+ */
+export async function syncAdministratorRole(db: Db, orgId: string, userId: string, isAdmin: boolean): Promise<void> {
+	const role = findAdministratorRole(await loadOrgRoles(db, orgId));
+	if (!role) return;
+	try {
+		if (isAdmin) {
+			if (role.permissions.some((p) => !ADMINISTRATOR_PERMISSIONS.includes(p))) return;
+			await dbRun(
+				db,
+				`INSERT INTO org_member_roles (id, org_id, user_id, role_id)
+				 VALUES (?, ?, ?, ?)
+				 ON CONFLICT (org_id, user_id, role_id) DO NOTHING`,
+				crypto.randomUUID(),
+				orgId,
+				userId,
+				role.id
+			);
+		} else {
+			await dbRun(
+				db,
+				'DELETE FROM org_member_roles WHERE org_id = ? AND user_id = ? AND role_id = ?',
+				orgId,
+				userId,
+				role.id
+			);
+		}
+	} catch {
+		/* pre-migration 0007: the flag alone still applies */
+	}
 }
 
 /** The role ids a member effectively holds, default role included. */
@@ -232,7 +292,10 @@ export async function actorContext(
 ): Promise<{ org: OrgContext; orgId: string; userId: string; access: MemberAccess }> {
 	const user = requireUser(locals);
 	const org = requireOrg(locals);
-	const access = await loadMemberAccess(locals.db, org.id, user.id, { isOwner: org.role === 'owner' });
+	const access = await loadMemberAccess(locals.db, org.id, user.id, {
+		isOwner: org.role === 'owner',
+		legacyRole: org.role
+	});
 	return { org, orgId: org.id, userId: user.id, access };
 }
 
@@ -254,6 +317,6 @@ export async function targetMemberAccess(
 		userId
 	);
 	if (!row) return null;
-	const access = await loadMemberAccess(db, orgId, userId, { isOwner: row.role === 'owner' });
+	const access = await loadMemberAccess(db, orgId, userId, { isOwner: row.role === 'owner', legacyRole: row.role });
 	return { legacyRole: row.role, access };
 }

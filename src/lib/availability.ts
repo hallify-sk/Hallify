@@ -6,9 +6,27 @@ import { dbAll, dbFirst, dbRun } from '$lib/db/index';
 import { getPlan } from '$lib/plans';
 import type { PlanId } from '$lib/plans';
 import { st } from '$lib/i18n-server';
+import { rateLimit, type RateLimitRule } from '$lib/rateLimit';
 import type { D1Database } from '@cloudflare/workers-types';
 
 export const HOLD_MINUTES = 15;
+
+/**
+ * Limits on a CLIENT's holds (staff holds in their own org are not capped).
+ *
+ * Without them one client account could hold every date of a venue, and keep
+ * holding them: there was no cap, and every renewal pushed the expiry another
+ * fifteen minutes out, forever.
+ *
+ *   HOLD_MAX_ACTIVE         dates one client may hold at once, across all halls.
+ *   HOLD_MAX_LIFETIME_MIN   a hold ends this long after it was taken, however often
+ *                           it is renewed. Plenty for filling in the booking form.
+ *   HOLD_FRESH_LIMIT        fresh holds on one hall+date per client per window, so
+ *                           the end of a hold cannot simply be followed by a new one.
+ */
+export const HOLD_MAX_ACTIVE = 3;
+export const HOLD_MAX_LIFETIME_MIN = 30;
+export const HOLD_FRESH_LIMIT = { limit: 3, windowSeconds: 3 * 60 * 60 } as const;
 
 // ── Date helpers (timezone-safe, string-keyed YYYY-MM-DD) ──
 export function isoLocal(d: Date): string {
@@ -17,6 +35,13 @@ export function isoLocal(d: Date): string {
 export function parseISO(s: string): Date { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d); }
 export function addDays(d: Date, n: number): Date { const r = new Date(d); r.setDate(d.getDate() + n); return r; }
 export function todayISO(): string { return isoLocal(new Date()); }
+
+/** A real calendar day in YYYY-MM-DD. The shape alone let '2026-13-99' through, which
+ *  `new Date` quietly rolls over into a different, valid-looking date. */
+export function isRealDateISO(s: string): boolean {
+	if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
+	return isoLocal(parseISO(s)) === s;
+}
 
 /** Earliest date a hall can be booked = today + min_days_advance. */
 export function earliestBookableISO(minDaysAdvance: number | null | undefined): string {
@@ -81,17 +106,49 @@ export async function getHeldDatesByOthers(db: D1Database, hallId: string, userI
 }
 
 // ── Hold lifecycle ──
-export interface AcquireResult { ok: boolean; reason?: 'taken' | 'held'; ttl?: number; }
+export interface AcquireResult {
+	ok: boolean;
+	/** taken: booked · held: someone else holds it · invalid: not a real date ·
+	 *  limit: too many holds at once · expired: the hold reached its lifetime ·
+	 *  too-often: this person has held this date too often lately. */
+	reason?: 'taken' | 'held' | 'invalid' | 'limit' | 'expired' | 'too-often';
+	ttl?: number;
+}
 
 /** Acquire a fresh hold or renew the caller's own. Rejects if the day is taken
  *  or actively held by another user. Hold expiry is computed in SQL so it
- *  string-compares correctly against datetime('now'). */
+ *  string-compares correctly against datetime('now').
+ *
+ *  `maxActive` and `maxLifetimeMinutes` are the client limits (see HOLD_MAX_*);
+ *  leave them out for staff. A renewal never pushes the expiry past the lifetime,
+ *  and a hold that has reached it is dropped, so it cannot be renewed forever.
+ *  Availability (past dates, blocks, closed days) is the caller's to check with
+ *  `assertCanBook` first: it needs the hall row and the viewer's locale. */
 export async function acquireOrRenewHold(
 	db: D1Database,
-	opts: { hallId: string; eventDate: string; userId: string; orgId?: string | null; minutes?: number }
+	opts: {
+		hallId: string;
+		eventDate: string;
+		userId: string;
+		orgId?: string | null;
+		minutes?: number;
+		maxActive?: number | null;
+		maxLifetimeMinutes?: number | null;
+		/** Fresh holds allowed on this hall+date per user per window. */
+		freshLimit?: RateLimitRule | null;
+	}
 ): Promise<AcquireResult> {
-	const { hallId, eventDate, userId, orgId = null, minutes = HOLD_MINUTES } = opts;
+	const {
+		hallId, eventDate, userId, orgId = null, minutes = HOLD_MINUTES,
+		maxActive = null, maxLifetimeMinutes = null, freshLimit = null
+	} = opts;
+	if (!isRealDateISO(eventDate)) return { ok: false, reason: 'invalid' };
 	const mod = `+${minutes} minutes`;
+	// The latest an expiry may be: `minutes` from now, and never past the lifetime.
+	const lifetime = maxLifetimeMinutes == null ? null : `+${maxLifetimeMinutes} minutes`;
+	const expirySql = lifetime == null
+		? "datetime('now', ?)"
+		: "MIN(datetime('now', ?), datetime(created_at, ?))";
 
 	await dbRun(db, "DELETE FROM reservation_holds WHERE expires_at <= datetime('now')");
 
@@ -106,8 +163,31 @@ export async function acquireOrRenewHold(
 
 	if (active) {
 		if (active.user_id !== userId) return { ok: false, reason: 'held' };
-		await dbRun(db, "UPDATE reservation_holds SET expires_at = datetime('now', ?), org_id = ? WHERE id = ?", mod, orgId, active.id);
-		return { ok: true, ttl: minutes * 60 };
+		await dbRun(db,
+			`UPDATE reservation_holds SET expires_at = ${expirySql}, org_id = ? WHERE id = ?`,
+			...(lifetime == null ? [mod] : [mod, lifetime]), orgId, active.id);
+		const left = await holdSecondsLeft(db, active.id);
+		if (left <= 0) {
+			// Reached its lifetime: gone now, rather than lingering as a hold nobody
+			// (the holder included) can renew.
+			await dbRun(db, 'DELETE FROM reservation_holds WHERE id = ?', active.id);
+			return { ok: false, reason: 'expired' };
+		}
+		return { ok: true, ttl: left };
+	}
+
+	if (maxActive != null) {
+		const mine = await dbFirst<{ n: number }>(db,
+			"SELECT COUNT(*) AS n FROM reservation_holds WHERE user_id = ? AND expires_at > datetime('now')",
+			userId);
+		if (Number(mine?.n ?? 0) >= maxActive) return { ok: false, reason: 'limit' };
+	}
+
+	// Counted only for a NEW hold, after every other check: renewals are free, and a
+	// refused attempt must not use up the person's allowance.
+	if (freshLimit) {
+		const rl = await rateLimit(db, `hold:${userId}:${hallId}:${eventDate}`, freshLimit);
+		if (!rl.ok) return { ok: false, reason: 'too-often' };
 	}
 
 	try {
@@ -115,11 +195,18 @@ export async function acquireOrRenewHold(
 			`INSERT INTO reservation_holds (id, hall_id, event_date, user_id, org_id, expires_at)
 			 VALUES (?, ?, ?, ?, ?, datetime('now', ?))`,
 			crypto.randomUUID(), hallId, eventDate, userId, orgId, mod);
-		return { ok: true, ttl: minutes * 60 };
+		return { ok: true, ttl: Math.min(minutes, maxLifetimeMinutes ?? minutes) * 60 };
 	} catch {
 		// Lost a race on the unique index — someone else just grabbed it.
 		return { ok: false, reason: 'held' };
 	}
+}
+
+async function holdSecondsLeft(db: D1Database, id: string): Promise<number> {
+	const row = await dbFirst<{ s: number }>(db,
+		"SELECT CAST(ROUND((julianday(expires_at) - julianday('now')) * 86400) AS INTEGER) AS s FROM reservation_holds WHERE id = ?",
+		id);
+	return Number(row?.s ?? 0);
 }
 
 export async function releaseHold(db: D1Database, hallId: string, eventDate: string, userId: string): Promise<void> {
@@ -150,7 +237,7 @@ export async function assertCanBook(
 	const e = st(locale).serverErrors;
 	if (hall.plan_locked) return { ok: false, reason: e.hallUnavailable };
 	if (!hall.allow_reservations) return { ok: false, reason: e.hallNotAcceptingBookings };
-	if (!/^\d{4}-\d{2}-\d{2}$/.test(eventDate)) return { ok: false, reason: e.chooseValidDate };
+	if (!isRealDateISO(eventDate)) return { ok: false, reason: e.chooseValidDate };
 
 	// Per-hall/month reservation cap (by the event's calendar month; excludes
 	// cancelled). The number comes from the hall's org plan.

@@ -1,5 +1,6 @@
 // Client helpers for the reservation hold (anti-race) API.
-export async function postHold(hallId: string, date: string): Promise<{ ok: boolean; reason?: string; ttl?: number }> {
+/** `message` is the server's own explanation, in the viewer's language, when it has one. */
+export async function postHold(hallId: string, date: string): Promise<{ ok: boolean; reason?: string; ttl?: number; message?: string }> {
 	try {
 		const res = await fetch('/api/holds', {
 			method: 'POST',
@@ -7,7 +8,7 @@ export async function postHold(hallId: string, date: string): Promise<{ ok: bool
 			body: JSON.stringify({ hallId, date }),
 		});
 		const body = await res.json().catch(() => ({}));
-		return { ok: !!body.ok && res.ok, reason: body.reason, ttl: body.ttl };
+		return { ok: !!body.ok && res.ok, reason: body.reason, ttl: body.ttl, message: typeof body.message === 'string' ? body.message : undefined };
 	} catch {
 		return { ok: false, reason: 'network' };
 	}

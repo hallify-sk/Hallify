@@ -3,18 +3,22 @@ import {
 	ADMINISTRATOR_PERMISSIONS,
 	CONSOLE_PERMISSIONS,
 	DEFAULT_ROLE_PERMISSIONS,
+	LEGACY_ADMIN_ROLE_ID,
 	PERMISSIONS,
 	can,
+	canGrantAdminAccess,
 	canManageMember,
 	canManageRole,
 	effectivePermissions,
 	grantablePermissions,
 	parsePermissions,
 	rankOf,
+	sameRoleName,
 	sanitize,
 	type MemberAccess,
 	type MemberRole,
-	type Permission
+	type Permission,
+	withLegacyAdmin
 } from './permissions';
 
 const role = (name: string, position: number, permissions: Permission[]): MemberRole => ({
@@ -236,5 +240,62 @@ describe('who may reach the management console', () => {
 		// A member must never hold something an admin of the same org does not.
 		const beyond = DEFAULT_ROLE_PERMISSIONS.filter((p) => !ADMINISTRATOR_PERMISSIONS.includes(p));
 		expect(beyond).toEqual([]);
+	});
+});
+
+describe('the legacy admin flag', () => {
+	const defaultOnly = () => member([role('Member', 0, DEFAULT_ROLE_PERMISSIONS)]);
+
+	it('reads as every Administrator permission, so a panel shows what the guards grant', () => {
+		const admin = withLegacyAdmin(defaultOnly(), 'admin');
+		expect([...effectivePermissions(admin)].sort()).toEqual([...ADMINISTRATOR_PERMISSIONS].sort());
+		expect(can(admin, 'billing.manage')).toBe(false);
+	});
+
+	it('changes nothing for a member or the owner', () => {
+		expect(withLegacyAdmin(defaultOnly(), 'member').roles).toHaveLength(1);
+		expect(withLegacyAdmin(OWNER, 'admin')).toBe(OWNER);
+	});
+
+	it('is applied once however often it is read', () => {
+		const twice = withLegacyAdmin(withLegacyAdmin(defaultOnly(), 'admin'), 'admin');
+		expect(twice.roles.filter((r) => r.id === LEGACY_ADMIN_ROLE_ID)).toHaveLength(1);
+	});
+
+	it('still loses to a per-member deny', () => {
+		const admin = withLegacyAdmin(member([], { deny: ['settings.manage'] }), 'admin');
+		expect(can(admin, 'settings.manage')).toBe(false);
+	});
+
+	it('hands out no rank of its own', () => {
+		expect(rankOf(withLegacyAdmin(defaultOnly(), 'admin'))).toBe(0);
+	});
+});
+
+describe('granting the Admin access level', () => {
+	it('is open to the owner', () => {
+		expect(canGrantAdminAccess(OWNER)).toBe(true);
+	});
+
+	it('is open to a full Administrator', () => {
+		expect(canGrantAdminAccess(member([role('Administrator', 10, ADMINISTRATOR_PERMISSIONS)]))).toBe(true);
+	});
+
+	// The report's case: settings denied to an admin, who then invites a second
+	// account as Admin and walks back into settings through it.
+	it('is refused to an admin with any Administrator permission denied', () => {
+		const limited = withLegacyAdmin(member([], { deny: ['settings.manage'] }), 'admin');
+		expect(canGrantAdminAccess(limited)).toBe(false);
+	});
+
+	it('is refused to a custom role that only manages members', () => {
+		expect(canGrantAdminAccess(member([role('People', 5, ['members.manage', 'invites.manage'])]))).toBe(false);
+	});
+});
+
+describe('role names', () => {
+	it('treat case and surrounding spaces as the same name', () => {
+		expect(sameRoleName('Čašník', ' čašník ')).toBe(true);
+		expect(sameRoleName('Čašník', 'Čašníčka')).toBe(false);
 	});
 });

@@ -1,24 +1,49 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
 	import { t, getLocale } from '$lib/i18n.svelte';
+	import { formatDate } from '$lib/format';
 	import { reveal } from '$lib/reveal';
 	import type { PageData, ActionData } from './$types';
 
 	interface Props { data: PageData; form: ActionData; }
 	let { data, form }: Props = $props();
 
+	// event_date is a plain YYYY-MM-DD: formatDate reads it as a local calendar day.
 	const fmtDate = $derived(
-		new Date(data.invite.eventDate).toLocaleDateString(getLocale() === 'en' ? 'en-GB' : 'sk-SK', {
-			weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
-		})
+		data.invite
+			? formatDate(data.invite.eventDate, getLocale(), { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+			: ''
+	);
+
+	const unavailableHint = $derived(
+		data.unavailable === 'used'
+			? t.inviteAccept.usedHint
+			: data.unavailable === 'expired'
+				? t.inviteAccept.expiredHint
+				: t.inviteAccept.notFoundHint
 	);
 </script>
 
-<svelte:head><title>{t.inviteAccept.invitedHeading} – {data.invite.orgName}</title></svelte:head>
+<svelte:head>
+	<title>{data.invite ? `${t.inviteAccept.invitedHeading} – ${data.invite.orgName}` : t.inviteAccept.unavailableTitle}</title>
+	<meta name="robots" content="noindex" />
+</svelte:head>
 
 <div class="invite-wrap">
 	<!-- A plain div: the root layout already renders the page <main>. -->
 	<div class="invite-shell">
+		{#if !data.invite}
+		<!-- Used, expired, revoked or cancelled: say which, and where to go next. -->
+		<section class="section section--lead" use:reveal>
+			<div class="section-head">
+				<h1 class="invite-heading">{t.inviteAccept.unavailableTitle}</h1>
+				<p>{unavailableHint}</p>
+			</div>
+			{#if data.unavailable === 'used'}
+				<a class="invite-btn" href="/login">{t.inviteAccept.signIn}</a>
+			{/if}
+		</section>
+		{:else}
 		<section class="section section--lead" use:reveal>
 			<div class="section-head">
 				<h1 class="invite-heading">{t.inviteAccept.invitedHeading}</h1>
@@ -78,6 +103,7 @@
 				</form>
 			{/if}
 		</section>
+		{/if}
 	</div>
 </div>
 
