@@ -16,4 +16,21 @@ describe('renderReply', () => {
 	it('makes bullet lists', () => {
 		expect(renderReply('- a\n- b')).toBe('<ul><li>a</li><li>b</li></ul>');
 	});
+	it('turns headings into bold lines, not literal hashes', () => {
+		expect(renderReply('### Sály\nText')).toBe('<p class="reply-heading"><strong>Sály</strong></p><p>Text</p>');
+	});
+	it('renders pipe tables with escaped, formatted cells', () => {
+		const html = renderReply('| Dátum | Udalosť |\n|---|:---:|\n| 12. 11. | **Svadba** <b> |\n| 20. 11. |');
+		expect(html).toBe(
+			'<div class="reply-table"><table><thead><tr><th>Dátum</th><th>Udalosť</th></tr></thead><tbody>' +
+			'<tr><td>12. 11.</td><td><strong>Svadba</strong> &lt;b&gt;</td></tr>' +
+			'<tr><td>20. 11.</td><td></td></tr></tbody></table></div>');
+	});
+	it('leaves a lone pipe in a sentence alone', () => {
+		expect(renderReply('a | b')).toBe('<p>a | b</p>');
+	});
+	it('makes numbered lists, and keeps a list together across blank lines', () => {
+		expect(renderReply('1. a\n\n2. b')).toBe('<ol><li>a</li><li>b</li></ol>');
+		expect(renderReply('- a\n\nafter')).toBe('<ul><li>a</li></ul><p>after</p>');
+	});
 });

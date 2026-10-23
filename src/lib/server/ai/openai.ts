@@ -53,6 +53,9 @@ export async function createResponse(opts: {
 	maxOutputTokens: number;
 	reasoningEffort: string;
 	user?: string;
+	/** Requests sharing a long prefix (tools + instructions) are routed together, so the
+	 *  prompt cache serves it; the same key for every conversation in one language. */
+	promptCacheKey?: string;
 }): Promise<ResponseResult> {
 	const key = env.OPENAI_API_KEY;
 	if (!key) throw new AiNotConfigured('OPENAI_API_KEY is not configured');
@@ -72,7 +75,8 @@ export async function createResponse(opts: {
 			parallel_tool_calls: false,
 			reasoning: { effort: opts.reasoningEffort },
 			// A stable, non-identifying id for OpenAI's abuse monitoring. Never an email.
-			...(opts.user ? { safety_identifier: opts.user } : {})
+			...(opts.user ? { safety_identifier: opts.user } : {}),
+			...(opts.promptCacheKey ? { prompt_cache_key: opts.promptCacheKey } : {})
 		})
 	});
 

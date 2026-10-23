@@ -8,7 +8,7 @@ import { applyTemplateKeepingGuests } from '$lib/floorplan-layout';
 import { st } from '$lib/i18n-server';
 import type { Actions, PageServerLoad } from './$types';
 import { reservationAccess, assertCanOpenReservation } from '$lib/server/reservation-access';
-import { seatingDraft, markProposalApplied } from '$lib/server/ai/proposals';
+import { seatingDraft, recordSavedDraft } from '$lib/server/ai/proposals';
 import { tableInventoryError } from '$lib/server/table-inventory';
 
 export const load: PageServerLoad = async ({ locals, params, url }) => {
@@ -99,7 +99,7 @@ export const actions: Actions = {
 				'UPDATE reservations SET layout_json = ? WHERE id = ? AND org_id = ? AND layout_json IS ?',
 				layoutJson, params.id, orgId, draft.built.baseJson);
 			if (write.meta.changes !== 1) return fail(409, { error: st(locals.locale).ai.draftStale });
-			await markProposalApplied(locals.db, proposalId, { seated: draft.built.seated, savedFromEditor: true });
+			await recordSavedDraft(locals.db, orgId, proposalId, layoutJson);
 			return { success: true, draftSaved: true };
 		}
 

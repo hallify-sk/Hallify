@@ -1,10 +1,10 @@
 import { fail } from '@sveltejs/kit';
 import { dbAll, dbFirst, dbRun } from '$lib/db/index';
 import { requireOrgPermission } from '$lib/server/access';
-import { getAccount, setEnabled, allowanceCredits } from '$lib/server/ai/credits';
+import { getAccount, setEnabled, allowanceCredits, MIN_TURN_MC } from '$lib/server/ai/credits';
 import { loadAiPlatform } from '$lib/server/ai/pricing';
 import { aiConfigured } from '$lib/server/ai/openai';
-import { loadThreadMessages } from '$lib/server/ai/agent';
+import { loadThreadMessages, questionCostMc } from '$lib/server/ai/agent';
 import { memberCan } from '$lib/server/ai/tools';
 import type { Actions, PageServerLoad } from './$types';
 
@@ -27,6 +27,10 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		available: platform.enabled && aiConfigured(),
 		canEnable: await memberCan(locals, 'settings.manage'),
 		balanceMc: account.balance_mc,
+		// Too little left for the assistant to start an answer: said before anyone types.
+		outOfCredits: account.balance_mc < MIN_TURN_MC,
+		// What an ordinary question costs, said before anyone spends anything.
+		questionMc: await questionCostMc(locals),
 		allowance: allowanceCredits(org, account.allowance_override),
 		periodEnd: account.period_end,
 		threads,

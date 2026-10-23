@@ -4,7 +4,7 @@ import type { HallRow, TableTypeRow } from '$lib/db/index';
 import { st } from '$lib/i18n-server';
 import type { Actions, PageServerLoad } from './$types';
 import { requireOrgPermission } from '$lib/server/access';
-import { floorplanDraft, markProposalApplied } from '$lib/server/ai/proposals';
+import { floorplanDraft, recordSavedDraft } from '$lib/server/ai/proposals';
 import { layoutVersion } from '$lib/floorplan-layout';
 
 export const load: PageServerLoad = async ({ params, locals, url }) => {
@@ -47,13 +47,12 @@ export const actions: Actions = {
 			// drawn on, and the proposal is closed with it so it cannot be applied again.
 			const draft = await floorplanDraft(locals.db, orgId, locals.user!.id, proposalId, params.id);
 			if (!draft || draft.stale) return fail(409, { error: st(locals.locale).ai.draftStale });
-			const edited = !!floorplanJson;
 			if (!floorplanJson) floorplanJson = JSON.stringify(draft.state);
 			const write = await dbRun(locals.db,
 				'UPDATE halls SET floorplan_json = ? WHERE id = ? AND org_id = ? AND floorplan_json IS ?',
 				floorplanJson, params.id, orgId, draft.baseJson);
 			if (write.meta.changes !== 1) return fail(409, { error: st(locals.locale).ai.draftStale });
-			await markProposalApplied(locals.db, proposalId, { saved: true, editedInEditor: edited });
+			await recordSavedDraft(locals.db, orgId, proposalId, floorplanJson);
 			return { success: true, draftSaved: true };
 		}
 

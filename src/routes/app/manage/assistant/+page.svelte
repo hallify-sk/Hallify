@@ -6,6 +6,9 @@
   import SectionHeader from '$lib/components/SectionHeader.svelte';
   import ProposalCard from '$lib/components/assistant/ProposalCard.svelte';
   import { renderReply, errorKey } from '$lib/assistant/render';
+  import { threadKey, OPEN_KEY, tabStore, navigationTarget } from '$lib/assistant/session';
+  import { creditAmount } from '$lib/assistant/credits';
+  import { confirmFirst } from '$lib/forms';
   import type { PageData } from './$types';
 
   const { data }: { data: PageData } = $props();
@@ -15,18 +18,16 @@
   let busy = $state(false);
   let uploading = $state(false);
   let error = $state('');
+  let errorCode = $state<string | null>(null);
   /** The message being answered, shown straight away rather than after the round trip. */
   let pendingText = $state<string | null>(null);
   let resolving = $state<string | null>(null);
   let fileInput = $state<HTMLInputElement | null>(null);
   let scroller = $state<HTMLDivElement | null>(null);
 
-  const dateLocale = $derived(getLocale() === 'en' ? 'en-GB' : 'sk-SK');
-  // Credits are held in thousandths; shown with at most one decimal, in the locale's
-  // own decimal separator (12,6 in Slovak).
-  const credits = $derived(
-    new Intl.NumberFormat(dateLocale, { maximumFractionDigits: 1 }).format(Math.floor(Math.max(0, data.balanceMc) / 100) / 10)
-  );
+  // The same formatter as the AI settings page, so the balance reads the same everywhere.
+  const credits = $derived(creditAmount(Math.max(0, data.balanceMc), getLocale()));
+  const questionCost = $derived(t.ai.questionCost(creditAmount(data.questionMc, getLocale())));
 
   const errorText = (code: unknown) => errorKey(t.ai.errors, code);
 
@@ -44,10 +45,19 @@
     if (busy || (!message && files.length === 0)) return;
     busy = true;
     error = '';
+    errorCode = null;
     pendingText = message + files.map((f) => `\n📎 ${f.name}`).join('');
+    const attached = files;
     const attachmentIds = files.map((f) => f.id);
     text = '';
     files = [];
+    // A refused or failed question goes back into the composer, so it need not be typed again.
+    const giveBack = () => {
+      if (!text.trim() && !files.length) {
+        text = message;
+        files = attached;
+      }
+    };
     scrollDown();
     try {
       const res = await fetch('/app/manage/assistant/chat', {
@@ -56,12 +66,26 @@
         body: JSON.stringify({ threadId: data.threadId, text: message, attachmentIds })
       });
       const body = await res.json().catch(() => ({}));
-      if (!body.ok) error = errorText(body.error);
+      if (!body.ok) {
+        error = errorText(body.error);
+        errorCode = typeof body.error === 'string' ? body.error : null;
+        giveBack();
+      }
       const thread = body.threadId ?? data.threadId;
-      if (thread && thread !== data.threadId) await goto(`?t=${thread}`, { keepFocus: true, noScroll: true });
+      const go = navigationTarget(body.actions);
+      if (go) {
+        // The assistant opened a page for them: go there, and carry the conversation
+        // on in the floating widget, open, on that page.
+        if (thread && data.currentOrg) {
+          tabStore.set(threadKey(data.currentOrg.id), thread);
+          tabStore.set(OPEN_KEY, '1');
+        }
+        await goto(go);
+      } else if (thread && thread !== data.threadId) await goto(`?t=${thread}`, { keepFocus: true, noScroll: true });
       else await invalidateAll();
     } catch {
       error = t.ai.errors.generic;
+      giveBack();
     } finally {
       busy = false;
       pendingText = null;
@@ -89,14 +113,14 @@
     }
   }
 
-  async function resolve(id: string, action: 'apply' | 'discard') {
+  async function resolve(id: string, action: 'apply' | 'discard', opts?: { skip?: number[] }) {
     resolving = id;
     error = '';
     try {
       const res = await fetch(`/app/manage/assistant/proposals/${id}`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ action })
+        body: JSON.stringify({ action, ...opts })
       });
       const body = await res.json().catch(() => ({}));
       if (!res.ok && !body.ok) error = errorText(body.error);
@@ -124,7 +148,7 @@
       <p class="beta-line"><span class="beta">{t.ai.beta}</span> {t.ai.betaHint}</p>
     </div>
     {#if data.enabled}
-      <span class="credits" title={t.ai.balanceTitle}>{t.ai.balance(credits)}</span>
+      <span class="credits" title="{t.ai.balanceTitle}. {questionCost}">{t.ai.balance(credits)}</span>
     {/if}
   </div>
 
@@ -132,6 +156,13 @@
     <section class="card--inset gate">
       <h2>{t.ai.disabledTitle}</h2>
       <p>{t.ai.disabledBody}</p>
+      <!-- What switching it on means, said before the switch: cost and the legal basis. -->
+      <p class="gate-cost">{questionCost}</p>
+      <p class="gate-legal">
+        {t.ai.enableLegal}
+        <a href="/privacy" target="_blank" rel="noopener">{t.ai.privacyLink}</a> ·
+        <a href="/dpa" target="_blank" rel="noopener">{t.ai.dpaLink}</a>
+      </p>
       {#if data.canEnable}
         <form method="POST" action="?/enable" use:enhance>
           <button type="submit" class="btn-action">{t.ai.enableButton}</button>
@@ -143,6 +174,11 @@
   {:else}
     {#if !data.available}
       <p class="alert-warning">{t.ai.unavailable}</p>
+    {:else if data.outOfCredits}
+      <p class="alert-warning">
+        {t.ai.outOfCredits}
+        {#if data.canEnable}<a href="/app/manage/settings/ai">{t.ai.buyTitle} →</a>{:else}{t.ai.askForCredits}{/if}
+      </p>
     {/if}
 
     <div class="assistant">
@@ -156,10 +192,12 @@
           {#each data.threads as th (th.id)}
             <li class:active={th.id === data.threadId}>
               <a href="?t={th.id}">{th.title || '…'}</a>
-              <form method="POST" action="?/deleteThread" use:enhance={() => async ({ update }) => {
+              <form method="POST" action="?/deleteThread" use:enhance={confirmFirst(() => t.ai.deleteThreadConfirm(th.title || '…'), async ({ update }) => {
+                  // Read before update(): afterwards the deleted thread is no longer the open one.
+                  const wasOpen = th.id === data.threadId;
                   await update();
-                  if (th.id === data.threadId) goto('/app/manage/assistant');
-                }}>
+                  if (wasOpen) goto('/app/manage/assistant');
+                })}>
                 <input type="hidden" name="id" value={th.id} />
                 <button type="submit" class="thread-del" aria-label={t.ai.deleteThread} title={t.ai.deleteThread}>×</button>
               </form>
@@ -174,6 +212,7 @@
             <div class="empty">
               <h2>{t.ai.emptyTitle}</h2>
               <p class="muted">{t.ai.subtitle}</p>
+              <p class="muted small cost-note">{questionCost}</p>
               <div class="suggestions">
                 {#each t.ai.suggestions as s}
                   <button type="button" class="suggestion" onclick={() => (text = s)}>{s}</button>
@@ -199,7 +238,12 @@
           {/if}
         </div>
 
-        {#if error}<p class="inline-err" role="alert">{error}</p>{/if}
+        {#if error}
+          <p class="inline-err" role="alert">
+            {error}
+            {#if errorCode === 'insufficient_credits' && data.canEnable}<a href="/app/manage/settings/ai">{t.ai.buyTitle} →</a>{/if}
+          </p>
+        {/if}
 
         <form class="composer" onsubmit={(e) => { e.preventDefault(); send(); }}>
           {#if files.length}
@@ -214,7 +258,7 @@
           <textarea rows="2" bind:value={text} onkeydown={onKey} placeholder={t.ai.placeholder}
             disabled={busy || !data.available} aria-label={t.ai.placeholder}></textarea>
           <div class="composer-bar">
-            <input type="file" accept=".csv,.tsv,.txt,.pdf,.jpg,.jpeg,.png,.webp,text/csv,application/pdf,image/jpeg,image/png,image/webp" class="sr-only" bind:this={fileInput} onchange={upload} />
+            <input type="file" accept=".xlsx,.csv,.tsv,.txt,.pdf,.jpg,.jpeg,.png,.webp,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/pdf,image/jpeg,image/png,image/webp" class="sr-only" bind:this={fileInput} onchange={upload} />
             <button type="button" class="btn-outline btn-sm" onclick={() => fileInput?.click()} disabled={busy || uploading || !data.available}>
               {uploading ? t.ai.uploading : t.ai.attach}
             </button>
@@ -251,6 +295,9 @@
   .gate { padding: 28px; max-width: 620px; }
   .gate h2 { margin: 0 0 8px; font-size: var(--h2-size); }
   .gate p { margin: 0 0 16px; line-height: var(--body-leading); color: var(--text-muted); }
+  .gate .gate-cost { margin-bottom: 6px; }
+  .gate .gate-legal { font-size: 12.5px; }
+  .gate a, .inline-err a, .alert-warning a { color: var(--accent-ink); font-weight: 600; }
 
   .assistant {
     display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 20px;
@@ -290,6 +337,7 @@
   .empty { margin: auto; text-align: center; max-width: 460px; }
   .empty h2 { margin: 0 0 6px; font-size: var(--h2-size); }
   .empty p { margin: 0 0 18px; line-height: 1.5; }
+  .empty p.cost-note { margin-top: -10px; }
   .suggestions { display: flex; flex-direction: column; gap: 6px; }
   .suggestion {
     padding: 9px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm);
@@ -305,6 +353,16 @@
   .msg--assistant :global(p:last-child) { margin-bottom: 0; }
   .msg--assistant :global(ul) { margin: 4px 0 6px; padding-left: 18px; }
   .msg--assistant :global(code) { font-size: 12px; padding: 1px 4px; border-radius: 3px; background: var(--bg-panel); }
+  .msg--assistant :global(ol) { margin: 4px 0 6px; padding-left: 20px; }
+  .msg--assistant :global(.reply-heading) { margin-top: 10px; }
+  .msg--assistant :global(.reply-heading:first-child) { margin-top: 0; }
+  .msg--assistant :global(hr) { border: none; border-top: 1px solid var(--border); margin: 8px 0; }
+  .msg--assistant :global(.reply-table) { overflow-x: auto; margin: 4px 0 8px; }
+  .msg--assistant :global(.reply-table:last-child) { margin-bottom: 0; }
+  .msg--assistant :global(table) { border-collapse: collapse; font-size: 12px; line-height: 1.45; }
+  .msg--assistant :global(th), .msg--assistant :global(td) { text-align: left; vertical-align: top; padding: 4px 8px; border-bottom: 1px solid var(--border); }
+  .msg--assistant :global(th) { font-weight: 600; color: var(--text-muted); white-space: nowrap; }
+  .msg--assistant :global(tr:last-child td) { border-bottom: none; }
   .thinking { color: var(--text-muted); animation: pulse 1.4s ease-in-out infinite; }
   @keyframes pulse { 50% { opacity: .45; } }
 

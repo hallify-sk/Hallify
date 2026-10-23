@@ -20,6 +20,9 @@
   import ProposalCard from './ProposalCard.svelte';
   import { renderReply, errorKey } from '$lib/assistant/render';
   import { assistantPageHooks } from '$lib/assistant/page-hooks';
+  import { threadKey, OPEN_KEY, tabStore as store, navigationTarget } from '$lib/assistant/session';
+  import { creditAmount } from '$lib/assistant/credits';
+  import { hintFor } from '$lib/assistant/hints';
 
   interface Message {
     id: string;
@@ -30,18 +33,22 @@
 
   const { orgId }: { orgId: string } = $props();
 
-  const KEY_THREAD = $derived(`hallify:assistant:thread:${orgId}`);
-  const KEY_OPEN = 'hallify:assistant:open';
+  const KEY_THREAD = $derived(threadKey(orgId));
+  const KEY_OPEN = OPEN_KEY;
 
   let open = $state(false);
   let threadId = $state<string | null>(null);
   let messages = $state<Message[]>([]);
   let balanceMc = $state<number | null>(null);
+  let questionMc = $state<number | null>(null);
+  let outOfCredits = $state(false);
+  let canManageCredits = $state(false);
   let text = $state('');
   let files = $state<{ id: string; name: string }[]>([]);
   let busy = $state(false);
   let uploading = $state(false);
   let error = $state('');
+  let errorCode = $state<string | null>(null);
   let pendingText = $state<string | null>(null);
   let resolving = $state<string | null>(null);
   let loaded = $state(false);
@@ -50,19 +57,13 @@
   let fileInput = $state<HTMLInputElement | null>(null);
   let pageTitle = $state('');
 
-  const store = {
-    get: (k: string) => { try { return sessionStorage.getItem(k); } catch { return null; } },
-    set: (k: string, v: string | null) => {
-      try { if (v === null) sessionStorage.removeItem(k); else sessionStorage.setItem(k, v); } catch { /* private mode */ }
-    }
-  };
-
-  const dateLocale = $derived(getLocale() === 'en' ? 'en-GB' : 'sk-SK');
-  const credits = $derived(
-    balanceMc === null ? '' :
-      new Intl.NumberFormat(dateLocale, { maximumFractionDigits: 1 }).format(Math.floor(Math.max(0, balanceMc) / 100) / 10)
-  );
+  const credits = $derived(balanceMc === null ? '' : creditAmount(Math.max(0, balanceMc), getLocale()));
   const errorText = (code: unknown) => errorKey(t.ai.errors, code);
+
+  // The full-screen editors keep their step buttons ("Next: …") in the bottom-right
+  // corner; there the launcher sits above them instead of on top of them.
+  const EDITOR_PAGE = /^\/app\/(manage\/halls\/[^/]+\/(editor|templates\/[^/]+)|reservation\/[^/]+\/layout)\/?$/;
+  const raised = $derived(EDITOR_PAGE.test($page.url.pathname));
 
   // The title is read after each navigation has rendered; it is what the user sees
   // in the tab, and what the panel says it can see.
@@ -83,6 +84,9 @@
       if (body.ok) {
         messages = body.messages;
         balanceMc = body.balanceMc;
+        questionMc = typeof body.questionMc === 'number' ? body.questionMc : null;
+        outOfCredits = body.outOfCredits === true;
+        canManageCredits = body.canManageCredits === true;
         if (!body.threadId && threadId) setThread(null); // deleted elsewhere
       }
     } catch { /* offline: keep what is shown */ }
@@ -117,10 +121,19 @@
     if (busy || (!message && files.length === 0)) return;
     busy = true;
     error = '';
+    errorCode = null;
     pendingText = message + files.map((f) => `\n📎 ${f.name}`).join('');
+    const attached = files;
     const attachmentIds = files.map((f) => f.id);
     text = '';
     files = [];
+    // A refused or failed question goes back into the composer, so it need not be typed again.
+    const giveBack = () => {
+      if (!text.trim() && !files.length) {
+        text = message;
+        files = attached;
+      }
+    };
     scrollDown();
     try {
       const res = await fetch('/app/manage/assistant/chat', {
@@ -132,16 +145,18 @@
         })
       });
       const body = await res.json().catch(() => ({}));
-      if (!body.ok) error = errorText(body.error);
+      if (!body.ok) {
+        error = errorText(body.error);
+        errorCode = typeof body.error === 'string' ? body.error : null;
+        giveBack();
+      }
       if (body.threadId) setThread(body.threadId);
       await load();
-      for (const action of body.actions ?? []) {
-        if (action.type === 'navigate' && typeof action.path === 'string' && action.path.startsWith('/app/')) {
-          await goto(action.path);
-        }
-      }
+      const go = navigationTarget(body.actions);
+      if (go) await goto(go);
     } catch {
       error = t.ai.errors.generic;
+      giveBack();
     } finally {
       busy = false;
       pendingText = null;
@@ -170,7 +185,7 @@
     }
   }
 
-  async function resolve(id: string, action: 'apply' | 'discard') {
+  async function resolve(id: string, action: 'apply' | 'discard', opts?: { skip?: number[] }) {
     // The open page may hold unsaved work this change would collide with.
     const blocked = action === 'apply' ? assistantPageHooks()?.blocker?.() : null;
     if (blocked) {
@@ -183,7 +198,7 @@
       const res = await fetch(`/app/manage/assistant/proposals/${id}`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ action })
+        body: JSON.stringify({ action, ...opts })
       });
       const body = await res.json().catch(() => ({}));
       if (!res.ok && !body.ok) error = errorText(body.error);
@@ -219,7 +234,7 @@
 </script>
 
 {#if open}
-  <section class="aw-panel" aria-label={t.ai.title}>
+  <section class="aw-panel" class:raised aria-label={t.ai.title}>
     <header class="aw-head">
       <span class="aw-spark" aria-hidden="true">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/></svg>
@@ -242,7 +257,10 @@
 
     <div class="aw-messages" bind:this={scroller}>
       {#if messages.length === 0 && !pendingText}
-        <p class="aw-empty">{t.ai.widgetEmpty}</p>
+        <div class="aw-empty">
+          <p>{t.ai.widgetHints[hintFor($page.url.pathname)]}</p>
+          {#if questionMc !== null}<p class="aw-cost">{t.ai.questionCost(creditAmount(questionMc, getLocale()))}</p>{/if}
+        </div>
       {/if}
       {#each messages as m (m.id)}
         {#if m.text}
@@ -260,7 +278,17 @@
       {/if}
     </div>
 
-    {#if error}<p class="aw-error" role="alert">{error}</p>{/if}
+    {#if error}
+      <p class="aw-error" role="alert">
+        {error}
+        {#if errorCode === 'insufficient_credits' && canManageCredits}<a href="/app/manage/settings/ai">{t.ai.buyTitle} →</a>{/if}
+      </p>
+    {:else if outOfCredits}
+      <p class="aw-notice">
+        {t.ai.outOfCredits}
+        {#if canManageCredits}<a href="/app/manage/settings/ai">{t.ai.buyTitle} →</a>{:else}{t.ai.askForCredits}{/if}
+      </p>
+    {/if}
 
     <form class="aw-composer" onsubmit={(e) => { e.preventDefault(); send(); }}>
       {#if pageTitle}
@@ -281,7 +309,7 @@
       <div class="aw-input">
         <textarea rows="2" bind:this={input} bind:value={text} onkeydown={onKey}
           placeholder={t.ai.placeholder} aria-label={t.ai.placeholder} disabled={busy}></textarea>
-        <input type="file" accept=".csv,.tsv,.txt,.pdf,.jpg,.jpeg,.png,.webp,text/csv,application/pdf,image/jpeg,image/png,image/webp" class="aw-hidden" bind:this={fileInput} onchange={upload} />
+        <input type="file" accept=".xlsx,.csv,.tsv,.txt,.pdf,.jpg,.jpeg,.png,.webp,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/pdf,image/jpeg,image/png,image/webp" class="aw-hidden" bind:this={fileInput} onchange={upload} />
         <button type="button" class="aw-icon" onclick={() => fileInput?.click()} disabled={busy || uploading}
           title={t.ai.attach} aria-label={t.ai.attach}>
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
@@ -295,7 +323,7 @@
   </section>
 {/if}
 
-<button type="button" class="aw-launcher" class:is-open={open} onclick={() => toggle()}
+<button type="button" class="aw-launcher" class:is-open={open} class:raised onclick={() => toggle()}
   aria-expanded={open} aria-label={open ? t.ai.widgetClose : t.ai.widgetOpen} title={open ? t.ai.widgetClose : t.ai.widgetOpen}>
   {#if open}
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="6 9 12 15 18 9"/></svg>
@@ -324,6 +352,8 @@
   }
   .aw-launcher:hover { background: var(--accent-hover); transform: translateY(-2px); }
   .aw-launcher:focus-visible { outline: 2px solid var(--accent-ink); outline-offset: 3px; }
+  /* Above an editor's step buttons (36 px high, 10 px padding) with the usual gap. */
+  .aw-launcher.raised { bottom: 76px; }
 
   .aw-panel {
     position: fixed; right: 20px; bottom: 80px; z-index: 90;
@@ -333,6 +363,7 @@
     box-shadow: 0 18px 50px rgba(0, 0, 0, .35);
     overflow: hidden;
   }
+  .aw-panel.raised { bottom: 136px; height: min(620px, calc(100vh - 166px)); }
 
   .aw-head {
     display: flex; align-items: center; gap: 8px; padding: 11px 12px 11px 14px;
@@ -355,6 +386,8 @@
 
   .aw-messages { flex: 1; overflow-y: auto; padding: 14px; display: flex; flex-direction: column; gap: 10px; }
   .aw-empty { margin: auto 8px; text-align: center; font-size: 13px; line-height: 1.55; color: var(--text-muted); }
+  .aw-empty p { margin: 0; }
+  .aw-empty .aw-cost { margin-top: 8px; font-size: 11.5px; color: var(--text-subtle); }
   .aw-msg { max-width: 88%; font-size: 13px; line-height: 1.55; border-radius: var(--radius); padding: 8px 12px; }
   .aw-msg--user { align-self: flex-end; background: var(--accent-dim); white-space: pre-wrap; }
   .aw-msg--assistant { align-self: flex-start; background: var(--bg-hover); }
@@ -362,6 +395,16 @@
   .aw-msg--assistant :global(p:last-child) { margin-bottom: 0; }
   .aw-msg--assistant :global(ul) { margin: 4px 0 6px; padding-left: 18px; }
   .aw-msg--assistant :global(code) { font-size: 12px; padding: 1px 4px; border-radius: 3px; background: var(--bg-panel); }
+  .aw-msg--assistant :global(ol) { margin: 4px 0 6px; padding-left: 20px; }
+  .aw-msg--assistant :global(.reply-heading) { margin-top: 10px; }
+  .aw-msg--assistant :global(.reply-heading:first-child) { margin-top: 0; }
+  .aw-msg--assistant :global(hr) { border: none; border-top: 1px solid var(--border); margin: 8px 0; }
+  .aw-msg--assistant :global(.reply-table) { overflow-x: auto; margin: 4px 0 8px; }
+  .aw-msg--assistant :global(.reply-table:last-child) { margin-bottom: 0; }
+  .aw-msg--assistant :global(table) { border-collapse: collapse; font-size: 12px; line-height: 1.45; }
+  .aw-msg--assistant :global(th), .aw-msg--assistant :global(td) { text-align: left; vertical-align: top; padding: 4px 8px; border-bottom: 1px solid var(--border); }
+  .aw-msg--assistant :global(th) { font-weight: 600; color: var(--text-muted); white-space: nowrap; }
+  .aw-msg--assistant :global(tr:last-child td) { border-bottom: none; }
   .aw-thinking { color: var(--text-muted); animation: aw-pulse 1.4s ease-in-out infinite; }
   @keyframes aw-pulse { 50% { opacity: .45; } }
 
@@ -369,6 +412,11 @@
     margin: 0 14px 8px; padding: 7px 10px; font-size: 12px; color: var(--danger);
     background: var(--danger-dim); border-radius: var(--radius-sm);
   }
+  .aw-notice {
+    margin: 0 14px 8px; padding: 7px 10px; font-size: 12px; color: var(--warning);
+    background: var(--warning-dim); border-radius: var(--radius-sm);
+  }
+  .aw-error a, .aw-notice a { color: var(--accent-ink); font-weight: 600; white-space: nowrap; }
 
   .aw-composer { border-top: 1px solid var(--border); padding: 8px 10px 10px; }
   .aw-context {
@@ -405,6 +453,8 @@
   @media (max-width: 560px) {
     .aw-panel { left: 8px; right: 8px; width: auto; bottom: 76px; height: calc(100vh - 96px); }
     .aw-launcher { right: 14px; bottom: 14px; }
+    .aw-panel.raised { bottom: 132px; height: calc(100vh - 152px); }
+    .aw-launcher.raised { bottom: 70px; }
   }
   @media (prefers-reduced-motion: reduce) {
     .aw-launcher:hover { transform: none; }

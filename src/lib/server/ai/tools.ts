@@ -5,7 +5,7 @@ import { requireOrgPermission } from '$lib/server/access';
 import { assertCanBook } from '$lib/availability';
 import { parseCsv, parseDate, parseTime, parseCount, type DateOrder } from './csv';
 import { buildSeatableLayout } from '$lib/reservationLayout';
-import { seatGroups } from '$lib/seating';
+import { planSeating } from './seating-plan';
 import type { Guest, MultiFloorState, TableObj } from '$lib/floorplan-types';
 import {
 	HALL_FIELDS, DAY_KEYS, allowedAmenityKeys, loadHallProfile, currentValue, validateHallPatch, type HallField
@@ -225,7 +225,7 @@ const TOOLS: Tool[] = [
 	},
 	{
 		name: 'read_attachment',
-		description: 'Look at a file the user attached. A CSV gives its columns, row count and first rows (and the whole text if small); a text file gives its text. Use this before proposing an import or seating.',
+		description: 'Look at a file the user attached. A CSV or Excel sheet gives its columns, row count and first rows (and the whole text if small); a text file gives its text. Use this before proposing an import or seating.',
 		permission: 'ai.use',
 		parameters: obj({ attachment_id: str('The attachment id given in the user message') }),
 		async run(ctx, a) {
@@ -236,7 +236,7 @@ const TOOLS: Tool[] = [
 			}
 			const fullText = file.content.length <= FULL_TEXT_CHARS ? file.content : null;
 			// Plain text (a pasted guest list, a note) is not a table; don't pretend it is.
-			if (!/\.(csv|tsv)$/i.test(file.name)) {
+			if (!/\.(csv|tsv|xlsx)$/i.test(file.name)) {
 				return { output: { name: file.name, text: fullText ?? file.content.slice(0, FULL_TEXT_CHARS), truncated: !fullText } };
 			}
 			const { delimiter, rows } = parseCsv(file.content);
@@ -388,15 +388,14 @@ const TOOLS: Tool[] = [
 	{
 		name: 'propose_seating',
 		description:
-			'Prepare a seating plan for an event from a list of names. Put people who belong together (a family, a couple, ' +
-			'colleagues) in one group; the plan keeps each group at one table where it fits. Children sit with their own ' +
-			'parents: put each child in their family\'s group (match by surname or by what the list says), never in a ' +
-			'separate children\'s group, unless the user explicitly asks for a children\'s table. Set keep_together for ' +
-			'families and couples, so that if the tables cannot keep every group whole, friends or colleagues are split ' +
-			'rather than a family. Give a table_label only when the ' +
+			'Prepare a seating plan for an event from a list of names. A group is a family or a couple (keep_together=true) or ' +
+			'one person; children go in their own parents\' group (match by surname or by what the list says), never a ' +
+			'separate children\'s group unless the user asks for a children\'s table. Groups the user listed under one circle ' +
+			'(e.g. "Kolegovia z práce", "Kamaráti", "Rodina nevesty") share that circle name: the plan seats each circle ' +
+			'together where the tables allow and spreads the guests over the free tables. Give a table_label only when the ' +
 			'user asked for a specific table, using a label from get_reservation_seating. Guests already on the list are matched ' +
 			'by name, not duplicated. keep_existing=true keeps everyone already seated where they are; false re-seats everyone. ' +
-			'Nothing is saved until the user presses Apply.',
+			'Report groups_split_across_tables as it comes back; never say nothing was split unless it is empty.',
 		permission: 'reservations.manage',
 		parameters: obj({
 			reservation_id: str('The reservation id'),
@@ -410,7 +409,8 @@ const TOOLS: Tool[] = [
 				type: 'array',
 				description: 'Guests in the groups they should sit in',
 				items: obj({
-					name: str('Short name for the group, e.g. "Novákovci" or "Kolegovia z práce"'),
+					name: str('Short name for the group, e.g. "Novákovci"'),
+					circle: nullableStr('The circle the user listed this group under, e.g. "Kolegovia z práce", or null'),
 					table_label: nullableStr('A table label the user asked for, or null'),
 					keep_together: { type: 'boolean', description: 'True for a family (with its children) or a couple' },
 					guests: {
@@ -434,11 +434,12 @@ const TOOLS: Tool[] = [
 			const known = new Map(layout.guests.map((g) => [norm(g.firstName, g.lastName), g.id]));
 			const newGuests: Guest[] = [];
 			const groups = (Array.isArray(a.groups) ? a.groups : []) as {
-				name: string; table_label: string | null; keep_together: boolean;
+				name: string; circle: string | null; table_label: string | null; keep_together: boolean;
 				guests: { first_name: string; last_name: string; note: string | null }[];
 			}[];
 			const seatingGroups = groups.map((g) => ({
 				name: String(g.name ?? '').slice(0, 80),
+				circle: typeof g.circle === 'string' && g.circle.trim() ? g.circle.trim().slice(0, 80) : null,
 				preferredTable: typeof g.table_label === 'string' ? g.table_label : null,
 				keepTogether: g.keep_together === true,
 				guestIds: (Array.isArray(g.guests) ? g.guests : []).slice(0, 1000).map((p) => {
@@ -459,7 +460,7 @@ const TOOLS: Tool[] = [
 
 			const keepExisting = a.keep_existing !== false;
 			const reserved = (Array.isArray(a.reserved_tables) ? a.reserved_tables : []).map(String);
-			const result = seatGroups(tables, seatingGroups, { keepExisting, reserved });
+			const result = planSeating(tables, seatingGroups, { keepExisting, reserved });
 			const name = guestNamer({ ...layout, guests: [...layout.guests, ...newGuests] });
 
 			const proposalId = crypto.randomUUID();
@@ -482,8 +483,9 @@ const TOOLS: Tool[] = [
 					seated_total: seated,
 					tables_used: result.tables.filter((t) => t.assignments.some(Boolean)).length,
 					could_not_be_seated: result.unseated.map(name),
-					// Mention these: the tables could not keep them whole.
+					// Mention these: the tables could not keep them whole (groups and circles).
 					groups_split_across_tables: result.split,
+					guests_per_table: result.tables.filter((t) => t.assignments.some(Boolean)).map((t) => `${t.label}: ${t.assignments.filter(Boolean).length}/${t.assignments.length}`),
 					note: 'A preview with an Apply button is now shown to the user. Summarise it briefly; do not list every guest.'
 				}
 			};
@@ -544,17 +546,13 @@ const TOOLS: Tool[] = [
 	{
 		name: 'propose_hall_update',
 		description:
-			'Propose changes to a hall\'s public profile — ALL of them in this one call: when setting a hall up from a real ' +
-			'venue, fill every field you found (name, description, capacity, address, contacts, pricing, price band, amenities, ' +
-			'hours and photos) rather than proposing one field at a time. null leaves a field as it is. ' +
-			'Photos: cover_photo_url is one photo URL from read_web_page (the best wide shot of the hall itself); ' +
-			'gallery_photo_urls is the FULL new gallery (keep existing /uploads/ photos by listing them); when the user asks for ' +
-			'several photos, gather them from several pages, and if you found fewer than asked, say so in your reply. They are copied into ' +
-			'Hallify\'s own storage. ' +
-			'Use facts the user gave or that your web search found on reliable pages (the venue\'s own site first) — never ' +
-			'invent a phone number, email, price or capacity; leave it null if you did not find it. List the pages you used ' +
-			'in sources. Write the description in the language of the user, in your own words, 2-4 sentences. ' +
-			'Nothing is saved until the user confirms the preview.',
+			'Propose changes to a hall\'s public profile, ALL in this one call (from a real venue: every field you found, not ' +
+			'one at a time); null leaves a field as it is. Photos come from read_web_page and are copied into Hallify: ' +
+			'cover_photo_url is the best wide shot of the hall itself (not a logo, people or another event); gallery_photo_urls ' +
+			'is the FULL new gallery (list existing /uploads/ photos to keep them), gathered from several pages when several ' +
+			'are wanted; if you found fewer than asked, say so. Never invent a phone, email, price or capacity: use what the ' +
+			'user gave or a reliable page says (the venue\'s own first), else null; list those pages in sources. The ' +
+			'description: the user\'s language, your own words, 2-4 sentences.',
 		permission: 'halls.manage',
 		parameters: obj({
 			hall_id: str('The hall id'),
@@ -620,6 +618,9 @@ const TOOLS: Tool[] = [
 				// The cover is shown on its own; repeating it as the gallery's first photo
 				// only makes the gallery look like it has one picture more than it has.
 				let urls = [...new Set(a.gallery_photo_urls.map(String))].filter((u) => u !== a.cover_photo_url);
+				if (urls.length < new Set(a.gallery_photo_urls.map(String)).size) {
+					photoProblems.push('the cover photo was also in the gallery list; it is shown once, as the cover, so the gallery has one photo fewer than you listed');
+				}
 				if (maxGallery !== -1 && urls.length > maxGallery) {
 					photoProblems.push(`only the first ${maxGallery} gallery photos were kept (the plan's limit)`);
 					urls = urls.slice(0, maxGallery);
@@ -659,8 +660,11 @@ const TOOLS: Tool[] = [
 				output: {
 					proposal_id: proposalId,
 					fields_changed: Object.keys(after),
+					// The real counts, so the reply says what the card shows.
+					cover_photo: 'cover_image_url' in after,
+					gallery_photos: Array.isArray(after.gallery_images) ? after.gallery_images.length : null,
 					photo_problems: photoProblems,
-					note: 'A preview with each field before and after is now shown to the user. Summarise it briefly and mention anything you could not find.'
+					note: 'A preview with each field before and after is now shown to the user. Summarise it briefly and mention anything you could not find. Give photo counts exactly as cover_photo and gallery_photos say.'
 				}
 			};
 		}

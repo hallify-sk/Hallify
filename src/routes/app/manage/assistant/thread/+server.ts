@@ -1,8 +1,9 @@
 import { json } from '@sveltejs/kit';
 import { dbFirst } from '$lib/db/index';
 import { requireOrgPermission } from '$lib/server/access';
-import { getAccount } from '$lib/server/ai/credits';
-import { loadThreadMessages } from '$lib/server/ai/agent';
+import { getAccount, MIN_TURN_MC } from '$lib/server/ai/credits';
+import { loadThreadMessages, questionCostMc } from '$lib/server/ai/agent';
+import { memberCan } from '$lib/server/ai/tools';
 import type { RequestHandler } from './$types';
 
 /** A conversation for the floating widget, which has no page load of its own. */
@@ -18,6 +19,10 @@ export const GET: RequestHandler = async ({ url, locals }) => {
 		ok: true,
 		threadId: thread?.id ?? null,
 		messages: thread ? await loadThreadMessages(locals.db, thread.id) : [],
-		balanceMc: account.balance_mc
+		balanceMc: account.balance_mc,
+		outOfCredits: account.balance_mc < MIN_TURN_MC,
+		// Who can act on "out of credits": the AI settings page is theirs.
+		canManageCredits: await memberCan(locals, 'settings.manage'),
+		questionMc: await questionCostMc(locals)
 	});
 };

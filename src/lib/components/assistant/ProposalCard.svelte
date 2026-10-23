@@ -10,7 +10,8 @@
   interface Props {
     proposal: Proposal;
     resolving: string | null;
-    onresolve: (id: string, action: 'apply' | 'discard') => void;
+    /** `skip`: positions of a batch's changes the person unticked. */
+    onresolve: (id: string, action: 'apply' | 'discard', opts?: { skip?: number[] }) => void;
     /** Narrow surfaces (the widget) show fewer preview rows. */
     compact?: boolean;
   }
@@ -51,6 +52,10 @@
     if (field === 'price_band') return '€'.repeat(Number(v));
     return String(v);
   }
+
+  // ── A batch of changes: each can be left out before applying ──
+  let skipped = $state<number[]>([]);
+  const toggleOp = (i: number) => (skipped = skipped.includes(i) ? skipped.filter((x) => x !== i) : [...skipped, i]);
 
   const fmtM = (n: number) => new Intl.NumberFormat(dateLocale, { maximumFractionDigits: 1 }).format(n);
   const fmtDate = (d: string | null) =>
@@ -155,7 +160,7 @@
     {#if plan.sources?.length}
       <p class="proposal-note sources">
         {t.ai.hallUpdateSources}:
-        {#each plan.sources as url, i (url)}{#if i}, {/if}<a href={url} target="_blank" rel="noopener noreferrer">{url.replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, '')}</a>{/each}
+        {#each plan.sources as url, i (url)}{#if i}{', '}{/if}<a href={url} target="_blank" rel="noopener noreferrer">{url.replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, '')}</a>{/each}
       </p>
     {/if}
     {#if 'address' in plan.after}<p class="proposal-note">{t.ai.hallUpdatePinNote}</p>{/if}
@@ -164,7 +169,7 @@
     {#if p.status === 'pending'}
       <div class="proposal-actions">
         <button type="button" class="btn-action btn-sm" disabled={resolving === p.id} onclick={() => onresolve(p.id, 'apply')}>
-          {resolving === p.id ? t.ai.applying : t.ai.hallUpdateApply}
+          {resolving === p.id ? t.ai.saving : t.ai.hallUpdateApply}
         </button>
         <button type="button" class="btn-outline btn-sm" disabled={resolving === p.id} onclick={() => onresolve(p.id, 'discard')}>
           {t.ai.discard}
@@ -181,19 +186,29 @@
 
   {:else if p.kind === 'changes'}
     {@const plan = p.payload as { ops: { type: string; title: string; lines: string[] }[] }}
-    {@const result = p.result as { results: { ok: boolean; error?: string }[] } | null}
+    {@const result = p.result as { results: { ok: boolean; error?: string; skipped?: boolean }[] } | null}
     {@const okCount = result?.results?.filter((r) => r.ok).length ?? 0}
+    {@const skippedCount = result?.results?.filter((r) => r.skipped).length ?? 0}
+    {@const pickable = p.status === 'pending' && plan.ops.length > 1}
+    {@const chosen = plan.ops.length - skipped.length}
     <div class="proposal-head">
       <strong>{t.ai.changesTitle(plan.ops.length)}</strong>
     </div>
+    {#if pickable}<p class="proposal-note">{t.ai.changesPick}</p>{/if}
     <ol class="ops">
       {#each plan.ops as op, i (i)}
         {@const r = result?.results?.[i]}
-        <li class:op-ok={r?.ok} class:op-bad={r && !r.ok}>
-          <span class="op-mark" aria-hidden="true">{r ? (r.ok ? '✓' : '✕') : i + 1}</span>
+        <li class:op-ok={r?.ok} class:op-bad={r && !r.ok && !r.skipped} class:op-skip={r?.skipped || (pickable && skipped.includes(i))}>
+          {#if pickable}
+            <input type="checkbox" class="op-check" checked={!skipped.includes(i)} disabled={resolving === p.id}
+              onchange={() => toggleOp(i)} aria-label={op.title} />
+          {:else}
+            <span class="op-mark" aria-hidden="true">{r ? (r.skipped ? '–' : r.ok ? '✓' : '✕') : i + 1}</span>
+          {/if}
           <span class="op-body">
             <strong>{op.title}</strong>
             {#each op.lines as line}<span class="op-line">{line}</span>{/each}
+            {#if r?.skipped}<span class="op-line">{t.ai.changesSkippedMark}</span>{/if}
             {#if r && !r.ok && r.error}<span class="op-line op-err">{r.error}</span>{/if}
           </span>
         </li>
@@ -201,15 +216,18 @@
     </ol>
     {#if p.status === 'pending'}
       <div class="proposal-actions">
-        <button type="button" class="btn-action btn-sm" disabled={resolving === p.id} onclick={() => onresolve(p.id, 'apply')}>
-          {resolving === p.id ? t.ai.applying : t.ai.changesApply(plan.ops.length)}
+        <button type="button" class="btn-action btn-sm" disabled={resolving === p.id || chosen === 0}
+          onclick={() => onresolve(p.id, 'apply', skipped.length ? { skip: skipped } : undefined)}>
+          {resolving === p.id ? t.ai.saving : t.ai.changesApply(chosen)}
         </button>
         <button type="button" class="btn-outline btn-sm" disabled={resolving === p.id} onclick={() => onresolve(p.id, 'discard')}>
           {t.ai.discard}
         </button>
       </div>
     {:else if p.status === 'applied' && result?.results}
-      <p class="proposal-done" class:muted={okCount < plan.ops.length}>{t.ai.changesApplied(okCount, plan.ops.length - okCount)}</p>
+      <p class="proposal-done" class:muted={okCount < plan.ops.length - skippedCount}>
+        {t.ai.changesApplied(okCount, plan.ops.length - okCount - skippedCount)}{#if skippedCount}{' '}{t.ai.changesSkipped(skippedCount)}.{/if}
+      </p>
     {:else if p.status === 'discarded'}
       <p class="proposal-done muted">{t.ai.discarded}</p>
     {/if}
@@ -221,7 +239,7 @@
       zones: { id: string; label: string; color: string; points: { x: number; y: number }[] }[];
       size: { w: number; h: number };
     }}
-    {@const result = p.result as { stale?: boolean } | null}
+    {@const result = p.result as { stale?: boolean; notSaved?: boolean } | null}
     {@const m = 1}
     <div class="proposal-head">
       <strong>{t.ai.floorplanTitle(plan.hallName)}</strong>
@@ -250,14 +268,14 @@
     {#if plan.sources?.length}
       <p class="proposal-note sources">
         {t.ai.hallUpdateSources}:
-        {#each plan.sources as src, i (src)}{#if i}, {/if}{#if /^https?:\/\//.test(src)}<a href={src} target="_blank" rel="noopener noreferrer">{src.replace(/^https?:\/\/(www\.)?/, '').slice(0, 60)}</a>{:else}{src}{/if}{/each}
+        {#each plan.sources as src, i (src)}{#if i}{', '}{/if}{#if /^https?:\/\//.test(src)}<a href={src} target="_blank" rel="noopener noreferrer">{src.replace(/^https?:\/\/(www\.)?/, '').slice(0, 60)}</a>{:else}{src}{/if}{/each}
       </p>
     {/if}
     {#if plan.replaces}<p class="proposal-note warn">{t.ai.floorplanReplaces}</p>{/if}
     {#if p.status === 'pending'}
       <div class="proposal-actions">
         <button type="button" class="btn-action btn-sm" disabled={resolving === p.id} onclick={() => onresolve(p.id, 'apply')}>
-          {resolving === p.id ? t.ai.applying : t.ai.floorplanApply}
+          {resolving === p.id ? t.ai.saving : t.ai.floorplanApply}
         </button>
         <a class="btn-outline btn-sm" href="/app/manage/halls/{plan.hallId}/editor?draft={p.id}">{t.ai.viewInEditor}</a>
         <button type="button" class="btn-outline btn-sm" disabled={resolving === p.id} onclick={() => onresolve(p.id, 'discard')}>
@@ -270,7 +288,7 @@
         <a href="/app/manage/halls/{plan.hallId}/editor">{t.ai.openFloorplan} →</a>
       </p>
     {:else}
-      <p class="proposal-done muted">{result?.stale ? t.ai.floorplanStale : t.ai.discarded}</p>
+      <p class="proposal-done muted">{result?.notSaved ? t.ai.draftNotSaved : result?.stale ? t.ai.floorplanStale : t.ai.discarded}</p>
     {/if}
 
   {:else if p.kind === 'seating'}
@@ -279,7 +297,7 @@
       tables: { id: string; label: string; assignments: (string | null)[] }[];
       names: Record<string, string>; unseated: string[]; split?: string[];
     }}
-    {@const result = p.result as { seated?: number; stale?: boolean } | null}
+    {@const result = p.result as { seated?: number; stale?: boolean; notSaved?: boolean } | null}
     {@const seated = plan.tables.reduce((n, tb) => n + tb.assignments.filter(Boolean).length, 0)}
     <div class="proposal-head">
       <strong>{t.ai.seatingTitle(plan.title)}</strong>
@@ -311,7 +329,7 @@
     {#if p.status === 'pending'}
       <div class="proposal-actions">
         <button type="button" class="btn-action btn-sm" disabled={resolving === p.id} onclick={() => onresolve(p.id, 'apply')}>
-          {resolving === p.id ? t.ai.applying : t.ai.seatingApply}
+          {resolving === p.id ? t.ai.saving : t.ai.seatingApply}
         </button>
         <a class="btn-outline btn-sm" href="/app/reservation/{plan.reservationId}/layout?draft={p.id}">{t.ai.viewInEditor}</a>
         <button type="button" class="btn-outline btn-sm" disabled={resolving === p.id} onclick={() => onresolve(p.id, 'discard')}>
@@ -324,7 +342,7 @@
         <a href="/app/reservation/{plan.reservationId}/layout">{t.ai.openLayout} →</a>
       </p>
     {:else}
-      <p class="proposal-done muted">{result?.stale ? t.ai.seatingStale : t.ai.discarded}</p>
+      <p class="proposal-done muted">{result?.notSaved ? t.ai.draftNotSaved : result?.stale ? t.ai.seatingStale : t.ai.discarded}</p>
     {/if}
   {/if}
 </div>
@@ -367,7 +385,7 @@
   .seat-table-head { display: flex; justify-content: space-between; font-size: 12px; font-weight: 650; margin-bottom: 4px; }
   .seat-table ul { list-style: none; margin: 0; padding: 0; font-size: 12px; line-height: 1.6; color: var(--text-base); }
 
-  .proposal-actions { display: flex; gap: 8px; margin-top: 12px; }
+  .proposal-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
   .proposal-done { margin: 12px 0 0; font-size: 13px; font-weight: 600; color: var(--success); }
   .proposal-done.muted { color: var(--text-muted); font-weight: 500; }
   .proposal-done a { margin-left: 8px; color: var(--accent-ink); font-weight: 600; }
@@ -385,6 +403,9 @@
     font-size: 11px; font-weight: 700; background: var(--bg-hover); color: var(--text-muted);
   }
   .op-ok .op-mark { background: var(--success-dim); color: var(--success); }
+  .op-check { flex-shrink: 0; width: 16px; height: 16px; margin: 2px 2px 0; accent-color: var(--accent); cursor: pointer; }
+  .op-skip .op-body { opacity: .55; }
+  .op-skip .op-body strong { text-decoration: line-through; }
   .op-bad .op-mark { background: var(--danger-dim); color: var(--danger); }
   .op-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
   .op-body strong { font-size: 12.5px; font-weight: 600; }

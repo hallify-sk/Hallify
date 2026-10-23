@@ -100,4 +100,20 @@ describe('seatGroups', () => {
 		], { keepExisting: false, reserved: ['pri pódiu'] });
 		expect(at(r, 'a').every((a) => a === null)).toBe(true);
 	});
+
+	it('spreads whole groups over the free tables when asked, instead of packing them', () => {
+		const ids = (p: string, n: number) => Array.from({ length: n }, (_, i) => `${p}${i}`);
+		const tables = () => [table('t1', 8), table('t2', 8), table('t3', 8), table('t4', 8)];
+		// 23 guests as one family of 3 and ten couples: packing leaves a table empty.
+		const groups = [
+			{ name: 'Rodina', preferredTable: null, guestIds: ids('r', 3) },
+			...Array.from({ length: 10 }, (_, i) => ({ name: `Pár ${i}`, preferredTable: null, guestIds: ids(`p${i}-`, 2) }))
+		];
+		const used = (r: ReturnType<typeof seatGroups>) => r.tables.map((t) => t.assignments.filter(Boolean).length).sort((a, b) => b - a);
+		expect(used(seatGroups(tables(), groups, { keepExisting: false }))).toContain(0);
+		const spread = seatGroups(tables(), groups, { keepExisting: false, spread: true });
+		expect(used(spread)).toEqual([6, 6, 6, 5]);
+		expect(spread.split).toEqual([]);
+		expect(spread.unseated).toEqual([]);
+	});
 });
