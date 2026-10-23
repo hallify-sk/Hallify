@@ -1,4 +1,4 @@
-import { error, fail, redirect } from '@sveltejs/kit';
+import { fail, redirect } from '@sveltejs/kit';
 import bcrypt from 'bcryptjs';
 import { dbFirst, dbRun } from '$lib/db/index';
 import { createSession } from '$lib/auth';
@@ -26,16 +26,42 @@ function loadInvite(db: D1Database, token: string) {
 	);
 }
 
+/**
+ * The invite, but only on its own venue's site. On another venue's site it does not
+ * exist: that site's branding around somebody else's event (and an account created
+ * in the wrong org's bubble) is exactly what must not happen. On the apex it is
+ * still served, because that is where the link points when the org has no public
+ * address.
+ */
+async function loadInviteHere(locals: App.Locals, token: string) {
+	const invite = await loadInvite(locals.db, token);
+	if (invite && locals.domainOrg && locals.domainOrg.id !== invite.org_id) return null;
+	return invite;
+}
+
 const stillValid = (inv: InviteRow | null): inv is InviteRow =>
 	!!inv && !inv.accepted_at && new Date(inv.expires_at) >= new Date();
 
+/** Why the link leads nowhere, shown by the page itself: the generic error page
+ *  said "something went wrong on our side" for a link that was merely used up. */
+type Unavailable = 'notFound' | 'used' | 'expired';
+
 export const load: PageServerLoad = async ({ params, locals }) => {
-	const invite = await loadInvite(locals.db, params.token);
-	if (!invite) error(404, st(locals.locale).serverErrors.inviteNotFoundOrExpired);
-	if (invite.accepted_at) error(410, st(locals.locale).serverErrors.inviteAlreadyUsed);
-	if (new Date(invite.expires_at) < new Date()) error(410, st(locals.locale).serverErrors.inviteExpired);
+	const invite = await loadInviteHere(locals, params.token);
+	const dead = (reason: Unavailable) => ({
+		unavailable: reason,
+		invite: null,
+		hasAccount: false,
+		loggedInMatches: false,
+		loggedInDifferent: false,
+		currentEmail: null,
+		token: params.token
+	});
+	if (!invite) return dead('notFound');
+	if (invite.accepted_at) return dead('used');
+	if (new Date(invite.expires_at) < new Date()) return dead('expired');
 	// The event was cancelled after the invite was sent — the invite is dead.
-	if (invite.res_status === 'cancelled') error(410, st(locals.locale).serverErrors.inviteNotFoundOrExpired);
+	if (invite.res_status === 'cancelled') return dead('notFound');
 
 	// Did this email already register as a client of the org (e.g. after the invite
 	// was sent)? If so we steer them to log in and claim instead of re-registering.
@@ -51,6 +77,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 	const loggedInDifferent = !!locals.user && !loggedInMatches;
 
 	return {
+		unavailable: null as Unavailable | null,
 		invite: {
 			email: invite.email,
 			firstName: invite.first_name,
@@ -72,7 +99,7 @@ export const actions: Actions = {
 	// New visitor sets a password → a client account is created and the reservation
 	// is handed to them. Name + email come from the invite, not the form.
 	register: async ({ params, request, cookies, locals, getClientAddress }) => {
-		const invite = await loadInvite(locals.db, params.token);
+		const invite = await loadInviteHere(locals, params.token);
 		if (!stillValid(invite) || invite.res_status === 'cancelled') return fail(410, { error: st(locals.locale).serverErrors.inviteNotFoundOrExpired });
 
 		// Same account-creation bucket as every other sign-up surface: this one
@@ -138,8 +165,8 @@ export const actions: Actions = {
 
 	// Already signed in as the invited client → just take ownership of the event.
 	claim: async ({ params, locals }) => {
-		if (!locals.user) redirect(303, `/login?redirect=/invite/${params.token}`);
-		const invite = await loadInvite(locals.db, params.token);
+		if (!locals.user) redirect(303, `/login?redirect=${encodeURIComponent(`/invite/${params.token}`)}`);
+		const invite = await loadInviteHere(locals, params.token);
 		if (!stillValid(invite) || invite.res_status === 'cancelled') return fail(410, { error: st(locals.locale).serverErrors.inviteNotFoundOrExpired });
 
 		if (locals.user.account_type !== 'client'

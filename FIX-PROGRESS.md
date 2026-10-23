@@ -10,3 +10,4 @@
 | B114 | done (invite part) | A failed invite e-mail is reported in an error banner with the invite link and a Copy button, instead of a green success. Assign-client toast and announcements are other teams' scope. |
 | M12 | done | Invites list: Copy link on each pending invite, Resend (new token, fresh 7 days, re-checks rank/roles/seats) on pending and expired ones; expired invites stay listed for 30 days marked "Platnosť vypršala". |
 | B157 | done | Invalid e-mails refused (`enterValidEmail`); revoking an invite that no longer exists returns 404 "Táto pozvánka už neexistuje" (meta.changes); members ordered owner, admins, members. |
+| B103 | done | Both invite pages render a used / expired / revoked invite as their own page state ("Táto pozvánka už neplatí" plus what to do next) instead of throwing into the generic error page; /invite/<token> only resolves on the invite's own venue site (or the apex). +error.svelte (discovery team) untouched. |

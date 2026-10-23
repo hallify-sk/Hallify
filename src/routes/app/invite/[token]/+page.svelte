@@ -10,10 +10,10 @@
   // the invitation actually grants. The lede keeps the familiar admin/member word;
   // the access row names everything that will be applied.
   const legacyRole = $derived(
-    data.invite.role === 'admin' ? t.membersAdmin.roleAdmin : t.membersAdmin.roleMember
+    data.invite?.role === 'admin' ? t.membersAdmin.roleAdmin : t.membersAdmin.roleMember
   );
   const accessLabel = $derived(
-    [legacyRole, ...data.invite.roleNames].filter((v, i, all) => v && all.indexOf(v) === i).join(', ')
+    [legacyRole, ...(data.invite?.roleNames ?? [])].filter((v, i, all) => v && all.indexOf(v) === i).join(', ')
   );
 
   // Encoded as one query value: the login action re-validates it (same-origin
@@ -25,15 +25,38 @@
 
   // The name fields are prefilled from the invite and editable; a failed submit
   // hands back whatever was typed rather than resetting to the invite's version.
-  const firstName = $derived(form?.firstName || data.invite.firstName);
-  const lastName = $derived(form?.lastName || data.invite.lastName);
+  const firstName = $derived(form?.firstName || data.invite?.firstName || '');
+  const lastName = $derived(form?.lastName || data.invite?.lastName || '');
+
+  const unavailableHint = $derived(
+    data.unavailable === 'used'
+      ? t.authPages.inviteUsedHint
+      : data.unavailable === 'expired'
+        ? t.authPages.inviteExpiredHint
+        : t.authPages.inviteNotFoundHint
+  );
 </script>
 
-<svelte:head><title>{t.authPages.inviteTitle} – {data.invite.orgName}</title></svelte:head>
+<svelte:head>
+  <title>{data.invite ? `${t.authPages.inviteTitle} – ${data.invite.orgName}` : `${t.authPages.inviteUnavailableTitle} – Hallify`}</title>
+  <meta name="robots" content="noindex" />
+</svelte:head>
 
 <div class="auth-shell">
   <!-- A plain div: the root layout already renders the page <main>. -->
   <div class="auth-measure">
+    {#if !data.invite}
+    <!-- Used, expired or revoked: say which, and where to go next. -->
+    <section class="section section--lead" use:reveal>
+      <div class="section-head">
+        <h1>{t.authPages.inviteUnavailableTitle}</h1>
+        <p>{unavailableHint}</p>
+      </div>
+      {#if data.unavailable === 'used'}
+        <a href="/app/login" class="btn-action inv-wide">{t.authPages.inviteSignIn}</a>
+      {/if}
+    </section>
+    {:else}
     <section class="section section--lead" use:reveal>
       <div class="section-head">
         <h1>{t.authPages.inviteTitle}</h1>
@@ -119,6 +142,7 @@
         </form>
       {/if}
     </section>
+    {/if}
   </div>
 </div>
 
