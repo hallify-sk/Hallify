@@ -249,7 +249,69 @@ export async function floorplanDraft(db: App.Locals['db'], orgId: string, userId
 	return { proposalId: p.id, state, stale, baseJson: hall.floorplan_json };
 }
 
-/** Close a proposal that was saved some other way than Apply (from the editor). */
+/**
+ * What saving a draft from the editor actually saved, measured on the saved JSON —
+ * never taken from the proposal's own numbers. `saved: false` when the saved plan
+ * holds none of the proposal (the editor wrote back the plan it had before the draft
+ * was shown), so a card can never claim "23 seated" over a layout nobody sits in.
+ */
+export function savedDraftOutcome(kind: string, payload: unknown, savedJson: string):
+	| { saved: false }
+	| { saved: true; result: Record<string, unknown> } {
+	const saved = migrateToMultiFloor(savedJson);
+	if (kind === 'seating') {
+		const plan = payload as SeatingPayload | null;
+		if (!plan) return { saved: false };
+		const tableOf = new Map<string, string>();
+		for (const f of saved.floors) for (const t of f.tables) for (const g of t.assignments ?? []) if (g) tableOf.set(g, t.id);
+		const placements = plan.tables.flatMap((t) => t.assignments.filter((g): g is string => !!g).map((g) => [g, t.id] as const));
+		const asPlanned = placements.filter(([g, t]) => tableOf.get(g) === t).length;
+		const listed = new Set(saved.guests.map((g) => g.id));
+		const newKept = plan.newGuests.filter((g) => listed.has(g.id)).length;
+		if (placements.length && (asPlanned === 0 || (plan.newGuests.length > 0 && newKept === 0))) return { saved: false };
+		return {
+			saved: true,
+			result: {
+				seated: placements.filter(([g]) => tableOf.has(g)).length,
+				editedInEditor: asPlanned < placements.length,
+				savedFromEditor: true
+			}
+		};
+	}
+	if (kind === 'floorplan') {
+		const plan = payload as { walls?: WallObj[]; zones?: ZoneObj[] } | null;
+		if (!plan) return { saved: false };
+		const ids = [...(plan.walls ?? []), ...(plan.zones ?? [])].map((x) => x.id);
+		const have = new Set(saved.floors.flatMap((f) => [...f.walls, ...f.zones].map((x) => x.id)));
+		if (ids.length && !ids.some((id) => have.has(id))) return { saved: false };
+		const first = saved.floors[0];
+		const same = !!first && JSON.stringify(first.walls) === JSON.stringify(plan.walls ?? [])
+			&& JSON.stringify(first.zones) === JSON.stringify(plan.zones ?? []);
+		return { saved: true, result: { saved: true, editedInEditor: !same } };
+	}
+	return { saved: true, result: { saved: true } };
+}
+
+/**
+ * Close a proposal whose draft was saved from the editor, recording what was really
+ * saved (see savedDraftOutcome). A save that carried none of it withdraws the
+ * proposal as stale instead: the saved plan replaced the one it was made for.
+ */
+export async function recordSavedDraft(db: App.Locals['db'], orgId: string, id: string, savedJson: string): Promise<'applied' | 'not_saved' | null> {
+	const p = await loadProposal(db, orgId, id);
+	if (!p || p.status !== 'pending') return null;
+	const outcome = savedDraftOutcome(p.kind, fromJson(p.payload), savedJson);
+	if (!outcome.saved) {
+		await dbRun(db,
+			"UPDATE ai_proposals SET status = 'discarded', resolved_at = datetime('now'), result = ? WHERE id = ? AND status = 'pending'",
+			toJson({ stale: true, notSaved: true }), id);
+		return 'not_saved';
+	}
+	return (await markProposalApplied(db, id, outcome.result)) ? 'applied' : null;
+}
+
+/** Close a proposal that was saved some other way than Apply. Callers that saved
+ *  from the editor use recordSavedDraft, which measures what was saved. */
 export async function markProposalApplied(db: App.Locals['db'], id: string, result: unknown): Promise<boolean> {
 	const r = await dbRun(db,
 		"UPDATE ai_proposals SET status = 'applied', resolved_at = datetime('now'), result = ? WHERE id = ? AND status = 'pending'",

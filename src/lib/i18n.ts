@@ -2388,6 +2388,7 @@ export const sk = {
 		draftSave: "Uložiť návrh",
 		draftDiscard: "Zahodiť návrh",
 		draftStale: "Tento návrh už neplatí — bol uložený, zahodený, alebo sa medzičasom zmenil pôvodný stav.",
+		draftNotSaved: "Neuložené — v editore sa uložil iný stav než tento návrh, preto sa zahodil. Požiadajte asistenta o nový.",
 		ops: {
 			yes: "áno",
 			no: "nie",
@@ -5194,6 +5195,7 @@ export const en: typeof sk = {
 		draftSave: "Save draft",
 		draftDiscard: "Discard draft",
 		draftStale: "This draft no longer applies — it was saved, discarded, or what it was based on has changed.",
+		draftNotSaved: "Not saved — the editor saved something other than this proposal, so it was withdrawn. Ask the assistant for a new one.",
 		ops: {
 			yes: "yes",
 			no: "no",

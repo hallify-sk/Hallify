@@ -221,7 +221,7 @@
       zones: { id: string; label: string; color: string; points: { x: number; y: number }[] }[];
       size: { w: number; h: number };
     }}
-    {@const result = p.result as { stale?: boolean } | null}
+    {@const result = p.result as { stale?: boolean; notSaved?: boolean } | null}
     {@const m = 1}
     <div class="proposal-head">
       <strong>{t.ai.floorplanTitle(plan.hallName)}</strong>
@@ -270,7 +270,7 @@
         <a href="/app/manage/halls/{plan.hallId}/editor">{t.ai.openFloorplan} →</a>
       </p>
     {:else}
-      <p class="proposal-done muted">{result?.stale ? t.ai.floorplanStale : t.ai.discarded}</p>
+      <p class="proposal-done muted">{result?.notSaved ? t.ai.draftNotSaved : result?.stale ? t.ai.floorplanStale : t.ai.discarded}</p>
     {/if}
 
   {:else if p.kind === 'seating'}
@@ -279,7 +279,7 @@
       tables: { id: string; label: string; assignments: (string | null)[] }[];
       names: Record<string, string>; unseated: string[]; split?: string[];
     }}
-    {@const result = p.result as { seated?: number; stale?: boolean } | null}
+    {@const result = p.result as { seated?: number; stale?: boolean; notSaved?: boolean } | null}
     {@const seated = plan.tables.reduce((n, tb) => n + tb.assignments.filter(Boolean).length, 0)}
     <div class="proposal-head">
       <strong>{t.ai.seatingTitle(plan.title)}</strong>
@@ -324,7 +324,7 @@
         <a href="/app/reservation/{plan.reservationId}/layout">{t.ai.openLayout} →</a>
       </p>
     {:else}
-      <p class="proposal-done muted">{result?.stale ? t.ai.seatingStale : t.ai.discarded}</p>
+      <p class="proposal-done muted">{result?.notSaved ? t.ai.draftNotSaved : result?.stale ? t.ai.seatingStale : t.ai.discarded}</p>
     {/if}
   {/if}
 </div>
