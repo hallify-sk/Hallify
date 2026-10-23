@@ -1,5 +1,6 @@
 <script lang="ts">
   import { CREDITS_PER_EUR } from '$lib/ai-credits';
+  import { creditAmount } from '$lib/assistant/credits';
   import { enhance } from '$app/forms';
   import { t, getLocale } from '$lib/i18n.svelte';
   import type { PageData } from './$types';
@@ -7,8 +8,7 @@
   const { data }: { data: PageData } = $props();
 
   const dateLocale = $derived(getLocale() === 'en' ? 'en-GB' : 'sk-SK');
-  const credits = (mc: number) =>
-    new Intl.NumberFormat(dateLocale, { maximumFractionDigits: 2 }).format(Math.round(mc / (data.mc / 100)) / 100);
+  const credits = (mc: number) => creditAmount(mc, getLocale());
   const fmtDate = (d: string | null, withTime = false) =>
     d
       ? new Date(d.includes('T') ? d : `${d.replace(' ', 'T')}Z`).toLocaleString(dateLocale, {

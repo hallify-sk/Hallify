@@ -7,6 +7,7 @@
   import ProposalCard from '$lib/components/assistant/ProposalCard.svelte';
   import { renderReply, errorKey } from '$lib/assistant/render';
   import { threadKey, OPEN_KEY, tabStore, navigationTarget } from '$lib/assistant/session';
+  import { creditAmount } from '$lib/assistant/credits';
   import type { PageData } from './$types';
 
   const { data }: { data: PageData } = $props();
@@ -22,12 +23,8 @@
   let fileInput = $state<HTMLInputElement | null>(null);
   let scroller = $state<HTMLDivElement | null>(null);
 
-  const dateLocale = $derived(getLocale() === 'en' ? 'en-GB' : 'sk-SK');
-  // Credits are held in thousandths; shown with at most one decimal, in the locale's
-  // own decimal separator (12,6 in Slovak).
-  const credits = $derived(
-    new Intl.NumberFormat(dateLocale, { maximumFractionDigits: 1 }).format(Math.floor(Math.max(0, data.balanceMc) / 100) / 10)
-  );
+  // The same formatter as the AI settings page, so the balance reads the same everywhere.
+  const credits = $derived(creditAmount(Math.max(0, data.balanceMc), getLocale()));
 
   const errorText = (code: unknown) => errorKey(t.ai.errors, code);
 

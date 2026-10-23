@@ -21,6 +21,7 @@
   import { renderReply, errorKey } from '$lib/assistant/render';
   import { assistantPageHooks } from '$lib/assistant/page-hooks';
   import { threadKey, OPEN_KEY, tabStore as store, navigationTarget } from '$lib/assistant/session';
+  import { creditAmount } from '$lib/assistant/credits';
 
   interface Message {
     id: string;
@@ -51,11 +52,7 @@
   let fileInput = $state<HTMLInputElement | null>(null);
   let pageTitle = $state('');
 
-  const dateLocale = $derived(getLocale() === 'en' ? 'en-GB' : 'sk-SK');
-  const credits = $derived(
-    balanceMc === null ? '' :
-      new Intl.NumberFormat(dateLocale, { maximumFractionDigits: 1 }).format(Math.floor(Math.max(0, balanceMc) / 100) / 10)
-  );
+  const credits = $derived(balanceMc === null ? '' : creditAmount(Math.max(0, balanceMc), getLocale()));
   const errorText = (code: unknown) => errorKey(t.ai.errors, code);
 
   // The title is read after each navigation has rendered; it is what the user sees
