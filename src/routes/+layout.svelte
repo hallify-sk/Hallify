@@ -147,7 +147,8 @@
 			: ''
 	);
 
-	const orgTheme = $derived(branding?.theme ?? 'slate');
+	// The organisation's default theme (Settings → Customize), or null when it set none.
+	const orgTheme = $derived<string | null>(branding?.theme ?? null);
 
 	const AUTH_PATHS = ['/app/login', '/app/register', '/app/forgot-password', '/app/reset-password', '/app/invite', '/login', '/forgot-password', '/reset-password'];
 	const isAuthPage = $derived(AUTH_PATHS.some(p => $page.url.pathname.startsWith(p)));
@@ -183,15 +184,20 @@
 	// The personal theme applies in the console only; the public site, marketing and
 	// legal pages stay light. Re-evaluated on every navigation, because "Public site"
 	// in the sidebar is a client-side navigation out of the console (and back).
+	// Without a personal preference the organisation's default theme (Settings →
+	// Customize) applies, and without one the OS preference; it is re-read when the
+	// org theme changes (e.g. org switch). Ignoring the org default made choosing one
+	// in Customize do nothing.
 	const personalTheme = $derived(usesPersonalTheme($page.url.pathname));
 	$effect(() => {
+		const o = orgTheme;
 		if (!personalTheme) {
 			document.documentElement.removeAttribute('data-theme');
 			return;
 		}
 		let saved: string | null = null;
 		try { saved = localStorage.getItem('hallify-theme'); } catch { /* storage blocked */ }
-		themeStore.set(saved ?? osTheme());
+		themeStore.set(saved ?? o ?? osTheme());
 	});
 </script>
 

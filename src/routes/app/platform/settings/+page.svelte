@@ -1,6 +1,7 @@
 <script lang="ts">
   import { enhance } from '$app/forms';
-  import { t } from '$lib/i18n.svelte';
+  import { t, getLocale } from '$lib/i18n.svelte';
+  import { formatDateTime } from '$lib/format';
   import type { PageData, ActionData } from './$types';
 
   let { data, form }: { data: PageData; form: ActionData } = $props();
@@ -9,7 +10,21 @@
   let includeBubbles = $state(data.analytics.includeBubbles);
   let serverUrl = $state(data.analytics.serverUrl);
 
-  const fmt = (d: string | null) => (d ? new Date(d + 'Z').toLocaleString() : '—');
+  // Re-seed from what is stored whenever it changes (after a save). The plain
+  // `use:enhance` used to reset the form, which emptied these bound fields and
+  // switched the toggle off, so the NEXT save wrote blanks over the real settings.
+  $effect(() => {
+    containerId = data.analytics.containerId;
+    includeBubbles = data.analytics.includeBubbles;
+    serverUrl = data.analytics.serverUrl;
+  });
+
+  /** Keep the fields as they are after a save; the effect above refreshes them. */
+  const keepFields = () => async ({ update }: { update: (o?: { reset?: boolean }) => Promise<void> }) => {
+    await update({ reset: false });
+  };
+
+  const fmt = (d: string | null) => formatDateTime(d, getLocale());
 </script>
 
 <svelte:head><title>{t.platformSettings.title} – Hallify</title></svelte:head>
@@ -32,7 +47,7 @@
       <p>{t.platformSettings.analyticsLead}</p>
     </div>
 
-    <form method="POST" action="?/saveAnalytics" use:enhance>
+    <form method="POST" action="?/saveAnalytics" use:enhance={keepFields}>
       <div class="field">
         <label class="field-label" for="pf-gtm">{t.platformSettings.containerLabel}</label>
         <input
@@ -93,7 +108,7 @@
     {#if !data.aiConfigured}
       <p class="alert-warning">OPENAI_API_KEY is not set on this deployment — the assistant shows as unavailable everywhere.</p>
     {/if}
-    <form method="POST" action="?/saveAi" use:enhance>
+    <form method="POST" action="?/saveAi" use:enhance={keepFields}>
       <div class="toggle-row">
         <label class="ui-switch">
           <input id="pf-ai" type="checkbox" name="enabled" checked={data.ai.enabled} />

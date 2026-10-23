@@ -7,7 +7,9 @@
 // cannot simply be deleted out from under them. We delete every descendant row by
 // hand, child-first. Keep this in sync with the schema's org-scoped tables.
 import { dbRun, dbFirst, dbAll } from '$lib/db/index';
-import { listInvoices } from '$lib/stripe';
+import { listInvoices, cancelSubscription } from '$lib/stripe';
+import { sendEmail } from '$lib/email';
+import { closureEmail, groupByClient } from '$lib/org-closure-email';
 import { deleteCustomHostname, isCFEnabled } from '$lib/cloudflare-saas';
 import type { D1Database } from '@cloudflare/workers-types';
 
@@ -15,17 +17,88 @@ export interface CloseOpts {
 	closedBy?: string | null;        // user id who closed it
 	closedByEmail?: string | null;   // their email (denormalized for the record)
 	reason?: 'owner_closed' | 'auto_empty' | 'user_deleted';
+	/** Refuse to delete anything when the Stripe subscription cannot be cancelled.
+	 *  The owner closing by hand can retry; automatic clean-ups go ahead and record
+	 *  the failure in the archive instead. */
+	strictBilling?: boolean;
+}
+
+export interface CloseResult {
+	/** A live Stripe subscription was found and set to end (no further charges). */
+	subscriptionCancelled: boolean;
+	/** Clients told by email that their upcoming bookings are gone. */
+	clientsNotified: number;
+	/** Clients whose email could not be sent. */
+	clientsNotNotified: number;
+}
+
+/** Thrown (with strictBilling) when Stripe would keep charging a closed organisation. */
+export class BillingCancelError extends Error {
+	constructor(cause: unknown) {
+		super(cause instanceof Error ? cause.message : String(cause));
+		this.name = 'BillingCancelError';
+	}
+}
+
+/** Stripe statuses that still bill: anything that is not already over. */
+function subscriptionStillBills(status: string | null | undefined): boolean {
+	return status !== 'cancelled';
+}
+
+/** People with an upcoming, not cancelled booking at this org who are not its staff:
+ *  closing deletes their booking and (for venue-site accounts) their account. */
+export async function upcomingClientBookings(db: D1Database, orgId: string) {
+	return dbAll<{ email: string | null; first_name: string | null; title: string; event_date: string; hall_name: string | null }>(db,
+		`SELECT u.email, u.first_name, r.title, r.event_date, h.name AS hall_name
+		 FROM reservations r
+		 JOIN users u ON u.id = r.user_id
+		 LEFT JOIN halls h ON h.id = r.hall_id
+		 WHERE (r.org_id = ? OR r.hall_id IN (SELECT id FROM halls WHERE org_id = ?))
+		   AND r.event_date >= date('now')
+		   AND r.status NOT IN ('cancelled', 'completed')
+		   AND u.id NOT IN (SELECT user_id FROM organization_members WHERE org_id = ?)
+		 ORDER BY r.event_date`,
+		orgId, orgId, orgId);
 }
 
 /** Snapshot the org's key records into closed_organizations (kept forever),
- *  then permanently delete the org and all its operational data. */
-export async function archiveAndDeleteOrg(db: D1Database, orgId: string, opts: CloseOpts = {}): Promise<void> {
+ *  then permanently delete the org and all its operational data.
+ *
+ *  Before anything is deleted: the Stripe subscription is cancelled (it used to keep
+ *  charging a closed organisation), and every client with an upcoming booking is
+ *  emailed, because their booking and venue-site account are about to disappear. */
+export async function archiveAndDeleteOrg(db: D1Database, orgId: string, opts: CloseOpts = {}): Promise<CloseResult> {
+	const result: CloseResult = { subscriptionCancelled: false, clientsNotified: 0, clientsNotNotified: 0 };
 	const org = await dbFirst<{ id: string; name: string; slug: string | null; created_at: string }>(
 		db, 'SELECT id, name, slug, created_at FROM organizations WHERE id = ?', orgId);
-	if (!org) return; // already gone
+	if (!org) return result; // already gone
 
 	const sub = await dbFirst<{ plan: string | null; status: string | null; stripe_customer_id: string | null; stripe_subscription_id: string | null; current_period_end: string | null }>(
 		db, 'SELECT plan, status, stripe_customer_id, stripe_subscription_id, current_period_end FROM subscriptions WHERE org_id = ?', orgId);
+
+	// ── Stop billing first. With strictBilling a failure aborts before any data is
+	// touched, so the owner can simply try again.
+	let billingError: string | null = null;
+	if (sub?.stripe_subscription_id && subscriptionStillBills(sub.status)) {
+		try {
+			await cancelSubscription(sub.stripe_subscription_id);
+			result.subscriptionCancelled = true;
+		} catch (e) {
+			if (opts.strictBilling) throw new BillingCancelError(e);
+			billingError = e instanceof Error ? e.message : String(e);
+			console.error('[orgLifecycle] could not cancel Stripe subscription', sub.stripe_subscription_id, e);
+		}
+	}
+
+	// ── Tell clients with upcoming bookings, while their addresses still exist.
+	const recipients = groupByClient(await upcomingClientBookings(db, orgId));
+	for (const rec of recipients) {
+		const { subject, html } = closureEmail(org.name, rec);
+		let ok = false;
+		try { ok = await sendEmail(db, rec.email, subject, html, 'orgClosed'); } catch { ok = false; }
+		if (ok) result.clientsNotified++;
+		else result.clientsNotNotified++;
+	}
 
 	const members = await dbAll<{ email: string; first_name: string; last_name: string; role: string; joined_at: string }>(
 		db, `SELECT u.email, u.first_name, u.last_name, m.role, m.joined_at
@@ -47,7 +120,15 @@ export async function archiveAndDeleteOrg(db: D1Database, orgId: string, opts: C
 	// Stripe is unreachable or there's no customer, archive without them.
 	const invoices = sub?.stripe_customer_id ? await listInvoices(sub.stripe_customer_id) : [];
 
-	const snapshot = JSON.stringify({ subscription: sub ?? null, members, reservations, halls, customDomains, invoices });
+	const snapshot = JSON.stringify({
+		subscription: sub ?? null, members, reservations, halls, customDomains, invoices,
+		closure: {
+			subscriptionCancelled: result.subscriptionCancelled,
+			billingError,
+			clientsNotified: result.clientsNotified,
+			clientsNotNotified: result.clientsNotNotified,
+		},
+	});
 
 	await dbRun(db,
 		`INSERT INTO closed_organizations
@@ -61,6 +142,7 @@ export async function archiveAndDeleteOrg(db: D1Database, orgId: string, opts: C
 	);
 
 	await deleteOrgCascade(db, orgId);
+	return result;
 }
 
 /** Permanently delete one organization and everything scoped to it (no archive). */
@@ -121,6 +203,31 @@ export async function deleteOrgCascade(db: D1Database, orgId: string): Promise<v
 
 	// ── The org itself ──
 	await dbRun(db, 'DELETE FROM organizations WHERE id = ?', orgId);
+}
+
+export type LeaveRefusal = 'notMember' | 'lastMember' | 'onlyOwner';
+
+/** Remove one person from an organisation, with what was granted to them there.
+ *  Roles and per-member overrides used to stay behind and came back when the same
+ *  person was later re-invited as a plain member. Returns why it was refused, or
+ *  null when they have left. */
+export async function leaveOrganization(db: D1Database, orgId: string, userId: string): Promise<LeaveRefusal | null> {
+	const me = await dbFirst<{ role: string }>(db,
+		'SELECT role FROM organization_members WHERE org_id = ? AND user_id = ?', orgId, userId);
+	if (!me) return 'notMember';
+	// The last member cannot leave: an organisation always has someone to pay the
+	// bill and answer clients. They close it instead.
+	if (await orgMemberCount(db, orgId) <= 1) return 'lastMember';
+	if (me.role === 'owner') {
+		const owners = await dbFirst<{ count: number }>(db,
+			`SELECT COUNT(*) AS count FROM organization_members WHERE org_id = ? AND role = 'owner'`, orgId);
+		if (Number(owners?.count ?? 0) <= 1) return 'onlyOwner';
+	}
+	await dbRun(db, 'DELETE FROM org_member_roles WHERE org_id = ? AND user_id = ?', orgId, userId);
+	await dbRun(db, 'DELETE FROM org_member_overrides WHERE org_id = ? AND user_id = ?', orgId, userId);
+	await dbRun(db, 'DELETE FROM organization_members WHERE org_id = ? AND user_id = ?', orgId, userId);
+	await dbRun(db, 'UPDATE sessions SET current_org_id = NULL WHERE user_id = ? AND current_org_id = ?', userId, orgId);
+	return null;
 }
 
 /** Count the members of an org. */

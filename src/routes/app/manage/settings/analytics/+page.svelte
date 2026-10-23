@@ -35,8 +35,8 @@
     </div>
     <button type="submit" class="btn-action gtm-save">{t.settingsPages.saveAnalytics}</button>
   </form>
-  {#if form?.gtmSuccess}<p class="gtm-ok">{t.settingsPages.analyticsSaved}</p>{/if}
-  {#if form?.error}<p class="gtm-err">{form.error}</p>{/if}
+  {#if form?.gtmSuccess}<p class="gtm-ok" role="status">{t.settingsPages.analyticsSaved}</p>{/if}
+  {#if form?.error}<p class="gtm-err" role="alert">{form.error}</p>{/if}
   <p class="gtm-note">{t.settingsPages.gtmServerHint}</p>
   <p class="gtm-note">{t.settingsPages.gtmPlatformNote}</p>
 </section>

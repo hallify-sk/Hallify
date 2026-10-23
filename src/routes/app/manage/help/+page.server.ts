@@ -1,5 +1,5 @@
 import { dbFirst, dbRun, fromJson, toJson } from '$lib/db/index';
-import { ARTICLES } from '$lib/knowledgebase';
+import { articlesFor, searchable, type KbLocale } from '$lib/knowledgebase';
 import type { PageServerLoad, Actions } from './$types';
 import { fail } from '@sveltejs/kit';
 import { requireOrgConsole, requireOrgPermission } from '$lib/server/access';
@@ -67,7 +67,11 @@ export const load: PageServerLoad = async ({ locals }) => {
 		total: checklist.length,
 		setupRequest,
 		setupPriceCents: SETUP_SERVICE_PRICE_CENTS,
-		articles: ARTICLES.map(({ slug, title, category, summary }) => ({ slug, title, category, summary })),
+		// Both languages, so switching language on the page needs no reload, with the
+		// plain text the search box matches against.
+		articles: Object.fromEntries((['sk', 'en'] as KbLocale[]).map((l) => [l,
+			articlesFor(l).map(({ slug, title, category, summary, body }) => ({ slug, title, category, summary, text: searchable(body) }))
+		])) as Record<KbLocale, Array<{ slug: string; title: string; category: string; summary: string; text: string }>>,
 	};
 };
 

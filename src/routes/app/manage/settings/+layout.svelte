@@ -3,11 +3,12 @@
 	import { t } from '$lib/i18n.svelte';
 	import SectionHeader from '$lib/components/SectionHeader.svelte';
 
-	const { children } = $props();
+	const { children, data } = $props();
 
 	// One destination, three linkable tabs. Each is a real route, so the browser's
 	// back button and a bookmarked tab both behave the way an operator expects.
-	const tabs = $derived([
+	// A member without settings.manage sees only Advanced, where they can leave.
+	const allTabs = $derived([
 		{ href: '/app/manage/settings/domains',   label: t.settingsPages.domains },
 		{ href: '/app/manage/settings/customize', label: t.settingsPages.customizeTitle },
 		{ href: '/app/manage/settings/site',      label: t.settingsPages.siteTab },
@@ -15,6 +16,9 @@
 		{ href: '/app/manage/settings/ai',        label: t.ai.settingsTab },
 		{ href: '/app/manage/settings/advanced',  label: t.settingsPages.tabAdvanced },
 	]);
+	const tabs = $derived(data?.canManageSettings === false
+		? allTabs.filter((tab) => tab.href.endsWith('/advanced'))
+		: allTabs);
 
 	const path = $derived($page.url.pathname);
 	const isActive = (href: string) => path === href || path.startsWith(href + '/');

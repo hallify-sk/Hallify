@@ -64,12 +64,20 @@ export const actions: Actions = {
     const orgId = org.id;
     const data = await request.formData();
     const themeRaw = String(data.get('theme') ?? 'slate');
+    // The colour ends up in a style attribute on every page and the logo in an
+    // <img src>: accept a hex colour and an uploaded or http(s) image only.
+    const hex = (v: FormDataEntryValue | null) => {
+      const s = String(v ?? '').trim();
+      return /^#[0-9a-f]{6}$/i.test(s) ? s : '#f05ca1';
+    };
+    const logoRaw = String(data.get('logoUrl') ?? '').trim();
+    const logoUrl = logoRaw.startsWith('/uploads/') || /^https:\/\//i.test(logoRaw) ? logoRaw : '';
     const branding = {
-      appName:      String(data.get('appName')      ?? 'Hallify'),
-      tagline:      String(data.get('tagline')      ?? ''),
-      logoUrl:      String(data.get('logoUrl')      ?? ''),
-      primaryColor: String(data.get('primaryColor') ?? '#f05ca1'),
-      accentColor:  String(data.get('accentColor')  ?? '#f05ca1'),
+      appName:      String(data.get('appName') ?? '').replace(/\s+/g, ' ').trim().slice(0, 80) || 'Hallify',
+      tagline:      String(data.get('tagline') ?? '').slice(0, 140),
+      logoUrl,
+      primaryColor: hex(data.get('primaryColor')),
+      accentColor:  hex(data.get('accentColor')),
       theme:        ['slate', 'dark', 'warm'].includes(themeRaw) ? themeRaw : 'slate',
     };
     await dbRun(locals.db,

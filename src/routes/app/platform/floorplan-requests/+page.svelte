@@ -122,7 +122,13 @@
 
                 <p class="quote-note">{t.floorplanService.quoteReminder}</p>
 
-                <a class="btn-outline btn-sm" href="/app/manage/halls/{r.hall_id}">{t.floorplanService.openVenue}</a>
+                <!-- The hall belongs to another organisation: open it through View as,
+                     or /app/manage resolves it in the admin's own org and 404s. -->
+                <form method="POST" action="/app/org/switch" class="open-venue">
+                  <input type="hidden" name="org_id" value={r.org_id} />
+                  <input type="hidden" name="return_to" value="/app/manage/halls/{r.hall_id}" />
+                  <button type="submit" class="btn-outline btn-sm">{t.floorplanService.openVenue}</button>
+                </form>
               </div>
             </div>
           {/if}

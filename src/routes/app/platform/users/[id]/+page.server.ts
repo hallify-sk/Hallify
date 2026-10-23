@@ -3,6 +3,7 @@ import { dbFirst, dbAll, dbRun } from '$lib/db/index';
 import { st } from '$lib/i18n-server';
 import type { PageServerLoad, Actions } from './$types';
 import { requirePlatformAdmin } from '$lib/guards';
+import { logPlatformAction } from '$lib/server/platform-audit';
 
 export const load: PageServerLoad = async ({ params, locals }) => {
   const user = await dbFirst<{
@@ -37,12 +38,16 @@ export const actions: Actions = {
   grantPlatformAdmin: async ({ params, locals }) => {
     requirePlatformAdmin(locals);
     await dbRun(locals.db, 'UPDATE users SET is_platform_admin = 1 WHERE id = ?', params.id);
+    const u = await dbFirst<{ email: string }>(locals.db, 'SELECT email FROM users WHERE id = ?', params.id);
+    await logPlatformAction(locals, 'user.admin_grant', { type: 'user', id: params.id, label: u?.email });
     return { success: true };
   },
   revokePlatformAdmin: async ({ params, locals }) => {
     requirePlatformAdmin(locals);
     if (params.id === locals.user?.id) return fail(400, { error: st(locals.locale).serverErrors.cannotRevokeOwnAdmin });
     await dbRun(locals.db, 'UPDATE users SET is_platform_admin = 0 WHERE id = ?', params.id);
+    const u = await dbFirst<{ email: string }>(locals.db, 'SELECT email FROM users WHERE id = ?', params.id);
+    await logPlatformAction(locals, 'user.admin_revoke', { type: 'user', id: params.id, label: u?.email });
     return { success: true };
   },
 };

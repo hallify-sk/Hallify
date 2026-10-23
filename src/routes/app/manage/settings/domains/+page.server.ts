@@ -6,6 +6,7 @@ import { st } from '$lib/i18n-server';
 import { env } from '$env/dynamic/private';
 import type { PageServerLoad, Actions } from './$types';
 import { requireOrgPermission } from '$lib/server/access';
+import { tidyDomain, isValidCustomDomain, claimExpired } from '$lib/custom-domain';
 
 interface DomainRow {
   id: string;
@@ -50,10 +51,10 @@ export const actions: Actions = {
     }
 
     const data = await request.formData();
-    const domain = String(data.get('domain') ?? '').toLowerCase().trim();
+    const domain = tidyDomain(data.get('domain'));
 
-    if (!domain || !/^[a-z0-9.-]+\.[a-z]{2,}$/.test(domain)) {
-      return fail(400, { error: st(locals.locale).serverErrors.enterValidDomain });
+    if (!isValidCustomDomain(domain)) {
+      return fail(400, { error: st(locals.locale).serverErrors.enterValidDomain, domain });
     }
 
     // Don't allow claiming a hallify subdomain as a "custom" domain.
@@ -62,12 +63,23 @@ export const actions: Actions = {
       return fail(400, { error: st(locals.locale).serverErrors.useFreeSubdomainInstead });
     }
 
-    // Check not already taken
-    const existing = await dbFirst<{ id: string }>(locals.db,
-      'SELECT id FROM custom_domains WHERE domain = ?',
+    // Taken? A claim nobody verified does not hold a domain forever: after a week
+    // without DNS pointing at us another organisation may add it, so whoever typed
+    // someone else's domain first cannot lock the real owner out.
+    const existing = await dbFirst<{ id: string; org_id: string; verified_at: string | null; created_at: string; cf_hostname_id: string | null }>(locals.db,
+      'SELECT id, org_id, verified_at, created_at, cf_hostname_id FROM custom_domains WHERE domain = ?',
       domain
     );
-    if (existing) return fail(400, { error: st(locals.locale).serverErrors.domainAlreadyRegistered });
+    if (existing) {
+      if (existing.org_id === orgId) return fail(400, { error: st(locals.locale).settingsPages.domainAlreadyYours, domain });
+      if (existing.verified_at || !claimExpired(existing.created_at)) {
+        return fail(400, { error: st(locals.locale).settingsPages.domainClaimedElsewhere, domain });
+      }
+      if (existing.cf_hostname_id && isCFEnabled()) {
+        try { await deleteCustomHostname(existing.cf_hostname_id); } catch { /* best-effort */ }
+      }
+      await dbRun(locals.db, 'DELETE FROM custom_domains WHERE id = ?', existing.id);
+    }
 
     let cfHostnameId: string | null = null;
     if (isCFEnabled()) {

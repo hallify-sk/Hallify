@@ -383,7 +383,11 @@ const appHandle: Handle = async ({ event, resolve }) => {
 
   autoCompletePastEvents(db);
   housekeeping(db, event.platform?.context);
-  return resolveWithLocale(event, resolve, domainOrg?.id ?? event.locals.currentOrg?.id ?? null, db);
+  // The organisation's default language is for VISITORS of its site. Staff in the
+  // console keep their own choice (cookie) or Slovak: applying the visitor default
+  // here switched the whole team's console when an owner set it to English.
+  const visitorOrgId = domainOrg && !event.url.pathname.startsWith('/app') ? domainOrg.id : null;
+  return resolveWithLocale(event, resolve, visitorOrgId, db);
 };
 
 /** Security response headers.

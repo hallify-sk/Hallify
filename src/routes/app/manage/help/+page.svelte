@@ -1,16 +1,22 @@
 <script lang="ts">
   import { enhance } from '$app/forms';
-  import { t } from '$lib/i18n.svelte';
+  import { t, getLocale } from '$lib/i18n.svelte';
+  import { searchArticles } from '$lib/knowledgebase';
   import SetupServiceCard from '$lib/components/SetupServiceCard.svelte';
   import type { PageData } from './$types';
   let { data }: { data: PageData } = $props();
 
   const pct = $derived(Math.round((data.completed / data.total) * 100));
 
+  // The articles in the console's language, narrowed by the search box.
+  let query = $state('');
+  const articles = $derived(data.articles[getLocale() === 'en' ? 'en' : 'sk']);
+  const results = $derived(query.trim() ? searchArticles(articles, query) : articles);
+
   // Group articles by category, preserving first-seen order.
   const grouped = $derived.by(() => {
-    const map = new Map<string, typeof data.articles>();
-    for (const a of data.articles) {
+    const map = new Map<string, typeof articles>();
+    for (const a of results) {
       if (!map.has(a.category)) map.set(a.category, []);
       map.get(a.category)!.push(a);
     }
@@ -114,6 +120,13 @@
     <div class="section-head">
       <h2>{t.membersAdmin.knowledgebase}</h2>
     </div>
+    <div class="kb-search" role="search">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <input type="search" bind:value={query} placeholder={t.membersAdmin.helpSearchPlaceholder} aria-label={t.membersAdmin.helpSearchPlaceholder} />
+    </div>
+    {#if query.trim() && results.length === 0}
+      <p class="kb-empty" role="status">{t.membersAdmin.helpSearchEmpty}</p>
+    {/if}
     {#each grouped as [category, articles]}
       <div class="kb-group">
         <span class="eyebrow kb-cat">{category}</span>
@@ -177,6 +190,14 @@
   .cl-cta:hover { border-color: var(--accent); }
 
   /* Knowledgebase index */
+  .kb-search { position: relative; display: flex; align-items: center; max-width: 420px; margin: 0 0 20px; }
+  .kb-search svg { position: absolute; left: 11px; color: var(--text-subtle); pointer-events: none; }
+  .kb-search input {
+    width: 100%; height: 38px; box-sizing: border-box; padding: 0 12px 0 32px; border: 1px solid var(--border);
+    border-radius: var(--radius-sm); background: var(--bg-panel2); color: var(--text-base); font: inherit; font-size: 13px;
+  }
+  .kb-search input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-dim); }
+  .kb-empty { font-size: 13px; color: var(--text-muted); margin: 0 0 12px; }
   .kb-group { margin-bottom: 22px; }
   .kb-group:last-child { margin-bottom: 0; }
   .kb-cat { display: block; color: var(--text-muted); margin-bottom: 6px; }

@@ -1,15 +1,22 @@
 <script lang="ts">
-  import { t } from '$lib/i18n.svelte';
+  import { enhance } from '$app/forms';
+  import { t, getLocale } from '$lib/i18n.svelte';
+  import { confirmFirst } from '$lib/forms';
+  import { formatDate } from '$lib/format';
   import type { PageData } from './$types';
   let { data }: { data: PageData } = $props();
 
   const SEARCH_THRESHOLD = 8;
   let search = $state('');
+  let planFilter = $state('all');
+  let statusFilter = $state<'all' | 'active' | 'suspended'>('all');
+  const PLANS = ['free', 'starter', 'professional', 'enterprise'];
   const filtered = $derived.by(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return data.orgs;
     return data.orgs.filter(o =>
-      o.name.toLowerCase().includes(q) || (o.slug ?? '').toLowerCase().includes(q)
+      (!q || o.name.toLowerCase().includes(q) || (o.slug ?? '').toLowerCase().includes(q)) &&
+      (planFilter === 'all' || (o.plan ?? 'free') === planFilter) &&
+      (statusFilter === 'all' || (statusFilter === 'suspended') === !!o.suspended_at)
     );
   });
 </script>
@@ -22,7 +29,16 @@
         <h1>{t.platformOrgs.organizations}</h1>
       </div>
       <div class="head-aside">
-        <span class="count">{data.orgs.length} {t.platformOrgs.total}</span>
+        <span class="count">{filtered.length === data.orgs.length ? data.orgs.length : `${filtered.length} / ${data.orgs.length}`} {t.platformOrgs.total}</span>
+        <select class="filter-select" bind:value={planFilter} aria-label={t.platformOrgs.colPlan}>
+          <option value="all">{t.platformOrgs.filterAllPlans}</option>
+          {#each PLANS as p}<option value={p}>{p}</option>{/each}
+        </select>
+        <select class="filter-select" bind:value={statusFilter} aria-label={t.platformOrgs.colStatus}>
+          <option value="all">{t.platformOrgs.filterAllStatuses}</option>
+          <option value="active">{t.platformOrgs.active}</option>
+          <option value="suspended">{t.platformOrgs.suspended}</option>
+        </select>
         {#if data.orgs.length > SEARCH_THRESHOLD}
           <div class="search-wrap">
             <svg class="search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
@@ -49,7 +65,7 @@
           <span role="cell" class="muted">{org.slug}</span>
           <span role="cell"><span class="badge badge-{org.plan ?? 'free'}">{org.plan ?? 'free'}</span></span>
           <span role="cell" class="muted">{org.member_count}</span>
-          <span role="cell" class="muted">{new Date(org.created_at).toLocaleDateString()}</span>
+          <span role="cell" class="muted">{formatDate(org.created_at, getLocale())}</span>
           <span role="cell">
             {#if org.suspended_at}
               <span class="badge badge-suspended">{t.platformOrgs.suspended}</span>
@@ -60,7 +76,7 @@
           <span role="cell" class="actions">
             <a href="/app/platform/orgs/{org.id}" class="btn-outline btn-sm">{t.platformOrgs.manage}</a>
             {#if org.suspended_at}
-              <form method="POST" action="?/unsuspend" style="display:inline">
+              <form method="POST" action="?/unsuspend" style="display:inline" use:enhance>
                 <input type="hidden" name="id" value={org.id} />
                 <button type="submit" class="btn-outline btn-sm">{t.platformOrgs.unsuspend}</button>
               </form>
@@ -73,10 +89,9 @@
                   {t.platformOrgs.viewAs}
                 </button>
               </form>
-              <form method="POST" action="?/suspend" style="display:inline">
+              <form method="POST" action="?/suspend" style="display:inline" use:enhance={confirmFirst(() => t.platformOrgs.confirmSuspend)}>
                 <input type="hidden" name="id" value={org.id} />
-                <button type="submit" class="btn-danger btn-sm"
-                  onclick={(e) => { if (!confirm(t.platformOrgs.confirmSuspend)) e.preventDefault(); }}>{t.platformOrgs.suspend}</button>
+                <button type="submit" class="btn-danger btn-sm">{t.platformOrgs.suspend}</button>
               </form>
             {/if}
           </span>
@@ -89,7 +104,7 @@
         <div class="icon-tile">
           <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
         </div>
-        <p class="empty">{t.platformOrgs.noMatchPrefix} “{search}”.</p>
+        <p class="empty">{search ? `${t.platformOrgs.noMatchPrefix} “${search}”.` : t.platformOrgs.noMatchFilters}</p>
       </div>
     {/if}
   </section>
@@ -100,7 +115,9 @@
   h1 { font-size: var(--display-size); font-weight: 550; letter-spacing: -.055em; line-height: 1.08; margin: 0; }
   .head-text .eyebrow { display: block; margin-bottom: 12px; }
   .head-aside { display: flex; align-items: center; gap: 1rem; flex: 1; justify-content: flex-end; }
-  .count { font-size: .875rem; color: var(--text-muted); }
+  .count { font-size: .875rem; color: var(--text-muted); white-space: nowrap; }
+  .head-aside { flex-wrap: wrap; }
+  .filter-select { height: 34px; box-sizing: border-box; padding: 0 10px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg-panel2); color: var(--text-base); font: inherit; font-size: 13px; }
 
   .search-wrap { position: relative; display: flex; align-items: center; min-width: 240px; max-width: 360px; flex: 1; }
   .search-icon { position: absolute; left: 11px; color: var(--text-subtle); pointer-events: none; }
