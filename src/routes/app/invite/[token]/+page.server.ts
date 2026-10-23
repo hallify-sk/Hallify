@@ -9,6 +9,7 @@ import { getPlan } from '$lib/plans';
 import type { PlanId } from '$lib/plans';
 import { rateLimit, rateLimitKey, tooManyAttemptsMessage, RATE_LIMITS } from '$lib/rateLimit';
 import type { D1Database } from '@cloudflare/workers-types';
+import { syncAdministratorRole } from '$lib/server/people';
 
 /**
  * Accepting an invitation into an organisation.
@@ -179,6 +180,20 @@ async function joinOrg(db: D1Database, invite: InviteRow, userId: string): Promi
 		userId,
 		memberRole
 	);
+
+	// An admin also gets the Administrator role row, and with it an Administrator's
+	// rank: the flag alone grants the permissions, and an admin invited with no role
+	// ticked could then act on nobody in the People area. Skipped for an owner, whom
+	// the upsert above left untouched.
+	if (memberRole === 'admin') {
+		const now = await dbFirst<{ role: string }>(
+			db,
+			'SELECT role FROM organization_members WHERE org_id = ? AND user_id = ?',
+			invite.org_id,
+			userId
+		);
+		if (now?.role === 'admin') await syncAdministratorRole(db, invite.org_id, userId, true);
+	}
 
 	for (const role of await resolveRoles(db, invite.org_id, parseRoleIds(invite.role_ids))) {
 		try {

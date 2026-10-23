@@ -6,8 +6,7 @@ import { sendOrgInviteEmail } from '$lib/email';
 import { st } from '$lib/i18n-server';
 import { env } from '$env/dynamic/private';
 import type { Actions, PageServerLoad } from './$types';
-import { requireOrgStaff } from '$lib/guards';
-import { can, canManageRole, grantablePermissions } from '$lib/permissions';
+import { can, canGrantAdminAccess, canManageRole, grantablePermissions } from '$lib/permissions';
 import { actorContext, buildAccess, loadOrgRoles, loadOverrides, loadRoleAssignments } from '$lib/server/people';
 import { requireOrgPermission } from '$lib/server/access';
 
@@ -51,7 +50,8 @@ export const load: PageServerLoad = async ({ locals }) => {
 		isOwner: org.role === 'owner',
 		roleIds: assignments.get(meId) ?? [],
 		roles,
-		override: overrides.get(meId)
+		override: overrides.get(meId),
+		legacyRole: org.role
 	});
 
 	const SELECT = (withRoleIds: boolean) => `
@@ -105,6 +105,9 @@ export const load: PageServerLoad = async ({ locals }) => {
 			assignable: canManageRole(actor, r.position)
 		})),
 		canInvite: actor.isOwner || can(actor, 'invites.manage'),
+		// The legacy Admin level carries every Administrator permission; offered only
+		// to somebody who could grant each of them.
+		canGrantAdmin: canGrantAdminAccess(actor),
 		currentOrg: org
 	};
 };
@@ -113,7 +116,6 @@ export const actions: Actions = {
 	/** Create (or re-issue) an invite. The plan's seat cap and the existing email /
 	 *  already-a-member validation are unchanged; the roles are new. */
 	invite: async ({ request, locals, url }) => {
-		requireOrgStaff(locals);
 		const T = st(locals.locale);
 		if (locals.currentOrg?.impersonated) return fail(403, { error: T.serverErrors.impersonationBlockThisOrg });
 
@@ -130,6 +132,11 @@ export const actions: Actions = {
 
 		if (!email) return fail(400, { error: T.serverErrors.emailRequired });
 		if (!['admin', 'member'].includes(role)) return fail(400, { error: T.serverErrors.invalidRole });
+		// Inviting someone as an admin hands them every Administrator permission (the
+		// legacy flag implies them all), so it is granting each of those.
+		if (role === 'admin' && !canGrantAdminAccess(actor)) {
+			return fail(403, { error: T.peopleArea.errors.adminBeyondYou });
+		}
 		if (firstName.length > MAX_NAME || lastName.length > MAX_NAME) {
 			return fail(400, { error: T.peopleArea.errors.nameTooLong });
 		}
@@ -235,7 +242,6 @@ export const actions: Actions = {
 	},
 
 	revoke: async ({ request, locals }) => {
-		requireOrgStaff(locals);
 		const T = st(locals.locale);
 		if (locals.currentOrg?.impersonated) return fail(403, { error: T.serverErrors.impersonationBlockThisOrg });
 

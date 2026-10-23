@@ -1,5 +1,7 @@
 <script lang="ts">
   import { enhance } from '$app/forms';
+  import { confirmFirst } from '$lib/forms';
+  import { formatDate } from '$lib/format';
   import { getLocale, t } from '$lib/i18n.svelte';
   import { ELEVATED, PERMISSION_GROUPS, type Permission } from '$lib/permissions';
   import type { PageData, ActionData } from './$types';
@@ -28,9 +30,9 @@
   }
 
   // Dates follow the interface language, the same way the dashboard does it.
-  const dateLocale = $derived(getLocale() === 'en' ? 'en-GB' : 'sk-SK');
+  // joined_at is a zone-less UTC database timestamp: parsed by formatDate, never new Date().
   function fmtDate(d: string) {
-    return new Date(d).toLocaleDateString(dateLocale, { day: 'numeric', month: 'short', year: 'numeric' });
+    return formatDate(d, getLocale());
   }
 
   // A role's colour is free text in the database. Only a plain hex reaches a style
@@ -126,7 +128,12 @@
               title={t.peopleArea.accessLevelHint}
               onchange={(e) => (e.currentTarget as HTMLSelectElement).form?.requestSubmit()}
             >
-              <option value="admin" selected={p.legacyRole === 'admin'}>{t.membersAdmin.roleAdmin}</option>
+              <option
+                value="admin"
+                selected={p.legacyRole === 'admin'}
+                disabled={p.legacyRole !== 'admin' && !data.actor.canGrantAdmin}
+                title={p.legacyRole !== 'admin' && !data.actor.canGrantAdmin ? t.peopleArea.errors.adminBeyondYou : undefined}
+              >{t.membersAdmin.roleAdmin}</option>
               <option value="member" selected={p.legacyRole === 'member'}>{t.membersAdmin.roleMember}</option>
             </select>
           </form>
@@ -149,10 +156,9 @@
           >{openId === p.userId ? t.peopleArea.hide : t.peopleArea.details}</button>
 
           {#if p.canManage}
-            <form method="POST" action="?/remove" use:enhance>
+            <form method="POST" action="?/remove" use:enhance={confirmFirst(() => t.peopleArea.confirmRemove)}>
               <input type="hidden" name="user_id" value={p.userId} />
-              <button type="submit" class="icon-btn icon-danger" title={t.peopleArea.removeMember}
-                onclick={(e) => { if (!confirm(t.peopleArea.confirmRemove)) e.preventDefault(); }}>
+              <button type="submit" class="icon-btn icon-danger" title={t.peopleArea.removeMember} aria-label={t.peopleArea.removeMember}>
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg>
               </button>
             </form>

@@ -5,10 +5,11 @@ import type { OrgMemberRow } from '$lib/db/index';
 import { orgMemberCount } from '$lib/orgLifecycle';
 import { st } from '$lib/i18n-server';
 import type { Actions, PageServerLoad } from './$types';
-import { requireOrgStaff } from '$lib/guards';
 import {
 	PERMISSIONS,
+	LEGACY_ADMIN_ROLE_ID,
 	can,
+	canGrantAdminAccess,
 	canManageMember,
 	canManageRole,
 	effectivePermissions,
@@ -23,6 +24,7 @@ import {
 	loadOrgRoles,
 	loadOverrides,
 	loadRoleAssignments,
+	syncAdministratorRole,
 	targetMemberAccess
 } from '$lib/server/people';
 
@@ -58,7 +60,8 @@ export const load: PageServerLoad = async ({ locals }) => {
 		   FROM organization_members m
 		   JOIN users u ON u.id = m.user_id
 		  WHERE m.org_id = ?
-		  ORDER BY m.role, u.first_name`,
+		  ORDER BY CASE m.role WHEN 'owner' THEN 0 WHEN 'admin' THEN 1 ELSE 2 END,
+		           u.first_name, u.last_name, u.email`,
 		orgId
 	);
 
@@ -72,7 +75,8 @@ export const load: PageServerLoad = async ({ locals }) => {
 		isOwner: org.role === 'owner',
 		roleIds: assignments.get(meId) ?? [],
 		roles,
-		override: overrides.get(meId)
+		override: overrides.get(meId),
+		legacyRole: org.role
 	});
 	const grantable = [...grantablePermissions(actor)];
 
@@ -82,7 +86,8 @@ export const load: PageServerLoad = async ({ locals }) => {
 			isOwner,
 			roleIds: assignments.get(m.user_id) ?? [],
 			roles,
-			override: overrides.get(m.user_id)
+			override: overrides.get(m.user_id),
+			legacyRole: m.role
 		});
 		// What the member's ROLES alone grant — the "inherited" leg of the tri-state.
 		const inherited = new Set<Permission>();
@@ -98,7 +103,9 @@ export const load: PageServerLoad = async ({ locals }) => {
 			isOwner,
 			isMe: m.user_id === meId,
 			// Everything they hold (the default role included, since it is implicit)…
-			roleIds: access.roles.map((r) => r.id),
+			// (The legacy-admin pseudo-role is not a row anybody can see or edit; the
+			// access-level select shows it.)
+			roleIds: access.roles.map((r) => r.id).filter((id) => id !== LEGACY_ADMIN_ROLE_ID),
 			// …and the rows that actually exist, which is what the checkboxes edit.
 			explicitRoleIds: assignments.get(m.user_id) ?? [],
 			inherited: [...inherited],
@@ -123,7 +130,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 		})),
 		// What the caller may put on somebody else. Anything outside this set is
 		// rendered read-only and refused server side.
-		actor: { isOwner: actor.isOwner, grantable },
+		actor: { isOwner: actor.isOwner, grantable, canGrantAdmin: canGrantAdminAccess(actor) },
 		totalPermissions: PERMISSIONS.length,
 		currentOrg: org
 	};
@@ -298,9 +305,6 @@ export const actions: Actions = {
 	 */
 	changeRole: async ({ request, locals }) => {
 		const T = st(locals.locale);
-		// Staff-only, as before: handing out the legacy admin flag is handing out the
-		// whole manage area, so only someone who already has it may do so.
-		requireOrgStaff(locals);
 		if (locals.currentOrg?.impersonated) return fail(403, { error: T.serverErrors.impersonationBlockThisOrg });
 
 		const { orgId, access: actor } = await actorFor(locals);
@@ -315,6 +319,12 @@ export const actions: Actions = {
 		if (!target) return fail(404, { error: T.peopleArea.errors.notMember });
 		if (!canManageMember(actor, target.access)) return fail(403, { error: T.peopleArea.errors.cannotManageMember });
 
+		// The admin flag carries every Administrator permission, so handing it out is
+		// granting all of them: only somebody who could grant each one may do it.
+		if (role === 'admin' && target.legacyRole !== 'admin' && !canGrantAdminAccess(actor)) {
+			return fail(403, { error: T.peopleArea.errors.adminBeyondYou });
+		}
+
 		await dbRun(
 			locals.db,
 			'UPDATE organization_members SET role = ? WHERE org_id = ? AND user_id = ?',
@@ -322,26 +332,25 @@ export const actions: Actions = {
 			orgId,
 			userId
 		);
+		// The Administrator role row follows the flag, so an admin also has an
+		// Administrator's rank (and a demoted one keeps neither).
+		await syncAdministratorRole(locals.db, orgId, userId, role === 'admin');
 		return { success: true, message: T.peopleArea.errors.accessSaved };
 	},
 
 	/** Remove a member. Validation unchanged from the old Members page, plus the
 	 *  rank check: you may only remove somebody ranked below you. */
 	remove: async ({ request, locals }) => {
-		requireOrgStaff(locals);
 		const T = st(locals.locale);
 		if (locals.currentOrg?.impersonated) return fail(403, { error: T.serverErrors.impersonationBlockThisOrg });
-		// Defense-in-depth: this action mutates membership, so re-check the caller's
-		// role explicitly rather than relying solely on the manage-layout guard.
-		if (locals.currentOrg?.role !== 'owner' && locals.currentOrg?.role !== 'admin') {
+		// The permission, not the legacy flag: a custom role holding members.manage was
+		// shown this button and then refused. The rank check below still applies.
+		const { orgId, access: actor } = await actorFor(locals);
+		if (!actor.isOwner && !can(actor, 'members.manage')) {
 			return fail(403, { error: T.serverErrors.noPermissionRemoveMembers });
 		}
-		const orgId = locals.currentOrg!.id;
 		const data = await request.formData();
 		const userId = String(data.get('user_id') ?? '');
-
-		const { access: actor } = await actorFor(locals);
-		if (!actor.isOwner && !can(actor, 'members.manage')) return denied(locals);
 		const target = await targetMemberAccess(locals.db, orgId, userId);
 		if (!target) return fail(404, { error: T.peopleArea.errors.notMember });
 		if (!canManageMember(actor, target.access)) return fail(403, { error: T.peopleArea.errors.cannotManageMember });

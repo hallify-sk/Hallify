@@ -199,6 +199,35 @@ export function can(access: MemberAccess, permission: Permission): boolean {
 }
 
 /**
+ * The legacy `organization_members.role = 'admin'` flag, read as a role.
+ *
+ * Every place that evaluates a member's access must apply it the same way: the
+ * guards, the People pages' own panels and the actions' rank checks. When only the
+ * guards applied it, an admin with no role ticked was let into the People area and
+ * then shown read-only controls, and the owner's panel listed 6 permissions for
+ * somebody the guards gave 16. It is added as a ROLE rather than as a bypass, so a
+ * per-member deny still wins over it.
+ *
+ * Position -1 is the "below every real role" floor from `rankOf`: the flag grants
+ * permissions, it must not hand anybody seniority over a real role. An admin's rank
+ * comes from the Administrator role row that promoting or inviting someone as an
+ * admin attaches (see `findAdministratorRole` in $lib/server/people).
+ */
+export const LEGACY_ADMIN_ROLE_ID = 'legacy-admin';
+
+export function withLegacyAdmin(access: MemberAccess, legacyRole: string | null | undefined): MemberAccess {
+	if (access.isOwner || legacyRole !== 'admin') return access;
+	if (access.roles.some((r) => r.id === LEGACY_ADMIN_ROLE_ID)) return access;
+	return {
+		...access,
+		roles: [
+			...access.roles,
+			{ id: LEGACY_ADMIN_ROLE_ID, name: 'Administrator', position: -1, permissions: ADMINISTRATOR_PERMISSIONS }
+		]
+	};
+}
+
+/**
  * Seniority: the highest position among a member's roles.
  *
  * The owner outranks everyone. Somebody with no roles sits below every real role,
@@ -244,4 +273,19 @@ export function canManageMember(actor: MemberAccess, target: MemberAccess): bool
 export function grantablePermissions(actor: MemberAccess): Set<Permission> {
 	if (actor.isOwner) return new Set(PERMISSIONS);
 	return effectivePermissions(actor);
+}
+
+/**
+ * Whether `actor` may make somebody a legacy admin, by inviting them as one or by
+ * switching their access level to it.
+ *
+ * The flag carries every permission in ADMINISTRATOR_PERMISSIONS (see
+ * `withLegacyAdmin`), so handing it out is granting that whole set. Without this an
+ * admin whose `settings.manage` had been denied could invite a second account as an
+ * admin and walk straight back into settings through it.
+ */
+export function canGrantAdminAccess(actor: MemberAccess): boolean {
+	if (actor.isOwner) return true;
+	const grantable = grantablePermissions(actor);
+	return ADMINISTRATOR_PERMISSIONS.every((p) => grantable.has(p));
 }

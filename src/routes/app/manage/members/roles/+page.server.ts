@@ -1,6 +1,6 @@
 import { fail } from '@sveltejs/kit';
 import { dbAll, dbFirst, dbRun } from '$lib/db/index';
-import { requireOrgStaff } from '$lib/guards';
+import { requireOrg } from '$lib/guards';
 import { loadMemberAccess, requireOrgPermission } from '$lib/server/access';
 import {
 	PERMISSIONS,
@@ -24,7 +24,7 @@ import type { Actions, PageServerLoad } from './$types';
  *     guard protects navigation and nothing else. Every action here therefore does
  *     its own three checks, in this order:
  *
- *       1. requireOrgStaff      — the caller is staff of the ACTIVE org
+ *       1. actorOf              — the caller's access in the ACTIVE org
  *       2. the role is re-read  — `WHERE id = ? AND org_id = ?`, so an id belonging
  *                                 to another organisation simply does not exist
  *       3. canManageRole(...)   — against the role's CURRENT STORED position, never
@@ -47,11 +47,19 @@ interface RoleRow {
 	is_default: number;
 }
 
-/** Staff of the active org, plus their evaluated access. */
+/**
+ * A member of the active org, plus their evaluated access.
+ *
+ * Not `requireOrgStaff`: that admits owners and legacy admins only, so a custom role
+ * holding roles.manage was shown this tab's controls and refused by every action.
+ * What each action may do is decided by `can(..., 'roles.manage')` and
+ * `canManageRole`, which requires roles.manage as well as rank.
+ */
 async function actorOf(locals: App.Locals): Promise<{ orgId: string; access: MemberAccess }> {
-	const org = requireOrgStaff(locals);
+	const org = requireOrg(locals);
 	const access = await loadMemberAccess(locals.db, org.id, locals.user!.id, {
-		isOwner: org.role === 'owner'
+		isOwner: org.role === 'owner',
+		legacyRole: org.role
 	});
 	return { orgId: org.id, access };
 }

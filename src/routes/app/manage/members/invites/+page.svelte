@@ -75,7 +75,11 @@
           <label for="role">{t.peopleArea.accessLevel}</label>
           <select id="role" name="role">
             <option value="member">{t.membersAdmin.roleMember}</option>
-            <option value="admin">{t.membersAdmin.roleAdmin}</option>
+            <option
+              value="admin"
+              disabled={!data.canGrantAdmin}
+              title={data.canGrantAdmin ? undefined : t.peopleArea.errors.adminBeyondYou}
+            >{t.membersAdmin.roleAdmin}</option>
           </select>
         </div>
       </div>
