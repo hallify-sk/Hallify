@@ -6,6 +6,7 @@
   import SectionHeader from '$lib/components/SectionHeader.svelte';
   import ProposalCard from '$lib/components/assistant/ProposalCard.svelte';
   import { renderReply, errorKey } from '$lib/assistant/render';
+  import { threadKey, OPEN_KEY, tabStore, navigationTarget } from '$lib/assistant/session';
   import type { PageData } from './$types';
 
   const { data }: { data: PageData } = $props();
@@ -58,7 +59,16 @@
       const body = await res.json().catch(() => ({}));
       if (!body.ok) error = errorText(body.error);
       const thread = body.threadId ?? data.threadId;
-      if (thread && thread !== data.threadId) await goto(`?t=${thread}`, { keepFocus: true, noScroll: true });
+      const go = navigationTarget(body.actions);
+      if (go) {
+        // The assistant opened a page for them: go there, and carry the conversation
+        // on in the floating widget, open, on that page.
+        if (thread && data.currentOrg) {
+          tabStore.set(threadKey(data.currentOrg.id), thread);
+          tabStore.set(OPEN_KEY, '1');
+        }
+        await goto(go);
+      } else if (thread && thread !== data.threadId) await goto(`?t=${thread}`, { keepFocus: true, noScroll: true });
       else await invalidateAll();
     } catch {
       error = t.ai.errors.generic;

@@ -20,6 +20,7 @@
   import ProposalCard from './ProposalCard.svelte';
   import { renderReply, errorKey } from '$lib/assistant/render';
   import { assistantPageHooks } from '$lib/assistant/page-hooks';
+  import { threadKey, OPEN_KEY, tabStore as store, navigationTarget } from '$lib/assistant/session';
 
   interface Message {
     id: string;
@@ -30,8 +31,8 @@
 
   const { orgId }: { orgId: string } = $props();
 
-  const KEY_THREAD = $derived(`hallify:assistant:thread:${orgId}`);
-  const KEY_OPEN = 'hallify:assistant:open';
+  const KEY_THREAD = $derived(threadKey(orgId));
+  const KEY_OPEN = OPEN_KEY;
 
   let open = $state(false);
   let threadId = $state<string | null>(null);
@@ -49,13 +50,6 @@
   let input = $state<HTMLTextAreaElement | null>(null);
   let fileInput = $state<HTMLInputElement | null>(null);
   let pageTitle = $state('');
-
-  const store = {
-    get: (k: string) => { try { return sessionStorage.getItem(k); } catch { return null; } },
-    set: (k: string, v: string | null) => {
-      try { if (v === null) sessionStorage.removeItem(k); else sessionStorage.setItem(k, v); } catch { /* private mode */ }
-    }
-  };
 
   const dateLocale = $derived(getLocale() === 'en' ? 'en-GB' : 'sk-SK');
   const credits = $derived(
@@ -135,11 +129,8 @@
       if (!body.ok) error = errorText(body.error);
       if (body.threadId) setThread(body.threadId);
       await load();
-      for (const action of body.actions ?? []) {
-        if (action.type === 'navigate' && typeof action.path === 'string' && action.path.startsWith('/app/')) {
-          await goto(action.path);
-        }
-      }
+      const go = navigationTarget(body.actions);
+      if (go) await goto(go);
     } catch {
       error = t.ai.errors.generic;
     } finally {
