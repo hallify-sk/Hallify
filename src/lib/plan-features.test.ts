@@ -40,3 +40,9 @@ describe('billing status helpers', () => {
 		expect(resolveStripePlan(4999, undefined, 'free')).toBeNull();
 	});
 });
+
+describe('the €1 test payment', () => {
+	it('activates Starter from its metadata, since €1 matches no plan price', () => {
+		expect(resolveStripePlan(100, 'starter', null)).toBe('starter');
+	});
+});

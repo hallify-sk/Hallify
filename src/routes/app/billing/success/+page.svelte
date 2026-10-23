@@ -18,7 +18,7 @@
     const key = `hallify-purchase-${data.sessionId}`;
     try { seen = localStorage.getItem(key) === '1'; localStorage.setItem(key, '1'); } catch { /* storage blocked */ }
     if (seen) return;
-    saas.upgradeCompleted(data.planId ?? 'unknown', data.value, data.sessionId ?? undefined);
+    if (!data.test) saas.upgradeCompleted(data.planId ?? 'unknown', data.value, data.sessionId ?? undefined);
 
     playSound('order');
     const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;

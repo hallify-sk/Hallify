@@ -197,3 +197,25 @@ describe('createPortalSession', () => {
 		expect(mockPortalCreate.mock.calls[0][0].return_url).toBe('http://localhost:5173/settings');
 	});
 });
+
+describe('createTestCheckoutSession', () => {
+	beforeEach(() => {
+		mockSessionCreate.mockReset();
+		mockSessionCreate.mockResolvedValue({ url: 'https://checkout.stripe.com/test_session' });
+	});
+
+	it('charges €1 a month for Starter and marks the session and subscription as a test', async () => {
+		const { createTestCheckoutSession, TEST_PAYMENT_CENTS } = await import('./stripe.js');
+		const url = await createTestCheckoutSession({ orgId: 'org_1', stripeCustomerId: 'cus_1', userEmail: 'a@b.sk' });
+		expect(url).toBe('https://checkout.stripe.com/test_session');
+		const params = mockSessionCreate.mock.calls[0][0];
+		expect(TEST_PAYMENT_CENTS).toBe(100);
+		expect(params.mode).toBe('subscription');
+		expect(params.line_items[0].price_data.unit_amount).toBe(100);
+		expect(params.line_items[0].price_data.recurring).toEqual({ interval: 'month' });
+		expect(params.metadata).toEqual({ orgId: 'org_1', plan: 'starter', test: '1' });
+		expect(params.subscription_data.metadata).toEqual({ orgId: 'org_1', plan: 'starter', test: '1' });
+		expect(params.customer).toBe('cus_1');
+		expect(params.allow_promotion_codes).toBeUndefined();
+	});
+});
