@@ -11,7 +11,7 @@
 | M2 | done | Apex sign-up links Terms and Privacy with a required checkbox (checked server-side) and records the acceptance in legal_acceptances (migration 0024 creates the table where missing; helper shared verbatim with the venue branch). |
 | B47 | done | Changing the login email requires the current password (rate-limited like sign-in), the address is format-checked server-side (also at sign-up), and the old address gets a notice (bilingual, escaped). |
 | B155 | done | Profile email uniqueness is checked within the account's own namespace (org_id IS NULL for Hallify accounts), so venue clients' addresses no longer leak. |
-| B91 | done | Session check, cleanup (sessions, resets, org and reservation invites) and the pending-invites list compare datetime(expires_at) with datetime('now'), so ISO timestamps expire on time. |
+| B91 | done | Session check and cleanup (sessions, resets, org and reservation invites) compare datetime(expires_at) with datetime('now'), so ISO timestamps expire on time. The pending-invites list is fixed the same way on fix/permissions (left to them to avoid a conflict). |
 | B154 | done | GET /app/logout shows a "Sign out?" page with a POST button (signed-out visitors go to sign-in); signing out on GET would be CSRF-able. |
 | B15 | done | New organisation slugs use slugify (Kaštieľ Ťahanovce Žilina -> kastiel-tahanovce-zilina), via a new uniqueOrgSlug helper. |
 | B97 | done | uniqueOrgSlug also refuses any slug in closed_organizations, so a closed venue subdomain is never handed to a new organisation. |
