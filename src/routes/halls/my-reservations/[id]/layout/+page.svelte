@@ -8,6 +8,8 @@
 	import { t } from '$lib/i18n.svelte';
 	import { dialog } from '$lib/actions/dialog';
 	import { EVENT_TYPE_KEYS } from '$lib/eventTypes';
+	import { layoutProblems } from '$lib/floorplan-sync';
+	import LayoutFitBanner from '$lib/editor/LayoutFitBanner.svelte';
 	import type { PageData } from './$types';
 
 	interface Props { data: PageData; }
@@ -20,7 +22,17 @@
 
 	// Autosave shortly after the last change; the last edits are saved (or the
 	// browser asks) on the way out.
-	const saver = new LayoutSaver({ action: '?/saveLayout', field: 'layoutJson', failedMessage: () => t.editor.saveFailed });
+	const saver = new LayoutSaver({
+		action: '?/saveLayout',
+		field: 'layoutJson',
+		failedMessage: () => t.editor.saveFailed,
+		onResult: (result) => {
+			// The venue changed the hall's plan while this was open: carry on from the
+			// layout on the new plan, as the server stored it.
+			const layout = result.type === 'success' ? (result.data as { layout?: unknown } | undefined)?.layout : undefined;
+			if (layout) rebuild(layout, { savedOnce: true });
+		}
+	});
 	guardUnsaved(saver, { leaveUnsaved: () => t.editor.leaveUnsaved, leaveFailed: () => t.editor.leaveSaveFailed });
 
 	function rebuild(layout: unknown, opts: { dirty?: boolean; savedOnce?: boolean } = {}) {
@@ -112,6 +124,10 @@
 	}
 
 	const errorText = $derived(tmplError ?? saver.error);
+
+	// What no longer fits the hall's floor plan, measured live.
+	const problems = $derived(data.hallPlan ? layoutProblems(saver.json ?? currentInitial, data.hallPlan) : []);
+	const flaggedIds = $derived(problems.map((p) => p.id));
 </script>
 
 <svelte:head><title>{venueTitle(data.domainOrg?.name, data.reservation.title, t.event.tableLayout)}</title></svelte:head>
@@ -150,6 +166,7 @@
 									<button type="button" class="tmpl-item" class:recommended={tm.id === recommendedId} onclick={() => chooseTemplate(tm.id)}>
 										<span class="tmpl-item-top">
 											<span class="tmpl-item-name">{tm.name}</span>
+											{#if tm.problems > 0}<span class="tmpl-fit" title={t.editor.layoutFit.badgeTitle(tm.problems)}>{t.editor.layoutFit.badge}</span>{/if}
 											{#if tm.id === recommendedId}<span class="tmpl-rec">{t.myRes.recommended}</span>{/if}
 										</span>
 										<span class="tmpl-item-meta">
@@ -179,6 +196,7 @@
 		</div>
 	</div>
 	{#if errorText}<div class="save-err" role="alert">{errorText}</div>{/if}
+	<LayoutFitBanner {problems} seatingOnly={data.tablesLocked} />
 	{#if tmplNotice}
 		<div class="tmpl-notice" role="status">
 			<span class="tmpl-notice-text">{tmplNotice.text}</span>
@@ -205,6 +223,7 @@
 				allowGuests={true}
 				lockTables={data.tablesLocked}
 				lockedZoneIds={data.hallZoneIds}
+				{flaggedIds}
 				audience="client"
 			/>
 		{/key}
@@ -295,6 +314,12 @@
 	.tmpl-item-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 	.tmpl-item-name { font-size: 13px; font-weight: 600; letter-spacing: -.03em; }
 	/* Badge ON the accent fill → --accent-contrast. */
+	/* A template that no longer fits the hall's floor plan. */
+	.tmpl-fit {
+		font-size: 10px; font-weight: 650; text-transform: uppercase; letter-spacing: .1em;
+		color: var(--warning); background: var(--warning-dim); padding: 2px 6px;
+		border-radius: var(--radius-sm); flex-shrink: 0; margin-left: auto;
+	}
 	.tmpl-rec {
 		font-size: 9.5px; font-weight: 650; text-transform: uppercase; letter-spacing: .08em;
 		color: var(--accent-contrast); background: var(--accent); padding: 2px 7px; border-radius: var(--radius-sm); flex-shrink: 0;

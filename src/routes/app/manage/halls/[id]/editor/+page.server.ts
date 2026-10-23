@@ -6,6 +6,7 @@ import type { Actions, PageServerLoad } from './$types';
 import { requireOrgPermission } from '$lib/server/access';
 import { floorplanDraft, recordSavedDraft } from '$lib/server/ai/proposals';
 import { layoutVersion } from '$lib/floorplan-layout';
+import { syncHallLayouts } from '$lib/server/layout-sync';
 
 export const load: PageServerLoad = async ({ params, locals, url }) => {
 	await requireOrgPermission(locals, 'floorplans.manage');
@@ -53,7 +54,8 @@ export const actions: Actions = {
 				floorplanJson, params.id, orgId, draft.baseJson);
 			if (write.meta.changes !== 1) return fail(409, { error: st(locals.locale).ai.draftStale });
 			await recordSavedDraft(locals.db, orgId, proposalId, floorplanJson);
-			return { success: true, draftSaved: true };
+			const sync = await syncHallLayouts(locals.db, params.id, draft.baseJson, floorplanJson);
+			return { success: true, draftSaved: true, sync };
 		}
 
 		if (!floorplanJson) return fail(400, { error: st(locals.locale).serverErrors.noData });
@@ -63,10 +65,11 @@ export const actions: Actions = {
 		// now the later one is told, and chooses to reload or to overwrite.
 		const baseVersion = String(data.get('baseVersion') ?? '');
 		const force = data.get('force') === '1';
+		// The plan being replaced: the hall's templates and events are moved off it.
+		const current = await dbFirst<{ floorplan_json: string | null }>(locals.db,
+			'SELECT floorplan_json FROM halls WHERE id = ? AND org_id = ?', params.id, orgId);
+		if (!current) return fail(404, { error: st(locals.locale).serverErrors.hallNotFound });
 		if (baseVersion && !force) {
-			const current = await dbFirst<{ floorplan_json: string | null }>(locals.db,
-				'SELECT floorplan_json FROM halls WHERE id = ? AND org_id = ?', params.id, orgId);
-			if (!current) return fail(404, { error: st(locals.locale).serverErrors.hallNotFound });
 			const conflict = () => fail(409, { conflict: true, error: st(locals.locale).serverErrors.floorplanChangedElsewhere });
 			if ((await layoutVersion(current.floorplan_json)) !== baseVersion) return conflict();
 			const write = await dbRun(locals.db,
@@ -76,6 +79,9 @@ export const actions: Actions = {
 		} else {
 			await dbRun(locals.db, 'UPDATE halls SET floorplan_json=? WHERE id=? AND org_id=?', floorplanJson, params.id, orgId);
 		}
-		return { success: true, version: await layoutVersion(floorplanJson) };
+		// The new room goes under every template and upcoming event; what that leaves
+		// wrong is listed for the person who changed it.
+		const sync = await syncHallLayouts(locals.db, params.id, current.floorplan_json, floorplanJson);
+		return { success: true, version: await layoutVersion(floorplanJson), sync };
 	}
 };

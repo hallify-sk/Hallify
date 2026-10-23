@@ -1,6 +1,6 @@
 import { error, redirect, fail } from '@sveltejs/kit';
 import { loginUrl } from '$lib/login-redirect';
-import { dbFirst, dbAll, dbRun } from '$lib/db/index';
+import { dbFirst, dbAll, dbRun, fromJson } from '$lib/db/index';
 import type { ReservationRow, TableTypeRow } from '$lib/db/index';
 import { buildSeatableLayout } from '$lib/reservationLayout';
 import { parseEventTypes } from '$lib/eventTypes';
@@ -10,6 +10,8 @@ import { st } from '$lib/i18n-server';
 import { hasEventStarted } from '$lib/reservationStatus';
 import { tableInventoryError } from '$lib/server/table-inventory';
 import type { Actions, PageServerLoad } from './$types';
+import { prepareLayoutSave } from '$lib/server/layout-sync';
+import { applyHallGeometry, hasLayout, layoutProblems, parseProblems, problemsColumn } from '$lib/floorplan-sync';
 
 // The booking client may edit the seating layout once the event is approved — but only
 // until the event starts.
@@ -36,21 +38,34 @@ export const load: PageServerLoad = async ({ locals, params, url }) => {
 
 	// Org-defined templates the client can start from. Seat count (for the guest-count
 	// recommendation) is computed server-side so the full layout JSON stays off the wire.
-	const templatesRaw = await dbAll<{ id: string; name: string; event_type: string | null; layout_json: string | null }>(locals.db,
-		'SELECT id, name, event_type, layout_json FROM floorplan_templates WHERE hall_id = ? ORDER BY name', reservation.hall_id);
+	// SELECT *: layout_problems arrives with migration 0032.
+	const templatesRaw = await dbAll<{ id: string; name: string; event_type: string | null; layout_json: string | null; layout_problems?: string | null }>(locals.db,
+		'SELECT * FROM floorplan_templates WHERE hall_id = ? ORDER BY name', reservation.hall_id);
 	const templates = templatesRaw.map(tm => ({
 		id: tm.id, name: tm.name,
 		eventTypes: parseEventTypes(tm.event_type),
 		seats: countSeats(tm.layout_json),
+		problems: parseProblems(tm.layout_problems).length,
 	}));
 
-	const { layout } = await buildSeatableLayout(locals.db, params.id, reservation.hall_floorplan_json, reservation.layout_json);
+	// An event the client may still edit has not begun, so it stands on the hall's
+	// current room, whatever room its layout was saved on.
+	const built = await buildSeatableLayout(locals.db, params.id, reservation.hall_floorplan_json, reservation.layout_json);
+	const layout = hasLayout(reservation.layout_json) ? applyHallGeometry(built.layout, reservation.hall_floorplan_json) : built.layout;
+	const column = hasLayout(reservation.layout_json) ? problemsColumn(layoutProblems(layout, reservation.hall_floorplan_json)) : null;
+	if (column !== ((reservation as { layout_problems?: string | null }).layout_problems ?? null)) {
+		try {
+			await dbRun(locals.db, 'UPDATE reservations SET layout_problems = ? WHERE id = ?', column, params.id);
+		} catch { /* before migration 0032 */ }
+	}
 
 	return {
 		reservation: { id: reservation.id, title: reservation.title, numGuests: reservation.num_guests ?? null },
 		tableTypes,
 		templates,
 		initialLayout: layout,
+		// The hall's plan, to show what of the layout no longer fits it.
+		hallPlan: fromJson(reservation.hall_floorplan_json as string | null),
 		// The hall's own zones (the stage, the bar) stay where the venue drew them.
 		hallZoneIds: hallZoneIds(reservation.hall_floorplan_json),
 		tablesLocked: tablesLocked(reservation),
@@ -85,20 +100,25 @@ export const actions: Actions = {
 		if (!CLIENT_EDITABLE.has(reservation.status) || hasEventStarted(reservation.event_date, reservation.start_time)) return fail(403, { error: st(locals.locale).serverErrors.eventNoLongerEditable });
 		if (!reservation.hall_floorplan_json) return fail(400, { error: st(locals.locale).serverErrors.hallNoFloorPlan });
 
+		// On the hall's current room (an editor opened before the hall's plan changed
+		// would put the old walls back), with what is still wrong stored alongside.
+		const save = prepareLayoutSave(layoutJson, reservation.hall_floorplan_json);
+
 		// A hall that does not let clients arrange tables: only the seating may change.
+		// Both sides on the hall's current room, so a newer hall plan is not a change.
 		if (tablesLocked(reservation)) {
 			const { layout: base } = await buildSeatableLayout(locals.db, params.id, reservation.hall_floorplan_json, reservation.layout_json);
-			let posted: unknown;
-			try { posted = JSON.parse(layoutJson); } catch { return fail(400, { error: st(locals.locale).serverErrors.noLayoutData }); }
-			if (arrangementKey(posted) !== arrangementKey(base)) return fail(403, { error: st(locals.locale).serverErrors.layoutLockedByVenue });
+			try { JSON.parse(layoutJson); } catch { return fail(400, { error: st(locals.locale).serverErrors.noLayoutData }); }
+			const baseOnRoom = reservation.hall_floorplan_json ? applyHallGeometry(base, reservation.hall_floorplan_json) : base;
+			if (arrangementKey(save.json) !== arrangementKey(baseOnRoom)) return fail(403, { error: st(locals.locale).serverErrors.layoutLockedByVenue });
 		}
 
 		const overStock = await tableInventoryError(locals.db, reservation.hall_id, layoutJson, locals.locale);
 		if (overStock) return fail(400, { error: overStock });
 
-		await dbRun(locals.db, 'UPDATE reservations SET layout_json = ? WHERE id = ? AND user_id = ? AND org_id = ?',
-			layoutJson, params.id, locals.user.id, orgId);
-		return { success: true };
+		await dbRun(locals.db, 'UPDATE reservations SET layout_json = ?, layout_problems = ? WHERE id = ? AND user_id = ? AND org_id = ?',
+			save.json, save.column, params.id, locals.user.id, orgId);
+		return { success: true, problems: save.problems.length, ...(save.roomChanged ? { layout: JSON.parse(save.json) } : {}) };
 	},
 
 	// Apply an org template to this reservation: its tables, with the guest list kept
@@ -132,10 +152,12 @@ export const actions: Actions = {
 			? posted
 			: await withPostedSeating(reservation, params.id, posted, locals.db);
 		const applied = applyTemplateKeepingGuests(current, tmpl.layout_json);
+		// The template's tables on the hall's current room, and what does not fit flagged.
+		const save = prepareLayoutSave(JSON.stringify(applied.layout), reservation.hall_floorplan_json);
 
-		await dbRun(locals.db, 'UPDATE reservations SET layout_json = ? WHERE id = ? AND user_id = ? AND org_id = ?',
-			JSON.stringify(applied.layout), params.id, locals.user.id, orgId);
-		return { success: true, layout: applied.layout, reseated: applied.reseated, unseated: applied.unseated };
+		await dbRun(locals.db, 'UPDATE reservations SET layout_json = ?, layout_problems = ? WHERE id = ? AND user_id = ? AND org_id = ?',
+			save.json, save.column, params.id, locals.user.id, orgId);
+		return { success: true, layout: JSON.parse(save.json), reseated: applied.reseated, unseated: applied.unseated };
 	}
 };
 

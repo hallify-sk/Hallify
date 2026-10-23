@@ -15,6 +15,7 @@ import { st } from '$lib/i18n-server';
 import { orgPublicBaseUrl } from '$lib/orgUrl';
 import { RSVP_ENABLED } from '$lib/features';
 import { env } from '$env/dynamic/private';
+import { refreshLayoutProblems } from '$lib/server/layout-sync';
 
 // The organization's preferred default language — used to localize emails to the
 // invited/assigned client (who interacts with the org in that language).
@@ -304,6 +305,7 @@ export const actions: Actions = {
 		}
 
 		await dbRun(locals.db, 'UPDATE reservations SET layout_json = ? WHERE id = ? AND org_id = ?', layoutJson, params.id, orgId);
+		await refreshLayoutProblems(locals.db, 'event', params.id);
 		return { success: true };
 	},
 
@@ -391,6 +393,7 @@ export const actions: Actions = {
 			'UPDATE reservations SET layout_json = (SELECT floorplan_json FROM halls WHERE id = ?) WHERE id = ? AND org_id = ?',
 			reservation.hall_id, params.id, orgId
 		);
+		await refreshLayoutProblems(locals.db, 'event', params.id);
 		// The client may have placed tables and seated guests: say so in the history and
 		// tell them (it used to vanish silently). Nothing to say if nothing changed.
 		if ((reservation.layout_json ?? null) !== (reservation.hall_floorplan ?? null)) {
@@ -425,6 +428,7 @@ export const actions: Actions = {
 			'UPDATE reservations SET layout_json = ? WHERE id = ? AND org_id = ?',
 			toJson(fromJson(tmpl.layout_json as string | null)), params.id, orgId
 		);
+		await refreshLayoutProblems(locals.db, 'event', params.id);
 		await layoutReplaced(locals, orgId, params.id, tmpl.name || null);
 		return { success: true };
 	},

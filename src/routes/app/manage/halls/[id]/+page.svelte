@@ -1685,6 +1685,20 @@
               </ul>
             {/if}
           </div>
+          {#if data.problemEvents.length}
+            <!-- Upcoming events whose tables the current plan no longer fits (D2). -->
+            <div class="fp-fit-events" role="status">
+              <strong>{t.editor.layoutFit.eventsHeading}</strong>
+              <ul>
+                {#each data.problemEvents as ev (ev.id)}
+                  <li>
+                    <a href="/app/reservation/{ev.id}/layout">{ev.title}</a>
+                    <span>{fmtDbDate(ev.event_date, getLocale())} · {t.editor.layoutFit.problems(ev.problems)}</span>
+                  </li>
+                {/each}
+              </ul>
+            </div>
+          {/if}
           {#if mappingOpen && data.floorplanRequest}
             {@render mappingStatus(data.floorplanRequest)}
           {/if}
@@ -1789,6 +1803,7 @@
                     <b>{tmpl.name}</b>
                     <span>{[`${countSeats(tmpl.layout_json)} ${t.units.seats(countSeats(tmpl.layout_json))}`, ...parseEventTypes(tmpl.event_type).map((k) => t.eventTypes[k])].join(' · ')}</span>
                   </span>
+                  {#if tmpl.problems > 0}<span class="fp-fit" title={t.editor.layoutFit.badgeTitle(tmpl.problems)}>{t.editor.layoutFit.badge}</span>{/if}
                 </a>
                 <form method="POST" action="?/deleteTemplate" use:enhance>
                   <input type="hidden" name="id" value={tmpl.id} />
@@ -2832,6 +2847,20 @@
   .fp-row-text { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
   .fp-row-text b { font-size: 13px; font-weight: 600; color: var(--text-base); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .fp-row-text span { font-size: 11.5px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  /* A template the hall's current plan no longer fits, and the events likewise. */
+  .fp-fit {
+    margin-left: auto; flex: none; font-size: 10px; font-weight: 650; text-transform: uppercase; letter-spacing: .1em;
+    color: var(--warning); background: var(--warning-dim); padding: 2px 6px; border-radius: var(--radius-sm); white-space: nowrap;
+  }
+  .fp-fit-events {
+    margin: 10px 0 0; padding: 8px 10px; border-radius: var(--radius-sm); font-size: 12.5px; line-height: 1.45;
+    background: var(--warning-dim); border: 1px solid color-mix(in srgb, var(--warning) 30%, transparent);
+  }
+  .fp-fit-events strong { display: block; font-weight: 650; color: var(--text-base); }
+  .fp-fit-events ul { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+  .fp-fit-events li { display: flex; flex-wrap: wrap; gap: 2px 8px; align-items: baseline; }
+  .fp-fit-events a { font-weight: 600; color: var(--accent-ink); overflow-wrap: anywhere; }
+  .fp-fit-events span { font-size: 11.5px; color: var(--text-muted); }
   .fp-del { width: 28px; height: 28px; border: 0; border-radius: var(--radius); background: none; color: var(--text-subtle); cursor: pointer; display: inline-flex; align-items: center; justify-content: center; }
   .fp-del:hover { background: var(--danger-dim); color: var(--danger); }
   .fp-mapping summary { font-size: 12.5px; font-weight: 600; color: var(--accent-ink); cursor: pointer; }

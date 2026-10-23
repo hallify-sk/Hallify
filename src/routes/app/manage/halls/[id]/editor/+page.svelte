@@ -6,6 +6,9 @@
 	import { onMount, untrack } from 'svelte';
 	import { registerAssistantPage } from '$lib/assistant/page-hooks';
 	import { LayoutSaver, guardUnsaved } from '$lib/editor/layout-saver.svelte';
+	import { getLocale } from '$lib/i18n.svelte';
+	import { fmtDate } from '$lib/reservationStatus';
+	import type { HallSyncReport } from '$lib/floorplan-sync';
 	import type { PageData } from './$types';
 
 	interface Props { data: PageData; }
@@ -26,6 +29,20 @@
 	let conflict = $state(false);
 	let overwrite = false;
 
+	// Each save lays the new room under the hall's templates and upcoming events
+	// (on the server); what that leaves wrong is listed here, with links to fix it.
+	let syncReport = $state<HallSyncReport | null>(null);
+	let syncHidden = $state(false);
+	function showSync(report: unknown) {
+		if (!report || typeof report !== 'object') return;
+		const next = report as HallSyncReport;
+		const key = (r: HallSyncReport | null) => JSON.stringify(r ? [r.failed, r.templates.map((x) => [x.id, x.problems]), r.events.map((x) => [x.id, x.problems])] : null);
+		// Hidden stays hidden until the list itself changes.
+		if (key(next) !== key(syncReport)) syncHidden = false;
+		syncReport = next;
+	}
+	const syncCount = $derived(syncReport ? syncReport.templates.length + syncReport.events.length : 0);
+
 	// Autosave a moment after the last change. An AI draft is never saved on its own:
 	// saving it is the user's decision (a step change does not save it either).
 	const saver = new LayoutSaver({
@@ -37,6 +54,7 @@
 		failedMessage: () => t.editor.saveFailed,
 		onResult: async (result) => {
 			if (result.type === 'success') {
+				showSync((result.data as { sync?: unknown } | undefined)?.sync);
 				const version = (result.data as { version?: unknown } | undefined)?.version;
 				if (typeof version === 'string') baseVersion = version;
 				// Saved: from here on it is the hall's plan, edited like any other.
@@ -163,6 +181,36 @@
 		</div>
 	{/if}
 
+	{#if syncReport && !syncHidden && (syncCount > 0 || syncReport.failed)}
+		<div class="draft-banner draft-banner--stale sync-banner" role="status">
+			<div class="banner-text">
+				{#if syncReport.failed}
+					<strong>{t.editor.layoutFit.syncFailed}</strong>
+				{:else}
+					<strong>{t.editor.layoutFit.afterSave(syncReport.templates.length, syncReport.events.length)}</strong>
+					<span class="sync-hint">{t.editor.layoutFit.afterSaveHint}</span>
+					<ul class="sync-list">
+						{#each syncReport.templates as tm (tm.id)}
+							<li>
+								<span class="sync-kind">{t.editor.layoutFit.template}</span>
+								<a href="/app/manage/halls/{data.hall.id}/templates/{tm.id}">{tm.name}</a>
+								<span class="sync-count">{t.editor.layoutFit.problems(tm.problems)}</span>
+							</li>
+						{/each}
+						{#each syncReport.events as ev (ev.id)}
+							<li>
+								<span class="sync-kind">{t.editor.layoutFit.event}</span>
+								<a href="/app/reservation/{ev.id}/layout">{ev.title}</a>
+								<span class="sync-count">{fmtDate(ev.event_date, getLocale())} · {t.editor.layoutFit.problems(ev.problems)}</span>
+							</li>
+						{/each}
+					</ul>
+				{/if}
+			</div>
+			<button type="button" class="btn-outline btn-sm" onclick={() => (syncHidden = true)}>{t.editor.layoutFit.dismiss}</button>
+		</div>
+	{/if}
+
 	<!-- Editor fills remaining space -->
 	<div class="editor-body">
 		{#key editorKey}
@@ -250,4 +298,19 @@
 		flex: 1;
 		overflow: hidden;
 	}
+
+	/* After a save: the templates and events the new plan no longer fits. */
+	.sync-banner { align-items: flex-start; }
+	.sync-banner .banner-text { display: flex; flex-direction: column; gap: 3px; }
+	.sync-hint { color: var(--text-muted); }
+	.sync-list {
+		list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-direction: column; gap: 3px;
+		max-height: 132px; overflow-y: auto;
+	}
+	.sync-list li { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; }
+	.sync-kind {
+		font-size: 10px; font-weight: 650; text-transform: uppercase; letter-spacing: .1em; color: var(--text-muted);
+	}
+	.sync-list a { font-weight: 600; color: var(--accent-ink); overflow-wrap: anywhere; }
+	.sync-count { font-size: 11.5px; color: var(--text-muted); }
 </style>
