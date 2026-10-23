@@ -15,7 +15,8 @@ import { st } from '$lib/i18n-server';
 import { orgPublicBaseUrl } from '$lib/orgUrl';
 import { RSVP_ENABLED } from '$lib/features';
 import { env } from '$env/dynamic/private';
-import { refreshLayoutProblems } from '$lib/server/layout-sync';
+import { prepareLayoutSave, refreshLayoutProblems } from '$lib/server/layout-sync';
+import { followsHallPlan, parseProblems } from '$lib/floorplan-sync';
 
 // The organization's preferred default language — used to localize emails to the
 // invited/assigned client (who interacts with the org in that language).
@@ -143,7 +144,10 @@ export const load: PageServerLoad = async ({ locals, params, url }) => {
 		},
 		rsvps,
 		tableTypes,
-		templates: templates.map(t => ({ ...t, layout_json: fromJson(t.layout_json as string | null) })),
+		// Tables and chairs of an upcoming event that the hall's plan no longer fits (D2).
+		layoutProblems: followsHallPlan(reservation) ? parseProblems((reservation as { layout_problems?: unknown }).layout_problems).length : 0,
+		// `problems`: how much of the template no longer fits the hall's plan (D2).
+		templates: templates.map(t => ({ ...t, layout_json: fromJson(t.layout_json as string | null), problems: parseProblems(t.layout_problems).length })),
 		inviteUrl: `${baseUrl}/rsvp/${reservation.invite_code}`,
 		hasFloorplan,
 		// Priced as booked, with today's price alongside where it has changed since.
@@ -293,8 +297,9 @@ export const actions: Actions = {
 		const layoutJson = String(data.get('layoutJson') ?? '');
 		if (!layoutJson) return fail(400, { error: st(locals.locale).serverErrors.noLayoutData });
 
-		const reservation = await dbFirst<ReservationRow>(locals.db,
-			'SELECT user_id, status FROM reservations WHERE id = ? AND org_id = ?',
+		const reservation = await dbFirst<ReservationRow & { hall_floorplan_json: string | null }>(locals.db,
+			`SELECT r.user_id, r.status, r.event_date, r.start_time, h.floorplan_json AS hall_floorplan_json
+			 FROM reservations r JOIN halls h ON h.id = r.hall_id WHERE r.id = ? AND r.org_id = ?`,
 			params.id, orgId
 		);
 		if (!reservation) return fail(404, { error: st(locals.locale).serverErrors.notFound });
@@ -304,9 +309,11 @@ export const actions: Actions = {
 			return fail(403, { error: st(locals.locale).serverErrors.reservationMustBeApprovedToEditLayout });
 		}
 
-		await dbRun(locals.db, 'UPDATE reservations SET layout_json = ? WHERE id = ? AND org_id = ?', layoutJson, params.id, orgId);
-		await refreshLayoutProblems(locals.db, 'event', params.id);
-		return { success: true };
+		// On the hall's current room, with what is still wrong stored alongside (D2).
+		const save = prepareLayoutSave(layoutJson, reservation.hall_floorplan_json, followsHallPlan(reservation));
+		await dbRun(locals.db, 'UPDATE reservations SET layout_json = ?, layout_problems = ? WHERE id = ? AND org_id = ?',
+			save.json, save.column, params.id, orgId);
+		return { success: true, problems: save.problems.length };
 	},
 
 	// Staff with `reservations.manage` change the status — including bringing an

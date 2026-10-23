@@ -9,6 +9,7 @@ import { createReservation, STAFF_INITIAL_STATUSES } from '$lib/server/reservati
 import { parseListFilters, listReservations } from '$lib/server/reservation-list';
 import { todayUtcISO } from '$lib/server/reservation-rules';
 import { loadCapNotices } from '$lib/server/cap-notices';
+import { parseProblems } from '$lib/floorplan-sync';
 
 /** Caps on the customer details an operator types in. They are stored in staff-only
  *  columns nothing else bounds — the UI's maxlength is a convenience, this is the rule. */
@@ -38,15 +39,20 @@ export const load: PageServerLoad = async ({ locals, url }) => {
   // carries no template (createReservation enforces it), so without this list the
   // manual form would be a dead end for exactly those halls: every submit would
   // come back "a layout must be selected" with nothing on screen to select.
-  const templates = await dbAll<{ id: string; hall_id: string; name: string }>(
-    locals.db,
-    `SELECT t.id, t.hall_id, t.name
+  // With what of each no longer fits its hall's plan (D2): `layout_problems` comes
+  // with migration 0032, so without it the list is read as before.
+  const templateSql = (cols: string) => `SELECT ${cols}
      FROM floorplan_templates t
      JOIN halls h ON h.id = t.hall_id
      WHERE h.org_id = ?
-     ORDER BY t.name`,
-    orgId
-  );
+     ORDER BY t.name`;
+  let templateRows: { id: string; hall_id: string; name: string; layout_problems?: string | null }[];
+  try {
+    templateRows = await dbAll(locals.db, templateSql('t.id, t.hall_id, t.name, t.layout_problems'), orgId);
+  } catch {
+    templateRows = await dbAll(locals.db, templateSql('t.id, t.hall_id, t.name'), orgId);
+  }
+  const templates = templateRows.map(({ layout_problems, ...tm }) => ({ ...tm, problems: parseProblems(layout_problems).length }));
 
   return {
     // Months the plan's reservation cap has filled (M17).

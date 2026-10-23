@@ -643,6 +643,10 @@
 					<div class="ls-stat"><span class="ls-num">{layoutStats.tables}</span><span class="ls-lbl">{t.units.tables(layoutStats.tables)}</span></div>
 					<div class="ls-stat"><span class="ls-num">{layoutStats.seats}</span><span class="ls-lbl">{t.units.seats(layoutStats.seats)}</span></div>
 				</div>
+				{#if data.layoutProblems > 0}
+					<!-- The hall's plan changed under this layout (D2). -->
+					<p class="ls-fit" role="status">{t.editor.layoutFit.badgeTitle(data.layoutProblems)}</p>
+				{/if}
 				{#if canEditLayout}
 					<div class="ls-actions">
 						<a href="/app/reservation/{data.reservation.id}/layout" class="btn-action">
@@ -799,7 +803,10 @@
 					{#each data.templates as tmpl}
 						{@const tmplTypes = parseEventTypes(tmpl.event_type as string | null)}
 						<button type="button" class="template-item" onclick={() => loadTemplate(tmpl.id)}>
-							<div class="template-name">{tmpl.name}</div>
+							<div class="template-name">
+								{tmpl.name}
+								{#if tmpl.problems > 0}<span class="template-fit" title={t.editor.layoutFit.badgeTitle(tmpl.problems)}>{t.editor.layoutFit.badge}</span>{/if}
+							</div>
 							{#if tmplTypes.length}
 								<!-- The column holds a JSON array of keys; printing it raw put
 								     `["wedding","ball"]` on the row. -->
@@ -1251,6 +1258,18 @@
 	.template-name {
 		font-size: 14px;
 		font-weight: 500;
+		display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px;
+	}
+	/* An event layout (and a template) the hall's current floor plan no longer fits (D2). */
+	.ls-fit {
+		margin: 0; padding: 8px 10px; border-radius: var(--radius-sm); font-size: 12.5px; line-height: 1.45;
+		color: var(--text-base); background: var(--warning-dim);
+		border: 1px solid color-mix(in srgb, var(--warning) 30%, transparent);
+	}
+	.template-fit {
+		font-size: 10px; font-weight: 650; text-transform: uppercase; letter-spacing: .1em;
+		color: var(--warning); background: var(--warning-dim); padding: 2px 6px;
+		border-radius: var(--radius-sm); white-space: nowrap;
 	}
 
 	.template-type {

@@ -195,6 +195,8 @@ export interface TemplateRow {
   event_type: string | null;
   layout_json: unknown;
   created_at: string;
+  /** What no longer fits the hall's floor plan, as JSON (migration 0032); null for nothing. */
+  layout_problems?: string | null;
 }
 
 export interface HallBlockRow {
