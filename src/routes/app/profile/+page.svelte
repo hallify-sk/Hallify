@@ -1,12 +1,19 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
-	import { t } from '$lib/i18n.svelte';
+	import { t, getLocale } from '$lib/i18n.svelte';
+	import { formatDate } from '$lib/format';
 	import type { PageData, ActionData } from './$types';
 
 	interface Props { data: PageData; form: ActionData; }
 	const { data, form }: Props = $props();
 
 	const profile = $derived(data.profile);
+
+	// Changing the sign-in email asks for the current password, so the field appears
+	// as soon as the address differs from the saved one (and stays after a refusal).
+	let email = $state(data.profile.email);
+	$effect(() => { email = data.profile.email; });
+	const emailChanged = $derived(email.trim().toLowerCase() !== profile.email);
 </script>
 
 <svelte:head><title>{t.nav.profile} – Hallify</title></svelte:head>
@@ -27,7 +34,7 @@
 		</div>
 
 		{#if form?.success && form?.section === 'profile'}
-			<div class="alert-success">{t.profile.saved}</div>
+			<div class="alert-success">{form.emailChanged ? t.profile.emailChangedSaved : t.profile.saved}</div>
 		{/if}
 		{#if form?.error && form?.section !== 'password'}
 			<div class="alert-error">{form.error}</div>
@@ -46,8 +53,15 @@
 			</div>
 			<div class="field">
 				<label for="email">{t.auth.email}</label>
-				<input id="email" name="email" type="email" value={profile.email} required />
+				<input id="email" name="email" type="email" bind:value={email} required autocomplete="email" />
 			</div>
+			{#if emailChanged || (form?.section === 'profile' && form?.needsPassword)}
+				<div class="field">
+					<label for="emailPassword">{t.profile.currentPassword}</label>
+					<input id="emailPassword" name="currentPassword" type="password" required autocomplete="current-password" />
+					<p class="hint">{t.profile.emailChangeHint}</p>
+				</div>
+			{/if}
 			<div class="form-actions">
 				<button type="submit" class="btn-action">{t.common.save}</button>
 			</div>
@@ -61,7 +75,7 @@
 		</div>
 
 		{#if form?.success && form?.section === 'password'}
-			<div class="alert-success">{t.profile.passwordChanged}</div>
+			<div class="alert-success">{t.profile.passwordChangedElsewhere}</div>
 		{/if}
 		{#if form?.error && form?.section === 'password'}
 			<div class="alert-error">{form.error}</div>
@@ -101,7 +115,7 @@
 			</div>
 			<div class="row-item">
 				<span class="info-label">{t.users.registered}</span>
-				<span class="info-value">{new Date(profile.created_at).toLocaleDateString()}</span>
+				<span class="info-value">{formatDate(profile.created_at, getLocale())}</span>
 			</div>
 		</div>
 	</section>

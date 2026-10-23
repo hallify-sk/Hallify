@@ -9,3 +9,5 @@
 | I27 | done | Sign-in counts only failed attempts (new rateLimitStatus peek); registration is counted after the form validates. |
 | B44 | done | Register name/email fields are bound $state, so switching the intent no longer resets them. |
 | M2 | done | Apex sign-up links Terms and Privacy with a required checkbox (checked server-side) and records the acceptance in legal_acceptances (migration 0024 creates the table where missing; helper shared verbatim with the venue branch). |
+| B47 | done | Changing the login email requires the current password (rate-limited like sign-in), the address is format-checked server-side (also at sign-up), and the old address gets a notice (bilingual, escaped). |
+| B155 | done | Profile email uniqueness is checked within the account's own namespace (org_id IS NULL for Hallify accounts), so venue clients' addresses no longer leak. |
