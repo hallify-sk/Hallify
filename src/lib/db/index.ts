@@ -390,7 +390,10 @@ export type WebhookEvent =
   | 'ticket.new'
   | 'ticket.reply'
   | 'reservation.new'
-  | 'reservation.status_changed';
+  | 'reservation.status_changed'
+  | 'hall.archived'
+  | 'hall.restored'
+  | 'hall.deleted';
 
 export interface OrgWebhookRow {
   id: string;

@@ -46,6 +46,9 @@ const ALL_EVENTS = [
   'ticket.reply',
   'reservation.new',
   'reservation.status_changed',
+  'hall.archived',
+  'hall.restored',
+  'hall.deleted',
 ] as const;
 
 export const load: PageServerLoad = async ({ locals }) => {

@@ -12,6 +12,7 @@
    */
   import { tick } from 'svelte';
   import { t } from '$lib/i18n.svelte';
+  import { downscaleImage } from '$lib/image-resize';
 
   let {
     open = $bindable(false),
@@ -68,7 +69,9 @@
     open = false;
   }
 
-  async function upload(file: File): Promise<string> {
+  async function upload(original: File): Promise<string> {
+    // Made smaller first: a phone photo is several MB and is shown far smaller (I2).
+    const file = await downscaleImage(original);
     const body = new FormData();
     body.append('file', file);
     const response = await fetch('/api/upload/image', { method: 'POST', body });
@@ -98,6 +101,8 @@
       errorMessage = t.imageDialog.limitReached;
       return;
     }
+    // Say how many did not fit instead of dropping them without a word (I14).
+    const skipped = multiple ? images.length - queue.length : 0;
 
     busy = true;
     errorMessage = '';
@@ -111,6 +116,7 @@
       }
     }
     busy = false;
+    if (skipped > 0 && !errorMessage) errorMessage = t.imageDialog.skippedOverLimit(skipped);
 
     if (urls.length > 0) {
       addedCount += urls.length;
@@ -127,21 +133,42 @@
     if (files.length > 0) { void take(files); return; }
     // Dragging a picture out of another tab hands over a URL, not a file.
     const dropped = event.dataTransfer?.getData('text/uri-list') || event.dataTransfer?.getData('text/plain');
-    if (dropped) { urlDraft = dropped.trim(); addUrl(); }
+    if (dropped) { urlDraft = dropped.trim(); void addUrl(); }
   }
 
-  function addUrl() {
+  // A pasted address is not stored as it is: the site serves images from its own
+  // origin only, so a link to someone else's picture showed visitors a broken image
+  // (B62). The server copies the picture into our storage and hands back our URL.
+  async function addUrl() {
     const value = urlDraft.trim();
-    if (!value) return;
+    if (!value || busy) return;
     if (full) { errorMessage = t.imageDialog.limitReached; return; }
-    // Accept an absolute http(s) address or a same-origin path such as /uploads/…
-    const ok = /^https?:\/\/\S+$/i.test(value) || /^\/[^\s]*$/.test(value);
-    if (!ok) { errorMessage = t.imageDialog.invalidUrl; return; }
+    if (!/^https?:\/\/\S+$/i.test(value) && !/^\/uploads\/halls\/\S+$/.test(value)) {
+      errorMessage = t.imageDialog.invalidUrl;
+      return;
+    }
+    busy = true;
     errorMessage = '';
-    urlDraft = '';
-    addedCount += 1;
-    onadd([value]);
-    if (!multiple) close();
+    try {
+      const response = await fetch('/app/manage/halls/import-image', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', accept: 'application/json' },
+        body: JSON.stringify({ url: value })
+      });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok || !payload?.url) {
+        errorMessage = payload?.message ? String(payload.message) : t.imageDialog.importFailed;
+        return;
+      }
+      urlDraft = '';
+      addedCount += 1;
+      onadd([String(payload.url)]);
+      if (!multiple) close();
+    } catch {
+      errorMessage = t.imageDialog.importFailed;
+    } finally {
+      busy = false;
+    }
   }
 </script>
 
@@ -208,9 +235,9 @@
               type="text"
               bind:value={urlDraft}
               placeholder={t.imageDialog.urlPlaceholder}
-              onkeydown={(event) => { if (event.key === 'Enter') { event.preventDefault(); addUrl(); } }}
+              onkeydown={(event) => { if (event.key === 'Enter') { event.preventDefault(); void addUrl(); } }}
             />
-            <button type="button" class="btn-outline btn-sm" onclick={addUrl} disabled={!urlDraft.trim() || full}>
+            <button type="button" class="btn-outline btn-sm" onclick={() => void addUrl()} disabled={!urlDraft.trim() || full || busy}>
               {t.imageDialog.addUrl}
             </button>
           </div>

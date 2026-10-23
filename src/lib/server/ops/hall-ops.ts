@@ -2,6 +2,7 @@ import { dbFirst, dbRun, toJson } from '$lib/db/index';
 import { getPlan, type PlanId } from '$lib/plans';
 import { canAddExtra, canAddHall } from '$lib/limits';
 import { st } from '$lib/i18n-server';
+import { uniqueHallSlug } from '$lib/server/hall-naming';
 import type { OpResult } from './reservation-ops';
 
 /**
@@ -199,17 +200,27 @@ export async function updateBookingSettings(db: Db, orgId: string, hallId: strin
 export const DEFAULT_HALL_COLOR = '#f05ca1';
 export const DEFAULT_MAX_PEOPLE = 100;
 
-/** A new venue is listed in discovery straight away but takes no bookings until the
- *  operator has it ready and opts in (see migration 0006). */
+/** A new hall starts as a draft: unlisted and taking no bookings, with its public
+ *  URL already reserved. It is listed only when the operator turns that on in its
+ *  profile, which asks for an address first — so the directory never fills with
+ *  empty "Nová sála" cards (B73), and the venue site has a URL for it (B11). */
 export async function createHall(db: Db, orgId: string, plan: PlanId, name: string, maxPeople: number | null, locale: Locale): Promise<OpResult<{ id: string }>> {
 	if (!(await canAddHall(db, orgId, plan))) {
 		const limit = getPlan(plan).limits.maxHalls;
 		return { ok: false, status: 403, error: st(locale).serverErrors.hallLimitReached.replace('{limit}', String(limit)) };
 	}
 	const id = crypto.randomUUID();
-	await dbRun(db,
-		`INSERT INTO halls (id, org_id, name, max_people, color, allow_reservations, is_public) VALUES (?, ?, ?, ?, ?, 0, 1)`,
-		id, orgId, name.trim().slice(0, 120) || st(locale).halls.untitledHall,
+	const finalName = name.trim().slice(0, 120) || st(locale).halls.untitledHall;
+	const slug = await uniqueHallSlug(db, finalName, null, locale === 'en' ? 'hall' : 'sala');
+	const insert = (s: string) => dbRun(db,
+		`INSERT INTO halls (id, org_id, name, slug, max_people, color, allow_reservations, is_public) VALUES (?, ?, ?, ?, ?, ?, 0, 0)`,
+		id, orgId, finalName, s,
 		maxPeople && maxPeople >= 1 ? Math.round(maxPeople) : DEFAULT_MAX_PEOPLE, DEFAULT_HALL_COLOR);
+	try {
+		await insert(slug);
+	} catch {
+		// Another hall took the same slug between the lookup and the insert.
+		await insert(`${slug.slice(0, 50)}-${id.slice(0, 6)}`);
+	}
 	return { ok: true, id };
 }

@@ -35,6 +35,9 @@
   const archivedHalls = $derived(data.halls.filter(h => h.archived_at));
 
   const maxRes = $derived(Math.max(...activeHalls.map(h => Number(h.reservation_count)), 1));
+  // At the plan's limit the create button cannot succeed, so it says so and offers
+  // the way up instead of failing after the click (B153, I14).
+  const atLimit = $derived(data.hallLimit !== -1 && data.activeHalls >= data.hallLimit);
   const limitNote = $derived(
     data.hallLimit === -1
       ? ''
@@ -46,6 +49,15 @@
 
 <svelte:head><title>{t.halls.manageHalls} – Hallify</title></svelte:head>
 
+{#snippet createButton()}
+  <form method="POST" action="?/create" use:enhance={createHall}>
+    <button class="btn-primary" type="submit" disabled={creating || atLimit}
+      title={atLimit ? t.hallAdmin.hallLimitReachedNote(data.hallLimit) : undefined}>
+      {creating ? t.hallAdmin.creatingHall : t.halls.createHall}
+    </button>
+  </form>
+{/snippet}
+
 <div class="wrap page">
 
   <!-- ─── Header ────────────────────────────────────────────────────────────── -->
@@ -55,12 +67,19 @@
       <h1 class="page-title">{t.halls.manageHalls}</h1>
       <p class="page-sub">{t.hallAdmin.createOpensProfile}</p>
     </div>
-    <form method="POST" action="?/create" use:enhance={createHall}>
-      <button class="btn-primary" type="submit" disabled={creating}>
-        {creating ? t.hallAdmin.creatingHall : t.halls.createHall}
-      </button>
-    </form>
+    {@render createButton()}
   </div>
+
+  {#if atLimit}
+    <p class="limit-note" role="note">
+      {t.hallAdmin.hallLimitReachedNote(data.hallLimit)}
+      <a href="/app/billing">{t.hallAdmin.upgrade}</a>
+    </p>
+  {/if}
+
+  {#if data.deleted}
+    <p class="form-success" role="status">{t.hallAdmin.hallDeletedNotice}</p>
+  {/if}
 
   {#if form?.error}
     <p class="form-error" role="alert">{form.error}</p>
@@ -77,11 +96,7 @@
         </span>
         <h2 class="empty-title">{t.hallAdmin.noHallsYet}</h2>
         <p class="empty-sub">{t.hallAdmin.noHallsSub}</p>
-        <form method="POST" action="?/create" use:enhance={createHall}>
-          <button class="btn-primary" type="submit" disabled={creating}>
-            {creating ? t.hallAdmin.creatingHall : t.halls.createHall}
-          </button>
-        </form>
+        {@render createButton()}
       </div>
     </section>
 
@@ -211,6 +226,18 @@
   .btn-primary:active { transform: translateY(0); }
   .btn-primary:disabled {
     opacity: .55; cursor: default; transform: none; background: var(--accent);
+  }
+
+  .limit-note {
+    margin: 18px 0 0; padding: 10px 14px; background: var(--warning-dim);
+    border: 1px solid color-mix(in srgb, var(--warning) 25%, transparent);
+    border-radius: var(--radius-sm); font-size: 13px; color: var(--text-muted); line-height: 1.5;
+  }
+  .limit-note a { color: var(--accent-ink); font-weight: 600; margin-left: 4px; }
+  .form-success {
+    margin: 18px 0 0; padding: 10px 14px; background: var(--success-dim);
+    border: 1px solid color-mix(in srgb, var(--success) 25%, transparent);
+    border-radius: var(--radius-sm); font-size: 13px; color: var(--success);
   }
 
   .form-error {

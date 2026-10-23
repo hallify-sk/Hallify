@@ -15,8 +15,13 @@
   import { eur } from '$lib/extras';
   import { EVENT_TYPE_KEYS, parseEventTypes } from '$lib/eventTypes';
   import type { PageData, ActionData } from './$types';
-  import { onMount } from 'svelte';
+  import { onMount, tick } from 'svelte';
+  import { beforeNavigate } from '$app/navigation';
   import { registerAssistantPage } from '$lib/assistant/page-hooks';
+  import { slugify } from '$lib/slug';
+  import { completeOpeningHours } from '$lib/opening-hours';
+  import { formatDate as fmtDbDate } from '$lib/format';
+  import { confirmFirst } from '$lib/forms';
 
   interface Props { data: PageData; form: ActionData; }
   const { data, form }: Props = $props();
@@ -61,10 +66,10 @@
   $effect(() => {
     const f = form as Record<string, unknown> | null;
     if (!f) return;
-    if (f.profileError || f.amenityError) tab = f.amenityError ? 'media' : 'profile';
+    if (f.profileError || f.amenityError) tab = f.amenityError || f.profileTab === 'media' ? 'media' : 'profile';
     else if (f.extraError) tab = 'pricing';
-    else if (f.tableTypeError || f.templateError) tab = 'floorplan';
-    else if (f.archiveError) tab = 'settings';
+    else if (f.tableTypeError || f.templateError || f.fpError) tab = 'floorplan';
+    else if (f.archiveError || f.infoError) tab = 'settings';
     else if (f.blockError) tab = 'overview';
   });
   let settingsFormEl: HTMLFormElement | null = null;
@@ -270,11 +275,23 @@
 
   function addGalleryImages(urls: string[]) {
     const room = galleryLeft;
-    galleryImages = [...galleryImages, ...urls.slice(0, room)];
+    const fresh = urls.filter((u) => !galleryImages.includes(u));
+    galleryImages = [...galleryImages, ...fresh.slice(0, room)];
+  }
+
+  /** Swap a photo with its neighbour; the gallery is shown in this order (M14). */
+  function moveGalleryImage(i: number, by: -1 | 1) {
+    const j = i + by;
+    if (j < 0 || j >= galleryImages.length) return;
+    const next = [...galleryImages];
+    [next[i], next[j]] = [next[j], next[i]];
+    galleryImages = next;
   }
 
   type DayHours = { open: boolean; from: string; to: string };
-  let profileHours = $state<Record<string, DayHours>>(parseObj(data.hall.opening_hours));
+  // All seven days, with the defaults this editor shows for an untouched day, so
+  // what is saved is what is shown here and on the public pages (B74).
+  let profileHours = $state<Record<string, DayHours>>(completeOpeningHours(data.hall.opening_hours));
 
   // Dirty-tracking for the profile form. Declared AFTER every `preview*` / `profile*`
   // state above: $derived bodies are lazy so hoisting worked at runtime, but it read
@@ -297,7 +314,7 @@
     priceBand: data.hall.price_band ? String(data.hall.price_band) : '',
     amenities: JSON.stringify(parseArr(data.hall.amenities)),
     gallery:   JSON.stringify(parseArr(data.hall.gallery_images)),
-    hours:     JSON.stringify(parseObj(data.hall.opening_hours)),
+    hours:     JSON.stringify(completeOpeningHours(data.hall.opening_hours)),
   });
 
   const profileDirty = $derived(
@@ -326,14 +343,46 @@
   // Clear settings dirty flag once the server confirms save.
   $effect(() => { if (settingsSaved) settingsDirty = false; });
 
-  async function saveAll() {
-    savingAll = true;
-    if (profileDirty)  profileFormEl?.requestSubmit();
-    if (settingsDirty) settingsFormEl?.requestSubmit();
-    savingAll = false;
+  /**
+   * The first field the browser would refuse, on whichever tab it sits. Every tab
+   * stays in the page but only one is shown, and a browser cannot point at a field
+   * that is hidden: requestSubmit() then did nothing at all, without a word (B29).
+   */
+  function firstInvalid(formEl: HTMLFormElement | null): HTMLInputElement | null {
+    if (!formEl) return null;
+    for (const el of Array.from(formEl.elements)) {
+      const field = el as HTMLInputElement;
+      if (typeof field.checkValidity === 'function' && !field.disabled && !field.checkValidity()) return field;
+    }
+    return null;
   }
 
-  function revertAll() {
+  async function saveAll() {
+    const forms = [profileDirty ? profileFormEl : null, settingsDirty ? settingsFormEl : null];
+    for (const formEl of forms) {
+      const bad = firstInvalid(formEl);
+      if (!bad) continue;
+      const panels = (bad.closest('[data-panel]')?.getAttribute('data-panel') ?? '').split(' ');
+      if (!panels.includes(tab) && (TABS as readonly string[]).includes(panels[0])) {
+        openTab(panels[0] as Tab);
+        await tick();
+      }
+      bad.reportValidity();
+      bad.focus();
+      return;
+    }
+    savingAll = true;
+    try {
+      if (profileDirty)  profileFormEl?.requestSubmit();
+      if (settingsDirty) settingsFormEl?.requestSubmit();
+    } finally {
+      savingAll = false;
+    }
+  }
+
+  /** The profile fields as the server now has them: after a save (the server may
+   *  have tidied a value — the website, the URL), or to drop unsaved edits. */
+  function syncProfile() {
     previewName        = _init.name;
     previewDescription = _init.desc;
     previewMaxPeople   = _init.maxPeople;
@@ -352,9 +401,30 @@
     profileAmenities   = JSON.parse(_init.amenities);
     galleryImages      = JSON.parse(_init.gallery);
     profileHours       = JSON.parse(_init.hours);
+  }
+
+  function revertAll() {
+    syncProfile();
     settingsFormEl?.reset();
     settingsDirty      = false;
   }
+
+  // The server can change the listing on its own (archiving unlists a hall, a plan
+  // downgrade suspends it). Follow it, or the page kept saying "Published" with a
+  // save bar that could not be cleared until a reload (B99).
+  let seenPublic = !!data.hall.is_public;
+  $effect(() => {
+    const pub = !!data.hall.is_public;
+    if (pub !== seenPublic) { seenPublic = pub; profileIsPublic = pub; }
+  });
+
+  // Leaving with unsaved edits asks first: every field of the profile lives on this
+  // page until it is saved (M15). A reload or a closed tab gets the browser's prompt.
+  beforeNavigate((nav) => {
+    if (!anyDirty) return;
+    if (nav.type === 'leave') { nav.cancel(); return; }
+    if (!confirm(t.hallAdmin.leaveUnsavedConfirm)) nav.cancel();
+  });
 
   // The floating assistant can save this hall's details. The form holds its own
   // copy of every field, so: hold that off while the form has unsaved edits, and
@@ -413,11 +483,21 @@
   // The save bar announces UNSAVED changes and then vanishes, so a successful save
   // produced no confirmation at all. Every action already returns a success flag;
   // this surfaces them and clears itself so it cannot linger over later edits.
-  let savedNotice = $state(false);
+  // Archiving, restoring and reactivating said nothing either (I15); they use the
+  // same toast with their own words.
+  let savedNotice = $state('');
   $effect(() => {
-    if (!(form?.profileSuccess || form?.infoSuccess || form?.amenityAdded || form?.amenityRemoved)) return;
-    savedNotice = true;
-    const timer = setTimeout(() => { savedNotice = false; }, 3200);
+    const f = form as Record<string, unknown> | null;
+    if (!f) return;
+    const text = f.archived ? t.hallAdmin.archivedNotice
+      : f.restored ? t.hallAdmin.restoredNotice
+      : f.reactivated ? t.hallAdmin.reactivatedNotice
+      : f.floorplanCancelled ? t.hallAdmin.mappingCancelledNotice
+      : (f.profileSuccess || f.infoSuccess || f.amenityAdded || f.amenityRemoved) ? t.settingsPages.changesSaved
+      : '';
+    if (!text) return;
+    savedNotice = text;
+    const timer = setTimeout(() => { savedNotice = ''; }, 3200);
     return () => clearTimeout(timer);
   });
   let newAmenitySk = $state('');
@@ -503,10 +583,14 @@
     { id: 'sun', label: t.dayNamesFull[6] },
   ]);
 
-  function slugify(s: string): string {
-    return s.toLowerCase()
-      .normalize('NFD').replace(/[̀-ͯ]/g, '')
-      .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+  /** A free URL the server offered when the typed one was taken (B140). */
+  const slugSuggestion = $derived(String((form as Record<string, unknown> | null)?.slugSuggestion ?? ''));
+
+  /** While typing, a separator at the end is kept so a hyphen can be typed at all;
+   *  the shared slugify (Slovak transliteration) runs on every keystroke. */
+  function typedSlug(v: string): string {
+    const base = slugify(v, 60);
+    return base && /[\s\-_.]$/.test(v) ? `${base}-` : base;
   }
 
   function getDayHours(id: string): DayHours {
@@ -522,6 +606,21 @@
   // The floor plan, its templates and its table types used to sit in three loose
   // rows. They are now collapsible sections under one "Floor plan" eyebrow, open by
   // default so nothing an operator used to see is hidden behind a click.
+
+  // ── The mapping add-on (M25) ──
+  const mappingOpen = $derived(!!data.floorplanRequest && ['requested', 'contacted', 'scheduled'].includes(data.floorplanRequest.status));
+  function mappingStatusLabel(status: string): string {
+    return status === 'contacted' ? t.floorplanService.statusContacted
+      : status === 'scheduled' ? t.floorplanService.statusScheduled
+      : status === 'delivered' ? t.floorplanService.statusDelivered
+      : status === 'cancelled' ? t.floorplanService.statusCancelled
+      : t.floorplanService.statusRequested;
+  }
+  function mappingStatusHint(status: string): string {
+    return status === 'contacted' ? t.hallAdmin.mappingHintContacted
+      : status === 'scheduled' ? t.hallAdmin.mappingHintScheduled
+      : t.hallAdmin.mappingRequestedHint;
+  }
 
   // ── Create-template dialog ──
   let tmplDialogOpen = $state(false);
@@ -553,14 +652,25 @@
     })
   );
 
+  // Bookings the block would collide with: live ones, not yet past, inside the range
+  // AND on the weekdays being blocked. Unticking Saturday used to still list (and
+  // cancel) Saturday's booking (B98). The server applies the same rule again.
+  const LIVE_STATUSES = ['pending', 'waiting_payment', 'approved', 'planned'];
   const conflictingEvents = $derived.by(() => {
     if (!rangeFrom || !rangeTo) return [];
     return data.reservations.filter(r => {
-      const d = new Date(r.event_date);
-      const iso = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-      return iso >= rangeFrom && iso <= rangeTo;
+      if (!LIVE_STATUSES.includes(String(r.status))) return false;
+      const iso = String(r.event_date).slice(0, 10);
+      if (iso < todayStr || iso < rangeFrom || iso > rangeTo) return false;
+      const weekday = new Date(`${iso}T00:00:00`).getDay();
+      return blockDays.length === 0 || blockDays.includes(weekday);
     });
   });
+  let rangeCancelNote = $state('');
+  function openRangeCancel() {
+    rangeCancelNote = t.hallAdmin.rangeCancelDefault(data.hall.name);
+    showCancelConfirm = true;
+  }
 
   function openBlockDialog() {
     blockStep = 1; rangeFrom = ''; rangeTo = '';
@@ -611,6 +721,28 @@
 
 <svelte:head><title>{data.hall.name} – Hallify</title></svelte:head>
 
+<!-- The mapping request as the owner sees it: where it stands, and a way to withdraw
+     it while we have not delivered yet (M25). -->
+{#snippet mappingStatus(req: { id: string; status: string; note: string | null; created_at: string; updated_at: string })}
+  <div class="fp-request" role="group" aria-label={t.hallAdmin.mappingStatusTitle}>
+    <div class="fp-request-head">
+      <strong>{t.hallAdmin.mappingStatusTitle}</strong>
+      <span class="chip chip-muted">{mappingStatusLabel(req.status)}</span>
+    </div>
+    <p class="fp-text">{mappingStatusHint(req.status)}</p>
+    <p class="fp-request-meta">
+      {t.floorplanService.requestedOn} {fmtDbDate(req.created_at, getLocale())}
+      {#if req.updated_at && req.updated_at !== req.created_at} · {t.floorplanService.lastUpdate} {fmtDbDate(req.updated_at, getLocale())}{/if}
+    </p>
+    {#if req.note}<p class="fp-request-note">{req.note}</p>{/if}
+    {#if form?.fpError}<div class="inline-err" role="alert">{form.fpError}</div>{/if}
+    <form method="POST" action="?/cancelFloorplanRequest" use:enhance={confirmFirst(() => t.hallAdmin.mappingCancelConfirm)}>
+      <input type="hidden" name="id" value={req.id} />
+      <button type="submit" class="btn-ghost btn-ghost-sm">{t.hallAdmin.mappingCancel}</button>
+    </form>
+  </div>
+{/snippet}
+
 {#snippet tablePreview(shape: string, w: number, h: number, chairs: number, color: string)}
   {@const g = ttGeom(shape, w, h)}
   <svg viewBox="0 0 100 100" class="tt-svg" aria-hidden="true">
@@ -641,10 +773,32 @@
         <strong>{t.hallAdmin.suspendedTitle}</strong>
         <span>{t.hallAdmin.suspendedDesc}</span>
       </div>
-      <form method="POST" action="?/reactivate" use:enhance>
-        <button type="submit" class="btn-action btn-sm">{t.hallAdmin.reactivate}</button>
-      </form>
+      {#if !data.planFull}
+        <form method="POST" action="?/reactivate" use:enhance>
+          <button type="submit" class="btn-action btn-sm">{t.hallAdmin.reactivate}</button>
+        </form>
+      {/if}
     </div>
+    <!-- The plan is full: say so, and let the owner choose which hall stays active
+         instead of a reactivate button that could only fail (B84). -->
+    {#if data.planFull && !archived}
+      <div class="swap-box">
+        <p>{t.hallAdmin.swapIntro(data.plan.limits.maxHalls)}</p>
+        {#if data.swapCandidates.length}
+          <form method="POST" action="?/swapActive" use:enhance class="swap-form">
+            <label class="field-label" for="swap-hall">{t.hallAdmin.swapPauseLabel}</label>
+            <div class="swap-row">
+              <select id="swap-hall" name="pauseHallId" class="field-input" required>
+                {#each data.swapCandidates as h (h.id)}<option value={h.id}>{h.name}</option>{/each}
+              </select>
+              <button type="submit" class="btn-action btn-sm">{t.hallAdmin.swapAction}</button>
+            </div>
+          </form>
+        {/if}
+        <a href="/app/billing" class="swap-upgrade">{t.hallAdmin.upgrade}</a>
+      </div>
+    {/if}
+    {#if form?.lockError}<div class="inline-err" role="alert">{form.lockError}</div>{/if}
   {/if}
 
   {#if archived}
@@ -721,8 +875,11 @@
         bind:this={profileFormEl}
         method="POST"
         action="?/saveProfile"
-        use:enhance={() => async ({ update }) => {
+        use:enhance={() => async ({ result, update }) => {
           await update({ reset: false });
+          // Take the values as saved (a website gains https://, an empty URL is filled
+          // from the name), or the save bar stayed up after a successful save.
+          if (result.type === 'success') { await tick(); syncProfile(); }
         }}
         class="profile-form"
       >
@@ -838,13 +995,16 @@
           {/if}
           {#if profileIsPublic}
             <div class="field" transition:slide={{ duration: 140 }}>
-              <label class="field-label" for="pf-slug">{t.hallAdmin.publicUrl} *</label>
+              <!-- Not browser-required: the field sits on a tab that may be hidden, and an
+                   empty URL is filled from the name on save (B140). -->
+              <label class="field-label" for="pf-slug">{t.hallAdmin.publicUrl}</label>
               <div class="slug-row">
                 <div class="slug-wrap">
                   <span class="slug-prefix">/halls/</span>
                   <input class="field-input slug-input" id="pf-slug" name="slug"
-                    type="text" value={profileSlug} placeholder={t.hallAdmin.slugPlaceholder} required
-                    oninput={(e) => profileSlug = slugify(e.currentTarget.value)} />
+                    type="text" value={profileSlug} placeholder={slugify(previewName, 60) || t.hallAdmin.slugPlaceholder} maxlength="80"
+                    oninput={(e) => profileSlug = typedSlug(e.currentTarget.value)}
+                    onchange={(e) => { profileSlug = slugify(e.currentTarget.value, 60); e.currentTarget.value = profileSlug; }} />
                 </div>
                 {#if data.hall.slug && data.hall.is_public}
                   <a href="/app/halls/{data.hall.slug}" target="_blank" rel="noopener" class="btn-ghost view-live-btn">
@@ -853,6 +1013,12 @@
                   </a>
                 {/if}
               </div>
+              <span class="field-hint">{t.hallAdmin.slugHint}</span>
+              {#if slugSuggestion && slugSuggestion !== profileSlug}
+                <button type="button" class="btn-ghost btn-ghost-sm slug-suggest" onclick={() => profileSlug = slugSuggestion}>
+                  {t.hallAdmin.useSuggestedSlug(slugSuggestion)}
+                </button>
+              {/if}
             </div>
           {/if}
         </div>
@@ -896,13 +1062,29 @@
 
           <div class="gallery-grid">
             {#each galleryImages as url, i}
-              <div class="gallery-item">
+              <div class="gallery-item" class:is-cover={url === profileCoverUrl}>
                 <img src={url} alt="" />
+                {#if url === profileCoverUrl}<span class="gallery-cover-badge">{t.hallAdmin.coverBadge}</span>{/if}
                 <button type="button" class="gallery-remove"
                   onclick={() => galleryImages = galleryImages.filter((_, j) => j !== i)}
                   title={t.hallAdmin.removeImage} aria-label={t.hallAdmin.removeImage}>
                   <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                 </button>
+                <!-- Order and cover (M14): the gallery shows in this order everywhere. -->
+                <div class="gallery-tools">
+                  <button type="button" onclick={() => moveGalleryImage(i, -1)} disabled={i === 0}
+                    title={t.hallAdmin.movePhotoEarlier} aria-label={t.hallAdmin.movePhotoEarlier}>
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg>
+                  </button>
+                  <button type="button" onclick={() => profileCoverUrl = url} disabled={url === profileCoverUrl}
+                    title={t.hallAdmin.setAsCover} aria-label={t.hallAdmin.setAsCover} aria-pressed={url === profileCoverUrl}>
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill={url === profileCoverUrl ? 'currentColor' : 'none'} stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                  </button>
+                  <button type="button" onclick={() => moveGalleryImage(i, 1)} disabled={i === galleryImages.length - 1}
+                    title={t.hallAdmin.movePhotoLater} aria-label={t.hallAdmin.movePhotoLater}>
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
+                  </button>
+                </div>
                 <input type="hidden" name="galleryImages" value={url} />
               </div>
             {/each}
@@ -1006,8 +1188,12 @@
             </div>
             <div class="field field-grow">
               <label class="field-label" for="pf-web">{t.hallProfile.website}</label>
-              <input class="field-input" id="pf-web" name="contactWebsite" type="url"
-                bind:value={previewWebsite} placeholder="https://…" />
+              <!-- Plain text: "www.reduta.sk" is a fine answer, and the browser's url
+                   check refused it on a tab that may be hidden (B29). The server keeps
+                   only http(s) addresses (B14). -->
+              <input class="field-input" id="pf-web" name="contactWebsite" type="text" inputmode="url"
+                autocomplete="url" spellcheck="false" maxlength="300"
+                bind:value={previewWebsite} placeholder={t.hallAdmin.websitePlaceholder} />
             </div>
           </div>
         </div>
@@ -1336,18 +1522,13 @@
           }
         }}
       >
-        <input type="hidden" name="name"        value={previewName} />
-        <input type="hidden" name="maxPeople"   value={previewMaxPeople} />
-        <input type="hidden" name="color"       value={previewColor} />
-        <input type="hidden" name="description" value={previewDescription} />
-        <input type="hidden" name="address"     value={previewAddress} />
-        <input type="hidden" name="latitude" value={previewLatitude ?? ""} />
-        <input type="hidden" name="longitude" value={previewLongitude ?? ""} />
-
+        <!-- Booking rules only: the profile's fields are saved by the profile form,
+             with its checks (B72). -->
         <div class="section-head">
           <p class="eyebrow">{t.halls.settings}</p>
           <h2>{t.hallAdmin.bookingSettings}</h2>
         </div>
+        {#if form?.infoError}<div class="inline-err" role="alert">{form.infoError}</div>{/if}
 
         <div class="settings-cols">
           <div class="settings-toggles">
@@ -1507,6 +1688,9 @@
               </ul>
             {/if}
           </div>
+          {#if mappingOpen && data.floorplanRequest}
+            {@render mappingStatus(data.floorplanRequest)}
+          {/if}
           <footer class="fp-step-foot">
             <a href="/app/manage/halls/{data.hall.id}/editor" class="btn-primary btn-sm">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
@@ -1517,9 +1701,12 @@
           <!-- No plan yet: draw it now, or ask us to measure it (a quoted add-on, so it
                only starts a conversation and never shows a price we have not agreed). -->
           <p class="fp-text">{t.hallAdmin.drawYourselfHint}</p>
-          {#if data.floorplanRequest}
-            <p class="fp-text fp-text--done">✓ {t.hallAdmin.mappingRequested}. {t.hallAdmin.mappingRequestedHint}</p>
+          {#if mappingOpen && data.floorplanRequest}
+            {@render mappingStatus(data.floorplanRequest)}
           {:else}
+            {#if data.floorplanRequest?.status === 'delivered'}
+              <p class="fp-text fp-text--done">✓ {t.hallAdmin.mappingDeliveredOn(fmtDbDate(data.floorplanRequest.updated_at, getLocale()))}</p>
+            {/if}
             <details class="fp-mapping">
               <summary>{t.hallAdmin.mappingOffer}</summary>
               <form method="POST" action="?/requestFloorplanService" use:enhance={() => async ({ update }) => { await update({ reset: false }); }}>
@@ -1681,7 +1868,7 @@
 {#if savedNotice && !anyDirty}
   <div class="saved-toast" role="status" aria-live="polite" transition:slide={{ duration: 160 }}>
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
-    {t.settingsPages.changesSaved}
+    {savedNotice}
   </div>
 {/if}
 
@@ -1759,8 +1946,11 @@
             {conflictingEvents.length} {t.halls.reservations} {t.hallAdmin.inThisRange}
           </div>
           <ul class="conflict-list">{#each conflictingEvents as ev}<li>{ev.title} — {formatDate(ev.event_date)}</li>{/each}</ul>
-          <button type="button" class="btn-ghost-sm" onclick={() => showCancelConfirm=true}>{t.hallAdmin.cancelTheseReservations}</button>
+          <button type="button" class="btn-ghost-sm" onclick={openRangeCancel}>{t.hallAdmin.cancelTheseReservations}</button>
         </div>
+      {/if}
+      {#if form?.rangeCancelled !== undefined}
+        <div class="alert alert-success" style="margin:0 24px 12px" role="status">{t.hallAdmin.bulkCancelled(Number(form.rangeCancelled))}</div>
       {/if}
 
       <div class="dialog-footer">
@@ -1802,21 +1992,29 @@
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
         </button>
       </div>
-      <div class="dialog-body">
-        <p class="confirm-text">{t.hallAdmin.cancelReservationsConfirm}</p>
-        <ul class="conflict-list">{#each conflictingEvents as ev}<li>{ev.title} — {formatDate(ev.event_date)}</li>{/each}</ul>
-      </div>
-      <div class="dialog-footer">
-        <button type="button" class="btn-ghost" onclick={() => showCancelConfirm=false}>{t.hallAdmin.goBack}</button>
-        <form method="POST" action="?/cancelEvents"
-          use:enhance={() => async ({ result, update }) => {
-            await update();
-            if (result.type === 'success') showCancelConfirm = false;
-          }}>
+      <!-- The same notice the archive flow sends: a status change in the client's
+           log, this note in their reservation's messages and by email (B98). -->
+      <form method="POST" action="?/cancelEvents"
+        use:enhance={() => async ({ result, update }) => {
+          await update({ reset: false });
+          if (result.type === 'success') showCancelConfirm = false;
+        }}>
+        <div class="dialog-body">
+          <p class="confirm-text">{t.hallAdmin.cancelReservationsConfirm}</p>
+          <ul class="conflict-list">{#each conflictingEvents as ev}<li>{ev.title} — {formatDate(ev.event_date)}</li>{/each}</ul>
+          <label class="field-label" for="range-note">{t.hallAdmin.bulkCancelMessageLabel}</label>
+          <textarea id="range-note" name="message" class="field-input field-textarea bulk-note" rows="6" maxlength="2000"
+            bind:value={rangeCancelNote}></textarea>
           <input type="hidden" name="ids" value={conflictingEvents.map(e => e.id).join(',')} />
-          <button type="submit" class="btn-destructive">{t.hallAdmin.cancelReservationsAction}</button>
-        </form>
-      </div>
+          <input type="hidden" name="dateFrom" value={rangeFrom} />
+          <input type="hidden" name="dateTo" value={rangeTo} />
+          {#each blockDays as d}<input type="hidden" name="days" value={d} />{/each}
+        </div>
+        <div class="dialog-footer">
+          <button type="button" class="btn-ghost" onclick={() => showCancelConfirm=false}>{t.hallAdmin.goBack}</button>
+          <button type="submit" class="btn-destructive" disabled={conflictingEvents.length === 0}>{t.hallAdmin.cancelReservationsAction}</button>
+        </div>
+      </form>
     </div>
   </div>
 {/if}
@@ -1983,8 +2181,15 @@
               <label class="field-label" for={id}>{label}</label>
               <div class="tt2-step">
                 <button type="button" aria-label="−" onclick={() => set(clampN(value - step, lo, hi, step))} disabled={value <= lo}>−</button>
+                <!-- Typing is taken as it comes and only clamped when the field is left:
+                     clamping every keystroke turned "0.8" into 0.58 and "12" into 40 (B70). -->
                 <input id={id} type="number" inputmode="decimal" min={lo} max={hi} step={step} value={value}
-                  oninput={(e) => { const v = Number((e.target as HTMLInputElement).value); if (Number.isFinite(v)) set(Math.min(hi, Math.max(lo, v))); }} />
+                  oninput={(e) => { const el = e.currentTarget; const v = Number(el.value); if (el.value !== '' && Number.isFinite(v) && v >= lo && v <= hi) set(v); }}
+                  onchange={(e) => {
+                    const el = e.currentTarget; const v = Number(el.value);
+                    const next = el.value !== '' && Number.isFinite(v) ? Math.min(hi, Math.max(lo, v)) : value;
+                    set(next); el.value = String(next);
+                  }} />
                 <span class="tt2-unit">{unit}</span>
                 <button type="button" aria-label="+" onclick={() => set(clampN(value + step, lo, hi, step))} disabled={value >= hi}>+</button>
               </div>
@@ -2165,11 +2370,17 @@
       <div class="dialog-header">
         <h2 class="dialog-title">{t.hallAdmin.removeAmenity}</h2>
       </div>
-      <form class="dialog-form" method="POST" action="?/deleteAmenity" use:enhance={() => async ({ update }) => {
-        await update(); amenityDeleting = null;
+      <form class="dialog-form" method="POST" action="?/deleteAmenity" use:enhance={() => {
+        const slug = amenityDeleting?.slug;
+        return async ({ result, update }) => {
+          await update({ reset: false });
+          // The server unticks it on every hall; this hall's form follows (B150).
+          if (result.type === 'success' && slug) profileAmenities = profileAmenities.filter((x) => x !== slug);
+          amenityDeleting = null;
+        };
       }}>
         <input type="hidden" name="id" value={amenityDeleting.id} />
-        <p class="field-hint">{amenityDeleting.label}</p>
+        <p class="field-hint"><strong>{amenityDeleting.label}</strong> · {t.hallAdmin.confirmDeleteAmenity}</p>
         <div class="dialog-actions">
           <button type="button" class="btn-outline btn-sm" onclick={() => amenityDeleting = null}>{t.common.cancel}</button>
           <button type="submit" class="btn-danger">{t.common.delete}</button>
@@ -2251,6 +2462,7 @@
     color: var(--text-muted);
   }
   .listing-warning svg { color: var(--warning); flex-shrink: 0; margin-top: 1px; }
+  .slug-suggest { align-self: flex-start; margin-top: 4px; }
 
   /* ── Cover image ── */
   .sub-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
@@ -2396,6 +2608,19 @@
     border-color: var(--border);
   }
   .archived-banner strong { color: var(--text-base); }
+
+  /* Choosing which hall stays active when the plan is full (B84). */
+  .swap-box {
+    display: flex; flex-direction: column; gap: 10px; margin: -6px 0 16px;
+    padding: 12px 16px; border-radius: var(--radius-lg);
+    background: var(--bg-panel2); border: 1px solid var(--border);
+    font-size: 12.5px; color: var(--text-muted); line-height: 1.5;
+  }
+  .swap-box p { margin: 0; }
+  .swap-form { margin: 0; display: flex; flex-direction: column; gap: 6px; }
+  .swap-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .swap-row select { flex: 1 1 200px; min-width: 0; }
+  .swap-upgrade { align-self: flex-start; color: var(--accent-ink); font-weight: 600; font-size: 12.5px; }
 
   /* ── Retire ── */
   .retire-blocked {
@@ -2558,6 +2783,18 @@
   .fp-text { margin: 0; font-size: 12.5px; line-height: 1.55; color: var(--text-muted); }
   .fp-text--warn { color: var(--warning); }
   .fp-text--done { color: var(--success); }
+  .fp-request {
+    display: flex; flex-direction: column; gap: 6px; padding: 10px 12px;
+    border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg-panel2);
+  }
+  .fp-request-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+  .fp-request-head strong { font-size: 12.5px; font-weight: 650; color: var(--text-base); }
+  .fp-request-meta { margin: 0; font-size: 11.5px; color: var(--text-subtle); }
+  .fp-request-note {
+    margin: 0; font-size: 12px; line-height: 1.5; color: var(--text-muted);
+    white-space: pre-line; overflow-wrap: anywhere; border-left: 2px solid var(--border); padding-left: 8px;
+  }
+  .fp-request form { margin: 0; }
 
   /* The plan, at its own proportions inside a fixed-height frame. */
   .fp-preview {
@@ -2957,7 +3194,32 @@
     cursor: pointer; display: flex; align-items: center; justify-content: center;
     opacity: 0; transition: opacity .15s;
   }
-  .gallery-item:hover .gallery-remove { opacity: 1; }
+  .gallery-item:hover .gallery-remove,
+  .gallery-item:focus-within .gallery-remove { opacity: 1; }
+  .gallery-item.is-cover { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+  .gallery-cover-badge {
+    position: absolute; top: 5px; left: 5px;
+    font-size: 9.5px; font-weight: 650; text-transform: uppercase; letter-spacing: .08em;
+    padding: 2px 6px; border-radius: 3px; background: var(--accent); color: var(--accent-contrast);
+  }
+  .gallery-tools {
+    position: absolute; left: 0; right: 0; bottom: 0;
+    display: flex; justify-content: center; gap: 4px; padding: 5px;
+    background: linear-gradient(transparent, rgba(0,0,0,.55));
+    opacity: 0; transition: opacity .15s;
+  }
+  .gallery-item:hover .gallery-tools,
+  .gallery-item:focus-within .gallery-tools { opacity: 1; }
+  .gallery-tools button {
+    width: 24px; height: 24px; border-radius: 50%; border: none; cursor: pointer;
+    display: grid; place-items: center; background: rgba(0,0,0,.55); color: #fff;
+  }
+  .gallery-tools button:disabled { opacity: .35; cursor: default; }
+  .gallery-tools button:not(:disabled):hover { background: rgba(0,0,0,.8); }
+  /* No hover on a touch screen: the tools stay visible there. */
+  @media (hover: none) {
+    .gallery-remove, .gallery-tools { opacity: 1; }
+  }
 
   .gallery-add-slot {
     aspect-ratio: 4/3;
