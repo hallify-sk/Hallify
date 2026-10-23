@@ -55,7 +55,7 @@ export async function changeReservationStatus(
 	await postSystemMessage(locals.db, reservation.user_id, reservation.title,
 		`status_change:${status}:${actor.first_name} ${actor.last_name}`, actor.id);
 	const client = await dbFirst<{ email: string }>(locals.db, 'SELECT email FROM users WHERE id = ?', reservation.user_id);
-	if (client?.email) notifyStatusChange(locals.db, orgId, client.email, reservation.title, status).catch(() => {});
+	if (client?.email) notifyStatusChange(locals.db, orgId, client.email, reservation.title, status, { reservationId }).catch(() => {});
 	dispatchWebhooks(locals.db, orgId, 'reservation.status_changed', {
 		reservation_id: reservationId, title: reservation.title,
 		event_date: reservation.event_date, status, changed_by: 'staff'
@@ -101,7 +101,7 @@ export async function messageReservationClient(
 		crypto.randomUUID(), ticketId, actor.id, text);
 
 	if (res.user_email) {
-		notifyNewMessage(locals.db, orgId, res.user_email, subject, `${actor.first_name} ${actor.last_name}`).catch(() => {});
+		notifyNewMessage(locals.db, orgId, res.user_email, subject, `${actor.first_name} ${actor.last_name}`, { reservationId, ticketId, message: text }).catch(() => {});
 	}
 	dispatchWebhooks(locals.db, orgId, 'ticket.reply', { ticket_id: ticketId, reservation_id: reservationId }).catch(() => {});
 	return { ok: true, ticketId };

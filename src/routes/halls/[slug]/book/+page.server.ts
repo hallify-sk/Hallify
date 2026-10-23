@@ -90,7 +90,7 @@ export const actions: Actions = {
 
 		// Let the venue's owners/admins know a guest has requested a booking.
 		const guestName = `${locals.user.first_name} ${locals.user.last_name}`;
-		notifyNewReservation(locals.db, orgId, title, guestName, hall.name, eventDate).catch(() => {});
+		notifyNewReservation(locals.db, orgId, title, guestName, hall.name, eventDate, { reservationId }).catch(() => {});
 
 		redirect(303, '/halls/my-reservations?booked=1');
 	}

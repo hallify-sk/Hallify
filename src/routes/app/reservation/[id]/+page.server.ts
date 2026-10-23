@@ -307,7 +307,7 @@ export const actions: Actions = {
 			reservation.user_id
 		);
 		if (userInfo?.email) {
-			notifyStatusChange(locals.db, orgId, userInfo.email, reservation.title, 'cancelled').catch(() => {});
+			notifyStatusChange(locals.db, orgId, userInfo.email, reservation.title, 'cancelled', { reservationId: params.id }).catch(() => {});
 		}
 
 		return { success: true };

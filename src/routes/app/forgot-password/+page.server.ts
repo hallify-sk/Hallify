@@ -2,7 +2,7 @@ import type { Actions, PageServerLoad } from './$types';
 import { fail, redirect } from '@sveltejs/kit';
 import { dbFirst, dbRun } from '$lib/db/index';
 import type { UserRow } from '$lib/db/index';
-import { sendPasswordResetEmail } from '$lib/email';
+import { sendPasswordResetEmail, emailServiceDown } from '$lib/email';
 import { st } from '$lib/i18n-server';
 import { rateLimit, rateLimitKey, tooManyAttemptsMessage, RATE_LIMITS } from '$lib/rateLimit';
 
@@ -33,6 +33,12 @@ export const actions: Actions = {
 			}
 		}
 
+		// During an email outage nothing can be sent to anyone, so saying "sent" would
+		// be false. The answer is the same for every address, so it reveals nothing.
+		if (await emailServiceDown(locals.db)) {
+			return fail(503, { error: st(locals.locale).serverErrors.emailUnavailable });
+		}
+
 		// Always show success to prevent email enumeration
 		const successMsg = true;
 
@@ -52,7 +58,10 @@ export const actions: Actions = {
 			// Must match the route on disk: src/routes/app/reset-password/[token].
 			// This lived at /reset-password/<token> and 404'd for every recipient.
 			const resetUrl = `${url.origin}/app/reset-password/${token}`;
-			await sendPasswordResetEmail(locals.db, email, resetUrl);
+			const ok = await sendPasswordResetEmail(locals.db, email, resetUrl);
+			if (!ok && await emailServiceDown(locals.db)) {
+				return fail(503, { error: st(locals.locale).serverErrors.emailUnavailable });
+			}
 		}
 
 		return { sent: successMsg };

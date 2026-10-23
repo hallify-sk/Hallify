@@ -66,7 +66,7 @@ export const actions: Actions = {
 			params.id, org.id
 		);
 		if (tk?.user_email) {
-			notifyNewMessage(locals.db, locals.currentOrg!.id, tk.user_email, tk.subject, `${locals.user.first_name} ${locals.user.last_name}`).catch(() => {});
+			notifyNewMessage(locals.db, locals.currentOrg!.id, tk.user_email, tk.subject, `${locals.user.first_name} ${locals.user.last_name}`, { ticketId: params.id, message: body }).catch(() => {});
 		}
 
 		return { success: true };

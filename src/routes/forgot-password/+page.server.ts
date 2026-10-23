@@ -2,7 +2,7 @@ import type { Actions, PageServerLoad } from './$types';
 import { fail, redirect } from '@sveltejs/kit';
 import { dbFirst, dbRun } from '$lib/db/index';
 import type { UserRow } from '$lib/db/index';
-import { sendPasswordResetEmail } from '$lib/email';
+import { sendPasswordResetEmail, emailServiceDown } from '$lib/email';
 import { st } from '$lib/i18n-server';
 import { rateLimit, rateLimitKey, tooManyAttemptsMessage, RATE_LIMITS } from '$lib/rateLimit';
 
@@ -41,6 +41,12 @@ export const actions: Actions = {
       }
     }
 
+    // During an email outage nothing can be sent to anyone, so saying "sent" would
+    // be false. The answer is the same for every address, so it reveals nothing.
+    if (await emailServiceDown(locals.db)) {
+      return fail(503, { error: st(locals.locale).serverErrors.emailUnavailable });
+    }
+
     // Always report success — never reveal whether the address has an account here.
     const user = await dbFirst<Pick<UserRow, 'id'>>(
       locals.db,
@@ -57,7 +63,10 @@ export const actions: Actions = {
         crypto.randomUUID(), user.id, token, expiresAt
       );
       // Stays on this bubble — the reset route below is bubble-scoped too.
-      await sendPasswordResetEmail(locals.db, email, `${url.origin}/reset-password/${token}`);
+      const ok = await sendPasswordResetEmail(locals.db, email, `${url.origin}/reset-password/${token}`);
+      if (!ok && await emailServiceDown(locals.db)) {
+        return fail(503, { error: st(locals.locale).serverErrors.emailUnavailable });
+      }
     }
 
     return { sent: true };

@@ -87,6 +87,9 @@
         <span class="kpi-sub">{data.migrations.latest ?? '-'}</span>
       </div>
     </div>
+    {#if data.emailHealth.down}
+      <p class="alert-warning config-warning" role="alert">{t.platformExtra.emailOutage} {data.emailHealth.lastError ?? 'BREVO_API_KEY'}</p>
+    {/if}
   </section>
 
   <!-- Configuration -->

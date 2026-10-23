@@ -8,6 +8,7 @@ import { getPlan } from '$lib/plans';
 import type { PlanId } from '$lib/plans';
 import { env } from '$env/dynamic/private';
 import { runInRequestScope, keepAlive } from '$lib/server/background';
+import { syncUserLocale } from '$lib/server/user-locale';
 import { canonicalRedirect, needsOriginCheck, originAllowed, redirectStatus } from '$lib/server/edge';
 import { sequence } from '@sveltejs/kit/hooks';
 import type { Handle } from '@sveltejs/kit';
@@ -139,15 +140,25 @@ async function resolveWithLocale(
 ): Promise<Response> {
   const param = event.url.searchParams.get('lang');
   let locale: 'sk' | 'en';
+  let chosen = true;
   if (isLocale(param)) {
     locale = param;
     event.cookies.set('hallify-lang', param, { path: '/', maxAge: 60 * 60 * 24 * 365, httpOnly: false, sameSite: 'lax' });
   } else {
     const cookie = event.cookies.get('hallify-lang');
     if (isLocale(cookie)) locale = cookie;
-    else locale = (orgIdForDefault ? await loadOrgLanguage(orgIdForDefault, db) : null) ?? 'sk';
+    else {
+      chosen = false;
+      locale = (orgIdForDefault ? await loadOrgLanguage(orgIdForDefault, db) : null) ?? 'sk';
+    }
   }
   event.locals.locale = locale;
+  // Remember a signed-in person's own choice on their account, so emails reach them
+  // in the language they read (the switcher only sets a cookie). Once per change.
+  if (chosen && event.locals.user) {
+    const write = syncUserLocale(db, event.locals.user.id, locale);
+    if (write) keepAlive(write);
+  }
   return resolve(event, { transformPageChunk: ({ html }) => html.replace('%lang%', locale) });
 }
 

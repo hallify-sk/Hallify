@@ -1,12 +1,25 @@
 import { dbAll, dbFirst, dbRun, fromJson } from '$lib/db/index';
 import type { D1Database } from '@cloudflare/workers-types';
 import { env } from '$env/dynamic/private';
+import { inBackground, requestScope } from '$lib/server/background';
+import { DEFAULT_TEMPLATES, LEGACY_DEFAULT_TEMPLATES, emailCopy, type EmailLocale, type TemplateKey } from '$lib/server/email-copy';
+import { escapeHtml, renderLayout, renderTemplate } from '$lib/server/email-layout';
+import { isUserLocale, orgDefaultLocale, recipientLocale, storedLocaleForEmail } from '$lib/server/user-locale';
+import { statusLabel } from '$lib/reservationStatus';
+import { formatDate } from '$lib/format';
+import { orgPublicBaseUrl } from '$lib/orgUrl';
 
 // Email is sent platform-wide via the Brevo transactional HTTP API
 // (https://developers.brevo.com/reference/sendtransacemail). Every email goes
 // out from a single platform sender (EMAIL_FROM); organizations do not configure
 // their own SMTP. Set BREVO_API_KEY as a Worker secret; EMAIL_FROM / EMAIL_FROM_NAME
 // are plain vars. If BREVO_API_KEY is missing, sends are skipped and logged failed.
+//
+// Emails about a venue carry the venue's name as the sender name and a Reply-To
+// that reaches a person (the venue's contact address for clients, the client for
+// staff), are written in the recipient's language, and use one layout
+// ($lib/server/email-layout). Every exported sender is kept alive past the response
+// (inBackground), so call sites that fire and forget are not cut off on Workers.
 const BREVO_ENDPOINT = 'https://api.brevo.com/v3/smtp/email';
 const FROM_EMAIL = env.EMAIL_FROM || 'noreply@hallify.sk';
 const FROM_NAME = env.EMAIL_FROM_NAME || 'Hallify';
@@ -16,7 +29,7 @@ const FROM_NAME = env.EMAIL_FROM_NAME || 'Hallify';
 export type TeamNotifyEvent = 'newReservation' | 'guestMessage' | 'guestCancel' | 'guestEdit';
 
 export interface EmailNotifyConfig {
-	// Notify the org's owners/admins
+	// Notify the org's team
 	newReservation: boolean;
 	guestMessage: boolean;
 	guestCancel: boolean;
@@ -25,8 +38,9 @@ export interface EmailNotifyConfig {
 	statusChange: boolean;
 	newMessage: boolean;
 	/** Per-event staff recipients, written by Settings → Advanced. `null` or absent
-	 *  means "every owner and admin", so a member invited tomorrow is included
-	 *  without anyone revisiting that screen. An explicit list is honoured as-is. */
+	 *  means "every member of the organisation", so a member invited tomorrow is
+	 *  included without anyone revisiting that screen. An explicit list is honoured
+	 *  as-is, as long as at least one of its people is still a member. */
 	recipients?: Partial<Record<TeamNotifyEvent, string[] | null>>;
 }
 
@@ -42,33 +56,9 @@ export interface EmailTemplates {
 	testEmail?: string;
 }
 
-const DEFAULT_TEMPLATES: Required<EmailTemplates> = {
-	newReservation: `<h2>New Reservation</h2>
-<p><b>{{userName}}</b> created a new reservation <b>{{title}}</b> at <b>{{hallName}}</b> on <b>{{date}}</b>.</p>`,
-	guestMessage: `<h2>New message from a guest</h2>
-<p><b>{{senderName}}</b> sent a message about <b>{{subject}}</b>:</p>
-<blockquote>{{message}}</blockquote>`,
-	guestCancel: `<h2>Booking cancelled by a guest</h2>
-<p><b>{{guestName}}</b> cancelled their booking <b>{{title}}</b> at <b>{{hallName}}</b> on <b>{{date}}</b>.</p>`,
-	guestEdit: `<h2>Booking changed by a guest</h2>
-<p><b>{{guestName}}</b> updated their booking <b>{{title}}</b> at <b>{{hallName}}</b> (date: <b>{{date}}</b>).</p>`,
-	statusChange: `<h2>Reservation Status Updated</h2>
-<p>Your reservation <b>{{title}}</b> has been updated to: <b>{{status}}</b>.</p>`,
-	hallCancellation: `<h2>Your reservation has been cancelled</h2>
-<p>Your reservation <b>{{title}}</b> at <b>{{hallName}}</b> on <b>{{date}}</b> has been cancelled by the venue.</p>
-<blockquote style="white-space:pre-wrap">{{message}}</blockquote>
-<p>You can reply to the venue from your reservation in Hallify.</p>`,
-	newMessage: `<h2>New Message</h2>
-<p><b>{{senderName}}</b> sent a message in ticket <b>{{subject}}</b>.</p>`,
-	passwordReset: `<h2>Password Reset</h2>
-<p>You requested a password reset. Click the link below to set a new password:</p>
-<p><a href="{{resetUrl}}">{{resetUrl}}</a></p>
-<p>This link expires in 1 hour. If you did not request this, please ignore this email.</p>`,
-	testEmail: `<h2>Hallify email test</h2>
-<p>If you can read this, email sending is working correctly.</p>`,
-};
+const TEMPLATE_KEYS = Object.keys(DEFAULT_TEMPLATES.sk) as TemplateKey[];
 
-// Per-organization notification preferences (set on /app/manage/settings/email).
+// Per-organization notification preferences (set on /app/manage/settings/advanced).
 export async function getNotifyConfig(db: D1Database, orgId: string): Promise<EmailNotifyConfig> {
 	const row = await dbFirst<{ value: string | null }>(
 		db,
@@ -84,18 +74,48 @@ export async function getNotifyConfig(db: D1Database, orgId: string): Promise<Em
 	};
 }
 
-export async function getEmailTemplates(db: D1Database): Promise<Required<EmailTemplates>> {
-	const row = await dbFirst<{ value: string | null }>(
-		db,
-		"SELECT value FROM system_settings WHERE key = 'email_templates'"
-	);
-	const templates = row ? fromJson<EmailTemplates>(row.value) : null;
-	return { ...DEFAULT_TEMPLATES, ...templates };
+// ── Templates ───────────────────────────────────────────────────────────────
+
+const normalise = (s: string) => s.replace(/\s+/g, ' ').trim();
+
+/** True when `value` is one of the shipped defaults for `key` (in any language, or
+ *  the old English one). Such a copy was saved by the settings form, not written by
+ *  anyone, and must not pin every recipient to that one language. */
+export function isDefaultTemplate(key: TemplateKey, value: string): boolean {
+	const v = normalise(value);
+	return [DEFAULT_TEMPLATES.sk[key], DEFAULT_TEMPLATES.en[key], LEGACY_DEFAULT_TEMPLATES[key]]
+		.some((d) => d != null && normalise(d) === v);
 }
 
-function renderTemplate(template: string, vars: Record<string, string>): string {
-	return template.replace(/\{\{(\w+)\}\}/g, (_, key) => vars[key] ?? '');
+/** The templates to use for `locale`. A stored template wins only when it says
+ *  something: an empty (or whitespace-only) one, or an unchanged default, falls
+ *  back to the default in the recipient's language. Before this, clearing a
+ *  template sent blank emails. */
+export function resolveTemplates(stored: EmailTemplates | null | undefined, locale: EmailLocale = 'sk'): Required<EmailTemplates> {
+	const out = { ...DEFAULT_TEMPLATES[locale] } as Required<EmailTemplates>;
+	for (const key of TEMPLATE_KEYS) {
+		const value = stored?.[key];
+		if (typeof value === 'string' && value.trim() !== '' && !isDefaultTemplate(key, value)) {
+			out[key] = value;
+		}
+	}
+	return out;
 }
+
+async function loadStoredTemplates(db: D1Database): Promise<EmailTemplates | null> {
+	try {
+		const row = await dbFirst<{ value: string | null }>(db, "SELECT value FROM system_settings WHERE key = 'email_templates'");
+		return row ? fromJson<EmailTemplates>(row.value) : null;
+	} catch {
+		return null;
+	}
+}
+
+export async function getEmailTemplates(db: D1Database, locale: EmailLocale = 'sk'): Promise<Required<EmailTemplates>> {
+	return resolveTemplates(await loadStoredTemplates(db), locale);
+}
+
+// ── Sending ─────────────────────────────────────────────────────────────────
 
 async function logEmail(db: D1Database, recipient: string, subject: string, template: string | null, status: 'sent' | 'failed', error?: string) {
 	try {
@@ -107,13 +127,37 @@ async function logEmail(db: D1Database, recipient: string, subject: string, temp
 	} catch { /* don't fail on logging errors */ }
 }
 
-export async function sendEmail(db: D1Database, to: string, subject: string, html: string, templateName?: string): Promise<boolean> {
+export interface SendOptions {
+	/** Sender display name; the address is always EMAIL_FROM. */
+	fromName?: string | null;
+	/** Where replies go. Without it, replies reach the no-reply mailbox. */
+	replyTo?: string | null;
+}
+
+const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+
+/** A sender name Brevo accepts: one line, no angle brackets or quotes, bounded. */
+function cleanName(name: string): string {
+	return name.replace(/[\r\n<>"]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 70);
+}
+
+export const sendEmail = inBackground(async function sendEmail(
+	db: D1Database,
+	to: string,
+	subject: string,
+	html: string,
+	templateName?: string,
+	opts: SendOptions = {}
+): Promise<boolean> {
 	const apiKey = env.BREVO_API_KEY;
 	if (!apiKey) {
-		console.warn(`[email] BREVO_API_KEY not set — skipping send to ${to}: ${subject}`);
+		console.error(`[email] BREVO_API_KEY not set — no email can be sent (to ${to}: ${subject})`);
 		await logEmail(db, to, subject, templateName ?? null, 'failed', 'BREVO_API_KEY not configured');
 		return false;
 	}
+
+	const replyTo = opts.replyTo && EMAIL_RE.test(opts.replyTo) && opts.replyTo !== to ? opts.replyTo : null;
+	const fromName = cleanName(opts.fromName || FROM_NAME) || FROM_NAME;
 
 	try {
 		const res = await fetch(BREVO_ENDPOINT, {
@@ -124,8 +168,9 @@ export async function sendEmail(db: D1Database, to: string, subject: string, htm
 				'accept': 'application/json',
 			},
 			body: JSON.stringify({
-				sender: { email: FROM_EMAIL, name: FROM_NAME },
+				sender: { email: FROM_EMAIL, name: fromName },
 				to: [{ email: to }],
+				...(replyTo ? { replyTo: { email: replyTo } } : {}),
 				subject,
 				htmlContent: html,
 			}),
@@ -139,199 +184,677 @@ export async function sendEmail(db: D1Database, to: string, subject: string, htm
 		await logEmail(db, to, subject, templateName ?? null, 'sent');
 		return true;
 	} catch (err) {
-		console.error('[email] Failed to send:', err);
-		await logEmail(db, to, subject, templateName ?? null, 'failed', err instanceof Error ? err.message : String(err));
+		const message = err instanceof Error ? err.message : String(err);
+		if (isConfigError(message)) {
+			// Not one bad address: every email is failing until the key is fixed.
+			console.error(`[email] OUTAGE — Brevo refused the API key; no email can be sent until BREVO_API_KEY is fixed. ${message}`);
+		} else {
+			console.error('[email] Failed to send:', err);
+		}
+		await logEmail(db, to, subject, templateName ?? null, 'failed', message);
+		return false;
+	}
+});
+
+// ── Delivery health ─────────────────────────────────────────────────────────
+
+/** A failure that hits every email rather than one recipient: no key, or Brevo
+ *  refusing the key or the sender (401/403). */
+export function isConfigError(error: string | null | undefined): boolean {
+	if (!error) return false;
+	return /BREVO_API_KEY not configured|^Brevo 40[13]\b/.test(error);
+}
+
+export interface EmailHealth {
+	configured: boolean;
+	/** True while email is broken for everyone: no key, or the latest attempt failed
+	 *  with a configuration error and nothing has been delivered since. */
+	down: boolean;
+	lastError: string | null;
+	lastFailureAt: string | null;
+	lastSuccessAt: string | null;
+	/** Failed attempts since the last delivered email. */
+	failedSinceSuccess: number;
+}
+
+export async function getEmailHealth(db: D1Database): Promise<EmailHealth> {
+	const configured = !!env.BREVO_API_KEY;
+	let row: { last_sent: string | null; last_failed: string | null; last_error: string | null; failed_since: number | string | null } | null = null;
+	try {
+		row = await dbFirst(db, `
+			SELECT
+				(SELECT MAX(created_at) FROM email_log WHERE status = 'sent') AS last_sent,
+				(SELECT MAX(created_at) FROM email_log WHERE status = 'failed') AS last_failed,
+				(SELECT error FROM email_log WHERE status = 'failed' ORDER BY created_at DESC LIMIT 1) AS last_error,
+				(SELECT COUNT(*) FROM email_log WHERE status = 'failed'
+				   AND created_at >= COALESCE((SELECT MAX(created_at) FROM email_log WHERE status = 'sent'), '')) AS failed_since`);
+	} catch { /* no log table: report what the config says */ }
+	const lastSent = row?.last_sent ?? null;
+	const lastFailed = row?.last_failed ?? null;
+	const failingNow = !!lastFailed && (!lastSent || lastFailed >= lastSent);
+	return {
+		configured,
+		down: !configured || (failingNow && isConfigError(row?.last_error)),
+		lastError: row?.last_error ?? null,
+		lastFailureAt: lastFailed,
+		lastSuccessAt: lastSent,
+		failedSinceSuccess: Number(row?.failed_since ?? 0),
+	};
+}
+
+/** True when no email can currently go out at all. Callers use it to avoid telling
+ *  someone "we've sent you an email" during an outage — without revealing anything
+ *  about a particular address, since the answer is the same for every address. */
+export async function emailServiceDown(db: D1Database): Promise<boolean> {
+	try {
+		return (await getEmailHealth(db)).down;
+	} catch {
 		return false;
 	}
 }
 
-export async function sendTestEmail(db: D1Database, to: string): Promise<{ ok: boolean; error?: string }> {
-	const templates = await getEmailTemplates(db);
-	const ok = await sendEmail(db, to, 'Hallify – Test Email', templates.testEmail, 'testEmail');
-	return ok ? { ok: true } : { ok: false, error: 'Check the BREVO_API_KEY secret and that hallify.sk is an authenticated sender in Brevo.' };
+// ── Context: people, venues, reservations, links ────────────────────────────
+
+/** The language the current request is being served in, if any. */
+function requestLocale(): EmailLocale | null {
+	const l = requestScope()?.locals?.locale;
+	return isUserLocale(l) ? l : null;
 }
 
-// Send an email to the owners/admins of an organization.
-//
-// `onlyUserIds` is the per-event recipient list saved in Settings → Advanced:
-//   null / undefined → every owner and admin (the default)
-//   []               → nobody (the event is switched off)
-//   [ids]            → those members, still filtered to current owners/admins, so a
-//                      stale id or a demoted member never receives staff mail.
-async function emailOrgStaff(
-	db: D1Database,
-	orgId: string,
-	subject: string,
-	html: string,
-	templateName: string,
-	onlyUserIds?: string[] | null
-) {
-	const scoped = Array.isArray(onlyUserIds);
-	if (scoped && onlyUserIds!.length === 0) return;
+/** Absolute base of the console (staff links). */
+function appBase(): string {
+	const fromEnv = (env.APP_URL || '').replace(/\/$/, '');
+	if (fromEnv) return fromEnv;
+	return requestScope()?.url?.origin ?? 'https://hallify.sk';
+}
 
-	const recipients = scoped
-		? await dbAll<{ email: string }>(db,
-			`SELECT u.email FROM organization_members m JOIN users u ON u.id = m.user_id
-			 WHERE m.org_id = ? AND m.role IN ('owner', 'admin')
-			   AND u.id IN (${onlyUserIds!.map(() => '?').join(',')})`,
-			orgId, ...onlyUserIds!
-		)
-		: await dbAll<{ email: string }>(db,
-			`SELECT u.email FROM organization_members m JOIN users u ON u.id = m.user_id
-			 WHERE m.org_id = ? AND m.role IN ('owner', 'admin')`,
-			orgId
-		);
+/** Absolute base of a venue's own site (client links). */
+async function venueBase(db: D1Database, orgId: string): Promise<string> {
+	const reqUrl = requestScope()?.url;
+	let probe: URL;
+	try { probe = reqUrl ?? new URL(appBase()); } catch { probe = new URL('https://hallify.sk'); }
+	try {
+		const base = await orgPublicBaseUrl(db, orgId, probe);
+		if (base) return base;
+	} catch { /* fall through */ }
+	return reqUrl?.origin ?? appBase();
+}
 
-	for (const r of recipients) {
-		await sendEmail(db, r.email, subject, html, templateName);
+interface OrgInfo { name: string; contactEmail: string | null }
+
+/** The venue's name and a public contact address (the first hall that lists one). */
+async function orgInfo(db: D1Database, orgId: string): Promise<OrgInfo> {
+	try {
+		const row = await dbFirst<{ name: string; contact_email: string | null }>(db,
+			`SELECT o.name,
+			        (SELECT h.contact_email FROM halls h
+			          WHERE h.org_id = o.id AND h.contact_email IS NOT NULL AND h.contact_email != ''
+			          ORDER BY h.archived_at IS NOT NULL, h.created_at LIMIT 1) AS contact_email
+			   FROM organizations o WHERE o.id = ?`, orgId);
+		if (row) return { name: row.name, contactEmail: row.contact_email };
+	} catch {
+		try {
+			const row = await dbFirst<{ name: string }>(db, 'SELECT name FROM organizations WHERE id = ?', orgId);
+			if (row) return { name: row.name, contactEmail: null };
+		} catch { /* ignore */ }
+	}
+	return { name: 'Hallify', contactEmail: null };
+}
+
+interface ReservationContext {
+	id: string;
+	orgId: string;
+	title: string;
+	eventDate: string;
+	startTime: string | null;
+	endTime: string | null;
+	guests: number | null;
+	status: string;
+	hallName: string;
+	hallEmail: string | null;
+	clientId: string | null;
+	clientEmail: string | null;
+	clientName: string | null;
+	clientLocale: EmailLocale | null;
+}
+
+async function loadReservation(db: D1Database, id: string | null | undefined): Promise<ReservationContext | null> {
+	if (!id) return null;
+	type Row = {
+		id: string; org_id: string; title: string; event_date: string; start_time: string | null; end_time: string | null;
+		num_guests: number | null; status: string; hall_name: string; hall_email: string | null;
+		client_id: string | null; client_email: string | null; first_name: string | null; last_name: string | null; client_locale?: string | null;
+	};
+	const sql = (withLocale: boolean) => `
+		SELECT r.id, r.org_id, r.title, r.event_date, r.start_time, r.end_time, r.num_guests, r.status,
+		       h.name AS hall_name, h.contact_email AS hall_email,
+		       u.id AS client_id, u.email AS client_email, u.first_name, u.last_name
+		       ${withLocale ? ', u.locale AS client_locale' : ''}
+		  FROM reservations r
+		  JOIN halls h ON h.id = r.hall_id
+		  LEFT JOIN users u ON u.id = r.user_id
+		 WHERE r.id = ?`;
+	let row: Row | null = null;
+	try {
+		row = await dbFirst<Row>(db, sql(true), id);
+	} catch {
+		try { row = await dbFirst<Row>(db, sql(false), id); } catch { return null; }
+	}
+	if (!row) return null;
+	return {
+		id: row.id,
+		orgId: row.org_id,
+		title: row.title,
+		eventDate: row.event_date,
+		startTime: row.start_time,
+		endTime: row.end_time,
+		guests: row.num_guests,
+		status: row.status,
+		hallName: row.hall_name,
+		hallEmail: row.hall_email || null,
+		clientId: row.client_id,
+		clientEmail: row.client_email,
+		clientName: [row.first_name, row.last_name].filter(Boolean).join(' ') || null,
+		clientLocale: isUserLocale(row.client_locale) ? row.client_locale : null,
+	};
+}
+
+/** The reservation a message thread belongs to, if any. */
+async function ticketReservationId(db: D1Database, ticketId: string | null | undefined): Promise<string | null> {
+	if (!ticketId) return null;
+	try {
+		const row = await dbFirst<{ reservation_id: string | null }>(db, 'SELECT reservation_id FROM tickets WHERE id = ?', ticketId);
+		return row?.reservation_id ?? null;
+	} catch {
+		return null;
 	}
 }
 
-// New reservation → email the organization's owners and admins.
-export async function notifyNewReservation(db: D1Database, orgId: string, title: string, userName: string, hallName: string, date: string) {
-	const notify = await getNotifyConfig(db, orgId);
-	if (!notify.newReservation) return;
-	const templates = await getEmailTemplates(db);
-	const html = renderTemplate(templates.newReservation, { title, userName, hallName, date });
-	await emailOrgStaff(db, orgId, `New reservation: ${title}`, html, 'newReservation', notify.recipients?.newReservation ?? null);
+/** "23. mája 2027" / "23 May 2027" for a stored YYYY-MM-DD; anything else unchanged. */
+function eventDate(date: string, locale: EmailLocale): string {
+	return /^\d{4}-\d{2}-\d{2}$/.test(date)
+		? formatDate(date, locale, { day: 'numeric', month: 'long', year: 'numeric' })
+		: date;
 }
 
-// Guest sent a message → email the organization's owners and admins.
-export async function notifyGuestMessage(db: D1Database, orgId: string, senderName: string, subject: string, message: string) {
-	const notify = await getNotifyConfig(db, orgId);
-	if (!notify.guestMessage) return;
-	const templates = await getEmailTemplates(db);
-	const html = renderTemplate(templates.guestMessage, { senderName, subject, message });
-	await emailOrgStaff(db, orgId, `New message: ${subject}`, html, 'guestMessage', notify.recipients?.guestMessage ?? null);
+function timeRange(start: string | null, end: string | null): string | null {
+	const s = start?.slice(0, 5);
+	const e = end?.slice(0, 5);
+	if (s && e) return `${s} – ${e}`;
+	return s || null;
 }
 
-// Guest cancelled a booking → email the organization's owners and admins.
-export async function notifyGuestCancel(db: D1Database, orgId: string, guestName: string, title: string, hallName: string, date: string) {
-	const notify = await getNotifyConfig(db, orgId);
-	if (!notify.guestCancel) return;
-	const templates = await getEmailTemplates(db);
-	const html = renderTemplate(templates.guestCancel, { guestName, title, hallName, date });
-	await emailOrgStaff(db, orgId, `Booking cancelled: ${title}`, html, 'guestCancel', notify.recipients?.guestCancel ?? null);
+function reservationDetails(res: ReservationContext, locale: EmailLocale, forStaff: boolean): Array<[string, string | null]> {
+	const c = emailCopy(locale).details;
+	return [
+		[c.event, res.title],
+		[c.hall, res.hallName],
+		[c.date, eventDate(res.eventDate, locale)],
+		[c.time, timeRange(res.startTime, res.endTime)],
+		[c.guests, res.guests != null ? String(res.guests) : null],
+		...(forStaff
+			? [[c.client, res.clientName ? `${res.clientName}${res.clientEmail ? ` (${res.clientEmail})` : ''}` : res.clientEmail] as [string, string | null],
+			   [c.status, statusLabel(res.status, locale)] as [string, string | null]]
+			: []),
+	];
 }
 
-// Guest edited a booking → email the organization's owners and admins.
-export async function notifyGuestEdit(db: D1Database, orgId: string, guestName: string, title: string, hallName: string, date: string) {
+const staffReservationUrl = (id: string) => `${appBase()}/app/reservation/${encodeURIComponent(id)}`;
+const staffThreadUrl = (ticketId: string) => `${appBase()}/app/manage/messages/${encodeURIComponent(ticketId)}`;
+
+// ── Staff notifications ─────────────────────────────────────────────────────
+
+interface Recipient { email: string; locale: EmailLocale | null }
+
+async function orgMembers(db: D1Database, orgId: string, onlyUserIds?: string[]): Promise<Recipient[]> {
+	const filter = onlyUserIds?.length ? ` AND u.id IN (${onlyUserIds.map(() => '?').join(',')})` : '';
+	const params = [orgId, ...(onlyUserIds ?? [])];
+	const base = (withLocale: boolean) =>
+		`SELECT u.email${withLocale ? ', u.locale' : ''} FROM organization_members m JOIN users u ON u.id = m.user_id
+		  WHERE m.org_id = ?${filter}`;
+	let rows: Array<{ email: string; locale?: string | null }>;
+	try {
+		rows = await dbAll(db, base(true), ...params);
+	} catch {
+		rows = await dbAll(db, base(false), ...params);
+	}
+	const seen = new Set<string>();
+	return rows
+		.filter((r) => r.email && !seen.has(r.email) && seen.add(r.email))
+		.map((r) => ({ email: r.email, locale: isUserLocale(r.locale) ? r.locale : null }));
+}
+
+/**
+ * Who on the team receives a staff email.
+ *
+ *   null / undefined → every member of the organisation (owners, admins and members:
+ *                      the settings screen calls this "the whole team")
+ *   []               → nobody (the event is switched off)
+ *   [ids]            → those people, while they are still members. If none of them
+ *                      is (the only chosen person was removed from the team), the
+ *                      email goes to the whole team rather than to nobody: the venue
+ *                      switched this email on, and silently dropping new bookings
+ *                      is the worse failure.
+ */
+export async function staffRecipients(db: D1Database, orgId: string, onlyUserIds?: string[] | null): Promise<Recipient[]> {
+	if (Array.isArray(onlyUserIds)) {
+		if (onlyUserIds.length === 0) return [];
+		const chosen = await orgMembers(db, orgId, onlyUserIds);
+		if (chosen.length > 0) return chosen;
+		console.warn(`[email] none of the chosen recipients is still in org ${orgId}; notifying the whole team`);
+	}
+	return orgMembers(db, orgId);
+}
+
+type Built = { subject: string; html: string };
+
+async function emailStaff(
+	db: D1Database,
+	orgId: string,
+	templateName: TeamNotifyEvent,
+	onlyUserIds: string[] | null | undefined,
+	build: (locale: EmailLocale) => Built | Promise<Built>,
+	opts: SendOptions = {}
+): Promise<void> {
+	const recipients = await staffRecipients(db, orgId, onlyUserIds);
+	if (!recipients.length) return;
+	const fallback = (await orgDefaultLocale(db, orgId)) ?? 'sk';
+	const cache = new Map<EmailLocale, Built>();
+	for (const r of recipients) {
+		const locale = r.locale ?? fallback;
+		let built = cache.get(locale);
+		if (!built) { built = await build(locale); cache.set(locale, built); }
+		await sendEmail(db, r.email, built.subject, built.html, templateName, opts);
+	}
+}
+
+interface StaffEmailInput {
+	key: TeamNotifyEvent;
+	orgId: string;
+	vars: Record<string, string>;
+	/** The raw event date, formatted per recipient. */
+	date?: string;
+	subject: (c: ReturnType<typeof emailCopy>) => string;
+	res: ReservationContext | null;
+	link: { url: string; label: (c: ReturnType<typeof emailCopy>) => string } | null;
+}
+
+async function notifyStaffAbout(db: D1Database, input: StaffEmailInput) {
+	const notify = await getNotifyConfig(db, input.orgId);
+	if (!notify[input.key]) return;
+	const org = await orgInfo(db, input.orgId);
+	const stored = await loadStoredTemplates(db);
+	const replyTo = input.res?.clientEmail ?? null;
+	await emailStaff(db, input.orgId, input.key, notify.recipients?.[input.key] ?? null, (locale) => {
+		const c = emailCopy(locale);
+		const subject = input.subject(c);
+		const vars = { ...input.vars, ...(input.date != null ? { date: eventDate(input.date, locale) } : {}) };
+		const html = renderLayout({
+			locale,
+			brand: org.name,
+			subject,
+			bodyHtml: renderTemplate(resolveTemplates(stored, locale)[input.key], vars),
+			details: input.res ? reservationDetails(input.res, locale, true) : [],
+			cta: input.link ? { label: input.link.label(c), url: input.link.url } : null,
+			linkFallback: c.footer.linkFallback,
+			footer: [replyTo ? c.footer.replyToClient(replyTo) : '', c.footer.staffSettings],
+		});
+		return { subject, html };
+	}, { replyTo });
+}
+
+export interface NotifyExtra {
+	/** The booking concerned: adds its details, a link to it, and the client as Reply-To. */
+	reservationId?: string | null;
+	/** The message thread concerned. */
+	ticketId?: string | null;
+}
+
+// New reservation → email the organization's team.
+export const notifyNewReservation = inBackground(async function notifyNewReservation(
+	db: D1Database, orgId: string, title: string, userName: string, hallName: string, date: string, extra: NotifyExtra = {}
+): Promise<void> {
+	const res = await loadReservation(db, extra.reservationId);
+	await notifyStaffAbout(db, {
+		key: 'newReservation', orgId, res,
+		vars: { title, userName, hallName }, date: res?.eventDate ?? date,
+		subject: (c) => c.subject.newReservation(title),
+		link: res ? { url: staffReservationUrl(res.id), label: (c) => c.cta.openReservation } : null,
+	});
+});
+
+// Guest sent a message → email the organization's team, with the message itself.
+export const notifyGuestMessage = inBackground(async function notifyGuestMessage(
+	db: D1Database, orgId: string, senderName: string, subject: string, message: string, extra: NotifyExtra = {}
+): Promise<void> {
+	const res = await loadReservation(db, extra.reservationId ?? await ticketReservationId(db, extra.ticketId));
+	const url = extra.ticketId ? staffThreadUrl(extra.ticketId) : res ? staffReservationUrl(res.id) : null;
+	await notifyStaffAbout(db, {
+		key: 'guestMessage', orgId, res,
+		vars: { senderName, subject, message },
+		subject: (c) => c.subject.guestMessage(subject),
+		link: url ? { url, label: (c) => c.cta.openConversation } : null,
+	});
+});
+
+// Guest cancelled a booking → email the organization's team.
+export const notifyGuestCancel = inBackground(async function notifyGuestCancel(
+	db: D1Database, orgId: string, guestName: string, title: string, hallName: string, date: string, extra: NotifyExtra = {}
+): Promise<void> {
+	const res = await loadReservation(db, extra.reservationId);
+	await notifyStaffAbout(db, {
+		key: 'guestCancel', orgId, res,
+		vars: { guestName, title, hallName }, date,
+		subject: (c) => c.subject.guestCancel(title),
+		link: res ? { url: staffReservationUrl(res.id), label: (c) => c.cta.openReservation } : null,
+	});
+});
+
+/** One field a client changed on their booking. */
+export interface ReservationChange {
+	field: 'title' | 'date' | 'startTime' | 'endTime' | 'guests' | 'description';
+	from: string | null;
+	to: string | null;
+}
+
+export interface ReservationSnapshot {
+	title?: string | null;
+	event_date?: string | null;
+	start_time?: string | null;
+	end_time?: string | null;
+	num_guests?: number | null;
+	description?: string | null;
+}
+
+/** What differs between two versions of a booking, for the "changed by the client"
+ *  email (it used to say only that something changed). */
+export function reservationChanges(before: ReservationSnapshot, after: ReservationSnapshot): ReservationChange[] {
+	const norm = (v: unknown) => (v == null || String(v).trim() === '' ? null : String(v).trim());
+	const pairs: Array<[ReservationChange['field'], unknown, unknown]> = [
+		['title', before.title, after.title],
+		['date', before.event_date, after.event_date],
+		['startTime', before.start_time?.slice(0, 5), after.start_time?.slice(0, 5)],
+		['endTime', before.end_time?.slice(0, 5), after.end_time?.slice(0, 5)],
+		['guests', before.num_guests, after.num_guests],
+		['description', before.description, after.description],
+	];
+	return pairs
+		.filter(([, a, b]) => norm(a) !== norm(b))
+		.map(([field, a, b]) => ({ field, from: norm(a), to: norm(b) }));
+}
+
+/** The changes as plain-text lines in `locale` ("Dátum: 12. mája 2027 → 13. mája 2027"). */
+export function describeChanges(changes: ReservationChange[] | null | undefined, locale: EmailLocale): string {
+	const c = emailCopy(locale).changes;
+	if (!changes?.length) return c.unknown;
+	const show = (field: ReservationChange['field'], v: string | null) => {
+		if (v == null) return c.empty;
+		if (field === 'date') return eventDate(v, locale);
+		if (field === 'description') return v.length > 200 ? `${v.slice(0, 199)}…` : v;
+		return v;
+	};
+	return changes.map((ch) => `${c[ch.field]}: ${show(ch.field, ch.from)} → ${show(ch.field, ch.to)}`).join('\n');
+}
+
+// Guest edited a booking → email the organization's team, saying what changed.
+export const notifyGuestEdit = inBackground(async function notifyGuestEdit(
+	db: D1Database, orgId: string, guestName: string, title: string, hallName: string, date: string,
+	extra: NotifyExtra & { changes?: ReservationChange[] } = {}
+): Promise<void> {
 	const notify = await getNotifyConfig(db, orgId);
 	if (!notify.guestEdit) return;
-	const templates = await getEmailTemplates(db);
-	const html = renderTemplate(templates.guestEdit, { guestName, title, hallName, date });
-	await emailOrgStaff(db, orgId, `Booking updated: ${title}`, html, 'guestEdit', notify.recipients?.guestEdit ?? null);
+	const res = await loadReservation(db, extra.reservationId);
+	// `changes` depends on the recipient's language, so it is filled per locale.
+	const org = await orgInfo(db, orgId);
+	const stored = await loadStoredTemplates(db);
+	const replyTo = res?.clientEmail ?? null;
+	await emailStaff(db, orgId, 'guestEdit', notify.recipients?.guestEdit ?? null, (locale) => {
+		const c = emailCopy(locale);
+		const subject = c.subject.guestEdit(title);
+		const html = renderLayout({
+			locale,
+			brand: org.name,
+			subject,
+			bodyHtml: renderTemplate(resolveTemplates(stored, locale).guestEdit, {
+				guestName, title, hallName, date: eventDate(date, locale), changes: describeChanges(extra.changes, locale),
+			}),
+			details: res ? reservationDetails(res, locale, true) : [],
+			cta: res ? { label: c.cta.openReservation, url: staffReservationUrl(res.id) } : null,
+			linkFallback: c.footer.linkFallback,
+			footer: [replyTo ? c.footer.replyToClient(replyTo) : '', c.footer.staffSettings],
+		});
+		return { subject, html };
+	}, { replyTo });
+});
+
+// ── Client notifications ────────────────────────────────────────────────────
+
+interface ClientEmailInput {
+	orgId: string;
+	to: string;
+	templateName: string;
+	res: ReservationContext | null;
+	build: (c: ReturnType<typeof emailCopy>, locale: EmailLocale, tpl: Required<EmailTemplates>) => {
+		subject: string; bodyHtml: string; note?: { label: string; text: string } | null;
+	};
+	link: { url: string; label: (c: ReturnType<typeof emailCopy>) => string } | null;
 }
 
-// Reservation status change → email the guest who made the booking.
-export async function notifyStatusChange(db: D1Database, orgId: string, userEmail: string, title: string, newStatus: string) {
+async function emailClient(db: D1Database, input: ClientEmailInput): Promise<boolean> {
+	const org = await orgInfo(db, input.orgId);
+	const locale: EmailLocale =
+		(input.res && input.res.clientEmail === input.to ? input.res.clientLocale : null)
+		?? (await recipientLocale(db, input.to, input.orgId));
+	const c = emailCopy(locale);
+	const tpl = resolveTemplates(await loadStoredTemplates(db), locale);
+	const built = input.build(c, locale, tpl);
+	// Replies reach the venue: the hall's own contact address, else the venue's.
+	const replyTo = input.res?.hallEmail ?? org.contactEmail;
+	const html = renderLayout({
+		locale,
+		brand: org.name,
+		subject: built.subject,
+		bodyHtml: built.bodyHtml,
+		details: input.res ? reservationDetails(input.res, locale, false) : [],
+		note: built.note ?? null,
+		cta: input.link ? { label: input.link.label(c), url: input.link.url } : null,
+		linkFallback: c.footer.linkFallback,
+		footer: [replyTo ? c.footer.replyToVenue(org.name) : c.footer.noReplyClient, c.footer.sentBy(org.name)],
+	});
+	return sendEmail(db, input.to, built.subject, html, input.templateName, { fromName: c.via(org.name), replyTo });
+}
+
+async function clientReservationUrl(db: D1Database, orgId: string, reservationId: string): Promise<string> {
+	return `${await venueBase(db, orgId)}/halls/my-reservations/${encodeURIComponent(reservationId)}`;
+}
+
+// Reservation status change → email the guest who made the booking, in their language,
+// with what the new status means for them and the venue's note if there was one.
+export const notifyStatusChange = inBackground(async function notifyStatusChange(
+	db: D1Database, orgId: string, userEmail: string, title: string, newStatus: string,
+	extra: NotifyExtra & { message?: string | null } = {}
+): Promise<void> {
 	const notify = await getNotifyConfig(db, orgId);
 	if (!notify.statusChange) return;
-	const templates = await getEmailTemplates(db);
-	const html = renderTemplate(templates.statusChange, { title, status: newStatus });
-	await sendEmail(db, userEmail, `Reservation update: ${title}`, html, 'statusChange');
-}
+	const res = await loadReservation(db, extra.reservationId);
+	await emailClient(db, {
+		orgId, to: userEmail, templateName: 'statusChange', res,
+		build: (c, locale, tpl) => {
+			const status = statusLabel(newStatus, locale);
+			return {
+				subject: c.subject.statusChange(title, status),
+				bodyHtml: renderTemplate(tpl.statusChange, { title, status, statusInfo: c.statusInfo[newStatus] ?? '' }),
+				note: extra.message ? { label: c.noteFromVenue, text: extra.message } : null,
+			};
+		},
+		link: res ? { url: await clientReservationUrl(db, orgId, res.id), label: (c) => c.cta.viewBooking } : null,
+	});
+});
 
 // The venue cancelled a booking with a note (closing a hall) → email the guest.
 // One email carrying the note rather than a status mail plus a "new message" mail.
-// It is a status change, so it honours the org's statusChange switch. Every value is
-// escaped here: the note is free text typed by staff and renderTemplate escapes nothing.
-export async function notifyHallCancellation(
+// It is a status change, so it honours the org's statusChange switch. renderTemplate
+// escapes every value (the note is free text typed by staff).
+export const notifyHallCancellation = inBackground(async function notifyHallCancellation(
 	db: D1Database,
 	orgId: string,
 	userEmail: string,
-	vars: { title: string; hallName: string; date: string; message: string }
-) {
+	vars: { title: string; hallName: string; date: string; message: string },
+	extra: NotifyExtra = {}
+): Promise<void> {
 	const notify = await getNotifyConfig(db, orgId);
 	if (!notify.statusChange) return;
-	const esc = (s: string) => s.replace(/[<>&"]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' }[c] as string));
-	const templates = await getEmailTemplates(db);
-	const html = renderTemplate(templates.hallCancellation, {
-		title: esc(vars.title), hallName: esc(vars.hallName), date: esc(vars.date), message: esc(vars.message),
+	const res = await loadReservation(db, extra.reservationId);
+	await emailClient(db, {
+		orgId, to: userEmail, templateName: 'hallCancellation', res,
+		build: (c, locale, tpl) => ({
+			subject: c.subject.hallCancellation(vars.title),
+			bodyHtml: renderTemplate(tpl.hallCancellation, {
+				title: vars.title, hallName: vars.hallName, message: vars.message,
+				date: res ? eventDate(res.eventDate, locale) : eventDate(vars.date, locale),
+			}),
+		}),
+		link: res ? { url: await clientReservationUrl(db, orgId, res.id), label: (c) => c.cta.reply } : null,
 	});
-	await sendEmail(db, userEmail, `Reservation cancelled: ${vars.title}`, html, 'hallCancellation');
-}
+});
 
-// New message in a ticket thread → email the recipient.
-export async function notifyNewMessage(db: D1Database, orgId: string, recipientEmail: string, ticketSubject: string, senderName: string) {
+// New message in a ticket thread → email the client, with the message itself.
+export const notifyNewMessage = inBackground(async function notifyNewMessage(
+	db: D1Database, orgId: string, recipientEmail: string, ticketSubject: string, senderName: string,
+	extra: NotifyExtra & { message?: string | null } = {}
+): Promise<void> {
 	const notify = await getNotifyConfig(db, orgId);
 	if (!notify.newMessage) return;
-	const templates = await getEmailTemplates(db);
-	const html = renderTemplate(templates.newMessage, { subject: ticketSubject, senderName });
-	await sendEmail(db, recipientEmail, `New message: ${ticketSubject}`, html, 'newMessage');
-}
+	const res = await loadReservation(db, extra.reservationId ?? await ticketReservationId(db, extra.ticketId));
+	const url = res
+		? await clientReservationUrl(db, orgId, res.id)
+		: `${await venueBase(db, orgId)}/halls/messages`;
+	await emailClient(db, {
+		orgId, to: recipientEmail, templateName: 'newMessage', res,
+		build: (c, _locale, tpl) => ({
+			subject: c.subject.newMessage(ticketSubject),
+			bodyHtml: renderTemplate(tpl.newMessage, { subject: ticketSubject, senderName, message: extra.message ?? '' }),
+		}),
+		link: { url, label: (c) => (res ? c.cta.reply : c.cta.viewMessages) },
+	});
+});
 
-export async function sendPasswordResetEmail(db: D1Database, to: string, resetUrl: string): Promise<boolean> {
-	const templates = await getEmailTemplates(db);
-	const html = renderTemplate(templates.passwordReset, { resetUrl });
-	return sendEmail(db, to, 'Hallify – Password Reset', html, 'passwordReset');
-}
+// ── Account emails ──────────────────────────────────────────────────────────
 
-// Platform announcement → email every owner/admin of the targeted orgs.
-export async function sendAnnouncementEmail(
+/** The reset email, in the language of the page it was requested from. On a venue
+ *  site it carries the venue's name. */
+export const sendPasswordResetEmail = inBackground(async function sendPasswordResetEmail(
+	db: D1Database, to: string, resetUrl: string, locale?: EmailLocale
+): Promise<boolean> {
+	const scope = requestScope();
+	const venue = scope?.locals?.domainOrg ?? null;
+	const lang: EmailLocale = locale ?? requestLocale() ?? (await recipientLocale(db, to, venue?.id ?? null));
+	const c = emailCopy(lang);
+	const templates = await getEmailTemplates(db, lang);
+	const brand = venue?.name ?? 'Hallify';
+	const html = renderLayout({
+		locale: lang,
+		brand,
+		subject: c.subject.passwordReset,
+		bodyHtml: renderTemplate(templates.passwordReset, { resetUrl }),
+		cta: { label: c.cta.resetPassword, url: resetUrl },
+		footer: [c.footer.automatic],
+	});
+	const subject = venue ? `${c.subject.passwordReset} – ${venue.name}` : `Hallify – ${c.subject.passwordReset}`;
+	return sendEmail(db, to, subject, html, 'passwordReset', venue ? { fromName: c.via(venue.name) } : {});
+});
+
+export const sendTestEmail = inBackground(async function sendTestEmail(
+	db: D1Database, to: string
+): Promise<{ ok: boolean; error?: string }> {
+	const locale = requestLocale() ?? 'sk';
+	const c = emailCopy(locale);
+	const templates = await getEmailTemplates(db, locale);
+	const html = renderLayout({ locale, brand: 'Hallify', subject: c.subject.testEmail, bodyHtml: renderTemplate(templates.testEmail, {}), footer: [c.footer.automatic] });
+	const ok = await sendEmail(db, to, c.subject.testEmail, html, 'testEmail');
+	if (ok) return { ok: true };
+	const health = await getEmailHealth(db);
+	return {
+		ok: false,
+		error: health.lastError
+			? `${health.lastError} — check the BREVO_API_KEY secret and that hallify.sk is an authenticated sender in Brevo.`
+			: 'Check the BREVO_API_KEY secret and that hallify.sk is an authenticated sender in Brevo.',
+	};
+});
+
+// Platform announcement → email every owner/admin of the targeted orgs, each in
+// their own language (the announcement text itself is as the admin wrote it).
+export const sendAnnouncementEmail = inBackground(async function sendAnnouncementEmail(
 	db: D1Database,
 	orgIds: string[],
 	opts: { level: string; title: string; body: string }
-): Promise<void> {
-	if (!orgIds.length) return;
-	const safe = (s: string) => String(s).replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c] as string));
+): Promise<{ sent: number; failed: number }> {
+	const result = { sent: 0, failed: 0 };
+	if (!orgIds.length) return result;
 	const accent = ({ info: '#a6225e', success: '#2f7a52', warning: '#955f10', error: '#c3362c' } as Record<string, string>)[opts.level] ?? '#a6225e';
-	const html = `
-	<div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;max-width:520px;margin:0 auto;padding:24px;color:#202322">
-		<div style="border-left:4px solid ${accent};padding-left:14px;margin-bottom:16px">
-			<h2 style="font-size:19px;font-weight:800;margin:0 0 6px">${safe(opts.title)}</h2>
-			<div style="font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:${accent};font-weight:700">${safe(opts.level)}</div>
-		</div>
-		<p style="font-size:14px;line-height:1.6;color:#454a45;white-space:pre-wrap;margin:0">${safe(opts.body)}</p>
-		<p style="font-size:12px;color:#878f87;margin:22px 0 0">— The Hallify team</p>
-	</div>`;
+	const build = (locale: EmailLocale) => {
+		const c = emailCopy(locale);
+		const subject = c.subject.announcement(opts.title);
+		const bodyHtml = `<div style="border-left:4px solid ${accent};padding-left:14px;margin:0 0 16px">
+<h2>${escapeHtml(opts.title)}</h2>
+<div style="font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:${accent};font-weight:700">${escapeHtml(c.announcement.level[opts.level] ?? opts.level)}</div>
+</div>
+<blockquote style="border-left:0;background:none;padding:0">${escapeHtml(opts.body)}</blockquote>
+<p>${escapeHtml(c.announcement.signOff)}</p>`;
+		return { subject, html: renderLayout({ locale, brand: 'Hallify', subject, bodyHtml, cta: { label: 'Hallify', url: appBase() + '/app' }, footer: [c.footer.automatic] }) };
+	};
 	// De-dupe recipients across orgs (an owner of two targeted orgs gets one email).
 	const seen = new Set<string>();
 	for (const orgId of orgIds) {
-		const recipients = await dbAll<{ email: string }>(db,
-			`SELECT u.email FROM organization_members m JOIN users u ON u.id = m.user_id
-			 WHERE m.org_id = ? AND m.role IN ('owner', 'admin')`, orgId);
+		let recipients: Array<{ email: string; locale?: string | null }>;
+		const sql = (withLocale: boolean) => `SELECT u.email${withLocale ? ', u.locale' : ''} FROM organization_members m JOIN users u ON u.id = m.user_id
+			 WHERE m.org_id = ? AND m.role IN ('owner', 'admin')`;
+		try { recipients = await dbAll(db, sql(true), orgId); } catch { recipients = await dbAll(db, sql(false), orgId); }
+		const fallback = (await orgDefaultLocale(db, orgId)) ?? 'sk';
 		for (const r of recipients) {
 			if (!r.email || seen.has(r.email)) continue;
 			seen.add(r.email);
-			await sendEmail(db, r.email, `Hallify announcement: ${opts.title}`, html, 'announcement');
+			const { subject, html } = build(isUserLocale(r.locale) ? r.locale : fallback);
+			if (await sendEmail(db, r.email, subject, html, 'announcement')) result.sent++;
+			else result.failed++;
 		}
 	}
-}
+	return result;
+});
 
-// Organization invite → email the invited address with the accept link.
-export async function sendOrgInviteEmail(
+// Organization invite → email the invited address with the accept link, in the
+// invitee's language when they already have an account, else the inviter's.
+export const sendOrgInviteEmail = inBackground(async function sendOrgInviteEmail(
 	db: D1Database,
 	to: string,
-	opts: { orgName: string; inviterName: string; role: string; inviteUrl: string }
+	opts: { orgName: string; inviterName: string; role: string; inviteUrl: string },
+	locale?: EmailLocale
 ): Promise<boolean> {
-	const safe = (s: string) => String(s).replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c] as string));
-	const html = `
-	<div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;max-width:480px;margin:0 auto;padding:24px;color:#202322">
-		<h2 style="font-size:20px;font-weight:800;margin:0 0 12px">You've been invited to ${safe(opts.orgName)}</h2>
-		<p style="font-size:14px;line-height:1.6;color:#5d635d;margin:0 0 8px">
-			${safe(opts.inviterName)} invited you to join <strong>${safe(opts.orgName)}</strong> on Hallify as a <strong>${safe(opts.role)}</strong>.
-		</p>
-		<p style="font-size:14px;line-height:1.6;color:#5d635d;margin:0 0 20px">
-			Click below to accept. If you don't have an account yet, you'll be able to create one.
-		</p>
-		<a href="${opts.inviteUrl}" style="display:inline-block;background:#f05ca1;color:#27131c;text-decoration:none;font-weight:700;font-size:14px;padding:11px 22px;border-radius:12px">
-			Accept invitation
-		</a>
-		<p style="font-size:12px;color:#878f87;margin:22px 0 0">
-			Or paste this link into your browser:<br><span style="word-break:break-all">${opts.inviteUrl}</span>
-		</p>
-		<p style="font-size:12px;color:#878f87;margin:14px 0 0">This invitation expires in 7 days.</p>
-	</div>`;
-	return sendEmail(db, to, `You've been invited to ${opts.orgName} on Hallify`, html, 'orgInvite');
-}
+	const lang: EmailLocale = locale ?? (await storedLocaleForEmail(db, to)) ?? requestLocale() ?? 'sk';
+	const c = emailCopy(lang);
+	const role = c.orgInvite.roles[opts.role] ?? opts.role;
+	const subject = c.subject.orgInvite(opts.orgName);
+	const bodyHtml = `<h2>${escapeHtml(c.orgInvite.heading(opts.orgName))}</h2>
+<p>${c.orgInvite.intro(escapeHtml(opts.inviterName || c.orgInvite.someone), escapeHtml(opts.orgName), escapeHtml(role))}</p>
+<p>${escapeHtml(c.orgInvite.body)}</p>`;
+	const html = renderLayout({
+		locale: lang,
+		brand: opts.orgName,
+		subject,
+		bodyHtml,
+		cta: { label: c.cta.acceptInvite, url: opts.inviteUrl },
+		linkFallback: c.footer.linkFallback,
+		footer: [c.orgInvite.expires, c.footer.automatic],
+	});
+	return sendEmail(db, to, subject, html, 'orgInvite', { fromName: c.via(opts.orgName) });
+});
 
-const esc = (s: string) => String(s).replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c] as string));
+const esc = escapeHtml;
 
 // Reservation event invite → email a person who doesn't have a client account yet,
 // with a link to set a password and become the event's owner. Localized to the
 // organization's preferred language.
-export async function sendReservationInviteEmail(
+export const sendReservationInviteEmail = inBackground(async function sendReservationInviteEmail(
 	db: D1Database,
 	to: string,
 	opts: { firstName: string; orgName: string; inviterName: string; eventTitle: string; hallName: string; date: string; inviteUrl: string },
@@ -345,7 +868,6 @@ export async function sendReservationInviteEmail(
 			event: 'Event', hall: 'Hall', date: 'Date',
 			cta: 'Create my account',
 			body: `Click below to create your account — your name and email are already filled in, so you only need to choose a password. You'll then become the owner of this event.`,
-			or: 'Or paste this link into your browser:',
 			expires: 'This invitation expires in 14 days.',
 		}
 		: {
@@ -355,33 +877,24 @@ export async function sendReservationInviteEmail(
 			event: 'Udalosť', hall: 'Sála', date: 'Dátum',
 			cta: 'Vytvoriť účet',
 			body: `Kliknutím nižšie si vytvoríte účet — vaše meno aj e-mail sú už vyplnené, stačí si zvoliť heslo. Následne sa stanete vlastníkom tejto udalosti.`,
-			or: 'Alebo skopírujte tento odkaz do prehliadača:',
 			expires: 'Platnosť pozvánky je 14 dní.',
 		};
-
-	const html = `
-	<div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;max-width:480px;margin:0 auto;padding:24px;color:#202322">
-		<h2 style="font-size:20px;font-weight:800;margin:0 0 12px">${tx.heading}</h2>
-		<p style="font-size:14px;line-height:1.6;color:#5d635d;margin:0 0 16px">${tx.intro}</p>
-		<div style="background:#f9f9f7;border:1px solid #dfe2dd;border-radius:10px;padding:14px 16px;margin:0 0 18px;font-size:14px;color:#454a45">
-			<div style="margin:0 0 4px"><strong>${tx.event}:</strong> ${esc(opts.eventTitle)}</div>
-			<div style="margin:0 0 4px"><strong>${tx.hall}:</strong> ${esc(opts.hallName)}</div>
-			<div><strong>${tx.date}:</strong> ${esc(opts.date)}</div>
-		</div>
-		<p style="font-size:14px;line-height:1.6;color:#5d635d;margin:0 0 20px">${tx.body}</p>
-		<a href="${opts.inviteUrl}" style="display:inline-block;background:#f05ca1;color:#27131c;text-decoration:none;font-weight:700;font-size:14px;padding:11px 22px;border-radius:12px">
-			${tx.cta}
-		</a>
-		<p style="font-size:12px;color:#878f87;margin:22px 0 0">
-			${tx.or}<br><span style="word-break:break-all">${opts.inviteUrl}</span>
-		</p>
-		<p style="font-size:12px;color:#878f87;margin:14px 0 0">${tx.expires}</p>
-	</div>`;
-	return sendEmail(db, to, tx.subject, html, 'reservationInvite');
-}
+	const c = emailCopy(locale);
+	const html = renderLayout({
+		locale,
+		brand: opts.orgName,
+		subject: tx.subject,
+		bodyHtml: `<h2>${tx.heading}</h2>\n<p>${tx.intro}</p>\n<p>${tx.body}</p>`,
+		details: [[tx.event, opts.eventTitle], [tx.hall, opts.hallName], [tx.date, opts.date]],
+		cta: { label: tx.cta, url: opts.inviteUrl },
+		linkFallback: c.footer.linkFallback,
+		footer: [tx.expires, c.footer.sentBy(opts.orgName)],
+	});
+	return sendEmail(db, to, tx.subject, html, 'reservationInvite', { fromName: c.via(opts.orgName) });
+});
 
 // Existing client was added to an org-created event → notify them with a link to it.
-export async function notifyEventAssigned(
+export const notifyEventAssigned = inBackground(async function notifyEventAssigned(
 	db: D1Database,
 	to: string,
 	opts: { orgName: string; eventTitle: string; hallName: string; date: string; eventUrl: string },
@@ -402,19 +915,16 @@ export async function notifyEventAssigned(
 			event: 'Udalosť', hall: 'Sála', date: 'Dátum',
 			cta: 'Zobraziť udalosť',
 		};
-
-	const html = `
-	<div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;max-width:480px;margin:0 auto;padding:24px;color:#202322">
-		<h2 style="font-size:20px;font-weight:800;margin:0 0 12px">${tx.heading}</h2>
-		<p style="font-size:14px;line-height:1.6;color:#5d635d;margin:0 0 16px">${tx.intro}</p>
-		<div style="background:#f9f9f7;border:1px solid #dfe2dd;border-radius:10px;padding:14px 16px;margin:0 0 18px;font-size:14px;color:#454a45">
-			<div style="margin:0 0 4px"><strong>${tx.event}:</strong> ${esc(opts.eventTitle)}</div>
-			<div style="margin:0 0 4px"><strong>${tx.hall}:</strong> ${esc(opts.hallName)}</div>
-			<div><strong>${tx.date}:</strong> ${esc(opts.date)}</div>
-		</div>
-		<a href="${opts.eventUrl}" style="display:inline-block;background:#f05ca1;color:#27131c;text-decoration:none;font-weight:700;font-size:14px;padding:11px 22px;border-radius:12px">
-			${tx.cta}
-		</a>
-	</div>`;
-	return sendEmail(db, to, tx.subject, html, 'eventAssigned');
-}
+	const c = emailCopy(locale);
+	const html = renderLayout({
+		locale,
+		brand: opts.orgName,
+		subject: tx.subject,
+		bodyHtml: `<h2>${tx.heading}</h2>\n<p>${tx.intro}</p>`,
+		details: [[tx.event, opts.eventTitle], [tx.hall, opts.hallName], [tx.date, opts.date]],
+		cta: { label: tx.cta, url: opts.eventUrl },
+		linkFallback: c.footer.linkFallback,
+		footer: [c.footer.sentBy(opts.orgName)],
+	});
+	return sendEmail(db, to, tx.subject, html, 'eventAssigned', { fromName: c.via(opts.orgName) });
+});
