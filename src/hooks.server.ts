@@ -7,6 +7,8 @@ import { runCleanup } from '$lib/cleanup';
 import { getPlan } from '$lib/plans';
 import type { PlanId } from '$lib/plans';
 import { env } from '$env/dynamic/private';
+import { runInRequestScope, keepAlive } from '$lib/server/background';
+import { canonicalRedirect, needsOriginCheck, originAllowed, redirectStatus } from '$lib/server/edge';
 import { sequence } from '@sveltejs/kit/hooks';
 import type { Handle } from '@sveltejs/kit';
 import type { Branding, OrgContext } from './app.d';
@@ -280,7 +282,6 @@ const appHandle: Handle = async ({ event, resolve }) => {
       : platformBranding;
     autoCompletePastEvents(db);
     housekeeping(db, event.platform?.context);
-  housekeeping(db, event.platform?.context);
     return resolveWithLocale(event, resolve, domainOrg?.id ?? null, db);
   }
 
@@ -382,4 +383,38 @@ const securityHeaders: Handle = async ({ event, resolve }) => {
   return response;
 };
 
-export const handle: Handle = sequence(securityHeaders, appHandle);
+/** Canonical scheme and host, and the Origin check on API writes. Runs first, so a
+ *  login form on http:// is redirected before anything can be posted to it.
+ *
+ *  Production had no http→https redirect at all (HSTS only helps after a first
+ *  https visit), and www.hallify.sk served a second copy of the site with its own
+ *  canonical. Local and preview hosts are never redirected (see isDevHost). */
+const edgeRules: Handle = async ({ event, resolve }) => {
+  const target = canonicalRedirect(event.url, event.request.headers, env.HALLIFY_DOMAIN ?? 'hallify.app');
+  if (target) {
+    return new Response(null, { status: redirectStatus(event.request.method), headers: { Location: target } });
+  }
+
+  // SvelteKit's CSRF check only covers form submissions; the JSON endpoints under
+  // /api relied on CORS preflight alone. Refuse a cross-site write outright.
+  if (needsOriginCheck(event.request.method, event.url.pathname) && !originAllowed(event.request.headers, event.url)) {
+    return new Response(JSON.stringify({ error: 'Cross-site request refused' }), {
+      status: 403,
+      headers: { 'content-type': 'application/json' },
+    });
+  }
+
+  // Everything below runs inside a request scope, so background work (notification
+  // emails) is kept alive with waitUntil after the response is sent.
+  const ctx = event.platform?.context;
+  return runInRequestScope(
+    {
+      waitUntil: ctx ? (p) => ctx.waitUntil(p) : undefined,
+      url: event.url,
+      locals: event.locals,
+    },
+    () => resolve(event),
+  );
+};
+
+export const handle: Handle = sequence(edgeRules, securityHeaders, appHandle);
