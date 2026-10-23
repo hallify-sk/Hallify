@@ -6,6 +6,8 @@ import { unreadAnnouncementCount } from '$lib/announcements';
 import { loadPlatformAnalytics } from '$lib/server/platform-settings';
 import { container, cspOrigins, type AnalyticsContainer } from '$lib/analytics-servers';
 import { assistantVisible } from '$lib/server/ai/credits';
+import { orgPermissionList } from '$lib/server/nav-access';
+import { orgPublicBaseUrl } from '$lib/orgUrl';
 
 /** The GTM containers on THIS page, in load order.
  *
@@ -39,7 +41,7 @@ async function resolveContainers(locals: App.Locals): Promise<AnalyticsContainer
   return out;
 }
 
-export const load: LayoutServerLoad = async ({ locals }) => {
+export const load: LayoutServerLoad = async ({ locals, url }) => {
   let unreadMessages = 0;
   let unreadAnnouncements = 0;
   let orgs: { id: string; name: string; slug: string; role: string }[] = [];
@@ -95,6 +97,22 @@ export const load: LayoutServerLoad = async ({ locals }) => {
     locale: locals.locale,
   };
 
+  // The console sidebar shows each link by the permission its page requires.
+  const navPermissions = await orgPermissionList(locals);
+
+  // "Public site" in the sidebar: on the venue's own host that is its /halls; on the
+  // apex it is the venue's own domain (null on localhost, where there is none).
+  let venueSiteUrl: string | null = null;
+  if (locals.currentOrg && locals.user?.account_type !== 'client') {
+    if (locals.domainOrg) venueSiteUrl = '/halls';
+    else {
+      try {
+        const base = await orgPublicBaseUrl(locals.db, locals.currentOrg.id, url);
+        venueSiteUrl = base ? `${base}/halls` : null;
+      } catch { /* no link rather than a broken page */ }
+    }
+  }
+
   const analyticsContainers = await resolveContainers(locals);
   // Read back by the security-header hook, which lets these origins through the CSP.
   locals.analyticsOrigins = cspOrigins(analyticsContainers);
@@ -113,6 +131,8 @@ export const load: LayoutServerLoad = async ({ locals }) => {
     allOrgs,
     unreadMessages,
     unreadAnnouncements,
+    navPermissions,
+    venueSiteUrl,
     // The floating AI assistant (bottom right of every console page).
     assistant: await assistantVisible(locals),
   };

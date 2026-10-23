@@ -165,6 +165,8 @@
 				onBubble={data.onBubble ?? false}
 				unreadMessages={liveUnreadMessages}
 				unreadAnnouncements={liveUnreadAnnouncements}
+				permissions={data.navPermissions ?? []}
+				venueSiteUrl={data.venueSiteUrl ?? null}
 			/>
 		{/if}
 		<main class="app-main" class:full-page={isAuthPage}>

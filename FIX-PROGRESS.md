@@ -9,3 +9,6 @@ Branch: fix/shell
 | B167 | done | The stored/OS theme is applied only on console paths (/app/*, not the site-builder preview) in app.html and the root layout; leaving the console removes data-theme, so the venue site stays light. |
 | B156 | done | Org switcher (and the sidebar user menu) close after every navigation (afterNavigate) and on Escape. Only the switcher part was in scope. |
 | I28 | done | Org switcher shows each org's slug next to the role, and the slug in the button tooltip, so same-named orgs can be told apart. |
+| B36 | done | Root layout loads the member's effective permissions (same resolution as requireOrgPermission, in $lib/server/nav-access); $lib/console-nav maps each sidebar link to the guard of its page, so custom roles see their pages and plain members see none. |
+| B78 | done | Sidebar "Verejná stránka" goes to the venue's /halls on its own host and, from the apex, to its own domain (orgPublicBaseUrl + /halls, new tab); "Hľadať priestor" stays for the apex venue search. |
+| B105 | done | Owners/admins get a "Tímový chat" link to /app/messages next to the client inbox (only the sidebar link is ours). |

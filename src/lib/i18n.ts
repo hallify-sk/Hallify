@@ -1069,6 +1069,10 @@ export const sk = {
 	sidebar: {
 		publicSite: "Hľadať priestor",
 		publicSiteOrg: "Verejná stránka",
+		opensInNewTab: "otvorí sa na novej karte",
+		teamChat: "Tímový chat",
+		openMenu: "Otvoriť menu",
+		closeMenu: "Zavrieť menu",
 		settings: "Nastavenia",
 		sectionAdmin: "Prevádzka",
 		sectionOrganization: "Organizácia",
@@ -3885,6 +3889,10 @@ export const en: typeof sk = {
 	sidebar: {
 		publicSite: "Find a venue",
 		publicSiteOrg: "Public site",
+		opensInNewTab: "opens in a new tab",
+		teamChat: "Team chat",
+		openMenu: "Open menu",
+		closeMenu: "Close menu",
 		settings: "Settings",
 		sectionAdmin: "Operations",
 		sectionOrganization: "Organization",
