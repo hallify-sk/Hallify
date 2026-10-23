@@ -1,11 +1,7 @@
-import { redirect, fail } from '@sveltejs/kit';
+import { redirect, fail, error } from '@sveltejs/kit';
 import { loginUrl } from '$lib/login-redirect';
 import type { PageServerLoad, Actions } from './$types';
-import {
-  createCheckoutSession, createPortalSession, cancelSubscription, resumeSubscription,
-  getSubscription, changeSubscriptionPlan, cancelScheduledChange, getPendingPlanChange,
-  previewPlanChange,
-} from '$lib/stripe';
+import { createCheckoutSession, createPortalSession, cancelSubscription, resumeSubscription, getSubscription, changeSubscriptionPlan, cancelScheduledChange, getPendingPlanChange, previewPlanChange, createTestCheckoutSession } from '$lib/stripe';
 import { dbFirst } from '$lib/db/index';
 import { PLANS, comparePlanPrice } from '$lib/plans';
 import { st } from '$lib/i18n-server';
@@ -103,6 +99,8 @@ export const load: PageServerLoad = async ({ locals, url }) => {
   return {
     currentOrg: org,
     canManage,
+    // The €1 test payment is offered to platform admins only.
+    isPlatformAdmin: !!locals.user?.is_platform_admin,
     canManageSettings: await memberCan(locals, 'settings.manage'),
     setupRequest: await openSetupRequest(locals.db, org.id),
     setupPriceCents: SETUP_SERVICE_PRICE_CENTS,
@@ -178,6 +176,24 @@ export const actions: Actions = {
     }));
     if (!res.ok) return fail(502, { error: res.error });
     redirect(303, res.value === 'upgraded' ? '/app/billing?upgraded=1' : '/app/billing?downgrade_scheduled=1');
+  },
+
+  // Platform admins only: a live €1 Checkout (Starter, marked test) that proves the
+  // whole payment path end to end. Only from Free without a subscription, so it can
+  // never start a second subscription next to a real one.
+  testPayment: async ({ locals }) => {
+    if (!locals.user?.is_platform_admin) error(403, 'Forbidden');
+    const org = await requireOrgPermission(locals, 'billing.manage');
+    if (org.subscription.plan !== 'free' || (await getSubId(locals.db, org.id))) {
+      return fail(400, { error: st(locals.locale).billingTest.onlyFromFree });
+    }
+    const res = await viaStripe(locals, 'test checkout', () => createTestCheckoutSession({
+      orgId:            org.id,
+      stripeCustomerId: org.subscription.stripeCustomerId,
+      userEmail:        locals.user!.email,
+    }));
+    if (!res.ok) return fail(502, { error: res.error });
+    redirect(303, res.value);
   },
 
   // Undo a scheduled period-end downgrade — stay on the current plan.

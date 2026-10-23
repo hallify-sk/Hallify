@@ -1667,6 +1667,14 @@ export const sk = {
 		dimensionsLead: "Odosielajú sa raz na stránku ako user_data, takže podľa nich viete filtrovať ktorúkoľvek udalosť vyššie.",
 		consentNote: "Nič sa neodosiela, kým návštevník neudelí súhlas. Na vašej doméne beží váš kontajner a popri ňom aj kontajner Hallify, ktorý meria, koľko návštev a rezervácií vám Hallify prináša. Každý posiela údaje do svojej vlastnej služby.",
 	},
+	billingTest: {
+		title: 'Testovacia platba (len pre správcov platformy)',
+		lead: 'Skutočná platba 1 € kartou cez Stripe za plán Starter, označená ako test. Overí celú cestu: Checkout, webhook a aktiváciu plánu. Po teste zrušte predplatné cez „Spravovať“ a 1 € vráťte v Stripe.',
+		price: '1,00 € mesačne · Starter (test)',
+		cta: 'Zaplatiť 1 € (test)',
+		opening: 'Otvára sa Stripe…',
+		onlyFromFree: 'Test sa dá spustiť len z bezplatného plánu, keď organizácia nemá predplatné.',
+	},
 	setupService: {
 		title: "Nastavíme vám to my",
 		lead: "Nemáte čas prechádzať zoznamom vyššie? Prejdeme ho za vás a odovzdáme vám hotový účet.",
@@ -5067,6 +5075,14 @@ export const en: typeof sk = {
 		dimensionsTitle: "Visitor dimensions",
 		dimensionsLead: "Sent once per page as user_data, so any event above can be sliced by them.",
 		consentNote: "Nothing is sent until the visitor consents. On your domain your container runs, and beside it Hallify's, which measures how many visits and bookings Hallify brings you. Each sends data to its own property.",
+	},
+	billingTest: {
+		title: 'Test payment (platform admins only)',
+		lead: 'A real €1 card payment through Stripe for the Starter plan, marked as a test. It proves the whole path: Checkout, the webhook and plan activation. After the test, cancel the subscription via “Manage” and refund the €1 in Stripe.',
+		price: '€1.00 a month · Starter (test)',
+		cta: 'Pay €1 (test)',
+		opening: 'Opening Stripe…',
+		onlyFromFree: 'The test can only start from the Free plan, when the organisation has no subscription.',
 	},
 	setupService: {
 		title: "Have us set it up",

@@ -45,5 +45,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
     orgName: org.name,
     sessionId: session.id,
     value: session.amount_total != null ? session.amount_total / 100 : null,
+    // The platform-admin €1 test (see createTestCheckoutSession) is not a sale.
+    test: session.metadata?.test === '1',
   };
 };
