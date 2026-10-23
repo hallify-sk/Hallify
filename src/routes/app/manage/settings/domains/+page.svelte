@@ -1,6 +1,7 @@
 <script lang="ts">
   import { enhance } from '$app/forms';
-  import { t } from '$lib/i18n.svelte';
+  import { t, getLocale } from '$lib/i18n.svelte';
+  import { formatDate as fmt } from '$lib/format';
   import type { PageData, ActionData } from './$types';
 
   interface Props { data: PageData; form: ActionData; }
@@ -9,9 +10,7 @@
   let domainInput = $state('');
   let confirmDelete = $state<string | null>(null);
 
-  function formatDate(d: Date | string) {
-    return new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
-  }
+  const formatDate = (d: string) => fmt(d, getLocale());
 </script>
 
 <svelte:head><title>{t.settingsPages.domains} – {t.settings.title} – Hallify</title></svelte:head>
@@ -32,13 +31,6 @@
       <a href="https://{data.subdomain}" target="_blank" rel="noopener">{data.subdomain}</a>
     </div>
     <p class="dns-title" style="margin-top:10px">{t.settingsPages.includedEveryPlan}</p>
-
-    {#if !data.cfEnabled}
-      <div class="notice-warn">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;margin-top:1px"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-        <span>{t.settingsPages.cfNotConfiguredPre} (<code>CF_ZONE_ID</code> / <code>CF_API_TOKEN</code> {t.settingsPages.cfNotConfiguredPost}</span>
-      </div>
-    {/if}
   </section>
 
   <!-- ── Add custom domain (paid only) ── -->
@@ -48,7 +40,15 @@
         <h2>{t.settingsPages.addCustomDomain}</h2>
       </div>
       {#if form?.error}
-        <div class="alert-error">{form.error}</div>
+        <div class="alert-error" role="alert">{form.error}</div>
+      {/if}
+      <!-- Automatic connection needs Cloudflare for SaaS on our side. Without it the
+           owner is told plainly what happens, not which environment variable is missing. -->
+      {#if !data.cfEnabled}
+        <div class="notice-warn notice-top">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;margin-top:1px"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          <span>{t.settingsPages.domainsManualSetup}</span>
+        </div>
       {/if}
       <form method="POST" action="?/add" use:enhance class="add-form">
         <div class="add-input-wrap">
@@ -70,7 +70,11 @@
         <ol class="dns-steps">
           <li>{t.settingsPages.dnsStep1Pre} <strong>CNAME</strong> {t.settingsPages.dnsStep1Post}</li>
           <li>{t.settingsPages.dnsStep2Pre} <code>fallback.hallify.sk</code>.</li>
-          <li>{t.settingsPages.dnsStep3Pre} <strong>{t.settingsPages.refreshStatus}</strong> {t.settingsPages.dnsStep3Post}</li>
+          {#if data.cfEnabled}
+            <li>{t.settingsPages.dnsStep3Pre} <strong>{t.settingsPages.refreshStatus}</strong> {t.settingsPages.dnsStep3Post}</li>
+          {:else}
+            <li>{t.settingsPages.dnsStep3Manual}</li>
+          {/if}
         </ol>
       </div>
     </section>
@@ -117,6 +121,9 @@
                   · <span class="meta-note">{t.settingsPages.cfNotLinked}</span>
                 {/if}
               </div>
+              {#if !d.verified_at}
+                <p class="domain-pending">{t.settingsPages.domainPendingHint}</p>
+              {/if}
             </div>
 
             <div class="domain-right">
@@ -254,6 +261,8 @@
   .domain-name a:hover { color: var(--accent-ink); }
   .domain-meta { font-size: 11px; color: var(--text-subtle); margin-top: 2px; padding-left: 20px; }
   .meta-note { color: var(--text-subtle); }
+  .domain-pending { font-size: 11.5px; line-height: 1.5; color: var(--text-muted); margin: 4px 0 0; padding-left: 20px; max-width: 60ch; }
+  .notice-top { margin: 0 0 14px; }
 
   .domain-right { display: flex; align-items: center; gap: 7px; flex-shrink: 0; }
 

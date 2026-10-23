@@ -30,3 +30,5 @@
 | I7 | done | Users: search, account-type filter and column; orgs: plan/status filters; announcement picker: search + slug. |
 | I18 | done | Announcements: edit, expiry date, live preview; "all" reaches only orgs that existed when published. |
 | I19 | done | "Paid" counts Stripe-backed subscriptions only, manual plans shown apart, partners = is_hallify_partner. |
+| B81 | partial | Strict hostname validation (rejects -bad-.sk, a..b.sk; pasted URLs tidied), clear pending-verification explanation, unverified claims expire after 7 days so a squatter cannot block the owner. Real ownership verification needs Cloudflare for SaaS (owner). |
+| I17 | done | No CF_ZONE_ID jargon: plain notice when connection is manual, refresh step only when automatic, "čaká na pripojenie" label. |
