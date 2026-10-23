@@ -2718,3 +2718,23 @@
   .marketing .plan-link:hover,
   .marketing .explorer-back:hover { gap: inherit; }
 }
+
+/* Venue cards. Booking happens on the venue's own site, so a bookable card links
+   straight there; "Detail" is a real link to the indexable venue page. The top line
+   wraps instead of running the place into the partner label ("BratislavaPartner
+   Hallify"), and stays legible on a phone instead of dropping to 8px. */
+.marketing .explorer-result-actions{display:inline-flex;align-items:center;gap:14px;flex-shrink:0}
+.marketing .explorer-result-footer a{display:inline-flex;align-items:center;gap:7px;font-size:9px;color:var(--accent-ink);padding:3px 0;white-space:nowrap}
+.marketing .explorer-result-actions>a:first-child:not(:last-child){font-weight:650}
+.marketing .venue-card-actions{display:flex;align-items:center;justify-content:space-between;gap:12px;padding-top:12px}
+.marketing .venue-card-actions .show-on-map{padding:0}
+.marketing .venue-book-link{display:inline-flex;align-items:center;gap:6px;margin-left:auto;font-size:10px;font-weight:650;color:var(--accent-ink)}
+.marketing .venue-topline{flex-wrap:wrap;row-gap:3px}
+.marketing .venue-topline .venue-place{min-width:0;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+@media(max-width:480px){
+  .marketing .venue-topline{display:flex;font-size:10px;line-height:1.5}
+}
+@media(max-width:800px){
+  .marketing .explorer-result-copy small,.marketing .explorer-result-copy>span.result-features{font-size:10px}
+  .marketing .explorer-result-copy>span,.marketing .explorer-result-footer,.marketing .explorer-result-footer a,.marketing .explorer-result-footer button,.marketing .explorer-result-count{font-size:11px}
+}

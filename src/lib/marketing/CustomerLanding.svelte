@@ -2,7 +2,7 @@
   import Icon from './Icon.svelte';
   import { onMount, untrack } from 'svelte';
   import { reveal } from './reveal';
-  import { getLocale } from '$lib/i18n.svelte';
+  import { getLocale, t } from '$lib/i18n.svelte';
   import { goto, replaceState } from '$app/navigation';
   import { dev } from '$app/environment';
   import { DEFAULT_CENTER, demoVenues, distanceKm, filterVenues, featuredVenues } from './discovery';
@@ -12,7 +12,7 @@
   import SelectedVenue from './SelectedVenue.svelte';
   import VenueMap from './VenueMap.svelte';
   import { hasCoordinates } from '$lib/venue-location';
-  import { venueHref, PRICE_BANDS, priceBandLabel, priceGlyphs, type PriceBand, type PublicVenue } from './types';
+  import { venueHref, bookingHref, PRICE_BANDS, priceBandLabel, priceGlyphs, type PriceBand, type PublicVenue } from './types';
   let { halls, initialQuery = '', initialGuests = 0, initialDemo = dev }: { halls: PublicVenue[]; initialQuery?: string; initialGuests?: number; initialDemo?: boolean } = $props();
   const en = $derived(getLocale() === 'en');
   let query = $state(untrack(() => initialQuery)), guests = $state(untrack(() => initialGuests)), floorplanOnly = $state(false);
@@ -20,6 +20,8 @@
   let activeId = $state<string | null>(null), demo = $state(untrack(() => initialDemo));
   let preview: { open: (venue: PublicVenue) => void };
   let selectionRevision = $state(0);
+  // Covers that failed to load: the card shows the placeholder instead of the alt text.
+  let failedCovers = $state<Record<string, true>>({});
   // Where "near" means, in order of preference: the place that was searched for, then
   // the visitor's own position, then nowhere -- which makes featuredVenues rotate
   // fairly instead of silently ranking everyone around the map origin.
@@ -79,11 +81,14 @@
 
 {#snippet venueCards(collection: PublicVenue[], highlight: boolean)}
 <div class="venue-results">{#each collection as venue (venue.id)}<article class="venue-card" class:venue-active={active?.id === venue.id} class:venue-featured={highlight}>
-      <a class="venue-photo" href={venueHref(venue)} onclick={(event) => { if (venue.demo) { event.preventDefault(); preview.open(venue); } }}>{#if venue.cover_image_url}<img src={venue.cover_image_url} alt={venue.name} loading="lazy" width="440" height="280">{:else}<div class="no-photo"><img src="/Hallify.svg" alt="" width="45" height="45"><span>{en ? 'Explore venue details' : 'Spoznajte priestor'}</span></div>{/if}</a>
-      <div class="venue-topline"><span>{venue.demo ? (en ? "Demo venue" : "Ukážkový priestor") : venue.address}</span>{#if venue.is_partner}<span class="partner-label">{en ? "Hallify partner" : "Partner Hallify"}</span>{:else if venue.has_floorplan}<span class="partner-label">{en ? 'Floorplan available' : 'S pôdorysom'}</span>{/if}</div>
+      <a class="venue-photo" href={venueHref(venue)} onclick={(event) => { if (venue.demo) { event.preventDefault(); preview.open(venue); } }}>{#if venue.cover_image_url && !failedCovers[venue.id]}<img src={venue.cover_image_url} alt={venue.name} loading="lazy" width="440" height="280" onerror={() => (failedCovers[venue.id] = true)}>{:else}<div class="no-photo"><img src="/Hallify.svg" alt="" width="45" height="45"><span>{en ? 'Explore venue details' : 'Spoznajte priestor'}</span></div>{/if}</a>
+      <div class="venue-topline">{#if venue.demo || venue.address}<span class="venue-place">{venue.demo ? (en ? "Demo venue" : "Ukážkový priestor") : venue.address}</span>{/if}{#if venue.is_partner}<span class="partner-label">{en ? "Hallify partner" : "Partner Hallify"}</span>{:else if venue.has_floorplan}<span class="partner-label">{en ? 'Floorplan available' : 'S pôdorysom'}</span>{/if}</div>
       <h3><a href={venueHref(venue)} onclick={(event) => { if (venue.demo) { event.preventDefault(); preview.open(venue); } }}>{venue.name}</a></h3><p class="venue-meta">{en ? 'Up to' : 'Do'} {venue.max_people} {en ? 'guests' : 'hostí'}{#if distanceLabel(venue)} · {distanceLabel(venue)}{/if}</p>
       <div class="venue-bottom"><span class="venue-price">{@render priceTag(venue)}</span><a href={venueHref(venue)} onclick={(event) => { if (venue.demo) { event.preventDefault(); preview.open(venue); } }} aria-label={`${en ? 'View' : 'Zobraziť'} ${venue.name}`}><Icon /></a></div>
-      {#if hasCoordinates(venue)}<button class="show-on-map" type="button" onclick={() => { activeId = venue.id; selectionRevision += 1; document.getElementById('main')?.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth' }); }}>{en ? 'Show on map' : 'Zobraziť na mape'}</button>{/if}
+      {#if hasCoordinates(venue) || bookingHref(venue)}<div class="venue-card-actions">
+        {#if hasCoordinates(venue)}<button class="show-on-map" type="button" onclick={() => { activeId = venue.id; selectionRevision += 1; document.getElementById('main')?.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth' }); }}>{en ? 'Show on map' : 'Zobraziť na mape'}</button>{/if}
+        {#if bookingHref(venue)}<a class="venue-book-link" href={bookingHref(venue)} aria-label={`${t.appHalls.bookOnVenueSite}: ${venue.name}`}>{t.appHalls.bookOnVenueSite} <Icon size={14} /></a>{/if}
+      </div>{/if}
     </article>{/each}</div>
 {/snippet}
 

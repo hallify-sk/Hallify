@@ -10,4 +10,5 @@ export const load: PageServerLoad = async ({ locals, url, setHeaders }) => ({
   demo: url.searchParams.has('demo') ? url.searchParams.get('demo') === '1' : undefined,
   canonicalSk: `${url.origin}/priestory`,
   canonicalEn: `${url.origin}/priestory?lang=en`,
+  ogImage: `${url.origin}/marketing/venue-example.jpg`,
 });

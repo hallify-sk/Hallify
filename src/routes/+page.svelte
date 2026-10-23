@@ -13,6 +13,7 @@
   <link rel="canonical" href={en ? data.canonicalEn : data.canonicalSk}>
   <link rel="alternate" hreflang="sk" href={data.canonicalSk}><link rel="alternate" hreflang="en" href={data.canonicalEn}><link rel="alternate" hreflang="x-default" href={data.canonicalSk}>
   <meta property="og:title" content={title}><meta property="og:description" content={description}><meta property="og:type" content="website">
+  <meta property="og:url" content={en ? data.canonicalEn : data.canonicalSk}><meta property="og:image" content={data.ogImage}><meta name="twitter:card" content="summary_large_image">
 </svelte:head>
 <MarketingShell audience="customer">
   {#key `${data.q}:${data.guests}`}<CustomerLanding halls={data.halls} initialQuery={data.q} initialGuests={data.guests} initialDemo={data.demo} />{/key}

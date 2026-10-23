@@ -20,6 +20,7 @@ export const load: PageServerLoad = async ({ locals, url, setHeaders }) => {
     lang,
     canonicalSk: `${origin}/`,
     canonicalEn: `${origin}/?lang=en`,
+    ogImage: `${origin}/marketing/venue-example.jpg`,
     q,
     guests,
     halls,

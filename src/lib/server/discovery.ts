@@ -1,3 +1,4 @@
+import { dbAll } from '$lib/db/index';
 import { getPlan, type PlanId } from '$lib/plans';
 import { isReservedSubdomain } from '$lib/reserved-subdomains';
 
@@ -34,6 +35,31 @@ export const LISTED_HALL_SQL_WITHOUT_COORDINATES = `h.is_public = 1 AND h.plan_l
 export const CUSTOM_DOMAIN_SQL = `(SELECT cd.domain FROM custom_domains cd
     WHERE cd.org_id = o.id AND cd.cf_hostname_id IS NOT NULL
     ORDER BY (cd.verified_at IS NOT NULL) DESC, cd.created_at DESC LIMIT 1)`;
+
+export interface ListedHallRef {
+  slug: string;
+  org_slug: string;
+  allow_reservations: number;
+  plan: string | null;
+  custom_domain: string | null;
+}
+
+/**
+ * Find a listed hall by the identifier the old /app/halls/<id-or-slug> links used,
+ * so they can be redirected. A hall slug is only unique within its organisation, so
+ * a slug that more than one organisation uses resolves to nothing rather than to a
+ * guess; the UUID form, which the directory itself linked to, is always unique.
+ */
+export async function findListedHall(db: App.Locals['db'], idOrSlug: string): Promise<ListedHallRef | null> {
+  const rows = await dbAll<ListedHallRef>(db,
+    `SELECT h.slug, o.slug AS org_slug, h.allow_reservations, s.plan AS plan, ${CUSTOM_DOMAIN_SQL} AS custom_domain
+       FROM halls h JOIN organizations o ON o.id = h.org_id
+       LEFT JOIN subscriptions s ON s.org_id = o.id
+      WHERE (h.id = ? OR h.slug = ?) AND ${LISTED_HALL_SQL}
+      LIMIT 2`,
+    idOrSlug, idOrSlug);
+  return rows.length === 1 ? rows[0] : null;
+}
 
 function isLocalHost(hostname: string): boolean {
   return hostname === 'localhost' || hostname === '127.0.0.1' || hostname.endsWith('.localhost') || hostname.endsWith('.local');
