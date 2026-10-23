@@ -15,6 +15,8 @@ export interface ConsoleNav {
 	console: boolean;
 	halls: boolean;
 	reservations: boolean;
+	/** The client list (D10), built from the reservations: the same permission. */
+	clients: boolean;
 	calendar: boolean;
 	assistant: boolean;
 	/** The client inbox, /app/manage/messages (owner/admin only on the server). */
@@ -35,6 +37,7 @@ export function consoleNav(role: string | null | undefined, permissions: Iterabl
 		console: staff || CONSOLE_PERMISSIONS.some(has),
 		halls: has('halls.manage'),
 		reservations: has('reservations.manage'),
+		clients: has('reservations.manage'),
 		calendar: has('reservations.manage'),
 		assistant: has('ai.use'),
 		clientMessages: staff,

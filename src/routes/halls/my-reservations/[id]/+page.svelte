@@ -1,13 +1,14 @@
 <script lang="ts">
 	import { venueTitle } from '$lib/page-title';
 	import { enhance } from '$app/forms';
-	import { tick } from 'svelte';
+	import { tick, untrack } from 'svelte';
 	import MiniCalendar from '$lib/components/MiniCalendar.svelte';
 	import { statusLabel, statusClass, fmtDate } from '$lib/reservationStatus';
 	import { computeExtras } from '$lib/extras';
 	import { reveal } from '$lib/reveal';
 	import { t, getLocale } from '$lib/i18n.svelte';
 	import { formatDate, formatDateTime, formatMoney } from '$lib/format';
+	import { formatIban } from '$lib/payment';
 	import type { PageData, ActionData } from './$types';
 
 	interface Props { data: PageData; form: ActionData; }
@@ -24,6 +25,27 @@
 	const extrasOverview = $derived(computeExtras(data.extras, data.extrasEditable ? extraSel : data.selectedExtras, r.num_guests));
 
 	let editing = $state(false);
+
+	// Rating the finished event (D5): stars picked here, sent with the comment.
+	let fbRating = $state(untrack(() => data.feedback?.row?.rating ?? 0));
+	let fbHover = $state(0);
+	let fbEditing = $state(untrack(() => !data.feedback?.row));
+	const fbShown = $derived(fbHover || fbRating);
+	const longDate = (d: string) => formatDate(d, getLocale(), { day: 'numeric', month: 'long', year: 'numeric' });
+
+	// Price and payment (D6): shown when the venue stated anything, and always while
+	// the booking waits for payment, so the client knows what is expected of them.
+	const pay = $derived(data.payment);
+	const showPayment = $derived(!!pay && (pay.hasAny || r.status === 'waiting_payment'));
+	const awaitingPayment = $derived(r.status === 'waiting_payment' && pay?.state !== 'paid');
+	let copiedKey = $state('');
+	async function copyValue(key: string, value: string) {
+		try {
+			await navigator.clipboard.writeText(value);
+			copiedKey = key;
+			setTimeout(() => { if (copiedKey === key) copiedKey = ''; }, 2000);
+		} catch { /* clipboard refused: the value is on screen to copy by hand */ }
+	}
 	let confirmCancel = $state(false);
 
 	let eTitle = $state('');
@@ -86,6 +108,7 @@
 		if (scope === 'update' && !editing) return 'page';
 		if (scope === 'cancel' && !data.cancellable) return 'page';
 		if (scope === 'extras' && !data.extrasEditable) return 'page';
+		if (scope === 'feedback' && data.feedback?.state !== 'open') return 'page';
 		return scope;
 	});
 	function errorInView(node: HTMLElement) {
@@ -214,6 +237,56 @@
 			{#if r.description}<div class="full"><dt>{t.myRes.notes}</dt><dd>{r.description}</dd></div>{/if}
 		</dl>
 
+		{#if showPayment && pay}
+			<div class="block pay-box" class:pay-due={awaitingPayment}>
+				<span class="eyebrow extras-title">{t.payment.clientTitle}</span>
+				{#if awaitingPayment}
+					<p class="pay-lead">{pay.hasInstructions || pay.hasAmounts ? t.payment.clientWaiting : t.payment.clientWaitingNoDetails}</p>
+				{/if}
+				{#if pay.hasAny}
+					<dl class="detail-list pay-list">
+						{#if pay.priceCents != null}<div><dt>{t.payment.price}</dt><dd>{eur(pay.priceCents)}</dd></div>{/if}
+						{#if pay.depositCents != null}
+							<div>
+								<dt>{t.payment.deposit}</dt>
+								<dd>{eur(pay.depositCents)}{#if pay.depositDueDate && !pay.depositPaidAt && !pay.paidInFullAt}<span class="pay-sub">{t.payment.dueBy(formatDate(pay.depositDueDate, getLocale(), { day: 'numeric', month: 'long', year: 'numeric' }))}</span>{/if}</dd>
+							</div>
+						{/if}
+						{#if pay.state === 'paid'}
+							<div><dt>{t.payment.statePaid}</dt><dd class="pay-ok">{t.payment.paidOn(formatDate(pay.paidInFullAt, getLocale()))}</dd></div>
+						{:else if pay.state === 'deposit_paid'}
+							<div><dt>{t.payment.stateDepositPaid}</dt><dd class="pay-ok">{formatDate(pay.depositPaidAt, getLocale())}</dd></div>
+							{#if pay.balanceCents != null}<div><dt>{t.payment.balance}</dt><dd>{eur(pay.balanceCents)}</dd></div>{/if}
+						{/if}
+						{#if pay.state !== 'paid'}
+							{#if pay.iban}
+								<div class="full">
+									<dt>{t.payment.iban}</dt>
+									<dd class="pay-copyrow">
+										<span class="mono">{formatIban(pay.iban)}</span>
+										<button type="button" class="pay-copy" onclick={() => copyValue('iban', pay.iban ?? '')}>{copiedKey === 'iban' ? t.payment.copied : t.payment.copy}</button>
+									</dd>
+								</div>
+							{/if}
+							{#if pay.recipient}<div><dt>{t.payment.recipient}</dt><dd>{pay.recipient}</dd></div>{/if}
+							{#if pay.bic}<div><dt>{t.payment.bic}</dt><dd class="mono">{pay.bic}</dd></div>{/if}
+							{#if pay.variableSymbol}
+								<div>
+									<dt>{t.payment.variableSymbol}</dt>
+									<dd class="pay-copyrow">
+										<span class="mono">{pay.variableSymbol}</span>
+										<button type="button" class="pay-copy" onclick={() => copyValue('vs', pay.variableSymbol ?? '')}>{copiedKey === 'vs' ? t.payment.copied : t.payment.copy}</button>
+									</dd>
+								</div>
+							{/if}
+							{#if pay.note}<div class="full"><dt>{t.payment.note}</dt><dd class="pay-note">{pay.note}</dd></div>{/if}
+						{/if}
+					</dl>
+				{/if}
+				<p class="x-note">{t.payment.clientDisclaimer(orgName)}</p>
+			</div>
+		{/if}
+
 		{#if data.canViewSeating}
 			<div class="block event-tools">
 				<span class="eyebrow tools-label">{t.myRes.planYourEvent}</span>
@@ -331,6 +404,58 @@
 	{/if}
 </section>
 
+<!-- ── Rating the finished event (D5): private to the venue ── -->
+{#if data.feedback}
+	{@const fb = data.feedback}
+	<section class="section fb-section" id="feedback" use:reveal>
+		<div class="section-head">
+			<h2>{t.feedback.clientTitle}</h2>
+			{#if fb.state === 'open'}<p>{t.feedback.clientIntro(orgName)}</p>{/if}
+		</div>
+
+		{#if form?.feedbackSaved}
+			<div class="toast ok" role="status"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg> {t.feedback.saved}</div>
+		{/if}
+
+		{#if fb.state === 'open' && fbEditing}
+			<form method="POST" action="?/feedback" class="fb-form"
+				use:enhance={() => async ({ update, result }) => { await update({ reset: false }); if (result.type === 'success') fbEditing = false; }}>
+				<fieldset class="fb-stars" onmouseleave={() => (fbHover = 0)}>
+					<legend>{t.feedback.ratingLabel}</legend>
+					{#each [1, 2, 3, 4, 5] as n}
+						<label class="fb-star" class:on={n <= fbShown} onmouseenter={() => (fbHover = n)}>
+							<input type="radio" name="rating" value={n} bind:group={fbRating} required />
+							<span aria-hidden="true">★</span>
+							<span class="sr-only">{t.feedback.starLabel(n)}</span>
+						</label>
+					{/each}
+				</fieldset>
+				<label class="fb-label" for="fb-comment">{t.feedback.commentLabel}</label>
+				<textarea id="fb-comment" name="comment" rows="4" maxlength="2000" placeholder={t.feedback.commentPlaceholder}>{fb.row?.comment ?? ''}</textarea>
+				{#if errorScope === 'feedback'}
+					{#key form}<div class="toast err small" role="alert" use:errorInView>{form?.error}</div>{/key}
+				{/if}
+				<div class="fb-actions">
+					<span class="fb-note">{t.feedback.clientEditUntil(longDate(fb.deadline))}</span>
+					{#if fb.row}<button type="button" class="btn-ghost" onclick={() => { fbEditing = false; fbRating = fb.row?.rating ?? 0; }}>{t.common.cancel}</button>{/if}
+					<button type="submit" class="btn-primary" disabled={!fbRating}>{fb.row ? t.feedback.update : t.feedback.submit}</button>
+				</div>
+			</form>
+		{:else if fb.row}
+			<div class="fb-given">
+				<div class="fb-given-stars" role="img" aria-label={t.feedback.starLabel(fb.row.rating)}>
+					{#each [1, 2, 3, 4, 5] as n}<span class:on={n <= fb.row.rating} aria-hidden="true">★</span>{/each}
+				</div>
+				{#if fb.row.comment}<p class="fb-given-comment">{fb.row.comment}</p>{/if}
+				<div class="fb-actions">
+					<span class="fb-note">{fb.state === 'open' ? t.feedback.clientEditUntil(longDate(fb.deadline)) : t.feedback.clientThanks}</span>
+					{#if fb.state === 'open'}<button type="button" class="btn-ghost" onclick={() => (fbEditing = true)}>{t.feedback.edit}</button>{/if}
+				</div>
+			</div>
+		{/if}
+	</section>
+{/if}
+
 <!-- ── The conversation with the venue ── -->
 <section class="section msg-section" use:reveal>
 	<div class="section-head section-head--row">
@@ -409,6 +534,24 @@
 	.st-progress { background: var(--accent-dim); color: var(--accent-ink); }
 	.head-badges { display: flex; align-items: center; gap: 6px; flex-shrink: 0; flex-wrap: wrap; justify-content: flex-end; }
 
+	/* ── Rating card ── */
+	.fb-form { display: flex; flex-direction: column; gap: 8px; max-width: 560px; }
+	.fb-stars { display: flex; gap: 4px; border: none; margin: 0 0 6px; padding: 0; }
+	.fb-stars legend { font-size: 12.5px; font-weight: 600; color: var(--text-base); margin-bottom: 6px; padding: 0; }
+	.fb-star { position: relative; cursor: pointer; font-size: 30px; line-height: 1; color: var(--border); transition: color .12s, transform .12s; }
+	.fb-star.on { color: var(--warning); }
+	.fb-star:hover { transform: scale(1.08); }
+	.fb-star input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+	.fb-star:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+	.fb-label { font-size: 12.5px; font-weight: 600; color: var(--text-base); }
+	.fb-form textarea { resize: vertical; }
+	.fb-actions { display: flex; align-items: center; justify-content: flex-end; gap: 10px; flex-wrap: wrap; margin-top: 6px; }
+	.fb-note { font-size: 12px; color: var(--text-muted); margin-right: auto; }
+	.fb-given-stars { font-size: 24px; color: var(--border); display: flex; gap: 3px; }
+	.fb-given-stars .on { color: var(--warning); }
+	.fb-given-comment { font-size: 14px; line-height: 1.6; margin: 10px 0 0; white-space: pre-line; overflow-wrap: anywhere; }
+	.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+
 	.toast { display: flex; align-items: center; gap: 9px; padding: 10px 14px; border-radius: var(--radius); font-size: 13px; font-weight: 600; margin-top: 16px; }
 	.toast.ok { color: var(--success); background: var(--success-dim); border: 1px solid color-mix(in srgb, var(--success) 30%, transparent); }
 	.toast.err { color: var(--danger); background: var(--danger-dim); border: 1px solid color-mix(in srgb, var(--danger) 30%, transparent); }
@@ -440,6 +583,24 @@
 		font-size: 13px; font-weight: 600; color: var(--text-base); text-decoration: none; transition: color .15s;
 	}
 	.tool-btn:hover { color: var(--accent-ink); text-decoration: none; }
+
+	/* Price and payment: a hairline block like the others; while the booking waits for
+	   payment it carries the warning tint, since that is what the client must act on. */
+	.pay-box.pay-due {
+		padding: 16px 18px; border-top: none; border-radius: var(--radius);
+		background: var(--warning-dim); border: 1px solid color-mix(in srgb, var(--warning) 30%, transparent);
+	}
+	.pay-lead { font-size: 13.5px; font-weight: 600; color: var(--text-base); margin: 0 0 14px; }
+	.pay-list { margin-bottom: 4px; }
+	.pay-sub { display: block; font-size: 12px; color: var(--text-muted); }
+	.pay-ok { color: var(--success); font-weight: 600; }
+	.pay-note { white-space: pre-line; overflow-wrap: anywhere; }
+	.pay-copyrow { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+	.pay-copy {
+		padding: 2px 9px; border-radius: var(--radius-sm); border: 1px solid var(--border); background: var(--bg-panel);
+		color: var(--text-muted); font: inherit; font-size: 11.5px; font-weight: 600; cursor: pointer;
+	}
+	.pay-copy:hover { color: var(--text-base); background: var(--bg-hover); }
 
 	.extras-box form { display: flex; flex-direction: column; }
 	.x-row { cursor: pointer; }

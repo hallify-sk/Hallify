@@ -9,6 +9,9 @@ import { statusLabel } from '$lib/reservationStatus';
 import { formatDate, formatMoney } from '$lib/format';
 import { st } from '$lib/i18n-server';
 import { orgPublicBaseUrl } from '$lib/orgUrl';
+import { formatIban, type PaymentView } from '$lib/payment';
+import { loadPaymentView } from '$lib/server/payments';
+import { feedbackDeadline } from '$lib/feedback';
 
 // Email is sent platform-wide via the Brevo transactional HTTP API
 // (https://developers.brevo.com/reference/sendtransacemail). Every email goes
@@ -67,6 +70,8 @@ export interface EmailTemplates {
 	clientCancelled?: string;
 	venueChanged?: string;
 	eventReminder?: string;
+	paymentDetails?: string;
+	feedbackRequest?: string;
 }
 
 const TEMPLATE_KEYS = Object.keys(DEFAULT_TEMPLATES.sk) as TemplateKey[];
@@ -665,6 +670,10 @@ interface ClientEmailInput {
 	res: ReservationContext | null;
 	build: (c: ReturnType<typeof emailCopy>, locale: EmailLocale, tpl: Required<EmailTemplates>) => {
 		subject: string; bodyHtml: string; note?: { label: string; text: string } | null;
+		/** Rows after the booking's own (the price and payment details). */
+		details?: Array<[string, string | null]>;
+		/** Lines above the standard footer. */
+		footer?: string[];
 	};
 	link: { url: string; label: (c: ReturnType<typeof emailCopy>) => string } | null;
 }
@@ -684,13 +693,34 @@ async function emailClient(db: D1Database, input: ClientEmailInput): Promise<boo
 		brand: org.name,
 		subject: built.subject,
 		bodyHtml: built.bodyHtml,
-		details: input.res ? reservationDetails(input.res, locale, false) : [],
+		details: [...(input.res ? reservationDetails(input.res, locale, false) : []), ...(built.details ?? [])],
 		note: built.note ?? null,
 		cta: input.link ? { label: input.link.label(c), url: input.link.url } : null,
 		linkFallback: c.footer.linkFallback,
-		footer: [replyTo ? c.footer.replyToVenue(org.name) : c.footer.noReplyClient, c.footer.sentBy(org.name)],
+		footer: [...(built.footer ?? []), replyTo ? c.footer.replyToVenue(org.name) : c.footer.noReplyClient, c.footer.sentBy(org.name)],
 	});
 	return sendEmail(db, input.to, built.subject, html, input.templateName, { fromName: c.via(org.name), replyTo });
+}
+
+/** The booking's price and payment details as email rows (D6), in the reader's
+ *  language. Empty when nothing is stated. */
+export function paymentRows(p: PaymentView | null, locale: EmailLocale): Array<[string, string | null]> {
+	if (!p || !p.hasAny) return [];
+	const c = emailCopy(locale).payment;
+	const money = (cents: number | null) => (cents == null ? null : formatMoney(cents, locale));
+	const state = p.state === 'paid' ? c.paid : p.state === 'deposit_paid' ? c.depositReceived : null;
+	return [
+		[c.price, money(p.priceCents)],
+		[c.deposit, money(p.depositCents)],
+		[c.depositDue, p.depositCents != null && p.depositDueDate ? eventDate(p.depositDueDate, locale) : null],
+		[c.state, state],
+		[c.balance, p.state === 'deposit_paid' ? money(p.balanceCents) : null],
+		[c.recipient, p.state === 'paid' ? null : p.recipient],
+		[c.iban, p.state === 'paid' || !p.iban ? null : formatIban(p.iban)],
+		[c.bic, p.state === 'paid' ? null : p.bic],
+		[c.variableSymbol, p.state === 'paid' ? null : p.variableSymbol],
+		[c.note, p.state === 'paid' ? null : p.note],
+	];
 }
 
 async function clientReservationUrl(db: D1Database, orgId: string, reservationId: string): Promise<string> {
@@ -706,14 +736,24 @@ export const notifyStatusChange = inBackground(async function notifyStatusChange
 	const notify = await getNotifyConfig(db, orgId);
 	if (!notify.statusChange) return;
 	const res = await loadReservation(db, extra.reservationId);
+	// The price and how to pay it travel with every status email (D6); a cancelled
+	// booking has nothing left to pay.
+	const payment = res && newStatus !== 'cancelled' ? await loadPaymentView(db, orgId, res.id) : null;
+	const showPayment = !!payment?.hasAny;
+	const org = showPayment ? await orgInfo(db, orgId) : null;
 	await emailClient(db, {
 		orgId, to: userEmail, templateName: 'statusChange', res,
 		build: (c, locale, tpl) => {
 			const status = statusLabel(newStatus, locale);
+			const statusInfo = newStatus === 'waiting_payment' && payment?.hasInstructions
+				? c.payment.waitingInfo
+				: c.statusInfo[newStatus] ?? '';
 			return {
 				subject: c.subject.statusChange(title, status),
-				bodyHtml: renderTemplate(tpl.statusChange, { title, status, statusInfo: c.statusInfo[newStatus] ?? '' }),
+				bodyHtml: renderTemplate(tpl.statusChange, { title, status, statusInfo }),
 				note: extra.message ? { label: c.noteFromVenue, text: extra.message } : null,
+				details: showPayment ? paymentRows(payment, locale) : [],
+				footer: showPayment && org ? [c.payment.disclaimer(org.name)] : [],
 			};
 		},
 		link: res ? { url: await clientReservationUrl(db, orgId, res.id), label: (c) => c.cta.viewBooking } : null,
@@ -848,6 +888,50 @@ export const notifyVenueChange = inBackground(async function notifyVenueChange(
 			bodyHtml: renderTemplate(tpl.venueChanged, { title: res.title, changes: describeChanges(changes, locale) }),
 		}),
 		link: { url: await clientReservationUrl(db, orgId, res.id), label: (c) => c.cta.viewBooking },
+	});
+});
+
+// Staff send the booking's price and payment details to the client (D6), from the
+// reservation page. Explicitly asked for, so no notification switch applies.
+export const notifyPaymentDetails = inBackground(async function notifyPaymentDetails(
+	db: D1Database, orgId: string, reservationId: string
+): Promise<boolean> {
+	const res = await loadReservation(db, reservationId);
+	if (!res?.clientEmail || !res.clientIsClient) return false;
+	const payment = await loadPaymentView(db, orgId, reservationId);
+	if (!payment?.hasAny) return false;
+	const org = await orgInfo(db, orgId);
+	return emailClient(db, {
+		orgId, to: res.clientEmail, templateName: 'paymentDetails', res,
+		build: (c, locale, tpl) => ({
+			subject: c.subject.paymentDetails(res.title),
+			bodyHtml: renderTemplate(tpl.paymentDetails, { title: res.title, hallName: res.hallName, date: eventDate(res.eventDate, locale) }),
+			details: paymentRows(payment, locale),
+			footer: [c.payment.disclaimer(org.name)],
+		}),
+		link: { url: await clientReservationUrl(db, orgId, res.id), label: (c) => c.cta.viewBooking },
+	});
+});
+
+// The event is over and its hall asks for feedback → invite the client to rate it, once
+// (src/lib/server/feedback.ts picks the bookings and claims each before sending).
+// The hall's own "ask for feedback" switch is the setting; there is no second one.
+export const notifyFeedbackRequest = inBackground(async function notifyFeedbackRequest(
+	db: D1Database, orgId: string, reservationId: string
+): Promise<boolean> {
+	const res = await loadReservation(db, reservationId);
+	if (!res?.clientEmail || !res.clientIsClient || res.status !== 'completed') return false;
+	const requestedAt = new Date().toISOString().slice(0, 10);
+	return emailClient(db, {
+		orgId, to: res.clientEmail, templateName: 'feedbackRequest', res,
+		build: (c, locale, tpl) => ({
+			subject: c.subject.feedbackRequest(res.title),
+			bodyHtml: renderTemplate(tpl.feedbackRequest, {
+				title: res.title, hallName: res.hallName, date: eventDate(res.eventDate, locale),
+				deadline: eventDate(feedbackDeadline(res.eventDate, requestedAt), locale),
+			}),
+		}),
+		link: { url: `${await clientReservationUrl(db, orgId, res.id)}#feedback`, label: (c) => c.cta.rateEvent },
 	});
 });
 

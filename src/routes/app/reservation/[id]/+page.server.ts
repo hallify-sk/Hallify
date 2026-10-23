@@ -5,7 +5,7 @@ import { dbAll, dbFirst, dbRun, fromJson, toJson } from '$lib/db/index';
 import type { ReservationRow, RsvpRow, TableTypeRow, TemplateRow, ReservationStatus, RsvpConfig, HallExtraRow } from '$lib/db/index';
 import { parseExtraIds, parseExtrasSnapshot, withBookedPrices } from '$lib/extras';
 import type { Actions, PageServerLoad } from './$types';
-import { notifyStatusChange, sendReservationInviteEmail, notifyEventAssigned, notifyVenueChange } from '$lib/email';
+import { notifyStatusChange, sendReservationInviteEmail, notifyEventAssigned, notifyVenueChange, notifyPaymentDetails } from '$lib/email';
 import { postSystemMessage } from '$lib/tickets';
 import {
 	changeReservationStatus, editReservationDetails, messageReservationClient, setReservationExtras,
@@ -16,6 +16,12 @@ import { st } from '$lib/i18n-server';
 import { orgPublicBaseUrl } from '$lib/orgUrl';
 import { RSVP_ENABLED } from '$lib/features';
 import { env } from '$env/dynamic/private';
+import { parsePaymentForm, resolvePayment, type PaymentField } from '$lib/payment';
+import { loadHallBasePrice, loadPaymentDefaults, loadPaymentRow, markPayment, savePaymentDetails } from '$lib/server/payments';
+import { feedbackDeadline } from '$lib/feedback';
+import { loadFeedback } from '$lib/server/feedback';
+import { reservationClientKey } from '$lib/server/clients';
+import { clientUrlId } from '$lib/clients';
 
 // The organization's preferred default language — used to localize emails to the
 // invited/assigned client (who interacts with the org in that language).
@@ -55,7 +61,7 @@ async function layoutReplaced(locals: App.Locals, orgId: string, reservationId: 
 }
 
 /** The common preamble of a staff-only action. */
-async function staffAction(locals: App.Locals, key: 'error' | 'assignError' | 'statusError' | 'detailsError') {
+async function staffAction(locals: App.Locals, key: 'error' | 'assignError' | 'statusError' | 'detailsError' | 'paymentError') {
 	const e = st(locals.locale).serverErrors;
 	if (!locals.user) return { fail: fail(403, { [key]: e.unauthorized }) } as const;
 	const orgId = locals.currentOrg?.id;
@@ -73,13 +79,14 @@ export const load: PageServerLoad = async ({ locals, params, url }) => {
 	const reservation = await dbFirst<ReservationRow & Extra & {
 		hall_max_people: number; hall_floorplan_json: unknown;
 		hall_auto_approve: boolean; hall_min_cancel_days: number;
-		hall_pre_reservation_text: string | null;
+		hall_pre_reservation_text: string | null; hall_allow_feedback: number;
 		user_first_name: string; user_last_name: string; user_email: string | null;
 		user_account_type: string | null; user_email_unverified: number;
 	}>(locals.db,
 		`SELECT r.*, h.name AS hall_name, h.max_people AS hall_max_people,
 			h.floorplan_json AS hall_floorplan_json, h.auto_approve AS hall_auto_approve,
 			h.min_cancel_days AS hall_min_cancel_days, h.pre_reservation_text AS hall_pre_reservation_text,
+			h.allow_feedback AS hall_allow_feedback,
 			COALESCE(u.first_name, 'Former') AS user_first_name,
 			COALESCE(u.last_name, 'member') AS user_last_name,
 			u.email AS user_email, u.account_type AS user_account_type,
@@ -153,8 +160,56 @@ export const load: PageServerLoad = async ({ locals, params, url }) => {
 			parseExtrasSnapshot((reservation as { extras_snapshot_json?: string | null }).extras_snapshot_json)),
 		selectedExtras: parseExtraIds(reservation.extras_json as string | null),
 		activity: access.canManage ? await listReservationActivity(locals.db, params.id) : [],
+		payment: await paymentForPage(locals.db, orgId, params.id, reservation.hall_id),
+		// The client's rating of the finished event (D5): private to the team.
+		feedback: access.canManage && clientOwner ? await feedbackForStaff(locals.db, reservation) : null,
+		// The client's card in the client list (D10).
+		clientUrl: access.canManage ? await clientCardUrl(locals.db, orgId, params.id) : null,
 	};
 };
+
+async function feedbackForStaff(db: App.Locals['db'], reservation: { id: string; status: string; event_date: string; hall_allow_feedback: number; feedback_requested_at?: string | null }) {
+	const row = await loadFeedback(db, reservation.id);
+	const requestedAt = reservation.feedback_requested_at ?? null;
+	// Before the event is over there is nothing to show, unless a rating exists anyway.
+	if (reservation.status !== 'completed' && !row) return null;
+	return {
+		row,
+		requestedAt,
+		asked: !!reservation.hall_allow_feedback,
+		deadline: feedbackDeadline(reservation.event_date, requestedAt),
+	};
+}
+
+async function clientCardUrl(db: App.Locals['db'], orgId: string, reservationId: string): Promise<string | null> {
+	try {
+		const key = await reservationClientKey(db, orgId, reservationId);
+		return key ? `/app/manage/clients/${clientUrlId(key)}` : null;
+	} catch {
+		return null;
+	}
+}
+
+/** The booking's price and payment details with the venue's defaults (D6); null
+ *  before migration 0031. */
+async function paymentForPage(db: App.Locals['db'], orgId: string, reservationId: string, hallId: string) {
+	const row = await loadPaymentRow(db, reservationId);
+	if (!row) return null;
+	const defaults = await loadPaymentDefaults(db, orgId);
+	// The hall's base price, which with the booked extras is offered as the price.
+	const hallBasePriceCents = await loadHallBasePrice(db, hallId);
+	return { row, defaults, view: resolvePayment(row, defaults), hallBasePriceCents };
+}
+
+/** The message for a payment field the staff form got wrong. */
+function paymentFieldError(locale: App.Locals['locale'], field: PaymentField): string {
+	const p = st(locale).payment;
+	const byField: Record<PaymentField, string> = {
+		price: p.errPrice, deposit: p.errDeposit, depositOverPrice: p.errDepositOverPrice, depositDue: p.errDepositDue,
+		iban: p.errIban, variableSymbol: p.errVariableSymbol, note: p.errNote,
+	};
+	return byField[field];
+}
 
 
 export const actions: Actions = {
@@ -292,6 +347,59 @@ export const actions: Actions = {
 		}, ctx.user);
 		if (!res.ok) return fail(res.status, { detailsError: res.error });
 		return { detailsSaved: true };
+	},
+
+	// Informational price, deposit and payment instructions (D6). Hallify takes no
+	// payment: this is what the client is shown and emailed.
+	savePayment: async ({ request, locals, params }) => {
+		const ctx = await staffAction(locals, 'paymentError');
+		if ('fail' in ctx) return ctx.fail;
+		const data = await request.formData();
+		const parsed = parsePaymentForm({
+			price: String(data.get('price') ?? ''),
+			deposit: String(data.get('deposit') ?? ''),
+			depositDue: String(data.get('depositDue') ?? ''),
+			iban: String(data.get('iban') ?? ''),
+			variableSymbol: String(data.get('variableSymbol') ?? ''),
+			note: String(data.get('note') ?? ''),
+		});
+		if (!parsed.ok) return fail(400, { paymentError: paymentFieldError(locals.locale, parsed.field) });
+		let saved: boolean;
+		try {
+			saved = await savePaymentDetails(locals.db, ctx.orgId, params.id, parsed.values);
+		} catch {
+			return fail(503, { paymentError: st(locals.locale).payment.unavailable });
+		}
+		if (!saved) return fail(404, { paymentError: st(locals.locale).serverErrors.notFound });
+		await logReservationActivity(locals.db, {
+			reservationId: params.id, orgId: ctx.orgId, actorId: ctx.user.id,
+			actorName: `${ctx.user.first_name} ${ctx.user.last_name}`.trim(), kind: 'edited', note: 'payment',
+		});
+		const emailSent = data.get('notifyClient') === 'on'
+			? await notifyPaymentDetails(locals.db, ctx.orgId, params.id).catch(() => false)
+			: null;
+		return { paymentSaved: true, paymentEmailSent: emailSent };
+	},
+
+	// Mark the deposit or the whole amount as received, or take the mark back.
+	markPayment: async ({ request, locals, params }) => {
+		const ctx = await staffAction(locals, 'paymentError');
+		if ('fail' in ctx) return ctx.fail;
+		const data = await request.formData();
+		const which = String(data.get('which') ?? '') === 'full' ? 'full' : 'deposit';
+		const received = String(data.get('received') ?? '') === 'true';
+		let ok: boolean;
+		try {
+			ok = await markPayment(locals.db, ctx.orgId, params.id, which, received);
+		} catch {
+			return fail(503, { paymentError: st(locals.locale).payment.unavailable });
+		}
+		if (!ok) return fail(404, { paymentError: st(locals.locale).serverErrors.notFound });
+		await logReservationActivity(locals.db, {
+			reservationId: params.id, orgId: ctx.orgId, actorId: ctx.user.id,
+			actorName: `${ctx.user.first_name} ${ctx.user.last_name}`.trim(), kind: 'edited', note: 'payment',
+		});
+		return { paymentMarked: true };
 	},
 
 	saveLayout: async ({ request, locals, params, url }) => {

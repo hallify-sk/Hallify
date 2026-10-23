@@ -25,6 +25,8 @@
 		{ key: 'clientCancelled', label: t.platformMisc.tplClientCancelled, vars: 'title, hallName, date' },
 		{ key: 'venueChanged', label: t.platformMisc.tplVenueChanged, vars: 'title, changes' },
 		{ key: 'eventReminder', label: t.platformMisc.tplEventReminder, vars: 'title, hallName, date' },
+		{ key: 'paymentDetails', label: t.payment.tplLabel, vars: 'title, hallName, date' },
+		{ key: 'feedbackRequest', label: t.feedback.tplLabel, vars: 'title, hallName, date, deadline' },
 		{ key: 'passwordReset', label: t.platformMisc.tplPasswordReset, vars: 'resetUrl' },
 		{ key: 'testEmail', label: t.platformMisc.tplTestEmail, vars: '' },
 	] as const);

@@ -24,6 +24,9 @@
   import { formatDate as fmtDbDate, formatNumber } from '$lib/format';
   import { confirmFirst } from '$lib/forms';
   import { dialog } from '$lib/actions/dialog';
+  import { amountInputValue } from '$lib/payment';
+  import { formatRating } from '$lib/feedback';
+  import StarRating from '$lib/components/StarRating.svelte';
 
   interface Props { data: PageData; form: ActionData; }
   const { data, form }: Props = $props();
@@ -1364,6 +1367,22 @@
       <span>{t.hallAdmin.extrasDisclaimer}</span>
     </div>
 
+    <!-- The hall's base price (D6): offered, with the booked extras, as a booking's price. -->
+    <form method="POST" action="?/saveBasePrice" class="base-price"
+      use:enhance={() => async ({ update }) => { await update({ reset: false }); }}>
+      <div class="field base-price-field">
+        <label class="field-label" for="hp-base">{t.payment.basePrice}</label>
+        <div class="base-price-row">
+          <input class="field-input" id="hp-base" name="basePrice" type="text" inputmode="decimal" autocomplete="off"
+            value={amountInputValue(data.hall.base_price_cents, getLocale())} placeholder="0" aria-describedby="hp-base-hint" />
+          <button type="submit" class="btn-outline btn-sm">{t.common.save}</button>
+          {#if form?.basePriceSaved}<span class="base-price-ok" role="status">✓</span>{/if}
+        </div>
+        <span class="field-hint" id="hp-base-hint">{t.payment.basePriceHint}</span>
+        {#if form?.basePriceError}<div class="inline-err" role="alert">{form.basePriceError}</div>{/if}
+      </div>
+    </form>
+
     {#if form?.extraError}<div class="inline-err">{form.extraError}</div>{/if}
 
     {#if data.extras.length === 0}
@@ -1501,6 +1520,56 @@
     </section>
 
   </div><!-- /dual-col -->
+
+  <!-- ─── Client feedback (D5): the hall's average, private to the team ─── -->
+  {#if data.feedback}
+    {@const fb = data.feedback}
+    <section class="section fb-block" data-panel="overview">
+      <div class="section-head section-head--row">
+        <div>
+          <h2>{t.feedback.hallTitle}</h2>
+          <p>{t.feedback.hallHint}</p>
+        </div>
+        {#if fb.summary.average != null}
+          <div class="fb-avg" aria-label="{formatRating(fb.summary.average, getLocale())} {t.feedback.outOf5}">
+            <span class="fb-avg-num">{formatRating(fb.summary.average, getLocale())}</span>
+            <span class="fb-avg-side">
+              <StarRating rating={fb.summary.average} size={15} />
+              <span class="fb-avg-count">{t.feedback.count(fb.summary.count)}</span>
+            </span>
+          </div>
+        {/if}
+      </div>
+      {#if !data.hall.allow_feedback}<p class="fb-off">{t.feedback.hallOff}</p>{/if}
+      {#if fb.summary.count === 0}
+        <p class="fb-none">{t.feedback.hallNone}</p>
+      {:else}
+        <div class="fb-dist" aria-hidden="true">
+          {#each [5, 4, 3, 2, 1] as n}
+            {@const k = fb.summary.distribution[n - 1]}
+            <div class="fb-dist-row">
+              <span>{n} ★</span>
+              <span class="fb-bar"><span style:width="{(k / fb.summary.count) * 100}%"></span></span>
+              <span class="fb-dist-k">{k}</span>
+            </div>
+          {/each}
+        </div>
+        <p class="eyebrow fb-latest">{t.feedback.latest}</p>
+        <ul class="fb-list">
+          {#each fb.recent as r (r.reservation_id)}
+            <li>
+              <div class="fb-row-head">
+                <StarRating rating={r.rating} size={13} />
+                <a href="/app/reservation/{r.reservation_id}">{r.title}</a>
+                <span class="fb-meta">{r.client_name ?? ''}{r.client_name ? ' · ' : ''}{fmtDbDate(r.event_date, getLocale())}</span>
+              </div>
+              <p class="fb-comment" class:muted={!r.comment}>{r.comment ?? t.feedback.noComment}</p>
+            </li>
+          {/each}
+        </ul>
+      {/if}
+    </section>
+  {/if}
 
   <!-- ─── Settings + Floorplan row ─────────────────────────────────────────── -->
   <div class="settings-row" data-panel="settings">
@@ -3429,4 +3498,30 @@
     .save-bar-btn:hover,
     .color-chip:hover { transform: none; }
   }
+
+  /* ── Base price (pricing panel) ── */
+  .base-price { margin: 0 0 16px; max-width: 520px; }
+  .base-price-row { display: flex; gap: 8px; align-items: center; }
+  .base-price-row .field-input { max-width: 160px; }
+  .base-price-ok { color: var(--success); font-weight: 700; }
+
+  /* ── Client feedback ── */
+  .fb-avg { display: flex; align-items: center; gap: 10px; }
+  .fb-avg-num { font-size: 34px; font-weight: 600; letter-spacing: -.04em; line-height: 1; color: var(--text-base); font-variant-numeric: tabular-nums; }
+  .fb-avg-side { display: flex; flex-direction: column; gap: 3px; }
+  .fb-avg-count { font-size: 11.5px; color: var(--text-muted); }
+  .fb-off, .fb-none { font-size: 13px; color: var(--text-muted); margin: 0 0 10px; }
+  .fb-dist { display: flex; flex-direction: column; gap: 4px; max-width: 360px; margin-bottom: 16px; }
+  .fb-dist-row { display: grid; grid-template-columns: 34px 1fr 28px; gap: 8px; align-items: center; font-size: 11.5px; color: var(--text-muted); }
+  .fb-bar { height: 6px; border-radius: 3px; background: var(--bg-hover); overflow: hidden; }
+  .fb-bar > span { display: block; height: 100%; background: var(--warning); }
+  .fb-dist-k { text-align: right; font-variant-numeric: tabular-nums; }
+  .fb-latest { margin: 0 0 8px; }
+  .fb-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
+  .fb-row-head { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; }
+  .fb-row-head a { font-size: 13px; font-weight: 600; color: var(--text-base); text-decoration: none; }
+  .fb-row-head a:hover { color: var(--accent-ink); }
+  .fb-meta { font-size: 11.5px; color: var(--text-muted); }
+  .fb-comment { font-size: 13px; line-height: 1.55; margin: 4px 0 0; white-space: pre-line; overflow-wrap: anywhere; }
+  .fb-comment.muted { color: var(--text-muted); }
 </style>

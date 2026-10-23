@@ -15,6 +15,8 @@
 	import type { RsvpConfig } from '$lib/db/index';
 	import { computeExtras, eur } from '$lib/extras';
 	import { eventTypeLabel, parseEventTypes } from '$lib/eventTypes';
+	import { amountInputValue, depositOverdue, formatIban, suggestedPrice } from '$lib/payment';
+	import StarRating from '$lib/components/StarRating.svelte';
 
 	interface Props { data: PageData; form: ActionData; }
 	let { data, form }: Props = $props();
@@ -44,6 +46,40 @@
 		extraSel = extraSel.includes(id) ? extraSel.filter((x) => x !== id) : [...extraSel, id];
 	}
 	const extrasOverview = $derived(computeExtras(data.extras, extraSel, data.reservation.num_guests));
+
+	// ── Price and payment (D6): informational, the venue collects the money itself ──
+	const pay = $derived(data.payment?.view ?? null);
+	let payEditing = $state(false);
+	let payPrice = $state('');
+	let payDeposit = $state('');
+	let payDue = $state('');
+	let payIban = $state('');
+	let payVs = $state('');
+	let payNote = $state('');
+	// The hall's base price plus the booked extras, offered as the price: prefilled
+	// while the booking states none, and one click away when it differs.
+	const bookedExtrasCents = $derived(computeExtras(data.extras, data.selectedExtras, data.reservation.num_guests).totalCents);
+	const hallBaseCents = $derived(data.payment?.hallBasePriceCents ?? null);
+	const suggestedCents = $derived(suggestedPrice(hallBaseCents, bookedExtrasCents));
+	const suggestionShown = $derived(suggestedCents != null && payPrice.trim() !== amountInputValue(suggestedCents, getLocale()));
+	function startPaymentEdit() {
+		const r = data.payment?.row;
+		payPrice = amountInputValue(r?.price_cents ?? suggestedCents, getLocale());
+		payDeposit = amountInputValue(r?.deposit_cents, getLocale());
+		payDue = r?.deposit_due_date ?? '';
+		payIban = r?.payment_iban ? formatIban(r.payment_iban) : '';
+		payVs = r?.payment_variable_symbol ?? '';
+		payNote = r?.payment_note ?? '';
+		payEditing = true;
+	}
+	const payStateLabel = $derived(
+		pay?.state === 'paid' ? t.payment.statePaid
+		: pay?.state === 'deposit_paid' ? t.payment.stateDepositPaid
+		: pay?.state === 'unpaid' ? t.payment.stateUnpaid
+		: t.payment.stateNone
+	);
+	const payOverdue = $derived(!!pay && depositOverdue(pay, new Date().toISOString().slice(0, 10)));
+	const money = (cents: number | null) => (cents == null ? '—' : eur(cents, getLocale()));
 
 	let copied = $state(false);
 	let statusOpen = $state(false);
@@ -159,7 +195,7 @@
 	const FIELD_LABEL = $derived<Record<string, string>>({
 		date: t.resOps.fieldDate, time: t.resOps.fieldTime, guests: t.resOps.fieldGuests,
 		notes: t.resOps.fieldNotes, internal: t.resOps.fieldInternal, client: t.resOps.fieldBooking,
-		extras: t.resOps.fieldExtras, layout: t.resOps.fieldLayout,
+		extras: t.resOps.fieldExtras, layout: t.resOps.fieldLayout, payment: t.payment.activityField,
 	});
 
 	function activityText(a: { kind: string; status: string | null; note: string | null }) {
@@ -420,10 +456,13 @@
 			</div>
 		</div>
 
-		{#if isAdmin}
+		{#if isAdmin || data.clientUrl}
 			<div class="details-foot">
-				{#if form?.detailsSaved}<span class="exr-saved" role="status">{t.resOps.detailsSaved}</span>{/if}
-				<button type="button" class="btn-outline btn-sm" onclick={() => (editOpen = true)}>{t.resOps.editDetails}</button>
+				{#if data.clientUrl}<a class="client-card-link" href={data.clientUrl}>{t.clients.viewClient}</a>{/if}
+				{#if isAdmin}
+					{#if form?.detailsSaved}<span class="exr-saved" role="status">{t.resOps.detailsSaved}</span>{/if}
+					<button type="button" class="btn-outline btn-sm" onclick={() => (editOpen = true)}>{t.resOps.editDetails}</button>
+				{/if}
 			</div>
 		{/if}
 	</section>
@@ -521,6 +560,174 @@
 					<p class="exr-empty">{t.reservationAdmin.extrasNoneSelected}</p>
 				{/each}
 				</div>
+			{/if}
+		</section>
+	{/if}
+
+	<!-- Price and payment (D6). Hallify processes no payments: this is what the
+	     client is told and what the team has marked as received. -->
+	{#if data.payment && pay}
+		<section class="section">
+			<div class="section-head section-head--row">
+				<div>
+					<h2>{t.payment.title}</h2>
+					<p>{t.payment.staffHint}</p>
+				</div>
+				{#if pay.state !== 'none'}
+					<span class="pay-state pay-state--{pay.state}">{payStateLabel}</span>
+				{/if}
+			</div>
+
+			{#if form?.paymentSaved}
+				{#if form?.paymentEmailSent === false}
+					<div class="assign-toast warn" role="alert">{t.payment.emailFailed}</div>
+				{:else}
+					<div class="assign-toast ok" role="status">{form?.paymentEmailSent ? t.payment.emailSent : t.payment.saved}</div>
+				{/if}
+			{/if}
+			{#if form?.paymentError && !payEditing}<div class="alert-error status-error" role="alert">{form.paymentError}</div>{/if}
+
+			{#if !payEditing}
+				{#if pay.hasAny}
+					<dl class="pay-grid">
+						{#if pay.priceCents != null}
+							<div><dt>{t.payment.price}</dt><dd>{money(pay.priceCents)}</dd></div>
+						{/if}
+						{#if pay.depositCents != null}
+							<div>
+								<dt>{t.payment.deposit}</dt>
+								<dd>
+									{money(pay.depositCents)}
+									{#if pay.depositDueDate}<span class="pay-sub" class:pay-overdue={payOverdue}>{t.payment.dueBy(fmtLocaleDate(pay.depositDueDate, getLocale()))}{payOverdue ? ` · ${t.payment.overdue}` : ''}</span>{/if}
+									{#if pay.depositPaidAt}<span class="pay-sub pay-ok">{t.payment.depositReceivedOn(fmtLocaleDate(pay.depositPaidAt, getLocale()))}</span>{/if}
+								</dd>
+							</div>
+						{/if}
+						{#if pay.paidInFullAt}
+							<div><dt>{t.payment.statePaid}</dt><dd><span class="pay-ok">{t.payment.paidOn(fmtLocaleDate(pay.paidInFullAt, getLocale()))}</span></dd></div>
+						{:else if pay.state === 'deposit_paid' && pay.balanceCents != null}
+							<div><dt>{t.payment.balance}</dt><dd>{money(pay.balanceCents)}</dd></div>
+						{/if}
+						{#if pay.iban}
+							<div class="pay-wide">
+								<dt>{t.payment.iban}</dt>
+								<dd><span class="pay-mono">{formatIban(pay.iban)}</span>{#if pay.bic}<span class="pay-sub">{t.payment.bic}: {pay.bic}</span>{/if}{#if pay.recipient}<span class="pay-sub">{t.payment.recipient}: {pay.recipient}</span>{/if}</dd>
+							</div>
+						{/if}
+						{#if pay.variableSymbol}
+							<div><dt>{t.payment.variableSymbol}</dt><dd class="pay-mono">{pay.variableSymbol}</dd></div>
+						{/if}
+						{#if pay.note}
+							<div class="pay-wide"><dt>{t.payment.note}</dt><dd class="desc-text">{pay.note}</dd></div>
+						{/if}
+					</dl>
+				{:else}
+					<p class="exr-empty">{t.payment.empty}</p>
+				{/if}
+
+				{#if isAdmin}
+					<div class="pay-actions">
+						{#if pay.depositCents != null && !pay.paidInFullAt}
+							<form method="POST" action="?/markPayment" use:enhance={pay.depositPaidAt ? confirmFirst(() => t.payment.confirmUnmark) : undefined}>
+								<input type="hidden" name="which" value="deposit" />
+								<input type="hidden" name="received" value={pay.depositPaidAt ? 'false' : 'true'} />
+								<button type="submit" class="btn-outline btn-sm">{pay.depositPaidAt ? t.payment.unmarkDeposit : t.payment.markDeposit}</button>
+							</form>
+						{/if}
+						{#if pay.hasAmounts}
+							<form method="POST" action="?/markPayment" use:enhance={pay.paidInFullAt ? confirmFirst(() => t.payment.confirmUnmark) : undefined}>
+								<input type="hidden" name="which" value="full" />
+								<input type="hidden" name="received" value={pay.paidInFullAt ? 'false' : 'true'} />
+								<button type="submit" class="btn-outline btn-sm">{pay.paidInFullAt ? t.payment.unmarkPaid : t.payment.markPaid}</button>
+							</form>
+						{/if}
+						<button type="button" class="btn-action btn-sm" onclick={startPaymentEdit}>{t.payment.edit}</button>
+					</div>
+				{/if}
+			{:else}
+				<form method="POST" action="?/savePayment" class="pay-form"
+					use:enhance={() => async ({ update, result }) => { await update({ reset: false }); if (result.type === 'success') payEditing = false; }}>
+					<div class="dialog-grid">
+						<div class="field">
+							<label for="pay-price">{t.payment.price}</label>
+							<input id="pay-price" name="price" type="text" inputmode="decimal" autocomplete="off" bind:value={payPrice} />
+							{#if suggestionShown && suggestedCents != null}
+								<span class="pay-hint">
+									{t.payment.suggestion(eur(suggestedCents, getLocale()))}{#if hallBaseCents != null && bookedExtrasCents > 0} ({t.payment.suggestionParts(eur(hallBaseCents, getLocale()), eur(bookedExtrasCents, getLocale()))}){/if}
+									<button type="button" class="assign-link" onclick={() => (payPrice = amountInputValue(suggestedCents, getLocale()))}>{t.payment.useSuggestion}</button>
+								</span>
+							{/if}
+						</div>
+						<div class="field">
+							<label for="pay-deposit">{t.payment.deposit}</label>
+							<input id="pay-deposit" name="deposit" type="text" inputmode="decimal" autocomplete="off" bind:value={payDeposit} />
+						</div>
+						<div class="field">
+							<label for="pay-due">{t.payment.depositDue}</label>
+							<input id="pay-due" name="depositDue" type="date" bind:value={payDue} />
+						</div>
+						<div class="field">
+							<label for="pay-vs">{t.payment.variableSymbol}</label>
+							<input id="pay-vs" name="variableSymbol" type="text" inputmode="numeric" maxlength="10" autocomplete="off" bind:value={payVs} />
+						</div>
+					</div>
+					<div class="field">
+						<label for="pay-iban">{t.payment.iban}</label>
+						<input id="pay-iban" name="iban" type="text" autocomplete="off" spellcheck="false" bind:value={payIban}
+							placeholder={data.payment.defaults.iban ? formatIban(data.payment.defaults.iban) : 'SK00 0000 0000 0000 0000 0000'} aria-describedby="pay-iban-hint" />
+						<span id="pay-iban-hint" class="pay-hint">
+							{#if data.payment.defaults.iban}{t.payment.ibanDefault(formatIban(data.payment.defaults.iban))}{:else}<span>{t.payment.ibanNoDefault}</span> <a href="/app/manage/settings/payments">{t.payment.settingsTab}</a>{/if}
+						</span>
+					</div>
+					<div class="field">
+						<label for="pay-note">{t.payment.note}</label>
+						<textarea id="pay-note" name="note" rows="2" maxlength="1000" bind:value={payNote}
+							placeholder={data.payment.defaults.note || t.payment.notePlaceholder}></textarea>
+					</div>
+					{#if data.clientOwner}
+						<label class="pay-check"><input type="checkbox" name="notifyClient" /> {t.payment.notifyClient}</label>
+					{/if}
+					{#if form?.paymentError}<div class="alert-error" role="alert">{form.paymentError}</div>{/if}
+					<div class="dialog-actions">
+						<button type="button" class="btn-outline btn-sm" onclick={() => (payEditing = false)}>{t.payment.cancelEdit}</button>
+						<button type="submit" class="btn-action btn-sm">{t.payment.save}</button>
+					</div>
+				</form>
+			{/if}
+		</section>
+	{/if}
+
+	<!-- The client's rating of the finished event (D5). Private to the team. -->
+	{#if data.feedback}
+		{@const fb = data.feedback}
+		<section class="section">
+			<div class="section-head section-head--row">
+				<div>
+					<h2>{t.feedback.title}</h2>
+					<p>{t.feedback.staffHint}</p>
+				</div>
+			</div>
+			{#if fb.row}
+				<div class="fb-staff">
+					<div class="fb-staff-head">
+						<StarRating rating={fb.row.rating} size={18} />
+						<span class="fb-staff-num">{fb.row.rating} {t.feedback.outOf5}</span>
+						<span class="fb-staff-meta">
+							{t.feedback.givenOn(fmtLocaleDate(fb.row.created_at, getLocale()))}{fb.row.updated_at !== fb.row.created_at ? ` · ${t.feedback.edited}` : ''}
+						</span>
+					</div>
+					<p class="fb-staff-comment" class:muted={!fb.row.comment}>{fb.row.comment ?? t.feedback.noComment}</p>
+					{#if fb.deadline >= new Date().toISOString().slice(0, 10)}
+						<p class="fb-staff-note">{t.feedback.staffEditable(fmtLocaleDate(fb.deadline, getLocale()))}</p>
+					{/if}
+				</div>
+			{:else}
+				<p class="exr-empty">{t.feedback.staffNone}</p>
+				<p class="fb-staff-note">
+					{#if !fb.asked}{t.feedback.staffNotAsked}
+					{:else if fb.requestedAt}{t.feedback.staffInvited(fmtLocaleDate(fb.requestedAt, getLocale()))}
+					{:else if fb.deadline >= new Date().toISOString().slice(0, 10)}{t.feedback.staffWillInvite}{/if}
+				</p>
 			{/if}
 		</section>
 	{/if}
@@ -896,6 +1103,43 @@
 	.exr-saved { font-size: 12px; color: var(--success); font-weight: 600; }
 	.exr-line { justify-content: space-between; font-size: 12.5px; color: var(--text-muted); }
 	.exr-empty { font-size: 12.5px; color: var(--text-muted); margin: 0; }
+
+	/* ── Price and payment ── */
+	.pay-state {
+		font-size: 11px; font-weight: 650; padding: 3px 9px; border-radius: 3px; white-space: nowrap;
+		background: var(--bg-hover); color: var(--text-muted);
+	}
+	.pay-state--unpaid { background: var(--warning-dim); color: var(--warning); }
+	.pay-state--deposit_paid { background: var(--accent-dim); color: var(--accent-ink); }
+	.pay-state--paid { background: var(--success-dim); color: var(--success); }
+	.pay-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 14px 24px; margin: 0; max-width: 760px; }
+	.pay-grid .pay-wide { grid-column: 1 / -1; }
+	.pay-grid dt { font-size: 12px; font-weight: 600; color: var(--text-muted); margin-bottom: 2px; }
+	.pay-grid dd { font-size: 14px; color: var(--text-base); margin: 0; overflow-wrap: anywhere; }
+	.pay-sub { display: block; font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+	.pay-mono { font-family: ui-monospace, monospace; letter-spacing: .02em; }
+	.pay-ok { color: var(--success); font-weight: 600; }
+	.pay-overdue { color: var(--danger); font-weight: 600; }
+	.pay-actions { display: flex; justify-content: flex-end; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
+	.pay-form { display: flex; flex-direction: column; gap: 10px; max-width: 640px; }
+	.pay-form .field { display: flex; flex-direction: column; gap: 4px; margin: 0; }
+	.pay-form label { font-size: 12.5px; font-weight: 600; color: var(--text-base); }
+	.pay-form textarea { resize: vertical; }
+	.pay-hint { font-size: 11.5px; line-height: 1.5; color: var(--text-subtle); display: flex; gap: 8px; flex-wrap: wrap; align-items: baseline; }
+	.pay-hint a { color: var(--accent-ink); }
+	.pay-form .pay-check { display: flex; align-items: center; gap: 8px; font-weight: 500; cursor: pointer; }
+	.pay-check input { width: 15px; height: 15px; margin: 0; }
+
+	/* ── Client feedback ── */
+	.fb-staff { max-width: 680px; }
+	.fb-staff-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+	.fb-staff-num { font-size: 13px; font-weight: 650; color: var(--text-base); }
+	.fb-staff-meta { font-size: 12px; color: var(--text-muted); }
+	.fb-staff-comment { font-size: 14px; line-height: 1.6; margin: 10px 0 0; white-space: pre-line; overflow-wrap: anywhere; color: var(--text-base); }
+	.fb-staff-comment.muted { color: var(--text-muted); font-size: 13px; }
+	.fb-staff-note { font-size: 12px; color: var(--text-muted); margin: 8px 0 0; }
+	.client-card-link { font-size: 12.5px; font-weight: 600; color: var(--accent-ink); text-decoration: none; margin-right: auto; }
+	.client-card-link:hover { text-decoration: underline; }
 
 	/* ── Message-the-client composer ── */
 	.msg-client-link { font-size: 12px; font-weight: 600; color: var(--accent-ink); text-decoration: none; }

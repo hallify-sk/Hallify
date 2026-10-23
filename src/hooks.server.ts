@@ -5,6 +5,7 @@ import { getBrandingCacheTime, setBrandingCacheTime, BRANDING_CACHE_TTL } from '
 import { dbAll, dbFirst, dbRun } from '$lib/db';
 import { runCleanup } from '$lib/cleanup';
 import { sendEventReminders } from '$lib/server/reminders';
+import { sendFeedbackInvites } from '$lib/server/feedback';
 import { expirePastRequests } from '$lib/server/reservation-activity';
 import { getPlan } from '$lib/plans';
 import type { PlanId } from '$lib/plans';
@@ -219,6 +220,8 @@ function housekeeping(db: D1Database, ctx: { waitUntil?: (p: Promise<unknown>) =
   const job = Promise.all([
     runCleanup(db).catch(() => []),
     sendEventReminders(db).catch(() => 0),
+    // Clients of a just-finished event are invited to rate it (D5).
+    sendFeedbackInvites(db).catch(() => 0),
   ]);
   if (ctx?.waitUntil) ctx.waitUntil(job);
 }

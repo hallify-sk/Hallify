@@ -82,13 +82,25 @@ export const GET: RequestHandler = async ({ locals, url }) => {
 	// Webhooks without their signing secrets.
 	const webhooks = await dbAll(db, 'SELECT name, url, events, enabled, created_at FROM org_webhooks WHERE org_id = ?', org.id);
 	const subscription = await dbFirst(db, 'SELECT plan, status, current_period_end FROM subscriptions WHERE org_id = ?', org.id);
+	// Booking prices and payment details (D6), client feedback (D5) and the client
+	// list's notes (D10); each table is absent before its migration.
+	const reservationPayments = await dbAll(db,
+		`SELECT id AS reservation_id, price_cents, deposit_cents, deposit_due_date, payment_iban, payment_variable_symbol,
+		        payment_note, deposit_paid_at, paid_in_full_at
+		   FROM reservations
+		  WHERE org_id = ? AND (price_cents IS NOT NULL OR deposit_cents IS NOT NULL OR payment_iban IS NOT NULL
+		        OR payment_variable_symbol IS NOT NULL OR payment_note IS NOT NULL OR paid_in_full_at IS NOT NULL)`, org.id).catch(() => []);
+	const clientFeedback = await dbAll(db,
+		'SELECT reservation_id, hall_id, user_id, rating, comment, created_at, updated_at FROM reservation_feedback WHERE org_id = ?', org.id).catch(() => []);
+	const clientNotes = await dbAll(db,
+		'SELECT client_key, phone, notes, updated_at FROM client_notes WHERE org_id = ?', org.id).catch(() => []);
 
 	const body = JSON.stringify({
 		exportedAt: new Date().toISOString(),
 		organization: { id: org.id, name: org.name, slug, created_at: meta?.created_at ?? null },
 		subscription,
 		halls, hallExtras: extras, tableTypes, hallBlocks: blocks,
-		reservations, guests, clients, members,
+		reservations, reservationPayments, guests, clients, clientFeedback, clientNotes, members,
 		rsvpTemplates, settings, customDomains: domains, webhooks,
 	}, null, 2);
 

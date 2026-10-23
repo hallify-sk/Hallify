@@ -156,6 +156,9 @@ export async function deleteOrgCascade(db: D1Database, orgId: string): Promise<v
 	await dbRun(db, 'DELETE FROM floorplan_templates WHERE hall_id IN (SELECT id FROM halls WHERE org_id = ?)', orgId);
 	await dbRun(db, 'DELETE FROM hall_blocks WHERE hall_id IN (SELECT id FROM halls WHERE org_id = ?)', orgId);
 	await dbRun(db, 'DELETE FROM reservation_holds WHERE org_id = ? OR hall_id IN (SELECT id FROM halls WHERE org_id = ?)', orgId, orgId);
+	// Client feedback and the client list's notes (migration 0031b; absent before it).
+	await dbRun(db, 'DELETE FROM reservation_feedback WHERE org_id = ?', orgId).catch(() => {});
+	await dbRun(db, 'DELETE FROM client_notes WHERE org_id = ?', orgId).catch(() => {});
 
 	// ── Children ──
 	await dbRun(db, 'DELETE FROM reservations WHERE org_id = ? OR hall_id IN (SELECT id FROM halls WHERE org_id = ?)', orgId, orgId);
@@ -262,6 +265,9 @@ export async function deleteUserAndCleanup(db: D1Database, userId: string): Prom
 	await dbRun(db, 'DELETE FROM rsvp_entries WHERE reservation_id IN (SELECT id FROM reservations WHERE user_id = ?)', userId);
 	await dbRun(db, 'DELETE FROM reservation_invites WHERE reservation_id IN (SELECT id FROM reservations WHERE user_id = ?)', userId);
 	await dbRun(db, 'DELETE FROM reservation_holds WHERE user_id = ?', userId);
+	// Their feedback and the venue's notes about them go with them (migration 0031b).
+	await dbRun(db, 'DELETE FROM reservation_feedback WHERE user_id = ? OR reservation_id IN (SELECT id FROM reservations WHERE user_id = ?)', userId, userId).catch(() => {});
+	await dbRun(db, 'DELETE FROM client_notes WHERE client_key = ?', `u:${userId}`).catch(() => {});
 	await dbRun(db, 'DELETE FROM reservations WHERE user_id = ?', userId);
 	await dbRun(db, 'DELETE FROM users WHERE id = ?', userId);
 	for (const oid of orgIds) await destroyOrgIfEmpty(db, oid, 'user_deleted');
