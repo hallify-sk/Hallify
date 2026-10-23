@@ -40,6 +40,9 @@ export const actions: Actions = {
     const rawServer = String(data.get('gtmServerUrl') ?? '').trim();
     const serverUrl = normaliseServerUrl(rawServer);
     if (rawServer && !serverUrl) return fail(400, { error: st(locals.locale).serverErrors.invalidServerUrl });
+    // A server container is only used together with a container id. Saving one alone
+    // used to drop it silently and still say "Saved".
+    if (serverUrl && !raw) return fail(400, { error: st(locals.locale).settingsPages.gtmServerNeedsId });
     if (!raw) {
       await dbRun(locals.db, `DELETE FROM org_settings WHERE org_id = ? AND key = 'gtm'`, orgId);
     } else {

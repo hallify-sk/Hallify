@@ -16,3 +16,5 @@
 | B40 | partial | Webhook delivery log uses parseDbTime-based timeAgo; announcements: see below. |
 | B16 | done | Preview posts a $state.snapshot (the proxy threw DataCloneError and froze the builder); posting is guarded. |
 | B79 | done | On Free the section controls are disabled with a plan notice, saving keeps stored texts/sections, and the preview shows what visitors get. |
+| B17 | done | Logo upload posts to /api/upload/image, shows an error when it fails; accept list and hint match the endpoint (no SVG). |
+| B77 | done | Name and theme are controlled state (no longer overwritten on re-render); the org default theme applies to members without a personal choice (root layout); accent ink was already derived. |

@@ -21,6 +21,7 @@
 	] as const);
 
 	let uploading = $state(false);
+	let uploadError = $state<string | null>(null);
 	let logoUrl = $state(branding?.logoUrl ?? '');
 	let logoPreview = $derived(logoUrl || '/Hallify.svg');
 
@@ -29,36 +30,62 @@
 	// still posted the previously saved colour.
 	let primaryColor = $state(data.branding?.primaryColor ?? '#f05ca1');
 
-	// The logo and the colour are the only two fields held in client state; the rest are
-	// plain inputs that Svelte re-syncs from `data` on their own. Re-seed these two when
-	// the saved branding changes, so "Reset to defaults" actually clears the preview
-	// instead of leaving the old logo and colour on screen.
+	// Every field of the branding form is held in client state. The name and theme used
+	// to be uncontrolled inputs seeded from `data`: any re-render (changing the colour
+	// was enough) put the saved values back over what had just been typed, so Save
+	// stored the old name.
+	let appName = $state(data.branding?.appName ?? 'Hallify');
+	let theme = $state(data.branding?.theme ?? 'slate');
+
+	// Re-seed from the saved branding when it changes (after a save or "Reset to
+	// defaults"), so the form shows what is stored — and only then.
 	let lastSaved = ''; // plain let on purpose: a marker, not reactive state
 	$effect(() => {
-		const snapshot = `${data.branding?.logoUrl ?? ''}|${data.branding?.primaryColor ?? ''}`;
+		const b = data.branding ?? {};
+		const snapshot = JSON.stringify([b.logoUrl, b.primaryColor, b.appName, b.theme]);
 		if (snapshot === lastSaved) return;
 		lastSaved = snapshot;
-		logoUrl = data.branding?.logoUrl ?? '';
-		primaryColor = data.branding?.primaryColor ?? '#f05ca1';
+		logoUrl = b.logoUrl ?? '';
+		primaryColor = b.primaryColor ?? '#f05ca1';
+		appName = b.appName ?? 'Hallify';
+		theme = b.theme ?? 'slate';
 	});
 
+	// The logo goes to the same image endpoint as hall photos. It used to call
+	// /api/upload, which does not exist, and failed without a word.
 	async function uploadLogo(e: Event) {
 		const input = e.target as HTMLInputElement;
 		const file = input.files?.[0];
 		if (!file) return;
 		uploading = true;
+		uploadError = null;
 		try {
 			const fd = new FormData();
 			fd.append('file', file);
-			const res = await fetch('/api/upload', { method: 'POST', body: fd });
+			const res = await fetch('/api/upload/image', { method: 'POST', body: fd });
 			if (res.ok) {
-				const data = await res.json();
-				logoUrl = data.url;
+				const body = await res.json();
+				logoUrl = body.url;
+			} else {
+				const body = await res.json().catch(() => null);
+				uploadError = body?.message ? `${t.settingsPages.logoUploadFailed} ${body.message}` : t.settingsPages.logoUploadFailed;
 			}
+		} catch {
+			uploadError = t.settingsPages.logoUploadFailed;
 		} finally {
 			uploading = false;
+			input.value = '';
 		}
 	}
+
+	/** Save as usual; "Reset to defaults" (a second submit button) asks first. */
+	const submitBranding: import('@sveltejs/kit').SubmitFunction = ({ action, cancel }) => {
+		if (action.search.includes('resetDefaults') && !confirm(t.settingsPages.confirmResetBranding)) {
+			cancel();
+			return;
+		}
+		return async ({ update }) => { await update({ reset: false }); };
+	};
 </script>
 
 <svelte:head><title>{t.settingsPages.customizeTitle} – {t.settings.title} – Hallify</title></svelte:head>
@@ -123,7 +150,7 @@
 		<a href="/app/billing" class="btn-action locked-cta">{t.settingsPages.viewPlans}</a>
 	</div>
 {:else}
-<form method="POST" action="?/save" use:enhance={() => { return async ({ update }) => { await update({ reset: false }); }; }}>
+<form method="POST" action="?/save" use:enhance={submitBranding}>
 	<input type="hidden" name="logoUrl" value={logoUrl} />
 
 	<!-- ── Theme ──────────────────────────────────── -->
@@ -134,9 +161,9 @@
 		</div>
 		<div class="theme-grid">
 			{#each themes as th}
-				<label class="theme-option" class:selected={(branding?.theme ?? 'slate') === th.id}>
-					<input type="radio" name="theme" value={th.id} checked={(branding?.theme ?? 'slate') === th.id} />
-					<div class="theme-preview" style="background:{th.bg}; border-color:{(branding?.theme ?? 'slate') === th.id ? th.accent : 'transparent'}">
+				<label class="theme-option" class:selected={theme === th.id}>
+					<input type="radio" name="theme" value={th.id} bind:group={theme} />
+					<div class="theme-preview" style="background:{th.bg}; border-color:{theme === th.id ? th.accent : 'transparent'}">
 						<div class="preview-sidebar" style="background:{th.panel}; border-color:{th.border}">
 							<div class="preview-dot" style="background:{th.accent}"></div>
 							<div class="preview-line"></div>
@@ -180,27 +207,27 @@
 							<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
 							{t.settingsPages.uploadImage}
 						{/if}
-						<input type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" onchange={uploadLogo} disabled={uploading} />
+						<input type="file" accept="image/png,image/jpeg,image/webp,image/gif" onchange={uploadLogo} disabled={uploading} />
 					</label>
 					{#if logoUrl && logoUrl !== '/Hallify.svg'}
 						<button type="button" class="remove-logo" onclick={() => logoUrl = ''}>{t.settingsPages.remove}</button>
 					{/if}
 					<span class="upload-hint">{t.settingsPages.logoFormatsHint}</span>
+					{#if uploadError}<span class="upload-error" role="alert">{uploadError}</span>{/if}
 				</div>
 			</div>
 		</div>
 
-		<!-- App name + tagline -->
+		<!-- App name. The slogan field that sat beside it was shown nowhere; the public
+		     site's subtitle lives under Verejná stránka. A stored slogan is carried
+		     along unchanged rather than wiped. -->
 		<div class="field-row">
 			<div class="field">
 				<label for="brand-name" class="field-label">{t.settingsPages.orgDisplayName}</label>
-				<input id="brand-name" name="appName" type="text" value={branding?.appName ?? 'Hallify'} placeholder="Hallify" />
-			</div>
-			<div class="field">
-				<label for="brand-tagline" class="field-label">{t.settingsPages.tagline} <span class="opt">{t.settingsPages.optional}</span></label>
-				<input id="brand-tagline" name="tagline" type="text" value={branding?.tagline ?? ''} placeholder={t.settingsPages.taglinePlaceholder} />
+				<input id="brand-name" name="appName" type="text" maxlength="80" bind:value={appName} placeholder="Hallify" />
 			</div>
 		</div>
+		<input type="hidden" name="tagline" value={branding?.tagline ?? ''} />
 	</section>
 
 	<!-- ── Accent color ───────────────────────────── -->
@@ -417,6 +444,10 @@
 	.upload-hint {
 		font-size: 11px;
 		color: var(--text-subtle);
+	}
+	.upload-error {
+		font-size: 12px;
+		color: var(--danger);
 	}
 
 	.field-row {

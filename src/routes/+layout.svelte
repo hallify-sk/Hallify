@@ -96,7 +96,8 @@
 			: ''
 	);
 
-	const orgTheme = $derived(branding?.theme ?? 'slate');
+	// The organisation's default theme (Settings → Customize), or null when it set none.
+	const orgTheme = $derived<string | null>(branding?.theme ?? null);
 
 	const AUTH_PATHS = ['/app/login', '/app/register', '/app/forgot-password', '/app/reset-password', '/app/invite', '/login'];
 	const isAuthPage = $derived(AUTH_PATHS.some(p => $page.url.pathname.startsWith(p)));
@@ -131,16 +132,17 @@
 
 	onMount(() => {
 		const saved = localStorage.getItem('hallify-theme');
-		themeStore.set(saved ?? osTheme());
+		themeStore.set(saved ?? orgTheme ?? osTheme());
 	});
 
-	// When org theme changes (e.g. org switch) and user has no personal preference,
-	// fall back to OS preference rather than the org default.
+	// When the org theme changes (e.g. org switch) and the member has no personal
+	// preference, use the organisation's default, and without one the OS preference.
+	// This used to ignore the org default, so choosing one in Customize did nothing.
 	$effect(() => {
-		const _o = orgTheme;
+		const o = orgTheme;
 		if (typeof localStorage !== 'undefined') {
 			const saved = localStorage.getItem('hallify-theme');
-			if (!saved) themeStore.set(osTheme());
+			if (!saved) themeStore.set(o ?? osTheme());
 		}
 	});
 </script>
