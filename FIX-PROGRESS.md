@@ -32,3 +32,5 @@
 | I19 | done | "Paid" counts Stripe-backed subscriptions only, manual plans shown apart, partners = is_hallify_partner. |
 | B81 | partial | Strict hostname validation (rejects -bad-.sk, a..b.sk; pasted URLs tidied), clear pending-verification explanation, unverified claims expire after 7 days so a squatter cannot block the owner. Real ownership verification needs Cloudflare for SaaS (owner). |
 | I17 | done | No CF_ZONE_ID jargon: plain notice when connection is manual, refresh step only when automatic, "čaká na pripojenie" label. |
+| B82 | done | All help articles in Slovak and English; categories, page title and "More in" localized; both languages sent so the switch needs no reload. |
+| M21 | done | Help search (diacritics-insensitive, ranked) and new SK+EN articles: public site, webhooks, AI assistant, messages, calendar (+ export and closing). |

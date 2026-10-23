@@ -2347,6 +2347,9 @@ export const sk = {
 			team:   { label: "Pozvite kolegu", desc: "Prizvite kolegov, aby pomohli spravovať udalosti.", cta: "Pozvať" },
 		},
 		knowledgebase: "Databáza znalostí",
+		helpSearchPlaceholder: "Hľadať v návodoch, napr. webhook, kalendár…",
+		helpSearchEmpty: "Nenašli sme žiadny návod. Skúste iné slovo.",
+		helpMoreIn: "Ďalšie v kategórii",
 	},
 	ai: {
 		navLabel: "AI asistent",
@@ -5255,6 +5258,9 @@ export const en: typeof sk = {
 			team:   { label: "Invite a teammate", desc: "Bring colleagues in to help manage events.", cta: "Invite" },
 		},
 		knowledgebase: "Knowledgebase",
+		helpSearchPlaceholder: "Search the guides, e.g. webhook, calendar…",
+		helpSearchEmpty: "No guide found. Try another word.",
+		helpMoreIn: "More in",
 	},
 	ai: {
 		navLabel: "AI assistant",

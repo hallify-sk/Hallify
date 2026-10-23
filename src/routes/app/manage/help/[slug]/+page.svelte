@@ -1,32 +1,36 @@
 <script lang="ts">
+  import { t, getLocale } from '$lib/i18n.svelte';
   import type { PageData } from './$types';
   let { data }: { data: PageData } = $props();
+  const view = $derived(getLocale() === 'en' ? data.en : data.sk);
+  const article = $derived(view.article);
+  const related = $derived(view.related);
 </script>
 
-<svelte:head><title>{data.article.title} – Help – Hallify</title></svelte:head>
+<svelte:head><title>{article.title} – {t.membersAdmin.helpTitle} – Hallify</title></svelte:head>
 
 <div class="wrap page">
   <a href="/app/manage/help" class="back">
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
-    Help
+    {t.membersAdmin.helpTitle}
   </a>
 
   <section class="section section--lead article">
     <div class="section-head">
-      <span class="eyebrow cat">{data.article.category}</span>
-      <h1>{data.article.title}</h1>
+      <span class="eyebrow cat">{article.category}</span>
+      <h1>{article.title}</h1>
     </div>
     <!-- Trusted, code-authored content. -->
-    <div class="body">{@html data.article.body}</div>
+    <div class="body">{@html article.body}</div>
   </section>
 
-  {#if data.related.length}
+  {#if related.length}
     <section class="section related">
       <div class="section-head">
-        <span class="eyebrow related-label">More in {data.article.category}</span>
+        <span class="eyebrow related-label">{t.membersAdmin.helpMoreIn} {article.category}</span>
       </div>
       <div class="row-list">
-        {#each data.related as r}
+        {#each related as r}
           <a href="/app/manage/help/{r.slug}" class="row-item related-link">{r.title}</a>
         {/each}
       </div>
