@@ -5,6 +5,7 @@ import type { HallRow, HallBlockRow } from '$lib/db/index';
 import type { PageServerLoad, Actions } from './$types';
 import { assertCanBook, getTakenDates, getHeldDatesByOthers, getUnavailableDates, getFullMonths, releaseHold, earliestBookableISO, isoLocal, addDays, HOLD_MINUTES } from '$lib/availability';
 import { notifyNewReservation, notifyBookingReceived } from '$lib/email';
+import { notifyOrg } from '$lib/server/notification-centre';
 import { dispatchWebhooks } from '$lib/notifications';
 import { st } from '$lib/i18n-server';
 import { loadBookableExtras } from '$lib/site/bookable-extras';
@@ -117,6 +118,11 @@ export const actions: Actions = {
 		// Let the venue's owners/admins know a guest has requested a booking.
 		const guestName = `${locals.user.first_name} ${locals.user.last_name}`;
 		notifyNewReservation(locals.db, orgId, title, guestName, hall.name, eventDate, { reservationId }).catch(() => {});
+		await notifyOrg(locals.db, {
+			orgId, kind: status === 'pending' ? 'booking.requested' : 'booking.created',
+			params: { title, hall: hall.name, date: eventDate, client: guestName },
+			link: `/app/reservation/${reservationId}`, actorId: locals.user.id,
+		});
 		// And give the client a receipt: "we have your request", or "confirmed" when
 		// the hall approves bookings by itself.
 		notifyBookingReceived(locals.db, orgId, reservationId).catch(() => {});

@@ -11,6 +11,7 @@ import type { HallRow, ReservationStatus, TemplateRow } from '$lib/db/index';
 import { assertCanBook, releaseHold } from '$lib/availability';
 import { st } from '$lib/i18n-server';
 import { notifyNewReservation, notifyBookingReceived } from '$lib/email';
+import { notifyOrg } from '$lib/server/notification-centre';
 import { postSystemMessage } from '$lib/tickets';
 import { noteMonthUsage, recordTurnedAway } from '$lib/server/cap-notices';
 import { keepAlive } from '$lib/server/background';
@@ -178,6 +179,12 @@ export async function createReservation(
 		await postSystemMessage(locals.db, user.id, title, `reservation_created:${initialStatus}:${userName}`, user.id, newId);
 		// Staff are not e-mailed about a booking one of them typed in.
 		if (!staff) notifyNewReservation(locals.db, input.orgId, title, userName, hall.name, eventDate, { reservationId: newId }).catch(() => {});
+		// And the notification centre (D12): a request, or a booking the hall confirmed itself.
+		if (!staff) await notifyOrg(locals.db, {
+			orgId: input.orgId, kind: initialStatus === 'pending' ? 'booking.requested' : 'booking.created',
+			params: { title, hall: hall.name, date: eventDate, client: userName },
+			link: `/app/reservation/${newId}`, actorId: user.id,
+		});
 		// A client booking for themselves gets a receipt (staff do not, for their own events).
 		if (!staff && user.account_type === 'client') notifyBookingReceived(locals.db, input.orgId, newId).catch(() => {});
 	}

@@ -9,6 +9,8 @@ import { noteMonthUsage, recordTurnedAway } from '$lib/server/cap-notices';
 import { keepAlive } from '$lib/server/background';
 import { dispatchWebhooks } from '$lib/notifications';
 import { notifyGuestMessage, notifyGuestCancel, notifyGuestEdit, notifyClientEdited, notifyClientCancelled, reservationChanges } from '$lib/email';
+import { notifyOrg } from '$lib/server/notification-centre';
+import { excerpt } from '$lib/notification-centre';
 import {
 	assertCanBook, getTakenDates, getHeldDatesByOthers, getUnavailableDates, getFullMonths,
 	earliestBookableISO, isoLocal, addDays,
@@ -162,6 +164,11 @@ export const actions: Actions = {
 				reservationId: params.id, changes: [change],
 			}).catch(() => {});
 			notifyClientEdited(locals.db, orgId, params.id, [change]).catch(() => {});
+			await notifyOrg(locals.db, {
+				orgId, kind: 'booking.changed',
+				params: { title: reservation.title, hall: reservation.hall_name, date: reservation.event_date, client: guestName },
+				link: `/app/reservation/${params.id}`, actorId: locals.user.id, dedupeKey: `booking.changed:${params.id}`,
+			});
 		}
 		return { extrasSaved: true };
 	},
@@ -226,6 +233,13 @@ export const actions: Actions = {
 			changes,
 		}).catch(() => {});
 		notifyClientEdited(locals.db, orgId, params.id, changes).catch(() => {});
+		if (changes.length) {
+			await notifyOrg(locals.db, {
+				orgId, kind: 'booking.changed',
+				params: { title, hall: hall.name, date: eventDate, client: guestName },
+				link: `/app/reservation/${params.id}`, actorId: userId, dedupeKey: `booking.changed:${params.id}`,
+			});
+		}
 
 		return { updated: true };
 	},
@@ -270,6 +284,11 @@ export const actions: Actions = {
 		const guestName = `${locals.user.first_name} ${locals.user.last_name}`;
 		notifyGuestCancel(locals.db, orgId, guestName, reservation.title, reservation.hall_name, reservation.event_date, { reservationId: reservation.id }).catch(() => {});
 		notifyClientCancelled(locals.db, orgId, reservation.id).catch(() => {});
+		await notifyOrg(locals.db, {
+			orgId, kind: 'booking.cancelled',
+			params: { title: reservation.title, hall: reservation.hall_name, date: reservation.event_date, client: guestName },
+			link: `/app/reservation/${reservation.id}`, actorId: userId,
+		});
 
 		return { cancelled: true };
 	},
@@ -307,6 +326,11 @@ export const actions: Actions = {
 
 		notifyGuestMessage(locals.db, orgId, `${user.first_name} ${user.last_name}`,
 			subjectFor(reservation.hall_name, reservation.event_date, locals.locale), body, { reservationId: reservation.id, ticketId: ticket.id }).catch(() => {});
+		await notifyOrg(locals.db, {
+			orgId, kind: 'message.received',
+			params: { client: `${user.first_name} ${user.last_name}`.trim(), excerpt: excerpt(body), title: reservation.title },
+			link: `/app/manage/messages/${ticket.id}`, actorId: user.id, dedupeKey: `message:${ticket.id}`,
+		});
 
 		return { msgSent: true };
 	},

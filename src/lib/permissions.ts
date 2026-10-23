@@ -150,7 +150,9 @@ export function consoleEntryPermissions(): Permission[] {
 export interface AreaAccess {
 	reservations: { view: boolean; manage: boolean };
 	calendar: { view: boolean; openReservations: boolean; create: boolean };
-	halls: { view: boolean; manage: boolean; floorplans: boolean; templates: boolean };
+	/** `tableTypes`: the hall's table inventory, which the templates are laid out
+	 *  from, so templates.manage edits it too (as its description says). */
+	halls: { view: boolean; manage: boolean; floorplans: boolean; templates: boolean; tableTypes: boolean };
 	members: { view: boolean; manage: boolean };
 	messages: { view: boolean; send: boolean };
 	/** Post in the organisation's announcement channels and create new ones. */
@@ -169,7 +171,8 @@ export function areaAccess(permissions: Iterable<string>): AreaAccess {
 			view: opens('halls'),
 			manage: has('halls.manage'),
 			floorplans: has('floorplans.manage'),
-			templates: has('templates.manage')
+			templates: has('templates.manage'),
+			tableTypes: has('halls.manage') || has('templates.manage')
 		},
 		members: { view: opens('members'), manage: has('members.manage') },
 		// Sending without reading would be posting blind into threads one cannot open.

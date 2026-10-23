@@ -8,7 +8,12 @@ import { st } from '$lib/i18n-server';
 import type { Actions, PageServerLoad } from './$types';
 import { sendEmail } from '$lib/email';
 import { OPERATOR } from '$lib/legal';
-import { requireOrgArea, requireOrgPermission } from '$lib/server/access';
+import { requireOrgAnyPermission, requireOrgArea, requireOrgPermission } from '$lib/server/access';
+import type { Permission } from '$lib/permissions';
+
+/** The table inventory the templates are laid out from: templates.manage edits it
+ *  too, as its description promises (see `areaAccess`). */
+const TABLE_TYPE_EDITORS: Permission[] = ['halls.manage', 'templates.manage'];
 import { canManageSettings } from '$lib/server/settings-access';
 import { parseCoordinates } from '$lib/venue-location';
 import { geocodeAddress } from '$lib/server/geocode';
@@ -199,7 +204,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 
 	// Ordering (or withdrawing) the paid mapping add-on needs settings.manage (I29).
 	const canOrderAddons = await canManageSettings(locals);
-	const hallAccess = { manage: access.halls.manage, floorplans: access.halls.floorplans, templates: access.halls.templates };
+	const hallAccess = { manage: access.halls.manage, floorplans: access.halls.floorplans, templates: access.halls.templates, tableTypes: access.halls.tableTypes };
 	return { hall, templates, blocks, tableTypes, reservations, extras, plan, orgAmenities, floorplanRequest, blocking, unused, planFull, swapCandidates, canOrderAddons, hallAccess };
 };
 
@@ -334,14 +339,14 @@ export const actions: Actions = {
 	},
 
 	addTableType: async ({ request, params, locals }) => {
-		const org = await requireOrgPermission(locals, 'halls.manage');
+		const { org } = await requireOrgAnyPermission(locals, TABLE_TYPE_EDITORS);
 		const res = await addTableType(locals.db, org.id, params.id, tableTypeFromForm(await request.formData()), locals.locale);
 		if (!res.ok) return fail(res.status, { tableTypeError: res.error });
 		return { tableTypeSuccess: true };
 	},
 
 	updateTableType: async ({ request, params, locals }) => {
-		const org = await requireOrgPermission(locals, 'halls.manage');
+		const { org } = await requireOrgAnyPermission(locals, TABLE_TYPE_EDITORS);
 		const data = await request.formData();
 		const id = String(data.get('id') ?? '');
 		if (!id) return fail(400, { tableTypeError: st(locals.locale).serverErrors.missingTableType });
@@ -351,7 +356,7 @@ export const actions: Actions = {
 	},
 
 	deleteTableType: async ({ request, params, locals }) => {
-		const org = await requireOrgPermission(locals, 'halls.manage');
+		const { org } = await requireOrgAnyPermission(locals, TABLE_TYPE_EDITORS);
 		await removeTableType(locals.db, org.id, params.id, String((await request.formData()).get('id') ?? ''));
 		return { success: true };
 	},

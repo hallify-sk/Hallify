@@ -100,6 +100,7 @@
   const canEditHall = $derived(data.hallAccess.manage);
   const canFloorplans = $derived(data.hallAccess.floorplans);
   const canTemplates = $derived(data.hallAccess.templates);
+  const canTableTypes = $derived(data.hallAccess.tableTypes);
   let showBulkCancel = $state(false);
   let cancelNote = $state('');
   let retireDialog = $state<'archive' | 'delete' | null>(null);
@@ -1763,11 +1764,11 @@
           <ul class="fp-list">
             {#each data.tableTypes as tt}
               <li>
-                <button type="button" class="fp-row" onclick={() => openTtEdit(tt)} aria-label="{t.common.edit} {tt.name}" disabled={!canEditHall}>
+                <button type="button" class="fp-row" onclick={() => openTtEdit(tt)} aria-label="{t.common.edit} {tt.name}" disabled={!canTableTypes}>
                   <span class="fp-thumb">{@render tablePreview(tt.shape, tt.width, tt.height, tt.max_chairs, tt.color || '#9a6512')}</span>
                   <span class="fp-row-text"><b>{tt.name}</b><span>{ttMeta(tt)}</span></span>
                 </button>
-                {#if canEditHall}
+                {#if canTableTypes}
                 <form method="POST" action="?/deleteTableType" use:enhance>
                   <input type="hidden" name="id" value={tt.id} />
                   <button type="submit" class="fp-del" title={t.common.delete} aria-label="{t.common.delete} {tt.name}"
@@ -1780,7 +1781,7 @@
             {/each}
           </ul>
         {/if}
-        {#if canEditHall}
+        {#if canTableTypes}
         <footer class="fp-step-foot">
           <button type="button" class={data.tableTypes.length ? 'btn-outline btn-sm' : 'btn-primary btn-sm'} onclick={openTtNew}>+ {t.halls.addTableType}</button>
         </footer>

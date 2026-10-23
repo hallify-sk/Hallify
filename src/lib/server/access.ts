@@ -142,11 +142,11 @@ export function requirePermission(access: MemberAccess, permission: Permission):
  *           names a MANAGE permission, so a member stays shut out exactly as
  *           requireOrgStaff shut them out.
  *
- * That last point is the whole reason these gates name manage permissions and
- * never view ones: gating a console page on `reservations.view` would silently
- * hand every existing member access they have never had, which is a privacy
- * change no organisation asked us to make on their behalf. Custom roles holding
- * the manage permission are the only parties whose access actually changes.
+ * Since D3 the view permissions do what the role editor says they do: read-only
+ * pages guard on `requireOrgArea` (the view permission or a manage one), and this
+ * guard stays on the manage permission every action needs. An organisation that
+ * wants its members out of, say, the bookings takes `reservations.view` off the
+ * default Member role.
  */
 export async function requireOrgPermission(
 	locals: App.Locals,

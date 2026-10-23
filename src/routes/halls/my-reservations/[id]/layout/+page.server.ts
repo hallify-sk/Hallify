@@ -9,6 +9,7 @@ import { applyTemplateKeepingGuests, arrangementKey } from '$lib/floorplan-layou
 import { st } from '$lib/i18n-server';
 import { hasEventStarted } from '$lib/reservationStatus';
 import { tableInventoryError } from '$lib/server/table-inventory';
+import { notifyOrg } from '$lib/server/notification-centre';
 import type { Actions, PageServerLoad } from './$types';
 
 // The booking client may edit the seating layout once the event is approved — but only
@@ -67,6 +68,20 @@ function tablesLocked(hall: { hall_custom_layouts: number | null; hall_force_lay
 	return !hall.hall_custom_layouts || !!hall.hall_force_layouts;
 }
 
+/** The client rearranged their event's tables or seating: the venue's notification
+ *  centre hears of it once an hour at most (a seating session is many saves). */
+async function notifyLayoutChanged(locals: App.Locals, orgId: string, reservationId: string) {
+	const r = await dbFirst<{ title: string; event_date: string; hall_name: string }>(locals.db,
+		'SELECT r.title, r.event_date, h.name AS hall_name FROM reservations r JOIN halls h ON h.id = r.hall_id WHERE r.id = ?',
+		reservationId);
+	if (!r || !locals.user) return;
+	await notifyOrg(locals.db, {
+		orgId, kind: 'booking.changed',
+		params: { title: r.title, hall: r.hall_name, date: r.event_date, client: `${locals.user.first_name} ${locals.user.last_name}`.trim() },
+		link: `/app/reservation/${reservationId}`, actorId: locals.user.id, dedupeKey: `booking.changed:${reservationId}`,
+	});
+}
+
 export const actions: Actions = {
 	saveLayout: async ({ request, locals, params }) => {
 		if (!locals.user) return fail(403, { error: st(locals.locale).serverErrors.unauthorized });
@@ -98,6 +113,7 @@ export const actions: Actions = {
 
 		await dbRun(locals.db, 'UPDATE reservations SET layout_json = ? WHERE id = ? AND user_id = ? AND org_id = ?',
 			layoutJson, params.id, locals.user.id, orgId);
+		await notifyLayoutChanged(locals, orgId, params.id);
 		return { success: true };
 	},
 
@@ -135,6 +151,7 @@ export const actions: Actions = {
 
 		await dbRun(locals.db, 'UPDATE reservations SET layout_json = ? WHERE id = ? AND user_id = ? AND org_id = ?',
 			JSON.stringify(applied.layout), params.id, locals.user.id, orgId);
+		await notifyLayoutChanged(locals, orgId, params.id);
 		return { success: true, layout: applied.layout, reseated: applied.reseated, unseated: applied.unseated };
 	}
 };

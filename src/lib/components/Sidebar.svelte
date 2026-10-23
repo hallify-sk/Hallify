@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { page } from '$app/stores';
   import OrgSwitcher from './OrgSwitcher.svelte';
+  import NotificationBell from './NotificationBell.svelte';
   import type { SessionUser } from '$lib/auth';
   import type { Branding, OrgContext } from '../../app.d';
   import { t, getLocale, chooseLocale, type Locale } from '$lib/i18n.svelte';
@@ -30,9 +31,13 @@
      *  with a close button. */
     inDrawer?: boolean;
     onclose?: () => void;
+    /** The notification centre's bell (D12). In the drawer the phone's top bar has it. */
+    notificationCentre?: boolean;
+    unreadNotifications?: number;
+    onNotificationsChange?: (unread: number) => void;
   }
 
-  const { user, branding, currentOrg, orgs = [], allOrgs = [], onBubble = false, unreadMessages = 0, unreadAnnouncements = 0, permissions = [], venueSiteUrl = null, inDrawer = false, onclose }: Props = $props();
+  const { user, branding, currentOrg, orgs = [], allOrgs = [], onBubble = false, unreadMessages = 0, unreadAnnouncements = 0, permissions = [], venueSiteUrl = null, inDrawer = false, onclose, notificationCentre = false, unreadNotifications = 0, onNotificationsChange }: Props = $props();
 
   const isOrgAdmin    = $derived(currentOrg?.role === 'owner' || currentOrg?.role === 'admin');
   // Each console link shows when the member holds the permission its page requires,
@@ -93,6 +98,9 @@
       <img src={branding?.logoUrl || '/Hallify.svg'} alt="" class="logo-img" />
       <span class="logo-text">{branding?.appName || 'Hallify'}</span>
     </a>
+    {#if notificationCentre && user && !inDrawer}
+      <NotificationBell unread={unreadNotifications} onchange={onNotificationsChange} />
+    {/if}
     {#if inDrawer && onclose}
       <button class="drawer-close" type="button" aria-label={t.sidebar.closeMenu} onclick={onclose}>
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
@@ -469,6 +477,11 @@
   .sidebar-header {
     padding: 16px 14px 10px;
     flex-shrink: 0;
+    /* The logo, and the notification bell at the far end. */
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
   }
   .sidebar.in-drawer .sidebar-header {
     display: flex;
@@ -815,7 +828,7 @@
   .sidebar.rail:not(:hover) .theme-switcher,
   .sidebar.rail:not(:hover) .user-info,
   .sidebar.rail:not(:hover) .user-footer .chevron { display: none; }
-  .sidebar.rail:not(:hover) .sidebar-header { padding: 16px 0 10px; text-align: center; }
+  .sidebar.rail:not(:hover) .sidebar-header { padding: 16px 0 10px; text-align: center; flex-direction: column; justify-content: center; }
   .sidebar.rail:not(:hover) .sidebar-nav { padding: 4px 8px 8px; }
   .sidebar.rail:not(:hover) .nav-item {
     font-size: 0;
