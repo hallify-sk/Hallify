@@ -4,7 +4,9 @@ import { d1, migratedSqlite } from './test-d1';
 import { hallSlug, isReservedHallSlug, nextUntitledHallName, uniqueHallSlug } from './hall-naming';
 
 function seeded() {
-	const sqlite = migratedSqlite('0021');
+	// The schema this branch started from: other branches' migrations (0015–0021)
+	// are theirs to test, and 0022 touches only columns that exist since 0006.
+	const sqlite = migratedSqlite('0014');
 	sqlite.exec("INSERT INTO organizations(id,name,slug) VALUES ('o1','Org one','one'), ('o2','Org two','two')");
 	return sqlite;
 }
