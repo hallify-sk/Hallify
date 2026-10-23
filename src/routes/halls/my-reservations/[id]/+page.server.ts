@@ -22,6 +22,7 @@ import type { Actions, PageServerLoad } from './$types';
 import { markTicketRead } from '$lib/unread';
 import { logReservationActivity } from '$lib/server/reservation-activity';
 import { findOrCreateReservationThread, MESSAGE_MAX } from '$lib/server/threads';
+import { loadPaymentView } from '$lib/server/payments';
 
 const RANGE_DAYS = 540;
 const EDITABLE = new Set(['pending']);
@@ -122,6 +123,8 @@ export const load: PageServerLoad = async ({ params, locals, url }) => {
 		heldDates: hall ? await getHeldDatesByOthers(locals.db, hall.id, userId) : [],
 		earliestDate: earliestBookableISO(hall?.min_days_advance ?? 0),
 		thread: { ticketId: ticket?.id ?? null, messages },
+		// Price and how to pay the venue (D6); nothing to pay on a cancelled booking.
+		payment: reservation.status === 'cancelled' ? null : await loadPaymentView(locals.db, orgId, reservation.id),
 	};
 };
 

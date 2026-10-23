@@ -8,6 +8,7 @@
 	import { reveal } from '$lib/reveal';
 	import { t, getLocale } from '$lib/i18n.svelte';
 	import { formatDate, formatDateTime, formatMoney } from '$lib/format';
+	import { formatIban } from '$lib/payment';
 	import type { PageData, ActionData } from './$types';
 
 	interface Props { data: PageData; form: ActionData; }
@@ -24,6 +25,20 @@
 	const extrasOverview = $derived(computeExtras(data.extras, data.extrasEditable ? extraSel : data.selectedExtras, r.num_guests));
 
 	let editing = $state(false);
+
+	// Price and payment (D6): shown when the venue stated anything, and always while
+	// the booking waits for payment, so the client knows what is expected of them.
+	const pay = $derived(data.payment);
+	const showPayment = $derived(!!pay && (pay.hasAny || r.status === 'waiting_payment'));
+	const awaitingPayment = $derived(r.status === 'waiting_payment' && pay?.state !== 'paid');
+	let copiedKey = $state('');
+	async function copyValue(key: string, value: string) {
+		try {
+			await navigator.clipboard.writeText(value);
+			copiedKey = key;
+			setTimeout(() => { if (copiedKey === key) copiedKey = ''; }, 2000);
+		} catch { /* clipboard refused: the value is on screen to copy by hand */ }
+	}
 	let confirmCancel = $state(false);
 
 	let eTitle = $state('');
@@ -213,6 +228,56 @@
 			<div><dt>{t.myRes.reference}</dt><dd class="mono">{r.invite_code}</dd></div>
 			{#if r.description}<div class="full"><dt>{t.myRes.notes}</dt><dd>{r.description}</dd></div>{/if}
 		</dl>
+
+		{#if showPayment && pay}
+			<div class="block pay-box" class:pay-due={awaitingPayment}>
+				<span class="eyebrow extras-title">{t.payment.clientTitle}</span>
+				{#if awaitingPayment}
+					<p class="pay-lead">{pay.hasInstructions || pay.hasAmounts ? t.payment.clientWaiting : t.payment.clientWaitingNoDetails}</p>
+				{/if}
+				{#if pay.hasAny}
+					<dl class="detail-list pay-list">
+						{#if pay.priceCents != null}<div><dt>{t.payment.price}</dt><dd>{eur(pay.priceCents)}</dd></div>{/if}
+						{#if pay.depositCents != null}
+							<div>
+								<dt>{t.payment.deposit}</dt>
+								<dd>{eur(pay.depositCents)}{#if pay.depositDueDate && !pay.depositPaidAt && !pay.paidInFullAt}<span class="pay-sub">{t.payment.dueBy(formatDate(pay.depositDueDate, getLocale(), { day: 'numeric', month: 'long', year: 'numeric' }))}</span>{/if}</dd>
+							</div>
+						{/if}
+						{#if pay.state === 'paid'}
+							<div><dt>{t.payment.statePaid}</dt><dd class="pay-ok">{t.payment.paidOn(formatDate(pay.paidInFullAt, getLocale()))}</dd></div>
+						{:else if pay.state === 'deposit_paid'}
+							<div><dt>{t.payment.stateDepositPaid}</dt><dd class="pay-ok">{formatDate(pay.depositPaidAt, getLocale())}</dd></div>
+							{#if pay.balanceCents != null}<div><dt>{t.payment.balance}</dt><dd>{eur(pay.balanceCents)}</dd></div>{/if}
+						{/if}
+						{#if pay.state !== 'paid'}
+							{#if pay.iban}
+								<div class="full">
+									<dt>{t.payment.iban}</dt>
+									<dd class="pay-copyrow">
+										<span class="mono">{formatIban(pay.iban)}</span>
+										<button type="button" class="pay-copy" onclick={() => copyValue('iban', pay.iban ?? '')}>{copiedKey === 'iban' ? t.payment.copied : t.payment.copy}</button>
+									</dd>
+								</div>
+							{/if}
+							{#if pay.recipient}<div><dt>{t.payment.recipient}</dt><dd>{pay.recipient}</dd></div>{/if}
+							{#if pay.bic}<div><dt>{t.payment.bic}</dt><dd class="mono">{pay.bic}</dd></div>{/if}
+							{#if pay.variableSymbol}
+								<div>
+									<dt>{t.payment.variableSymbol}</dt>
+									<dd class="pay-copyrow">
+										<span class="mono">{pay.variableSymbol}</span>
+										<button type="button" class="pay-copy" onclick={() => copyValue('vs', pay.variableSymbol ?? '')}>{copiedKey === 'vs' ? t.payment.copied : t.payment.copy}</button>
+									</dd>
+								</div>
+							{/if}
+							{#if pay.note}<div class="full"><dt>{t.payment.note}</dt><dd class="pay-note">{pay.note}</dd></div>{/if}
+						{/if}
+					</dl>
+				{/if}
+				<p class="x-note">{t.payment.clientDisclaimer(orgName)}</p>
+			</div>
+		{/if}
 
 		{#if data.canViewSeating}
 			<div class="block event-tools">
@@ -440,6 +505,24 @@
 		font-size: 13px; font-weight: 600; color: var(--text-base); text-decoration: none; transition: color .15s;
 	}
 	.tool-btn:hover { color: var(--accent-ink); text-decoration: none; }
+
+	/* Price and payment: a hairline block like the others; while the booking waits for
+	   payment it carries the warning tint, since that is what the client must act on. */
+	.pay-box.pay-due {
+		padding: 16px 18px; border-top: none; border-radius: var(--radius);
+		background: var(--warning-dim); border: 1px solid color-mix(in srgb, var(--warning) 30%, transparent);
+	}
+	.pay-lead { font-size: 13.5px; font-weight: 600; color: var(--text-base); margin: 0 0 14px; }
+	.pay-list { margin-bottom: 4px; }
+	.pay-sub { display: block; font-size: 12px; color: var(--text-muted); }
+	.pay-ok { color: var(--success); font-weight: 600; }
+	.pay-note { white-space: pre-line; overflow-wrap: anywhere; }
+	.pay-copyrow { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+	.pay-copy {
+		padding: 2px 9px; border-radius: var(--radius-sm); border: 1px solid var(--border); background: var(--bg-panel);
+		color: var(--text-muted); font: inherit; font-size: 11.5px; font-weight: 600; cursor: pointer;
+	}
+	.pay-copy:hover { color: var(--text-base); background: var(--bg-hover); }
 
 	.extras-box form { display: flex; flex-direction: column; }
 	.x-row { cursor: pointer; }

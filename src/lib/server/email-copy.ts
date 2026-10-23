@@ -9,7 +9,8 @@ export type EmailLocale = 'sk' | 'en';
 export type TemplateKey =
 	| 'newReservation' | 'guestMessage' | 'guestCancel' | 'guestEdit'
 	| 'statusChange' | 'hallCancellation' | 'newMessage' | 'passwordReset' | 'testEmail'
-	| 'bookingReceived' | 'bookingConfirmed' | 'clientEdited' | 'clientCancelled' | 'venueChanged' | 'eventReminder';
+	| 'bookingReceived' | 'bookingConfirmed' | 'clientEdited' | 'clientCancelled' | 'venueChanged' | 'eventReminder'
+	| 'paymentDetails';
 
 /** Default bodies of the templates platform admins can override on /app/platform/email.
  *  Every {{variable}} is HTML-escaped when rendered, and line breaks are kept. */
@@ -52,6 +53,8 @@ export const DEFAULT_TEMPLATES: Record<EmailLocale, Record<TemplateKey, string>>
 		eventReminder: `<h2>Vaše podujatie sa blíži</h2>
 <p><b>{{title}}</b> v sále <b>{{hallName}}</b> sa koná <b>{{date}}</b>.</p>
 <p>Podrobnosti, zasadací poriadok a správy pre prevádzku nájdete vo svojej rezervácii.</p>`,
+		paymentDetails: `<h2>Platobné údaje k vašej rezervácii</h2>
+<p>Prevádzka vám posiela cenu a platobné údaje k rezervácii <b>{{title}}</b> v sále <b>{{hallName}}</b> na <b>{{date}}</b>.</p>`,
 		passwordReset: `<h2>Obnovenie hesla</h2>
 <p>Požiadali ste o obnovenie hesla. Nové heslo si nastavíte cez tento odkaz:</p>
 <p><a href="{{resetUrl}}">{{resetUrl}}</a></p>
@@ -97,6 +100,8 @@ export const DEFAULT_TEMPLATES: Record<EmailLocale, Record<TemplateKey, string>>
 		eventReminder: `<h2>Your event is coming up</h2>
 <p><b>{{title}}</b> at <b>{{hallName}}</b> takes place on <b>{{date}}</b>.</p>
 <p>You will find the details, the seating plan and your messages with the venue in your reservation.</p>`,
+		paymentDetails: `<h2>Payment details for your reservation</h2>
+<p>The venue has sent you the price and payment details for your reservation <b>{{title}}</b> at <b>{{hallName}}</b> on <b>{{date}}</b>.</p>`,
 		passwordReset: `<h2>Password reset</h2>
 <p>You asked to reset your password. Set a new one with this link:</p>
 <p><a href="{{resetUrl}}">{{resetUrl}}</a></p>
@@ -152,6 +157,7 @@ const sk = {
 		clientCancelled: (title: string) => `Rezervácia zrušená: ${title}`,
 		venueChanged: (title: string) => `Prevádzka upravila vašu rezerváciu: ${title}`,
 		eventReminder: (title: string, date: string) => `Pripomienka: ${title} – ${date}`,
+		paymentDetails: (title: string) => `Platobné údaje: ${title}`,
 		passwordReset: 'Obnovenie hesla',
 		testEmail: 'Hallify – testovací e-mail',
 		announcement: (title: string) => `Oznámenie Hallify: ${title}`,
@@ -176,6 +182,23 @@ const sk = {
 		status: 'Stav',
 	},
 	noteFromVenue: 'Správa od prevádzky',
+	/** Price and payment rows (D6). Hallify collects nothing: the client pays the venue. */
+	payment: {
+		price: 'Celková cena',
+		deposit: 'Záloha',
+		depositDue: 'Splatnosť zálohy',
+		balance: 'Zostáva doplatiť',
+		state: 'Stav platby',
+		depositReceived: 'Záloha prijatá',
+		paid: 'Zaplatené',
+		iban: 'Číslo účtu (IBAN)',
+		bic: 'BIC (SWIFT)',
+		recipient: 'Príjemca',
+		variableSymbol: 'Variabilný symbol',
+		note: 'Poznámka k platbe',
+		disclaimer: (venue: string) => `Platbu nevyberá Hallify. Platíte priamo prevádzke ${venue} a s otázkami k platbe sa obracajte na ňu.`,
+		waitingInfo: 'Rezervácia čaká na vašu platbu. Cenu a platobné údaje nájdete nižšie.',
+	},
 	changes: {
 		title: 'Názov',
 		date: 'Dátum',
@@ -237,6 +260,7 @@ const en: typeof sk = {
 		clientCancelled: (title: string) => `Reservation cancelled: ${title}`,
 		venueChanged: (title: string) => `The venue changed your reservation: ${title}`,
 		eventReminder: (title: string, date: string) => `Reminder: ${title} – ${date}`,
+		paymentDetails: (title: string) => `Payment details: ${title}`,
 		passwordReset: 'Password reset',
 		testEmail: 'Hallify – test email',
 		announcement: (title: string) => `Hallify announcement: ${title}`,
@@ -261,6 +285,22 @@ const en: typeof sk = {
 		status: 'Status',
 	},
 	noteFromVenue: 'Message from the venue',
+	payment: {
+		price: 'Total price',
+		deposit: 'Deposit',
+		depositDue: 'Deposit due',
+		balance: 'Balance to pay',
+		state: 'Payment status',
+		depositReceived: 'Deposit received',
+		paid: 'Paid',
+		iban: 'Account number (IBAN)',
+		bic: 'BIC (SWIFT)',
+		recipient: 'Recipient',
+		variableSymbol: 'Payment reference (variable symbol)',
+		note: 'Payment note',
+		disclaimer: (venue: string) => `Hallify does not collect this payment. You pay ${venue} directly, and they answer any questions about it.`,
+		waitingInfo: 'This reservation is waiting for your payment. You will find the price and payment details below.',
+	},
 	changes: {
 		title: 'Name',
 		date: 'Date',
