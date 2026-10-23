@@ -37,7 +37,20 @@ export interface CreateReservationInput {
 	 *  otherwise arrive once per imported row. Webhooks still fire — integrations
 	 *  need every booking. */
 	silent?: boolean;
+	/** Entered by the venue's own team (the phone-booking form). Such a booking may
+	 *  start in a status other than pending, is not bound by the client-facing
+	 *  minimum-notice rule, and does not e-mail the staff about a booking they typed
+	 *  in themselves. The activity history still records it. */
+	byStaff?: {
+		initialStatus?: ReservationStatus | null;
+		customerName?: string | null;
+		customerContact?: string | null;
+		internalNotes?: string | null;
+	};
 }
+
+/** Statuses a booking may start in when the venue enters it. */
+export const STAFF_INITIAL_STATUSES: ReservationStatus[] = ['pending', 'waiting_payment', 'approved', 'planned'];
 
 export type CreateReservationResult =
 	| { ok: true; id: string; status: ReservationStatus; hallName: string }
@@ -102,7 +115,10 @@ export async function createReservation(
 	}
 
 	// All availability rules in one place (past/min-advance/blocked/taken/held/capacity).
-	const check = await assertCanBook(locals.db, hall, eventDate, user.id, numGuests, locals.locale);
+	// The notice period protects the venue from last-minute client requests; it does
+	// not stop the venue taking a last-minute booking itself.
+	const bookable = input.byStaff ? { ...hall, min_days_advance: 0 } : hall;
+	const check = await assertCanBook(locals.db, bookable, eventDate, user.id, numGuests, locals.locale);
 	if (!check.ok) return { ok: false, status: 400, error: check.reason ?? e.dateUnavailable };
 
 	let layoutJson: string | null = null;
@@ -119,7 +135,11 @@ export async function createReservation(
 		return { ok: false, status: 400, error: e.layoutMustBeSelected };
 	}
 
-	const initialStatus: ReservationStatus = hall.auto_approve ? 'approved' : 'pending';
+	const staffStatus = input.byStaff?.initialStatus;
+	const initialStatus: ReservationStatus = staffStatus && STAFF_INITIAL_STATUSES.includes(staffStatus)
+		? staffStatus
+		: hall.auto_approve ? 'approved' : 'pending';
+	const staff = input.byStaff;
 	const newId = crypto.randomUUID();
 	const inviteCode = crypto.randomUUID().replace(/-/g, '').slice(0, 8).toUpperCase();
 
@@ -130,6 +150,14 @@ export async function createReservation(
 			newId, input.orgId, hallId, user.id, title, description || null, eventDate,
 			startTime, endTime, layoutJson, initialStatus, inviteCode, numGuests, eventType
 		);
+		// The phone customer's details are staff-only columns (migration 0018). They used
+		// to be folded into the description, which the client sees once assigned.
+		if (staff && (staff.customerName || staff.customerContact || staff.internalNotes)) {
+			await dbRun(locals.db,
+				'UPDATE reservations SET customer_name = ?, customer_contact = ?, internal_notes = ? WHERE id = ?',
+				staff.customerName || null, staff.customerContact || null, staff.internalNotes || null, newId)
+				.catch((err) => console.error('saving phone-booking details failed:', err));
+		}
 	} catch {
 		// Lost the one-per-hall-day unique index race.
 		return { ok: false, status: 409, error: e.dateJustTaken };
@@ -139,8 +167,9 @@ export async function createReservation(
 
 	const userName = `${user.first_name} ${user.last_name}`;
 	if (!input.silent) {
-		await postSystemMessage(locals.db, user.id, title, `reservation_created:${initialStatus}:${userName}`, user.id);
-		notifyNewReservation(locals.db, input.orgId, title, userName, hall.name, eventDate).catch(() => {});
+		await postSystemMessage(locals.db, user.id, title, `reservation_created:${initialStatus}:${userName}`, user.id, newId);
+		// Staff are not e-mailed about a booking one of them typed in.
+		if (!staff) notifyNewReservation(locals.db, input.orgId, title, userName, hall.name, eventDate).catch(() => {});
 	}
 	// `reservation.new` is declared in WebhookEvent and offered in the webhook
 	// settings UI, but nothing ever dispatched it — subscribing was a no-op.

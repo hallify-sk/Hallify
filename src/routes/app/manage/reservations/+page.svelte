@@ -1,15 +1,15 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
 	import { untrack } from 'svelte';
-	import { t } from '$lib/i18n.svelte';
+	import { page } from '$app/stores';
+	import { t, getLocale } from '$lib/i18n.svelte';
+	import { formatDate as fmtLocaleDate } from '$lib/format';
 	import { EVENT_TYPE_KEYS, CUSTOM_EVENT_TYPE_MAX, eventTypeLabel } from '$lib/eventTypes';
 	import type { PageData, ActionData } from './$types';
 	import type { ReservationStatus } from '$lib/db';
 
 	interface Props { data: PageData; form: ActionData; }
 	const { data, form }: Props = $props();
-
-	let filter = $state<'all' | ReservationStatus>('all');
 
 	// ── Manual entry (a booking taken over the phone) ──
 	// Opened by hand, or re-opened automatically when a submit came back with an
@@ -37,21 +37,35 @@
 	const todayISO = new Date().toISOString().slice(0, 10);
 	const isPastEvent = (d: string) => d.slice(0, 10) < todayISO;
 
-	const filtered = $derived(
-		filter === 'all'
-			? data.reservations
-			: data.reservations.filter(r => r.status === filter)
-	);
-
 	const statusOptions: ReservationStatus[] = ['pending', 'waiting_payment', 'approved', 'planned', 'completed', 'cancelled'];
 
-	function formatDate(d: Date | string) {
-		const date = new Date(d);
-		return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+	function formatDate(d: string) {
+		return fmtLocaleDate(d, getLocale());
 	}
 
 	function cnt(s: ReservationStatus) {
-		return data.reservations.filter(r => r.status === s).length;
+		return data.counts[s] ?? 0;
+	}
+	const allCount = $derived(Object.values(data.counts).reduce((a, b) => a + b, 0));
+
+	/** The current list URL with some parameters changed (and paging reset unless given). */
+	function hrefWith(patch: Record<string, string | number | null>) {
+		const u = new URLSearchParams($page.url.searchParams);
+		if (!('page' in patch)) u.delete('page');
+		for (const [k, v] of Object.entries(patch)) {
+			if (v === null || v === '') u.delete(k);
+			else u.set(k, String(v));
+		}
+		const qs = u.toString();
+		return qs ? `?${qs}` : '?';
+	}
+	const exportHref = $derived(`/app/manage/reservations/export${$page.url.search}`);
+	const filtersActive = $derived(!!(data.filters.q || data.filters.hall || data.filters.from || data.filters.to || data.filters.status));
+	const firstShown = $derived(data.total === 0 ? 0 : (data.page - 1) * 50 + 1);
+	const lastShown = $derived(Math.min(data.page * 50, data.total));
+
+	function autoSubmit(e: Event) {
+		(e.currentTarget as HTMLSelectElement).form?.requestSubmit();
 	}
 
 	const STATUS_COLOR: Record<string, string> = {
@@ -71,7 +85,7 @@
 	<div class="page-header">
 		<div class="page-header-left">
 			<h1 class="page-title">{t.adminReservations.title}</h1>
-			<span class="total-badge">{data.reservations.length}</span>
+			<span class="total-badge">{data.total}</span>
 		</div>
 		<button type="button" class="btn-action" aria-expanded={showManual} aria-controls="manual-panel"
 			onclick={() => showManual = !showManual}>
@@ -115,7 +129,19 @@
 						</div>
 						<div class="field">
 							<label for="m-date">{t.adminReservations.date} *</label>
-							<input id="m-date" name="eventDate" type="date" required min={manualHallData?.earliestDate} />
+							<!-- The clients' notice period does not bind the venue: today is fine. -->
+							<input id="m-date" name="eventDate" type="date" required min={data.today} />
+						</div>
+					</div>
+
+					<div class="field-row">
+						<div class="field">
+							<label for="m-start">{t.resOps.startTime}</label>
+							<input id="m-start" name="startTime" type="time" />
+						</div>
+						<div class="field">
+							<label for="m-end">{t.resOps.endTime}</label>
+							<input id="m-end" name="endTime" type="time" />
 						</div>
 					</div>
 
@@ -191,9 +217,19 @@
 					</div>
 
 					<div class="field">
-						<label for="m-notes">{t.manualReservation.notes}</label>
+						<label for="m-notes">{t.resOps.internalNotes}</label>
 						<textarea id="m-notes" name="notes" rows="3" maxlength="2000"
-							placeholder={t.manualReservation.notesPlaceholder}></textarea>
+							placeholder={t.resOps.internalNotesPlaceholder}></textarea>
+					</div>
+
+					<div class="field">
+						<label for="m-status">{t.resOps.initialStatus}</label>
+						<select id="m-status" name="initialStatus" aria-describedby="m-status-hint">
+							{#each data.staffStatuses as st}
+								<option value={st} selected={st === 'approved'}>{(t.status as Record<string, string>)[st]}</option>
+							{/each}
+						</select>
+						<span id="m-status-hint" class="field-hint">{t.resOps.initialStatusHint}</span>
 					</div>
 
 					<p class="manual-note">{t.manualReservation.ownershipNote}</p>
@@ -208,29 +244,59 @@
 	{/if}
 
 	<section class="section" class:section--lead={!showManual}>
+		<nav class="when-tabs" aria-label={t.adminReservations.date}>
+			{#each [['upcoming', t.resOps.whenUpcoming], ['past', t.resOps.whenPast], ['all', t.resOps.whenAll]] as [w, label]}
+				<a href={hrefWith({ when: w, sort: null })} class="when-tab" class:active={data.filters.when === w}
+					aria-current={data.filters.when === w ? 'page' : undefined}>{label}</a>
+			{/each}
+		</nav>
+
+		<form method="GET" class="list-filters" data-sveltekit-keepfocus data-sveltekit-noscroll>
+			<input type="hidden" name="when" value={data.filters.when} />
+			{#if data.filters.status}<input type="hidden" name="status" value={data.filters.status} />{/if}
+			<label class="sr-only" for="f-q">{t.resOps.search}</label>
+			<input id="f-q" class="lf-search" type="search" name="q" value={data.filters.q} placeholder={t.resOps.searchPlaceholder} maxlength="100" />
+			<label class="sr-only" for="f-hall">{t.adminReservations.hall}</label>
+			<select id="f-hall" name="hall" onchange={autoSubmit}>
+				<option value="">{t.calendar.allHalls}</option>
+				{#each data.halls as h}<option value={h.id} selected={data.filters.hall === h.id}>{h.name}</option>{/each}
+			</select>
+			<label class="lf-date"><span>{t.resOps.dateFrom}</span><input type="date" name="from" value={data.filters.from} /></label>
+			<label class="lf-date"><span>{t.resOps.dateTo}</span><input type="date" name="to" value={data.filters.to} /></label>
+			<label class="sr-only" for="f-sort">{t.resOps.sortLabel}</label>
+			<select id="f-sort" name="sort" onchange={autoSubmit}>
+				<option value="date_asc" selected={data.filters.sort === 'date_asc'}>{t.resOps.sortDateAsc}</option>
+				<option value="date_desc" selected={data.filters.sort === 'date_desc'}>{t.resOps.sortDateDesc}</option>
+				<option value="created" selected={data.filters.sort === 'created'}>{t.resOps.sortCreated}</option>
+			</select>
+			<button type="submit" class="btn-outline btn-sm">{t.resOps.search}</button>
+			{#if filtersActive}<a class="lf-clear" href="?when={data.filters.when}">{t.resOps.clearFilters}</a>{/if}
+			<a class="lf-export" href={exportHref} download>{t.resOps.exportCsv}</a>
+		</form>
+
 		<div class="filters">
-			<button class="filter-btn" class:active={filter === 'all'} onclick={() => filter = 'all'}>
+			<a class="filter-btn" class:active={!data.filters.status} href={hrefWith({ status: null })}>
 				{t.adminReservations.filterAll}
-				<span class="f-count">{data.reservations.length}</span>
-			</button>
+				<span class="f-count">{allCount}</span>
+			</a>
 			{#each statusOptions as s}
 				{@const c = cnt(s)}
-				{#if c > 0}
-					<button class="filter-btn" class:active={filter === s} onclick={() => filter = s}
+				{#if c > 0 || data.filters.status === s}
+					<a class="filter-btn" class:active={data.filters.status === s} href={hrefWith({ status: s })}
 						style:--sc={`var(${STATUS_COLOR[s] ?? '--s-slate'})`}>
 						{(t.status as Record<string, string>)[s]}
 						<span class="f-count">{c}</span>
-					</button>
+					</a>
 				{/if}
 			{/each}
 		</div>
 
-		{#if filtered.length === 0}
+		{#if data.reservations.length === 0}
 			<div class="card--inset state-block">
 				<span class="icon-tile" aria-hidden="true">
 					<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
 				</span>
-				<h2>{t.adminReservations.noReservations}</h2>
+				<h2>{filtersActive || data.filters.when !== 'all' ? t.resOps.noMatches : t.adminReservations.noReservations}</h2>
 			</div>
 		{:else}
 			<div class="res-list row-list">
@@ -242,7 +308,7 @@
 					<span>{t.adminReservations.status}</span>
 					<span></span>
 				</div>
-				{#each filtered as res}
+				{#each data.reservations as res (res.id)}
 					{@const sc = STATUS_COLOR[res.status] ?? '--s-slate'}
 					<a href="/app/reservation/{res.id}" class="row-item res-row" class:is-past={isPastEvent(res.event_date) && res.status !== 'cancelled'}>
 						<div class="td-title">
@@ -253,11 +319,17 @@
 							{/if}
 						</div>
 						<div class="td-user">
-							<span class="user-name">{res.user_first_name} {res.user_last_name}</span>
-							<span class="user-email">{res.user_email}</span>
+							{#if res.customer_name}
+								<!-- A phone booking: the customer, not the colleague who typed it in. -->
+								<span class="user-name">{res.customer_name} <span class="phone-tag">{t.resOps.byPhone}</span></span>
+								<span class="user-email">{res.customer_contact ?? ''}</span>
+							{:else}
+								<span class="user-name">{res.user_first_name ?? ''} {res.user_last_name ?? ''}</span>
+								<span class="user-email">{res.user_email ?? ''}</span>
+							{/if}
 						</div>
 						<div class="td-hall">{res.hall_name}</div>
-						<div class="td-date">{formatDate(res.event_date)}</div>
+						<div class="td-date">{formatDate(res.event_date)}{#if res.start_time}<span class="td-time">{res.start_time.slice(0, 5)}</span>{/if}</div>
 						<div class="td-status">
 							<span class="status-pill" style:--sc={`var(${sc})`}>
 								{(t.status as Record<string, string>)[res.status]}
@@ -268,6 +340,17 @@
 						</div>
 					</a>
 				{/each}
+			</div>
+
+			<div class="pager">
+				<span class="pager-info">{t.resOps.showing(firstShown, lastShown, data.total)}</span>
+				{#if data.pages > 1}
+					<div class="pager-links">
+						{#if data.page > 1}<a class="btn-outline btn-sm" href={hrefWith({ page: data.page - 1 })} rel="prev">{t.resOps.prevPage}</a>{/if}
+						<span class="pager-num">{data.page} / {data.pages}</span>
+						{#if data.page < data.pages}<a class="btn-outline btn-sm" href={hrefWith({ page: data.page + 1 })} rel="next">{t.resOps.nextPage}</a>{/if}
+					</div>
+				{/if}
 			</div>
 		{/if}
 	</section>
@@ -305,6 +388,36 @@
 		color: var(--accent-ink);
 	}
 
+	.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+
+	/* ── Upcoming / past split, search and filters ── */
+	.when-tabs { display: flex; gap: 4px; margin-bottom: 12px; border-bottom: 1px solid var(--border); }
+	.when-tab {
+		padding: 7px 12px; margin-bottom: -1px; font-size: 13px; font-weight: 550; color: var(--text-muted);
+		text-decoration: none; border-bottom: 2px solid transparent;
+	}
+	.when-tab:hover { color: var(--text-base); }
+	.when-tab.active { color: var(--accent-ink); border-bottom-color: var(--accent); }
+	.list-filters { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 12px; }
+	.list-filters input, .list-filters select {
+		font: inherit; font-size: 12.5px; padding: 6px 9px; border: 1px solid var(--border);
+		border-radius: var(--radius-sm); background: var(--bg-panel); color: var(--text-base);
+	}
+	.lf-search { flex: 1 1 220px; min-width: 0; }
+	.lf-date { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-muted); }
+	.lf-clear, .lf-export { font-size: 12px; font-weight: 600; color: var(--accent-ink); text-decoration: none; }
+	.lf-clear:hover, .lf-export:hover { text-decoration: underline; }
+	.lf-export { margin-left: auto; }
+	.phone-tag {
+		display: inline-block; margin-left: 4px; padding: 0 5px; border-radius: 3px;
+		font-size: 10px; font-weight: 600; color: var(--text-muted); background: var(--bg-hover);
+	}
+	.td-time { display: block; font-weight: 500; font-size: 11px; color: var(--text-subtle); }
+	.pager { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 14px; }
+	.pager-info { font-size: 12px; color: var(--text-muted); }
+	.pager-links { display: flex; align-items: center; gap: 8px; }
+	.pager-num { font-size: 12px; color: var(--text-muted); }
+
 	/* ── Filter pills ── */
 	.filters { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 16px; }
 
@@ -312,7 +425,7 @@
 		display: inline-flex; align-items: center; gap: 6px;
 		padding: 5px 13px; border-radius: 3px; font-size: 12px; font-weight: 500;
 		background: transparent; border: 1px solid var(--border);
-		color: var(--text-muted); cursor: pointer; font-family: inherit;
+		color: var(--text-muted); cursor: pointer; font-family: inherit; text-decoration: none;
 		transition: border-color .15s, color .15s, background .15s;
 	}
 	.filter-btn:hover { border-color: var(--accent); color: var(--text-base); }
