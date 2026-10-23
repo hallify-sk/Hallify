@@ -310,8 +310,8 @@ const SOURCES: ArticleSource[] = [
 			body: `
 			<p>Každá organizácia má bezplatnú adresu <strong>&lt;vasa-subdomena&gt;.hallify.sk</strong>, na ktorej sú vaše verejné sály. Netreba nič nastavovať.</p>
 			<h3>Vlastná doména (platené programy)</h3>
-			<p>Na platenom programe môžete pripojiť vlastnú doménu (napr. <em>rezervacie.vasapriestor.sk</em>): pridajte ju v <strong>Nastavenia → Domény</strong>, u svojho poskytovateľa DNS vytvorte záznam <strong>CNAME</strong> na adresu, ktorú vám ukážeme, a počkajte na vydanie certifikátu SSL.</p>
-			<p>Kým doména nie je overená, zobrazuje sa ako <em>čaká na overenie</em>. Doménu, ktorú nikto do 7 dní neoverí, môže pridať iná organizácia — rezervovať si cudziu doménu teda nejde.</p>
+			<p>Na platenom programe môžete pripojiť vlastnú doménu (napr. <em>rezervacie.vasapriestor.sk</em>): pridajte ju v <strong>Nastavenia → Domény</strong>, u svojho poskytovateľa DNS vytvorte záznamy, ktoré vám tam ukážeme (<strong>CNAME</strong> na Hallify a <strong>TXT</strong> na overenie vlastníctva), a počkajte na vydanie certifikátu SSL. Stav kontrolujeme sami každú hodinu a kým máte stránku otvorenú, aj priebežne; skontrolovať ho hneď môžete tlačidlom <em>Skontrolovať stav</em>.</p>
+			<p>Vaša stránka začne na doméne fungovať až keď je doména overená (Cloudflare hlási doménu aj certifikát ako aktívne). Dovtedy sa zobrazuje ako <em>čaká na overenie</em>. Doména, ktorú nikto do 7 dní neoverí, sa uvoľní a môže ju pridať iná organizácia — rezervovať si cudziu doménu teda nejde.</p>
 		`
 		},
 		en: {
@@ -320,8 +320,8 @@ const SOURCES: ArticleSource[] = [
 			body: `
 			<p>Every organization gets a free <strong>&lt;your-slug&gt;.hallify.sk</strong> address where your public halls live — no setup needed.</p>
 			<h3>Custom domains (paid plans)</h3>
-			<p>On a paid plan you can connect your own domain (e.g. <em>bookings.yourvenue.com</em>): add it under <strong>Settings → Domains</strong>, create a <strong>CNAME</strong> record pointing to the address we show, then wait for the SSL certificate.</p>
-			<p>Until the domain is verified it shows as <em>awaiting verification</em>. A domain nobody verifies within 7 days can be added by another organisation, so nobody can sit on someone else's domain.</p>
+			<p>On a paid plan you can connect your own domain (e.g. <em>bookings.yourvenue.com</em>): add it under <strong>Settings → Domains</strong>, create the records shown there at your DNS provider (a <strong>CNAME</strong> pointing to Hallify and a <strong>TXT</strong> record proving ownership), then wait for the SSL certificate. We check the status every hour, and continuously while the page is open; <em>Check status</em> checks it right away.</p>
+			<p>Your site starts working on the domain only once it is verified (Cloudflare reports both the domain and its certificate active). Until then it shows as <em>awaiting verification</em>. A domain nobody verifies within 7 days is released and another organisation can add it, so nobody can sit on someone else's domain.</p>
 		`
 		}
 	},

@@ -8,6 +8,10 @@
 #   POST /api/cron/cleanup with it; without it that route is disabled and the scheduled
 #   run only logs an error. Set it on BOTH workers at deploy:
 #     wrangler secret put CRON_SECRET  and  wrangler secret put CRON_SECRET --env dev
+#   The same run checks pending custom domains with Cloudflare for SaaS (CF_ZONE_ID,
+#   CF_API_TOKEN) and releases claims nobody verified within 7 days.
+# Optional: CF_CNAME_TARGET, the hostname customers point their CNAME at
+#   (default fallback.hallify.sk, the zone's fallback origin).
 # NOTE: SESSION_SECRET is NOT used — session ids are random UUIDs stored in D1 and
 # are never signed. It was listed here and set as a prod secret, implying protection
 # the code does not implement. Remove it with: wrangler secret delete SESSION_SECRET

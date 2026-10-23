@@ -254,11 +254,12 @@ const appHandle: Handle = async ({ event, resolve }) => {
       && !host.endsWith('.hallify.pages.dev')
       && !host.endsWith('.workers.dev')
     ) {
-      // Paid bubble: external custom domain. Only resolves while the org's plan
-      // includes custom domains — a downgrade quietly stops serving it (the domain
-      // config is kept and resumes on re-upgrade).
+      // Paid bubble: external custom domain. Only resolves once verified (Cloudflare
+      // reported the hostname and its certificate active, $lib/server/custom-domains)
+      // and while the org's plan includes custom domains — a downgrade quietly stops
+      // serving it (the domain config is kept and resumes on re-upgrade).
       const r = await dbFirst<{ org_id: string; name: string; slug: string; logo_url: string | null; plan: string | null; suspended_at: string | null }>(db,
-        'SELECT cd.org_id, o.name, o.slug, o.logo_url, o.suspended_at, s.plan FROM custom_domains cd JOIN organizations o ON o.id = cd.org_id LEFT JOIN subscriptions s ON s.org_id = cd.org_id WHERE cd.domain = ? LIMIT 1', host);
+        'SELECT cd.org_id, o.name, o.slug, o.logo_url, o.suspended_at, s.plan FROM custom_domains cd JOIN organizations o ON o.id = cd.org_id LEFT JOIN subscriptions s ON s.org_id = cd.org_id WHERE cd.domain = ? AND cd.verified_at IS NOT NULL LIMIT 1', host);
       if (r && getPlan((r.plan ?? 'free') as PlanId).limits.customDomains) {
         // A suspended venue's custom domain used to keep serving the site.
         if (r.suspended_at) suspendedVenue = r.name;

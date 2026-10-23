@@ -2,13 +2,14 @@ import { json, error } from '@sveltejs/kit';
 import { env } from '$env/dynamic/private';
 import { runCleanup } from '$lib/cleanup';
 import { sendEventReminders } from '$lib/server/reminders';
+import { sweepCustomDomains } from '$lib/server/custom-domains';
 import type { RequestHandler } from './$types';
 
-/** Explicit housekeeping run, for an external scheduler.
- *
- *  Cleanup also happens opportunistically off request traffic (see hooks.server.ts),
- *  so this is a belt-and-braces path — useful for a quiet deployment, or to force a
- *  sweep after a data incident.
+/** The hourly housekeeping run. The Cron Trigger calls it (worker.js →
+ *  $lib/server/scheduled), and it can be run by hand to force a sweep after a data
+ *  incident. Clean-up and reminders also run opportunistically off request traffic
+ *  (see hooks.server.ts); the custom-domain checks run only here and from the domain
+ *  settings page.
  *
  *  Requires `CRON_SECRET` (a Worker secret). If it isn't configured the route is
  *  disabled rather than open: an unauthenticated DELETE endpoint is not something to
@@ -30,5 +31,8 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 
   const results = await runCleanup(locals.db);
   const reminders = await sendEventReminders(locals.db);
-  return json({ ok: true, results, reminders }, { headers: { 'cache-control': 'no-store' } });
+  // Pending custom domains: verify the ones Cloudflare reports active, release claims
+  // nobody verified within a week, and stop serving verified ones whose DNS moved away.
+  const domains = await sweepCustomDomains(locals.db).catch((e: unknown) => ({ error: e instanceof Error ? e.message : String(e) }));
+  return json({ ok: true, results, reminders, domains }, { headers: { 'cache-control': 'no-store' } });
 };
