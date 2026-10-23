@@ -5,13 +5,13 @@
 
 	const { children, data } = $props();
 
-	// One destination, three linkable tabs. Each is a real route, so the browser's
+	// One destination, linkable tabs, the venue's public site first. Each is a real route, so the browser's
 	// back button and a bookmarked tab both behave the way an operator expects.
 	// A member without settings.manage sees only Advanced, where they can leave.
 	const allTabs = $derived([
-		{ href: '/app/manage/settings/domains',   label: t.settingsPages.domains },
-		{ href: '/app/manage/settings/customize', label: t.settingsPages.customizeTitle },
 		{ href: '/app/manage/settings/site',      label: t.settingsPages.siteTab },
+		{ href: '/app/manage/settings/customize', label: t.settingsPages.customizeTitle },
+		{ href: '/app/manage/settings/domains',   label: t.settingsPages.domains },
 		{ href: '/app/manage/settings/analytics', label: t.settingsPages.analyticsTitle },
 		{ href: '/app/manage/settings/ai',        label: t.ai.settingsTab },
 		{ href: '/app/manage/settings/advanced',  label: t.settingsPages.tabAdvanced },

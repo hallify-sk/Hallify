@@ -167,7 +167,7 @@
   });
 </script>
 
-<svelte:head><title>{pageTitle(t.settings.title)}</title></svelte:head>
+<svelte:head><title>{pageTitle(t.settingsPages.siteTab, t.settings.title)}</title></svelte:head>
 
 <!-- Success is reported in the save bar, beside the button that was pressed.
      A second banner up here would only be read by someone who had scrolled back. -->
