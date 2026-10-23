@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { t as tr } from '$lib/i18n.svelte';
+	import { decodeCsvBytes } from '$lib/guest-csv';
 
 	/** A guest as the list shows it: the record plus where they sit. */
 	export interface GuestRow {
@@ -68,7 +69,8 @@
 		const input = e.currentTarget as HTMLInputElement;
 		const file = input.files?.[0];
 		if (!file) return;
-		const text = await file.text();
+		// Not file.text(): that assumes UTF-8, and Slovak Excel saves Windows-1250.
+		const text = decodeCsvBytes(await file.arrayBuffer());
 		onImport(text);
 		input.value = '';
 	}

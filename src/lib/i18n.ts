@@ -777,6 +777,8 @@ export const sk = {
 	manifest: {
 		seatingManifest: "Zasadací poriadok",
 		exportCsv: "Exportovať CSV",
+		csvFloor: "Poschodie",
+		csvTable: "Stôl",
 		print: "Tlačiť",
 		seated: "usadených",
 		occupiedSeat: "Obsadené miesto",
@@ -985,6 +987,7 @@ export const sk = {
 		importHint: "Stĺpce: meno, priezvisko, skupina, poznámka. Export z Excelu so stredníkmi funguje tiež.",
 		importDone: (n: number) => n === 1 ? 'Importovaný 1 hosť' : n < 5 ? `Importovaní ${n} hostia` : `Importovaných ${n} hostí`,
 		importNone: "V súbore sa nenašli žiadni hostia.",
+		importSkippedDuplicates: (n: number, names: string) => `${n === 1 ? '1 hosť už v zozname bol, nepridal sa' : n < 5 ? `${n} hostia už v zozname boli, nepridali sa` : `${n} hostí už v zozname bolo, nepridali sa`}: ${names}`,
 		autoSeatRest: "Usadiť zvyšok automaticky",
 		suggestGroup: (group: string, n: number) => `Zo skupiny „${group}“ ${n === 1 ? 'zostáva 1 neusadený hosť' : n < 5 ? `zostávajú ${n} neusadení hostia` : `zostáva ${n} neusadených hostí`}. Usadiť ich sem, aby boli spolu?`,
 		seatThemHere: "Usadiť sem",
@@ -3593,6 +3596,8 @@ export const en: typeof sk = {
 	manifest: {
 		seatingManifest: "Seating manifest",
 		exportCsv: "Export CSV",
+		csvFloor: "Floor",
+		csvTable: "Table",
 		print: "Print",
 		seated: "seated",
 		occupiedSeat: "Occupied seat",
@@ -3801,6 +3806,7 @@ export const en: typeof sk = {
 		importHint: "Columns: first name, last name, group, note. Excel exports with semicolons work too.",
 		importDone: (n: number) => `${n} ${n === 1 ? 'guest' : 'guests'} imported`,
 		importNone: "No guests were found in the file.",
+		importSkippedDuplicates: (n: number, names: string) => `${n} ${n === 1 ? 'guest was' : 'guests were'} already on the list and not added again: ${names}`,
 		autoSeatRest: "Auto-seat the rest",
 		suggestGroup: (group: string, n: number) => `${n} more from “${group}” ${n === 1 ? 'is' : 'are'} unseated. Seat them here to keep the group together?`,
 		seatThemHere: "Seat them here",

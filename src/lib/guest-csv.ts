@@ -16,6 +16,45 @@ export interface ImportedGuest {
 	note?: string;
 }
 
+/**
+ * The text of an uploaded CSV, whatever Excel saved it as.
+ *
+ * `File.text()` assumes UTF-8, but Excel on a Slovak Windows saves "CSV" in
+ * Windows-1250, which then came out as "J�na Kov��ov�" — and the mangled
+ * "Pozn�mka" header no longer matched, so the notes column was dropped. UTF-8
+ * (with or without BOM) is tried first and strictly; a file that is not valid
+ * UTF-8 is read as Windows-1250. "Unicode text" from Excel is UTF-16 with a BOM.
+ */
+export function decodeCsvBytes(bytes: ArrayBuffer | Uint8Array): string {
+	const u8 = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+	if (u8[0] === 0xff && u8[1] === 0xfe) return new TextDecoder('utf-16le').decode(u8);
+	if (u8[0] === 0xfe && u8[1] === 0xff) return new TextDecoder('utf-16be').decode(u8);
+	try {
+		return new TextDecoder('utf-8', { fatal: true }).decode(u8);
+	} catch {
+		return new TextDecoder('windows-1250').decode(u8);
+	}
+}
+
+const nameKey = (g: { firstName?: string; lastName?: string; group?: string }) =>
+	[g.firstName, g.lastName, g.group].map((s) => (s ?? '').trim().toLowerCase().replace(/\s+/g, ' ')).join('|');
+
+/**
+ * Split imported rows into new guests and ones already on the list (same first
+ * name, surname and group), so importing the same spreadsheet twice does not
+ * double everyone. Rows repeated within the file itself are kept: two people can
+ * share a name, and the file is what the coordinator says it is.
+ */
+export function splitDuplicateGuests<T extends ImportedGuest>(
+	existing: { firstName: string; lastName: string; group?: string }[],
+	incoming: T[]
+): { fresh: T[]; duplicates: T[] } {
+	const known = new Set(existing.map(nameKey));
+	const fresh: T[] = [], duplicates: T[] = [];
+	for (const g of incoming) (known.has(nameKey(g)) ? duplicates : fresh).push(g);
+	return { fresh, duplicates };
+}
+
 const HEADERS: Record<'first' | 'last' | 'name' | 'group' | 'note', string[]> = {
 	first: ['first name', 'firstname', 'first', 'given name', 'meno', 'krstné meno', 'krstne meno'],
 	last: ['last name', 'lastname', 'last', 'surname', 'family name', 'priezvisko'],

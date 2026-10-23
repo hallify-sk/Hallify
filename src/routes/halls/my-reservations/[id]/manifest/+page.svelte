@@ -19,7 +19,15 @@
 	}
 
 	function exportCsv() {
-		downloadCsv(`seating-${fileSlug(data.reservation.title)}.csv`, seatingManifestCsv(floors));
+		// Headings in the reader's language; semicolons for Slovak Excel, which only
+		// splits a double-clicked CSV into columns on them.
+		downloadCsv(`seating-${fileSlug(data.reservation.title)}.csv`, seatingManifestCsv(floors, {
+			delimiter: getLocale() === 'en' ? ',' : ';',
+			labels: {
+				floor: t.manifest.csvFloor, table: t.manifest.csvTable, seat: t.manifest.seat, guest: t.manifest.guest,
+				group: t.manifest.group, notes: t.manifest.notesAllergies, standalone: t.manifest.standaloneChairs
+			}
+		}));
 	}
 
 	function fmtDate(d: string) {

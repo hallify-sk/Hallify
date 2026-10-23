@@ -9,7 +9,7 @@
 	} from '$lib/floorplan-geometry';
 	import type { FloorData, MultiFloorState, WallObj, ZoneObj, TableObj, SeatObj, Guest, BoundsRect, Point, TableShape } from '$lib/floorplan-types';
 	import { stepsFor, toolsFor, TOOL_KEYS, toolForKey, type EditorMode, type StepId, type Tool } from '$lib/editor-steps';
-	import { parseGuestCsv } from '$lib/guest-csv';
+	import { parseGuestCsv, splitDuplicateGuests } from '$lib/guest-csv';
 	import { uiStore } from '$lib/stores/ui.svelte';
 	import StepStrip, { type StepItem } from '$lib/editor/StepStrip.svelte';
 	import ToolCards, { type ToolCard } from '$lib/editor/ToolCards.svelte';
@@ -262,6 +262,7 @@
 	let guestSearch  = $state('');
 	let chairPopover = $state<ChairPopover | null>(null);
 	let importMessage = $state<string | null>(null);
+	let importMessageTimer: ReturnType<typeof setTimeout> | undefined;
 	// A guest being dragged from the list onto a chair.
 	let dragGuest  = $state<{ id: string; x: number; y: number } | null>(null);
 	let dragTarget = $state<SeatTarget | null>(null);
@@ -516,10 +517,20 @@
 	function importGuests(text: string) {
 		const rows = parseGuestCsv(text);
 		if (!rows.length) { importMessage = tr.editor.importNone; return; }
-		pushUndo();
-		guests = [...guests, ...rows.map(r => ({ id: crypto.randomUUID(), firstName: r.firstName, lastName: r.lastName, group: r.group, note: r.note }))];
-		importMessage = tr.editor.importDone(rows.length);
-		setTimeout(() => { importMessage = null; }, 5000);
+		// Importing the same sheet again must not double everyone: people already on
+		// the list are left out, and the message says who.
+		const { fresh, duplicates } = splitDuplicateGuests(guests, rows);
+		if (fresh.length) {
+			pushUndo();
+			guests = [...guests, ...fresh.map(r => ({ id: crypto.randomUUID(), firstName: r.firstName, lastName: r.lastName, group: r.group, note: r.note }))];
+		}
+		const dupNames = duplicates.slice(0, 3).map(g => `${g.firstName} ${g.lastName}`.trim()).join(', ') + (duplicates.length > 3 ? ' …' : '');
+		importMessage = [
+			fresh.length || !duplicates.length ? tr.editor.importDone(fresh.length) : '',
+			duplicates.length ? tr.editor.importSkippedDuplicates(duplicates.length, dupNames) : ''
+		].filter(Boolean).join(' · ');
+		clearTimeout(importMessageTimer);
+		importMessageTimer = setTimeout(() => { importMessage = null; }, duplicates.length ? 9000 : 5000);
 	}
 
 	function updateGuestNote(id: string, note: string) {
