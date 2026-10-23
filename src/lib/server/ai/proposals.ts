@@ -56,7 +56,7 @@ export type ApplyOutcome =
 	| { ok: true; seated: number; reservationId: string }
 	| { ok: true; updated: string[]; hallId: string }
 	| { ok: true; floorplan: true; hallId: string }
-	| { ok: true; results: { ok: boolean; error?: string }[] }
+	| { ok: true; results: { ok: boolean; error?: string; skipped?: boolean }[] }
 	| { ok: false; status: number; error: string };
 
 export async function loadProposal(db: App.Locals['db'], orgId: string, id: string): Promise<ProposalRow | null> {
@@ -64,7 +64,13 @@ export async function loadProposal(db: App.Locals['db'], orgId: string, id: stri
 		'SELECT id, kind, status, payload, result, user_id FROM ai_proposals WHERE id = ? AND org_id = ?', id, orgId);
 }
 
-export async function applyProposal(locals: App.Locals, org: OrgContext, id: string): Promise<ApplyOutcome> {
+export async function applyProposal(
+	locals: App.Locals,
+	org: OrgContext,
+	id: string,
+	/** For a batch of changes: the positions the person unticked, left out of this apply. */
+	opts: { skip?: number[] } = {}
+): Promise<ApplyOutcome> {
 	const p = await loadProposal(locals.db, org.id, id);
 	if (!p) return { ok: false, status: 404, error: 'not_found' };
 	// Only the person it was proposed to; a colleague sees their own conversations.
@@ -127,8 +133,15 @@ export async function applyProposal(locals: App.Locals, org: OrgContext, id: str
 	if (p.kind === 'changes') {
 		// Each operation re-checks its own permission and runs through the shared
 		// functions; one failing does not undo or stop the others, and each is reported.
-		const plan = fromJson<{ ops: CheckedOp[] }>(p.payload);
-		const results = await applyChanges({ locals, org, can: (perm) => memberCan(locals, perm) }, plan?.ops ?? []);
+		const ops = fromJson<{ ops: CheckedOp[] }>(p.payload)?.ops ?? [];
+		const skip = new Set((opts.skip ?? []).filter((i) => Number.isInteger(i) && i >= 0 && i < ops.length));
+		if (ops.length && skip.size === ops.length) {
+			await dbRun(locals.db, "UPDATE ai_proposals SET status = 'pending', resolved_at = NULL WHERE id = ?", id);
+			return { ok: false, status: 400, error: 'nothing_selected' };
+		}
+		const ran = await applyChanges({ locals, org, can: (perm) => memberCan(locals, perm) }, ops.filter((_, i) => !skip.has(i)));
+		let k = 0;
+		const results = ops.map((_, i) => (skip.has(i) ? { ok: false, skipped: true } : ran[k++]));
 		await dbRun(locals.db, 'UPDATE ai_proposals SET result = ? WHERE id = ?', toJson({ results }), id);
 		return { ok: true, results };
 	}

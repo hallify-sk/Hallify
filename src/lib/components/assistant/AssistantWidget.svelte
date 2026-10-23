@@ -22,6 +22,7 @@
   import { assistantPageHooks } from '$lib/assistant/page-hooks';
   import { threadKey, OPEN_KEY, tabStore as store, navigationTarget } from '$lib/assistant/session';
   import { creditAmount } from '$lib/assistant/credits';
+  import { hintFor } from '$lib/assistant/hints';
 
   interface Message {
     id: string;
@@ -40,11 +41,14 @@
   let messages = $state<Message[]>([]);
   let balanceMc = $state<number | null>(null);
   let questionMc = $state<number | null>(null);
+  let outOfCredits = $state(false);
+  let canManageCredits = $state(false);
   let text = $state('');
   let files = $state<{ id: string; name: string }[]>([]);
   let busy = $state(false);
   let uploading = $state(false);
   let error = $state('');
+  let errorCode = $state<string | null>(null);
   let pendingText = $state<string | null>(null);
   let resolving = $state<string | null>(null);
   let loaded = $state(false);
@@ -81,6 +85,8 @@
         messages = body.messages;
         balanceMc = body.balanceMc;
         questionMc = typeof body.questionMc === 'number' ? body.questionMc : null;
+        outOfCredits = body.outOfCredits === true;
+        canManageCredits = body.canManageCredits === true;
         if (!body.threadId && threadId) setThread(null); // deleted elsewhere
       }
     } catch { /* offline: keep what is shown */ }
@@ -115,6 +121,7 @@
     if (busy || (!message && files.length === 0)) return;
     busy = true;
     error = '';
+    errorCode = null;
     pendingText = message + files.map((f) => `\n📎 ${f.name}`).join('');
     const attached = files;
     const attachmentIds = files.map((f) => f.id);
@@ -140,6 +147,7 @@
       const body = await res.json().catch(() => ({}));
       if (!body.ok) {
         error = errorText(body.error);
+        errorCode = typeof body.error === 'string' ? body.error : null;
         giveBack();
       }
       if (body.threadId) setThread(body.threadId);
@@ -177,7 +185,7 @@
     }
   }
 
-  async function resolve(id: string, action: 'apply' | 'discard') {
+  async function resolve(id: string, action: 'apply' | 'discard', opts?: { skip?: number[] }) {
     // The open page may hold unsaved work this change would collide with.
     const blocked = action === 'apply' ? assistantPageHooks()?.blocker?.() : null;
     if (blocked) {
@@ -190,7 +198,7 @@
       const res = await fetch(`/app/manage/assistant/proposals/${id}`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ action })
+        body: JSON.stringify({ action, ...opts })
       });
       const body = await res.json().catch(() => ({}));
       if (!res.ok && !body.ok) error = errorText(body.error);
@@ -250,7 +258,7 @@
     <div class="aw-messages" bind:this={scroller}>
       {#if messages.length === 0 && !pendingText}
         <div class="aw-empty">
-          <p>{t.ai.widgetEmpty}</p>
+          <p>{t.ai.widgetHints[hintFor($page.url.pathname)]}</p>
           {#if questionMc !== null}<p class="aw-cost">{t.ai.questionCost(creditAmount(questionMc, getLocale()))}</p>{/if}
         </div>
       {/if}
@@ -270,7 +278,17 @@
       {/if}
     </div>
 
-    {#if error}<p class="aw-error" role="alert">{error}</p>{/if}
+    {#if error}
+      <p class="aw-error" role="alert">
+        {error}
+        {#if errorCode === 'insufficient_credits' && canManageCredits}<a href="/app/manage/settings/ai">{t.ai.buyTitle} →</a>{/if}
+      </p>
+    {:else if outOfCredits}
+      <p class="aw-notice">
+        {t.ai.outOfCredits}
+        {#if canManageCredits}<a href="/app/manage/settings/ai">{t.ai.buyTitle} →</a>{:else}{t.ai.askForCredits}{/if}
+      </p>
+    {/if}
 
     <form class="aw-composer" onsubmit={(e) => { e.preventDefault(); send(); }}>
       {#if pageTitle}
@@ -394,6 +412,11 @@
     margin: 0 14px 8px; padding: 7px 10px; font-size: 12px; color: var(--danger);
     background: var(--danger-dim); border-radius: var(--radius-sm);
   }
+  .aw-notice {
+    margin: 0 14px 8px; padding: 7px 10px; font-size: 12px; color: var(--warning);
+    background: var(--warning-dim); border-radius: var(--radius-sm);
+  }
+  .aw-error a, .aw-notice a { color: var(--accent-ink); font-weight: 600; white-space: nowrap; }
 
   .aw-composer { border-top: 1px solid var(--border); padding: 8px 10px 10px; }
   .aw-context {

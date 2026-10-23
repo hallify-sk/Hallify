@@ -8,6 +8,7 @@
   import { renderReply, errorKey } from '$lib/assistant/render';
   import { threadKey, OPEN_KEY, tabStore, navigationTarget } from '$lib/assistant/session';
   import { creditAmount } from '$lib/assistant/credits';
+  import { confirmFirst } from '$lib/forms';
   import type { PageData } from './$types';
 
   const { data }: { data: PageData } = $props();
@@ -17,6 +18,7 @@
   let busy = $state(false);
   let uploading = $state(false);
   let error = $state('');
+  let errorCode = $state<string | null>(null);
   /** The message being answered, shown straight away rather than after the round trip. */
   let pendingText = $state<string | null>(null);
   let resolving = $state<string | null>(null);
@@ -43,6 +45,7 @@
     if (busy || (!message && files.length === 0)) return;
     busy = true;
     error = '';
+    errorCode = null;
     pendingText = message + files.map((f) => `\n📎 ${f.name}`).join('');
     const attached = files;
     const attachmentIds = files.map((f) => f.id);
@@ -65,6 +68,7 @@
       const body = await res.json().catch(() => ({}));
       if (!body.ok) {
         error = errorText(body.error);
+        errorCode = typeof body.error === 'string' ? body.error : null;
         giveBack();
       }
       const thread = body.threadId ?? data.threadId;
@@ -109,14 +113,14 @@
     }
   }
 
-  async function resolve(id: string, action: 'apply' | 'discard') {
+  async function resolve(id: string, action: 'apply' | 'discard', opts?: { skip?: number[] }) {
     resolving = id;
     error = '';
     try {
       const res = await fetch(`/app/manage/assistant/proposals/${id}`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ action })
+        body: JSON.stringify({ action, ...opts })
       });
       const body = await res.json().catch(() => ({}));
       if (!res.ok && !body.ok) error = errorText(body.error);
@@ -152,6 +156,13 @@
     <section class="card--inset gate">
       <h2>{t.ai.disabledTitle}</h2>
       <p>{t.ai.disabledBody}</p>
+      <!-- What switching it on means, said before the switch: cost and the legal basis. -->
+      <p class="gate-cost">{questionCost}</p>
+      <p class="gate-legal">
+        {t.ai.enableLegal}
+        <a href="/privacy" target="_blank" rel="noopener">{t.ai.privacyLink}</a> ·
+        <a href="/dpa" target="_blank" rel="noopener">{t.ai.dpaLink}</a>
+      </p>
       {#if data.canEnable}
         <form method="POST" action="?/enable" use:enhance>
           <button type="submit" class="btn-action">{t.ai.enableButton}</button>
@@ -163,6 +174,11 @@
   {:else}
     {#if !data.available}
       <p class="alert-warning">{t.ai.unavailable}</p>
+    {:else if data.outOfCredits}
+      <p class="alert-warning">
+        {t.ai.outOfCredits}
+        {#if data.canEnable}<a href="/app/manage/settings/ai">{t.ai.buyTitle} →</a>{:else}{t.ai.askForCredits}{/if}
+      </p>
     {/if}
 
     <div class="assistant">
@@ -176,10 +192,12 @@
           {#each data.threads as th (th.id)}
             <li class:active={th.id === data.threadId}>
               <a href="?t={th.id}">{th.title || '…'}</a>
-              <form method="POST" action="?/deleteThread" use:enhance={() => async ({ update }) => {
+              <form method="POST" action="?/deleteThread" use:enhance={confirmFirst(() => t.ai.deleteThreadConfirm(th.title || '…'), async ({ update }) => {
+                  // Read before update(): afterwards the deleted thread is no longer the open one.
+                  const wasOpen = th.id === data.threadId;
                   await update();
-                  if (th.id === data.threadId) goto('/app/manage/assistant');
-                }}>
+                  if (wasOpen) goto('/app/manage/assistant');
+                })}>
                 <input type="hidden" name="id" value={th.id} />
                 <button type="submit" class="thread-del" aria-label={t.ai.deleteThread} title={t.ai.deleteThread}>×</button>
               </form>
@@ -220,7 +238,12 @@
           {/if}
         </div>
 
-        {#if error}<p class="inline-err" role="alert">{error}</p>{/if}
+        {#if error}
+          <p class="inline-err" role="alert">
+            {error}
+            {#if errorCode === 'insufficient_credits' && data.canEnable}<a href="/app/manage/settings/ai">{t.ai.buyTitle} →</a>{/if}
+          </p>
+        {/if}
 
         <form class="composer" onsubmit={(e) => { e.preventDefault(); send(); }}>
           {#if files.length}
@@ -272,6 +295,9 @@
   .gate { padding: 28px; max-width: 620px; }
   .gate h2 { margin: 0 0 8px; font-size: var(--h2-size); }
   .gate p { margin: 0 0 16px; line-height: var(--body-leading); color: var(--text-muted); }
+  .gate .gate-cost { margin-bottom: 6px; }
+  .gate .gate-legal { font-size: 12.5px; }
+  .gate a, .inline-err a, .alert-warning a { color: var(--accent-ink); font-weight: 600; }
 
   .assistant {
     display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 20px;
