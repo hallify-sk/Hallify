@@ -191,9 +191,9 @@ function autoCompletePastEvents(db: D1Database) {
   const now = Date.now();
   if (now - lastAutoComplete < AUTO_COMPLETE_INTERVAL) return;
   lastAutoComplete = now;
-  dbRun(db, "UPDATE reservations SET status = 'completed' WHERE event_date < date('now') AND status IN ('approved', 'planned')").catch(() => {});
+  keepAlive(dbRun(db, "UPDATE reservations SET status = 'completed' WHERE event_date < date('now') AND status IN ('approved', 'planned')").catch(() => {}));
   // Sweep expired booking holds (reads already filter on expires_at; this is housekeeping).
-  dbRun(db, "DELETE FROM reservation_holds WHERE expires_at <= datetime('now')").catch(() => {});
+  keepAlive(dbRun(db, "DELETE FROM reservation_holds WHERE expires_at <= datetime('now')").catch(() => {}));
 }
 
 // ── Housekeeping: reap expired sessions, tokens, invites and counters ────────
