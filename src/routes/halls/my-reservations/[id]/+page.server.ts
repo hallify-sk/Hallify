@@ -3,7 +3,7 @@ import { dbAll, dbFirst, dbRun, fromJsonArr } from '$lib/db/index';
 import type { HallRow, HallBlockRow, ReservationRow, HallExtraRow } from '$lib/db/index';
 import { parseExtraIds } from '$lib/extras';
 import { dispatchWebhooks } from '$lib/notifications';
-import { notifyGuestMessage, notifyGuestCancel, notifyGuestEdit } from '$lib/email';
+import { notifyGuestMessage, notifyGuestCancel, notifyGuestEdit, reservationChanges } from '$lib/email';
 import {
 	assertCanBook, getTakenDates, getHeldDatesByOthers,
 	earliestBookableISO, isoLocal, addDays,
@@ -157,7 +157,10 @@ export const actions: Actions = {
 		}
 
 		const guestName = `${locals.user.first_name} ${locals.user.last_name}`;
-		notifyGuestEdit(locals.db, orgId, guestName, title, hall.name, eventDate).catch(() => {});
+		notifyGuestEdit(locals.db, orgId, guestName, title, hall.name, eventDate, {
+			reservationId: params.id,
+			changes: reservationChanges(reservation, { title, description, event_date: eventDate, start_time: startTime, end_time: endTime, num_guests: numGuests }),
+		}).catch(() => {});
 
 		return { updated: true };
 	},
@@ -197,7 +200,7 @@ export const actions: Actions = {
 		}).catch(() => {});
 
 		const guestName = `${locals.user.first_name} ${locals.user.last_name}`;
-		notifyGuestCancel(locals.db, orgId, guestName, reservation.title, reservation.hall_name, reservation.event_date).catch(() => {});
+		notifyGuestCancel(locals.db, orgId, guestName, reservation.title, reservation.hall_name, reservation.event_date, { reservationId: reservation.id }).catch(() => {});
 
 		return { cancelled: true };
 	},
@@ -238,7 +241,7 @@ export const actions: Actions = {
 		}).catch(() => {});
 
 		notifyGuestMessage(locals.db, orgId, `${user.first_name} ${user.last_name}`,
-			subjectFor(reservation.hall_name, reservation.event_date), body).catch(() => {});
+			subjectFor(reservation.hall_name, reservation.event_date), body, { reservationId: reservation.id, ticketId: ticket.id }).catch(() => {});
 
 		return { msgSent: true };
 	},

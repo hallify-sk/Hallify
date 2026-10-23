@@ -121,7 +121,7 @@ export const actions: Actions = {
     }
 
     if (res.user_email) {
-      notifyStatusChange(locals.db, orgId, res.user_email, res.title, status).catch(() => {});
+      notifyStatusChange(locals.db, orgId, res.user_email, res.title, status, { reservationId: id, message }).catch(() => {});
     }
 
     return { success: true };

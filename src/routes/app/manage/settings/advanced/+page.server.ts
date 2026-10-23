@@ -24,18 +24,20 @@ type TeamEvent = (typeof TEAM_EVENTS)[number];
 interface StoredNotifications {
   newReservation?: boolean; guestMessage?: boolean; guestCancel?: boolean; guestEdit?: boolean;
   statusChange?: boolean; newMessage?: boolean;
-  /** Per-event staff recipients. `null`/absent means "every owner and admin". */
+  /** Per-event staff recipients. `null`/absent means "every member of the team". */
   recipients?: Partial<Record<TeamEvent, string[] | null>>;
 }
 
 interface StaffRow { id: string; first_name: string; last_name: string; email: string; role: string }
 
+/** Everyone who can be chosen as a recipient: the whole team, members included
+ *  ("Celý tím – Každý člen" used to mean owners and admins only). */
 async function loadStaff(db: App.Locals['db'], orgId: string): Promise<StaffRow[]> {
   return dbAll<StaffRow>(db,
     `SELECT u.id, u.first_name, u.last_name, u.email, m.role
      FROM organization_members m JOIN users u ON u.id = m.user_id
-     WHERE m.org_id = ? AND m.role IN ('owner', 'admin')
-     ORDER BY m.role, u.first_name`,
+     WHERE m.org_id = ?
+     ORDER BY CASE m.role WHEN 'owner' THEN 0 WHEN 'admin' THEN 1 ELSE 2 END, u.first_name`,
     orgId
   );
 }
@@ -77,7 +79,12 @@ export const load: PageServerLoad = async ({ locals }) => {
     const stored = saved.recipients?.[key];
     if (!notifications[key]) recipients[key] = [];
     else if (!Array.isArray(stored)) recipients[key] = null;
-    else recipients[key] = stored.filter((id) => staffIds.has(id));
+    else {
+      // Everyone picked has left the team: the email still goes to the whole team
+      // ($lib/email staffRecipients), so show that rather than "Nobody".
+      const kept = stored.filter((id) => staffIds.has(id));
+      recipients[key] = kept.length ? kept : null;
+    }
   }
 
   // ── Webhooks (paid) ──────────────────────────────────────────────────
@@ -123,7 +130,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 
 export const actions: Actions = {
   /** Which emails go out, and to which members of the team. The submitted ids are
-   *  never trusted: anything that is not a current owner/admin of THIS org is
+   *  never trusted: anything that is not a current member of THIS org is
    *  dropped before the preference is stored. */
   saveNotifications: async ({ request, locals }) => {
     await requireOrgPermission(locals, 'settings.manage');

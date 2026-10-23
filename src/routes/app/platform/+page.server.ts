@@ -2,6 +2,7 @@ import { dbFirst, dbAll } from '$lib/db/index';
 import { env } from '$env/dynamic/private';
 import { requirePlatformAdmin } from '$lib/guards';
 import { SLA } from '$lib/legal';
+import { getEmailHealth } from '$lib/email';
 import type { PageServerLoad } from './$types';
 
 /**
@@ -138,6 +139,8 @@ export const load: PageServerLoad = async ({ locals }) => {
       orgs7d: num(stats?.orgs_7d), users7d: num(stats?.users_7d), reservations7d: num(stats?.reservations_7d),
       orgs30d: num(stats?.orgs_30d), users30d: num(stats?.users_30d), reservations30d: num(stats?.reservations_30d),
     },
+    // Down = every email is failing (key missing or refused), not one bad address.
+    emailHealth: await getEmailHealth(locals.db),
     health: {
       emailSent: num(email?.sent),
       emailFailed: num(email?.failed),

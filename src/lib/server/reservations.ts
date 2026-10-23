@@ -140,7 +140,7 @@ export async function createReservation(
 	const userName = `${user.first_name} ${user.last_name}`;
 	if (!input.silent) {
 		await postSystemMessage(locals.db, user.id, title, `reservation_created:${initialStatus}:${userName}`, user.id);
-		notifyNewReservation(locals.db, input.orgId, title, userName, hall.name, eventDate).catch(() => {});
+		notifyNewReservation(locals.db, input.orgId, title, userName, hall.name, eventDate, { reservationId: newId }).catch(() => {});
 	}
 	// `reservation.new` is declared in WebhookEvent and offered in the webhook
 	// settings UI, but nothing ever dispatched it — subscribing was a no-op.

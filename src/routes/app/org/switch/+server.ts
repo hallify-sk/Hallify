@@ -36,10 +36,11 @@ export const POST: RequestHandler = async ({ request, locals, cookies, url }) =>
   // admin "viewing as" stays on the current host (apex) so impersonation keeps working.
   let crossDomain: string | null = null;
   if (locals.user.is_platform_admin) {
-    // Platform admins may "view as" any non-suspended org without membership.
+    // Platform admins may "view as" any org without membership, suspended ones
+    // included: inspecting what was suspended is part of the job.
     const org = await dbFirst<{ id: string }>(
       locals.db,
-      'SELECT id FROM organizations WHERE id = ? AND suspended_at IS NULL',
+      'SELECT id FROM organizations WHERE id = ?',
       orgId
     );
     if (!org) error(404, st(locals.locale).serverErrors.organizationNotFound);

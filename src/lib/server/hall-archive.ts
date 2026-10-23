@@ -121,8 +121,8 @@ export async function cancelHallReservations(
 			pending.push(opts.message
 				? notifyHallCancellation(db, opts.orgId, r.client_email, {
 					title: r.title, hallName: opts.hallName, date: fmtDate(r.event_date), message: opts.message,
-				})
-				: notifyStatusChange(db, opts.orgId, r.client_email, r.title, 'cancelled'));
+				}, { reservationId: r.id })
+				: notifyStatusChange(db, opts.orgId, r.client_email, r.title, 'cancelled', { reservationId: r.id }));
 		}
 	}
 
