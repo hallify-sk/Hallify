@@ -3,7 +3,8 @@ import { dbFirst, dbAll, dbRun, fromJson } from '$lib/db/index';
 import type { ReservationRow, TableTypeRow } from '$lib/db/index';
 import { buildSeatableLayout } from '$lib/reservationLayout';
 import { parseEventTypes } from '$lib/eventTypes';
-import { countSeats } from '$lib/floorplan-types';
+import { countSeats, migrateToMultiFloor } from '$lib/floorplan-types';
+import { applyTemplateKeepingGuests } from '$lib/floorplan-layout';
 import { st } from '$lib/i18n-server';
 import type { Actions, PageServerLoad } from './$types';
 import { reservationAccess, assertCanOpenReservation } from '$lib/server/reservation-access';
@@ -61,6 +62,8 @@ export const load: PageServerLoad = async ({ locals, params, url }) => {
 		templates,
 		initialLayout: draft?.built ? draft.built.layout : layout,
 		draft: draft ? { id: draft.proposalId, stale: draft.stale } : null,
+		// The hall's own zones (the stage, the bar) stay where the hall plan has them.
+		hallZoneIds: migrateToMultiFloor(reservation.hall_floorplan_json).floors.flatMap((f) => (f.zones ?? []).map((z) => z.id)),
 	};
 };
 
@@ -80,15 +83,8 @@ export const actions: Actions = {
 		if (!reservation) return fail(404, { error: st(locals.locale).serverErrors.notFound });
 		if (!reservation.hall_floorplan_json) return fail(400, { error: st(locals.locale).serverErrors.hallHasNoFloorPlan });
 
-		// Same gate as the sibling action on /app/reservation/[id]: staff may edit any
-		// booking in the org; everyone else only their own, and only once it is live.
-		const staff = (await reservationAccess(locals)).canManage;
-		if (!staff && reservation.user_id !== locals.user.id) {
-			return fail(403, { error: st(locals.locale).serverErrors.accessDenied });
-		}
-		if (!staff && !['approved', 'planned'].includes(reservation.status)) {
-			return fail(403, { error: st(locals.locale).serverErrors.reservationMustBeApprovedToEditLayout });
-		}
+		const denied = await layoutAccessError(locals, reservation);
+		if (denied) return fail(403, { error: denied });
 
 		const overStock = await tableInventoryError(locals.db, reservation.hall_id, layoutJson, locals.locale);
 		if (overStock) return fail(400, { error: overStock });
@@ -111,8 +107,9 @@ export const actions: Actions = {
 		return { success: true };
 	},
 
-	// Apply an org template to this reservation: persist it and hand the parsed layout
-	// back so the editor can remount on it without a full reload.
+	// Apply an org template to this reservation: its tables, with the guest list kept
+	// (guests whose chair the template also has stay on it). Persisted, and handed back
+	// so the editor can remount on it without a full reload.
 	loadTemplate: async ({ request, locals, params }) => {
 		if (!locals.user) redirect(303, '/app/login');
 		const orgId = locals.currentOrg?.id;
@@ -121,20 +118,52 @@ export const actions: Actions = {
 		const templateId = String(data.get('templateId') ?? '');
 		if (!templateId) return fail(400, { error: st(locals.locale).serverErrors.noTemplateSelected });
 
-		const reservation = await dbFirst<{ hall_id: string; user_id: string }>(locals.db,
-			'SELECT hall_id, user_id FROM reservations WHERE id = ? AND org_id = ?', params.id, orgId);
+		const reservation = await dbFirst<{ hall_id: string; user_id: string; status: string; layout_json: string | null; hall_floorplan_json: string | null }>(locals.db,
+			`SELECT r.hall_id, r.user_id, r.status, r.layout_json, h.floorplan_json AS hall_floorplan_json
+			 FROM reservations r JOIN halls h ON h.id = r.hall_id WHERE r.id = ? AND r.org_id = ?`,
+			params.id, orgId);
 		if (!reservation) return fail(404, { error: st(locals.locale).serverErrors.notFound });
-		if (!(await reservationAccess(locals)).canManage && reservation.user_id !== locals.user.id) {
-			return fail(403, { error: st(locals.locale).serverErrors.accessDenied });
-		}
+		// The same gate as saving: this overwrites the reservation's seating just as much.
+		const denied = await layoutAccessError(locals, reservation);
+		if (denied) return fail(403, { error: denied });
 
 		const tmpl = await dbFirst<{ layout_json: string | null }>(locals.db,
 			'SELECT layout_json FROM floorplan_templates WHERE id = ? AND hall_id = ?',
 			templateId, reservation.hall_id);
 		if (!tmpl?.layout_json) return fail(404, { error: st(locals.locale).serverErrors.templateNotFound });
 
+		// The editor's current layout (it may hold edits not yet saved), else the stored one.
+		const current = parseLayout(String(data.get('currentJson') ?? ''))
+			?? (await buildSeatableLayout(locals.db, params.id, reservation.hall_floorplan_json, reservation.layout_json)).layout;
+		const applied = applyTemplateKeepingGuests(current, tmpl.layout_json);
+
 		await dbRun(locals.db, 'UPDATE reservations SET layout_json = ? WHERE id = ? AND org_id = ?',
-			tmpl.layout_json, params.id, orgId);
-		return { success: true, layout: fromJson(tmpl.layout_json) };
+			JSON.stringify(applied.layout), params.id, orgId);
+		return { success: true, layout: applied.layout, reseated: applied.reseated, unseated: applied.unseated };
 	}
 };
+
+/** Same gate as the sibling actions on /app/reservation/[id]: staff may change any
+ *  booking's seating in the org; everyone else only their own, and only once it is
+ *  live. Returns the refusal, or null. */
+async function layoutAccessError(locals: App.Locals, reservation: { user_id: string; status: string }): Promise<string | null> {
+	// Staff = may manage the org's bookings (the same permission as the sibling action
+	// on /app/reservation/[id]), not a fixed owner/admin role.
+	const staff = (await reservationAccess(locals)).canManage;
+	if (!staff && reservation.user_id !== locals.user?.id) return st(locals.locale).serverErrors.accessDenied;
+	if (!staff && !['approved', 'planned'].includes(reservation.status)) {
+		return st(locals.locale).serverErrors.reservationMustBeApprovedToEditLayout;
+	}
+	return null;
+}
+
+/** A layout posted by the editor, or null when it is not one. */
+function parseLayout(raw: string): unknown {
+	if (!raw) return null;
+	try {
+		const v = JSON.parse(raw);
+		return v && typeof v === 'object' && Array.isArray(v.floors) ? v : null;
+	} catch {
+		return null;
+	}
+}

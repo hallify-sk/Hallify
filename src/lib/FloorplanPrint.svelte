@@ -5,9 +5,26 @@
 	interface Props {
 		floor: FloorData;
 		guests: Guest[];
-		tableLabel: (t: TableObj, idx: number) => string;
+		/** The name under a table's number; its own label by default. */
+		tableLabel?: (t: TableObj, idx: number) => string;
+		/** Table numbers across the whole layout (`tableNumbers`), so the plan prints
+		 *  the same T1, T2… as the editor. Without it tables are numbered per floor. */
+		numbers?: Map<string, number>;
 	}
-	const { floor, guests, tableLabel }: Props = $props();
+	const { floor, guests, tableLabel = (t: TableObj) => (t.label ?? '').trim(), numbers }: Props = $props();
+
+	const tagOf = (t: TableObj, ti: number) => `T${numbers?.get(t.id) ?? ti + 1}`;
+
+	/** Where a zone's name goes: the middle of its corners, sized to its width. */
+	function zoneLabel(points: Point[]): { x: number; y: number; size: number } {
+		const xs = points.map((p) => Number(p.x)), ys = points.map((p) => Number(p.y));
+		const w = Math.max(...xs) - Math.min(...xs), h = Math.max(...ys) - Math.min(...ys);
+		return {
+			x: xs.reduce((a, v) => a + v, 0) / xs.length,
+			y: ys.reduce((a, v) => a + v, 0) / ys.length,
+			size: Math.max(0.18, Math.min(0.42, w / 8, h / 2.5))
+		};
+	}
 
 	// ─── Chair geometry (mirrors the editor's localChairs) ────────────────────
 	type ChairPos = { x: number; y: number; rot: number };
@@ -104,6 +121,14 @@
 		<polygon points={polyPoints(z.points)} fill="color-mix(in srgb, var(--text-base) 4%, transparent)"
 			stroke="var(--text-subtle)" stroke-width="0.025" />
 	{/each}
+	<!-- zone names (the stage, the bar…), so staff can find their way on paper -->
+	{#each floor.zones as z}
+		{#if z.label && z.points.length}
+			{@const at = zoneLabel(z.points)}
+			<text x={at.x} y={at.y} text-anchor="middle" dominant-baseline="central"
+				font-size={at.size} font-weight="600" fill="var(--text-muted)" letter-spacing="0.02">{z.label}</text>
+		{/if}
+	{/each}
 	<!-- walls (closed filled polygons, matching the editor) -->
 	{#each floor.walls as w}
 		<polygon points={polyPoints(w.points)} fill="var(--editor-wall)" stroke="var(--text-base)" stroke-width="0.02" stroke-linejoin="round" />
@@ -120,14 +145,17 @@
 			{/if}
 		</g>
 		<!-- Unique table tag (T1, T2…) above the name so same-named tables are distinguishable -->
+		{@const tag = tagOf(t, ti)}
 		{@const tName = tableLabel(t, ti)}
 		{@const nFont = labelFont(tName, t)}
 		{@const half = (t.shape === 'round' ? t.radius : t.height / 2)}
-		{@const off = Math.min(0.26, half * 0.42)}
+		{@const off = tName && tName !== tag ? Math.min(0.26, half * 0.42) : 0}
 		<text x={t.x} y={t.y - off} text-anchor="middle" dominant-baseline="central"
-			font-size={Math.min(0.42, half * 0.7)} font-weight="650" fill="var(--text-base)">T{ti + 1}</text>
-		<text x={t.x} y={t.y + off} text-anchor="middle" dominant-baseline="central"
-			font-size={Math.min(nFont, half * 0.5)} font-weight="600" fill="var(--text-muted)">{tName}</text>
+			font-size={Math.min(0.42, half * 0.7)} font-weight="650" fill="var(--text-base)">{tag}</text>
+		{#if tName && tName !== tag}
+			<text x={t.x} y={t.y + off} text-anchor="middle" dominant-baseline="central"
+				font-size={Math.min(nFont, half * 0.5)} font-weight="600" fill="var(--text-muted)">{tName}</text>
+		{/if}
 		<!-- chairs drawn on top so their seat numbers stay legible -->
 		{#each chairs as c}
 			{@const occupied = !!t.assignments[c.idx]}

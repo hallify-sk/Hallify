@@ -1,24 +1,14 @@
 <script lang="ts">
-	import { enhance } from '$app/forms';
-	import { goto } from '$app/navigation';
+	import { goto, invalidateAll } from '$app/navigation';
 	import { t } from '$lib/i18n.svelte';
 	import MapEditor from '$lib/MapEditor.svelte';
 	import { onMount, untrack } from 'svelte';
 	import { registerAssistantPage } from '$lib/assistant/page-hooks';
-	import type { PageData, ActionData } from './$types';
+	import { LayoutSaver, guardUnsaved } from '$lib/editor/layout-saver.svelte';
+	import type { PageData } from './$types';
 
-	interface Props { data: PageData; form: ActionData; }
-	const { data, form }: Props = $props();
-
-	let floorplanJson = $state('');
-	let saving = $state(false);
-	let formRef: HTMLFormElement | undefined = $state();
-	/** What was last saved (or loaded), so unsaved drawing can be told apart. */
-	let savedJson = $state('');
-	let editorKey = $state(0);
-	/** The JSON that went out with the save in flight, so edits made meanwhile stay unsaved. */
-	let submittedJson = '';
-	let autoTimer: ReturnType<typeof setTimeout> | undefined;
+	interface Props { data: PageData; }
+	const { data }: Props = $props();
 
 	// An AI assistant's proposed plan, opened here to look at before anything is saved.
 	// Saving goes through the same action with the proposal attached, so the draft is
@@ -28,15 +18,63 @@
 	// The plan the editor starts from. Taken once (and again when the editor is rebuilt):
 	// a save reloads the page data, and the editor must not reset to it mid-drawing.
 	let initialPlan = $state<unknown>(untrack(() => (data.draft && !data.draft.stale ? data.draft.state : data.hall.floorplan_json)));
+	let editorKey = $state(0);
+	/** The stored plan this editor's edits build on (see the server's conflict check). */
+	let baseVersion = $state(untrack(() => data.floorplanVersion));
+	/** Someone else saved this plan meanwhile: autosave stops until the user chooses. */
+	let conflict = $state(false);
+	let overwrite = false;
+
+	// Autosave a moment after the last change. An AI draft is never saved on its own:
+	// saving it is the user's decision (a step change does not save it either).
+	const saver = new LayoutSaver({
+		action: '?/saveFloorplan',
+		field: 'floorplanJson',
+		delay: 1000,
+		fields: () => (draft ? { proposalId: draft.id } : { baseVersion, ...(overwrite ? { force: '1' } : {}) }),
+		autosave: () => !draft && !conflict,
+		failedMessage: () => t.editor.saveFailed,
+		onResult: async (result) => {
+			if (result.type === 'success') {
+				const version = (result.data as { version?: unknown } | undefined)?.version;
+				if (typeof version === 'string') baseVersion = version;
+				// Saved: from here on it is the hall's plan, edited like any other.
+				if (draft) await leaveTo(plainEditor);
+			} else if (result.type === 'failure' && (result.data as { conflict?: unknown } | undefined)?.conflict) {
+				conflict = true;
+			}
+		}
+	});
+	guardUnsaved(saver, { leaveUnsaved: () => t.editor.leaveUnsaved, leaveFailed: () => t.editor.leaveSaveFailed });
+
 	function rebuildEditor() {
-		clearTimeout(autoTimer);
 		initialPlan = draft ? draft.state : data.hall.floorplan_json;
-		floorplanJson = '';
-		savedJson = '';
+		baseVersion = data.floorplanVersion;
+		conflict = false;
+		saver.reset();
 		editorKey++;
 	}
-	let discarding = $state(false);
 
+	/** Navigate on purpose (the draft was saved or discarded): no "unsaved" guard. */
+	async function leaveTo(url: string) {
+		saver.leaving = true;
+		try { await goto(url, { replaceState: true, invalidateAll: true }); } finally { saver.leaving = false; }
+	}
+
+	// The assistant widget opens a draft here by client-side navigation (and saving
+	// or discarding one navigates back). The page is not remounted then, so the
+	// editor is rebuilt whenever the draft in the URL changes — otherwise it went on
+	// showing the old plan under the draft's banner, and saved that.
+	const draftKey = $derived(data.draft ? `${data.draft.id}:${data.draft.stale ? 'stale' : 'live'}` : '');
+	let shownDraftKey = untrack(() => draftKey);
+	$effect(() => {
+		const key = draftKey;
+		if (key === shownDraftKey) return;
+		shownDraftKey = key;
+		untrack(rebuildEditor);
+	});
+
+	let discarding = $state(false);
 	async function discardDraft() {
 		if (!draft) return;
 		discarding = true;
@@ -49,30 +87,26 @@
 		} finally {
 			discarding = false;
 		}
-		await goto(plainEditor, { replaceState: true, invalidateAll: true });
+		await leaveTo(plainEditor);
+	}
+
+	/** The explicit save. A draft can be saved untouched; the server then writes the
+	 *  proposal as it is. */
+	function save() {
+		void saver.save({ force: true, payload: draft && !saver.dirty ? '' : undefined });
+	}
+
+	/** After a conflict: take the newer plan from the server (this tab's edits go). */
+	async function reloadNewer() {
+		saver.leaving = true;
+		try { await invalidateAll(); } finally { saver.leaving = false; }
 		rebuildEditor();
 	}
-
-	const saveState = $derived<'idle' | 'dirty' | 'saving' | 'saved'>(
-		saving ? 'saving' : floorplanJson && savedJson && floorplanJson !== savedJson ? 'dirty' : form?.success || (savedJson && floorplanJson === savedJson && !draft) ? 'saved' : 'idle'
-	);
-
-	function onFloorplanChange(json: string) {
-		floorplanJson = json;
-		if (!savedJson) { savedJson = json; return; } // the editor reports its starting state once
-		// Autosave a moment after the last change. An AI draft is never saved on its own:
-		// saving it is the user's decision.
-		clearTimeout(autoTimer);
-		if (!draft && json !== savedJson) autoTimer = setTimeout(save, 1000);
-	}
-	function save() {
-		clearTimeout(autoTimer);
-		if (saving || (!draft && (!floorplanJson || floorplanJson === savedJson))) return;
-		formRef?.requestSubmit();
-	}
-	// Warn before leaving with an edit that has not reached the server.
-	function onBeforeUnload(e: BeforeUnloadEvent) {
-		if (floorplanJson && floorplanJson !== savedJson) { e.preventDefault(); save(); }
+	/** After a conflict: keep this tab's plan and write it over the newer one. */
+	async function overwriteNewer() {
+		conflict = false;
+		overwrite = true;
+		try { await saver.save({ force: true }); } finally { overwrite = false; }
 	}
 
 	// The assistant can save a drawn plan for this hall. Refuse that over unsaved
@@ -80,13 +114,14 @@
 	// save from this page would quietly put the old walls back.
 	onMount(() =>
 		registerAssistantPage({
-			blocker: () => (floorplanJson && floorplanJson !== savedJson ? t.ai.errors.page_unsaved : null),
+			blocker: () => (saver.dirty || saver.saving ? t.ai.errors.page_unsaved : null),
 			afterApply: () => rebuildEditor()
 		})
 	);
+
+	const saveLabel = $derived(draft ? t.ai.draftSave : `${t.common.save} ${t.halls.floorplan.toLowerCase()}`);
 </script>
 
-<svelte:window onbeforeunload={onBeforeUnload} />
 <svelte:head><title>{t.halls.floorplan} – {data.hall.name} – Hallify</title></svelte:head>
 
 <div class="editor-page fill-main">
@@ -100,33 +135,12 @@
 		</a>
 		<span class="topbar-title">{t.halls.floorplan}</span>
 		<div class="topbar-actions">
-			<span class="save-state save-{saveState}">{saveState === 'dirty' ? t.editor.unsaved : saveState === 'saving' ? t.editor.saving : saveState === 'saved' ? t.editor.saved : ''}</span>
+			<span class="save-state save-{saver.state}">{saver.state === 'dirty' ? t.editor.unsaved : saver.state === 'saving' ? t.editor.saving : saver.state === 'saved' ? t.editor.saved : ''}</span>
 			<button type="button" class="btn-outline btn-sm" onclick={() => window.dispatchEvent(new CustomEvent('hallify:assistant:open'))}>{t.editor.draftWithAi}</button>
 			{#if draft}
 				<button type="button" class="btn-outline btn-sm" onclick={discardDraft} disabled={discarding}>{t.ai.draftDiscard}</button>
 			{/if}
-			<form method="POST" action="?/saveFloorplan" bind:this={formRef} use:enhance={() => { saving = true; submittedJson = floorplanJson; return async ({ update, result }) => {
-				await update({ reset: false });
-				saving = false;
-				if (result.type === 'success') {
-					savedJson = submittedJson;
-					if (draft) {
-						// Saved: from here on it is the hall's plan, edited like any other.
-						await goto(plainEditor, { replaceState: true, invalidateAll: true });
-						rebuildEditor();
-					} else if (floorplanJson !== savedJson) {
-						// Edited while the save was in flight: save again.
-						autoTimer = setTimeout(save, 600);
-					}
-				}
-			}; }}>
-				<input type="hidden" name="floorplanJson" value={floorplanJson} />
-				{#if draft}<input type="hidden" name="proposalId" value={draft.id} />{/if}
-				<!-- A draft can be saved untouched; the server then writes the proposal as it is. -->
-				<button type="submit" class="btn-action btn-sm" disabled={!draft && !floorplanJson}>
-					{draft ? t.ai.draftSave : `${t.common.save} ${t.halls.floorplan.toLowerCase()}`}
-				</button>
-			</form>
+			<button type="button" class="btn-action btn-sm" onclick={save} disabled={saver.saving || (!draft && saver.json === null)}>{saveLabel}</button>
 		</div>
 	</div>
 
@@ -138,19 +152,29 @@
 	{:else if data.draft?.stale}
 		<div class="draft-banner draft-banner--stale" role="status">{t.ai.draftStale}</div>
 	{/if}
-	{#if form?.error}<div class="draft-banner draft-banner--stale" role="alert">{form.error}</div>{/if}
+	{#if saver.error}
+		<div class="draft-banner draft-banner--stale" role="alert">
+			<span class="banner-text">{saver.error}</span>
+			{#if conflict}
+				<button type="button" class="btn-outline btn-sm" onclick={reloadNewer}>{t.editor.conflictReload}</button>
+				<button type="button" class="btn-outline btn-sm" onclick={overwriteNewer}>{t.editor.conflictOverwrite}</button>
+			{/if}
+		</div>
+	{/if}
 
 	<!-- Editor fills remaining space -->
 	<div class="editor-body">
 		{#key editorKey}
 			<MapEditor
 				initialState={initialPlan}
-				onchange={onFloorplanChange}
+				onchange={(json) => saver.change(json)}
 				tableTypes={data.tableTypes}
 				mode="room"
-				{saveState}
+				saveState={saver.state}
 				onSave={save}
-				saveLabel={draft ? t.ai.draftSave : `${t.common.save} ${t.halls.floorplan.toLowerCase()}`}
+				{saveLabel}
+				autosave={!draft && !conflict}
+				printHref={draft ? undefined : `/app/manage/halls/${data.hall.id}/editor/print`}
 			/>
 		{/key}
 	</div>
@@ -174,7 +198,11 @@
 		border-bottom: 1px solid var(--border);
 		flex-shrink: 0;
 		z-index: 10;
+		/* On a narrow screen the actions go to a second line instead of off-screen. */
+		flex-wrap: wrap;
+		row-gap: 8px;
 	}
+	.banner-text { flex: 1; min-width: 0; }
 
 	.back-link {
 		display: flex;
@@ -196,6 +224,7 @@
 		align-items: center;
 		gap: 8px;
 		margin-left: auto;
+		flex-wrap: wrap;
 	}
 
 	.topbar-title { font-size: 13px; font-weight: 600; color: var(--text-muted); margin-left: 14px; padding-left: 14px; border-left: 1px solid var(--border); }

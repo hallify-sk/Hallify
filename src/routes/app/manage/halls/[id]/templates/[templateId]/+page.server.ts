@@ -2,6 +2,7 @@ import { error, fail } from '@sveltejs/kit';
 import { dbFirst, dbAll, dbRun, fromJson } from '$lib/db/index';
 import type { TemplateRow, TableTypeRow } from '$lib/db/index';
 import { serializeEventTypes } from '$lib/eventTypes';
+import { migrateToMultiFloor } from '$lib/floorplan-types';
 import { st } from '$lib/i18n-server';
 import type { Actions, PageServerLoad } from './$types';
 import { requireOrgPermission } from '$lib/server/access';
@@ -12,8 +13,8 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 	const orgId = locals.currentOrg!.id;
 
 	// Template scoped by hall + org (templates belong to halls; halls belong to orgs).
-	const template = await dbFirst<TemplateRow & { hall_name: string }>(locals.db,
-		`SELECT ft.*, h.name AS hall_name
+	const template = await dbFirst<TemplateRow & { hall_name: string; hall_floorplan_json: string | null }>(locals.db,
+		`SELECT ft.*, h.name AS hall_name, h.floorplan_json AS hall_floorplan_json
 		 FROM floorplan_templates ft
 		 JOIN halls h ON h.id = ft.hall_id
 		 WHERE ft.id = ? AND ft.hall_id = ? AND h.org_id = ?`,
@@ -26,10 +27,13 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 		params.id
 	);
 
+	const { hall_floorplan_json, ...row } = template;
 	return {
 		hallId: params.id,
-		template: { ...template, layout_json: fromJson(template.layout_json as string | null) },
+		template: { ...row, layout_json: fromJson(row.layout_json as string | null) },
 		tableTypes,
+		// The hall's own zones (the stage, the bar) stay where the hall plan has them.
+		hallZoneIds: migrateToMultiFloor(hall_floorplan_json).floors.flatMap((f) => (f.zones ?? []).map((z) => z.id)),
 	};
 };
 

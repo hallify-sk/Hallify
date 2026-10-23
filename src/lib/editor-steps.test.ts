@@ -12,6 +12,9 @@ describe('stepsFor', () => {
 		expect(stepsFor('template')).toEqual(['tables', 'chairs', 'check']);
 		expect(stepsFor('event')).toEqual(['tables', 'chairs', 'guests', 'check']);
 	});
+	it('only seats guests where the venue fixes the tables', () => {
+		expect(stepsFor('seating')).toEqual(['guests', 'check']);
+	});
 });
 
 describe('toolsFor', () => {

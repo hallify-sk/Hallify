@@ -239,6 +239,38 @@ export function hitboxHitsWall(hb: Hitbox, wall: WallObj): boolean {
 	return pts.length >= 3 && pointInPoly({ x: hb.cx, y: hb.cy }, pts);
 }
 
+// ─── Walls and pillars ───────────────────────────────────────────────────────
+
+/** A pillar's outline around its centre: a square, or a round one as a 24-sided
+ *  polygon (walls are polygons, so a round pillar collides like any wall). */
+export function pillarPoints(c: Point, size: number, round: boolean): Point[] {
+	const r = Math.max(0.05, size) / 2;
+	if (!round) return [{ x: c.x - r, y: c.y - r }, { x: c.x + r, y: c.y - r }, { x: c.x + r, y: c.y + r }, { x: c.x - r, y: c.y + r }];
+	const n = 24;
+	return Array.from({ length: n }, (_, i) => {
+		const a = (i / n) * 2 * Math.PI;
+		return { x: Math.round((c.x + Math.cos(a) * r) * 1000) / 1000, y: Math.round((c.y + Math.sin(a) * r) * 1000) / 1000 };
+	});
+}
+
+/** The rectangle a wall is, when it is one with its sides along the axes (a run of
+ *  wall, a square pillar), so its size can be typed in. Null for any other shape. */
+export function axisRect(points: Point[]): BoundsRect | null {
+	if (points.length !== 4) return null;
+	const xs = [...new Set(points.map((p) => Number(p.x)))], ys = [...new Set(points.map((p) => Number(p.y)))];
+	if (xs.length !== 2 || ys.length !== 2) return null;
+	// Every corner of the box must be one of the points (no zig-zag through them).
+	for (const x of xs) for (const y of ys) if (!points.some((p) => Number(p.x) === x && Number(p.y) === y)) return null;
+	const x = Math.min(...xs), y = Math.min(...ys);
+	const mm = (v: number) => Math.round(v * 1000) / 1000;
+	return { x, y, w: mm(Math.max(...xs) - x), h: mm(Math.max(...ys) - y) };
+}
+
+/** The four corners of a rectangle, clockwise from the top left. */
+export function rectPoints(r: BoundsRect): Point[] {
+	return [{ x: r.x, y: r.y }, { x: r.x + r.w, y: r.y }, { x: r.x + r.w, y: r.y + r.h }, { x: r.x, y: r.y + r.h }];
+}
+
 // ─── The room ────────────────────────────────────────────────────────────────
 
 /** The rectangles a floor's room is made of. Old plans have a single `bounds`. */
@@ -364,6 +396,26 @@ export function partsConnected(parts: BoundsRect[], minShared = MIN_JOIN_M): boo
 		});
 	}
 	return seen.size === parts.length;
+}
+
+/** Whether a rectangle lies wholly inside the room already (inside one part, or
+ *  across several), so adding it as a part would add no floor at all. */
+export function rectCovered(rect: BoundsRect, parts: BoundsRect[]): boolean {
+	if (!parts.length) return false;
+	const inside = (x: number, y: number) => parts.some((p) => x > p.x - EPS && x < p.x + p.w + EPS && y > p.y - EPS && y < p.y + p.h + EPS);
+	// Cut the rectangle along every part edge that crosses it; it is covered when the
+	// middle of every resulting cell is.
+	const xs = [...new Set([rect.x, rect.x + rect.w, ...parts.flatMap((p) => [p.x, p.x + p.w])])]
+		.filter((x) => x >= rect.x - EPS && x <= rect.x + rect.w + EPS).sort((a, b) => a - b);
+	const ys = [...new Set([rect.y, rect.y + rect.h, ...parts.flatMap((p) => [p.y, p.y + p.h])])]
+		.filter((y) => y >= rect.y - EPS && y <= rect.y + rect.h + EPS).sort((a, b) => a - b);
+	for (let i = 0; i < xs.length - 1; i++) {
+		for (let j = 0; j < ys.length - 1; j++) {
+			if (xs[i + 1] - xs[i] <= EPS || ys[j + 1] - ys[j] <= EPS) continue;
+			if (!inside((xs[i] + xs[i + 1]) / 2, (ys[j] + ys[j + 1]) / 2)) return false;
+		}
+	}
+	return true;
 }
 
 /** Floor area of the joined rectangles, overlaps counted once. */

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { FloorData, TableObj } from './floorplan-types';
 import {
-	partsJoined, partsConnected,
+	partsJoined, partsConnected, rectCovered, pillarPoints, axisRect, rectPoints,
 	countTablesByType, defaultChairSides, hitboxHitsWall, hitboxInRoom, hitboxesOverlap,
 	inventoryOverage, localChairs, roomArea, roomOutline, roomParts, seatHitbox, tableHitbox, withRoom, CHAIR_R
 } from './floorplan-geometry';
@@ -174,5 +174,37 @@ describe('room parts must be connected', () => {
 		expect(partsConnected([left, right])).toBe(false);
 		expect(partsConnected([a])).toBe(true);
 		expect(partsConnected([])).toBe(true);
+	});
+});
+
+describe('pillars and wall rectangles', () => {
+	it('makes square and round pillars of the asked size around the click', () => {
+		const sq = pillarPoints({ x: 2, y: 3 }, 0.6, false);
+		expect(sq).toEqual([{ x: 1.7, y: 2.7 }, { x: 2.3, y: 2.7 }, { x: 2.3, y: 3.3 }, { x: 1.7, y: 3.3 }]);
+		const rd = pillarPoints({ x: 0, y: 0 }, 1, true);
+		expect(rd).toHaveLength(24);
+		for (const p of rd) expect(Math.hypot(p.x, p.y)).toBeCloseTo(0.5, 2);
+	});
+	it('reads an axis-aligned wall as a rectangle, in any corner order', () => {
+		expect(axisRect([{ x: 4, y: 1 }, { x: 4, y: 1.2 }, { x: 0, y: 1.2 }, { x: 0, y: 1 }])).toEqual({ x: 0, y: 1, w: 4, h: 0.2 });
+		expect(axisRect(rectPoints({ x: 1, y: 2, w: 3, h: 0.25 }))).toEqual({ x: 1, y: 2, w: 3, h: 0.25 });
+	});
+	it('does not read a slanted or many-cornered wall as a rectangle', () => {
+		expect(axisRect([{ x: 0, y: 0 }, { x: 2, y: 0.5 }, { x: 2, y: 1.5 }, { x: 0, y: 1 }])).toBeNull();
+		expect(axisRect(pillarPoints({ x: 0, y: 0 }, 1, true))).toBeNull();
+	});
+});
+
+describe('rectCovered', () => {
+	it('spots a part drawn wholly inside the room, even across two parts', () => {
+		expect(rectCovered({ x: 1, y: 1, w: 2, h: 2 }, L)).toBe(true);
+		// Spans the seam between the strip and the leg of the L.
+		expect(rectCovered({ x: 1, y: 3, w: 2, h: 3 }, L)).toBe(true);
+		expect(rectCovered({ x: 0, y: 0, w: 10, h: 4 }, L)).toBe(true);
+	});
+	it('lets a part through that adds floor', () => {
+		expect(rectCovered({ x: 8, y: 3, w: 2, h: 3 }, L)).toBe(false);
+		expect(rectCovered({ x: 5, y: 5, w: 2, h: 2 }, L)).toBe(false);
+		expect(rectCovered({ x: 0, y: 0, w: 1, h: 1 }, [])).toBe(false);
 	});
 });

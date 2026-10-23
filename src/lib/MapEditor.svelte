@@ -4,17 +4,21 @@
 	import { migrateToMultiFloor } from '$lib/floorplan-types';
 	import {
 		CHAIR_R, SEAT_R, localChairs, totalChairs, defaultChairSides, tableHitbox, seatHitbox, hitboxesOverlap,
-		hitboxHitsWall, hitboxInRoom, pointInPoly, roomParts, withRoom, partsBBox, partsConnected, roomOutline, roomArea,
+		hitboxHitsWall, hitboxInRoom, pointInPoly, roomParts, withRoom, partsBBox, partsConnected, rectCovered, roomOutline, roomArea,
+		pillarPoints, axisRect, rectPoints,
 		countTablesByType, type Hitbox
 	} from '$lib/floorplan-geometry';
 	import type { FloorData, MultiFloorState, WallObj, ZoneObj, TableObj, SeatObj, Guest, BoundsRect, Point, TableShape } from '$lib/floorplan-types';
 	import { stepsFor, toolsFor, TOOL_KEYS, toolForKey, type EditorMode, type StepId, type Tool } from '$lib/editor-steps';
-	import { parseGuestCsv } from '$lib/guest-csv';
+	import { parseGuestCsv, splitDuplicateGuests } from '$lib/guest-csv';
+	import { tableNumbers, nextTableNumber, withTableNumbers, tableTag } from '$lib/floorplan-layout';
 	import { uiStore } from '$lib/stores/ui.svelte';
 	import StepStrip, { type StepItem } from '$lib/editor/StepStrip.svelte';
 	import ToolCards, { type ToolCard } from '$lib/editor/ToolCards.svelte';
 	import GuestList, { type GuestRow } from '$lib/editor/GuestList.svelte';
 	import CoachMark from '$lib/editor/CoachMark.svelte';
+	import FloorplanPrint from '$lib/FloorplanPrint.svelte';
+	import { labelBox, placeLabels, type LabelBox } from '$lib/editor/label-layout';
 
 	// ─── Props ────────────────────────────────────────────────────────────────
 	interface TableType {
@@ -44,14 +48,30 @@
 		saveState?: SaveState;
 		onSave?: () => void;
 		saveLabel?: string;
+		/** Save on a step change. Off while saving is the user's decision (an AI draft). */
+		autosave?: boolean;
+		/** Tables and chairs stay where they are and only guests are seated: a hall
+		 *  that does not let its clients arrange the tables. */
+		lockTables?: boolean;
+		/** Who is at the keyboard. A client is never told to do what only staff can. */
+		audience?: 'staff' | 'client';
+		/** Zones from the hall's own plan (the stage, the bar): shown, but not moved,
+		 *  reshaped or deleted in a template or an event. */
+		lockedZoneIds?: string[];
 		/** Where "Preview & print" leads (events have a printable manifest). */
 		printHref?: string;
 	}
 	const {
 		initialState, onchange, tableTypes, hiddenTools = [], protectWallsZones = false, allowZones = false,
 		lockFloors = false, tablesFromTypesOnly = false, allowGuests = false,
-		mode, saveState = 'idle', onSave, saveLabel, printHref
+		mode, saveState = 'idle', onSave, saveLabel, autosave = true, printHref,
+		lockTables = false, audience = 'staff', lockedZoneIds = []
 	}: Props = $props();
+
+	const lockedZones = $derived(new Set(lockedZoneIds));
+	/** A zone that may be changed right now: zones are editable in this step, and it
+	 *  is not one of the hall's own. */
+	const zoneEditable = (id: string) => !zonesOff && !lockedZones.has(id);
 
 	// Walls (the venue shell) can be protected while zones stay editable.
 	const wallsLocked = $derived(protectWallsZones);
@@ -169,6 +189,24 @@
 	// Zone config
 	let zoneColor = $state('#a78bfa');
 
+	// Pillar config: its size across, and square or round.
+	let pillarSize  = $state(0.5);
+	let pillarRound = $state(false);
+	function pillarAt(c: Point): WallObj {
+		return { id: crypto.randomUUID(), points: pillarPoints(c, pillarSize, pillarRound) };
+	}
+
+	/** Type a rectangular wall's size (its thickness is the shorter side). The top
+	 *  left corner stays put. */
+	function setWallSize(id: string, patch: { w?: number; h?: number }) {
+		const w = walls.find(x => x.id === id);
+		const r = w ? axisRect(w.points) : null;
+		if (!r) return;
+		const next = { ...r, ...patch };
+		if (!(next.w > 0.01) || !(next.h > 0.01)) return;
+		walls = walls.map(x => x.id === id ? { ...x, points: rectPoints(next) } : x);
+	}
+
 	// The room: one or more rectangles joined into one shape (two make an L, three
 	// a U). `bounds` is their bounding box; `roomEdges` the outline tables may not cross.
 	let roomRects = $state<BoundsRect[]>([]);
@@ -262,6 +300,7 @@
 	let guestSearch  = $state('');
 	let chairPopover = $state<ChairPopover | null>(null);
 	let importMessage = $state<string | null>(null);
+	let importMessageTimer: ReturnType<typeof setTimeout> | undefined;
 	// A guest being dragged from the list onto a chair.
 	let dragGuest  = $state<{ id: string; x: number; y: number } | null>(null);
 	let dragTarget = $state<SeatTarget | null>(null);
@@ -333,8 +372,11 @@
 		try {
 			const raw = typeof initialState === 'string' ? JSON.parse(initialState) : initialState;
 			const state = migrateToMultiFloor(raw);
-			const f0 = state.floors[0]; // use local var, NOT reactive `floors`
-			floors = state.floors;
+			// Every table gets its number now, so it is stored with the next save and
+			// stays put when other tables come and go.
+			const numbered = withTableNumbers(state.floors);
+			const f0 = numbered[0]; // use local var, NOT reactive `floors`
+			floors = numbered;
 			guests = state.guests;
 			activeFloorIdx = 0;
 			walls = f0.walls; zones = f0.zones; tables = f0.tables; seats = f0.seats ?? []; roomRects = roomParts(f0);
@@ -349,10 +391,10 @@
 		// Access reactive working copy to create dependency
 		const snap = { walls, zones, tables, seats };
 		const room = roomRects;
-		// Read floors without creating deep dependency — use untrack for floors array
-		const currentFloors = untrack(() => floors).map((f, i) =>
-			i === untrack(() => activeFloorIdx) ? withRoom({ ...f, ...snap }, room) : f
-		);
+		// The floors list is read tracked as well: renaming a floor changes nothing but
+		// `floors`, and with it untracked a rename was never reported, so never saved.
+		const idx = activeFloorIdx;
+		const currentFloors = floors.map((f, i) => (i === idx ? withRoom({ ...f, ...snap }, room) : f));
 		const state: MultiFloorState = { version: 2, floors: currentFloors, guests };
 		onchange(JSON.stringify(state));
 	});
@@ -516,10 +558,20 @@
 	function importGuests(text: string) {
 		const rows = parseGuestCsv(text);
 		if (!rows.length) { importMessage = tr.editor.importNone; return; }
-		pushUndo();
-		guests = [...guests, ...rows.map(r => ({ id: crypto.randomUUID(), firstName: r.firstName, lastName: r.lastName, group: r.group, note: r.note }))];
-		importMessage = tr.editor.importDone(rows.length);
-		setTimeout(() => { importMessage = null; }, 5000);
+		// Importing the same sheet again must not double everyone: people already on
+		// the list are left out, and the message says who.
+		const { fresh, duplicates } = splitDuplicateGuests(guests, rows);
+		if (fresh.length) {
+			pushUndo();
+			guests = [...guests, ...fresh.map(r => ({ id: crypto.randomUUID(), firstName: r.firstName, lastName: r.lastName, group: r.group, note: r.note }))];
+		}
+		const dupNames = duplicates.slice(0, 3).map(g => `${g.firstName} ${g.lastName}`.trim()).join(', ') + (duplicates.length > 3 ? ' …' : '');
+		importMessage = [
+			fresh.length || !duplicates.length ? tr.editor.importDone(fresh.length) : '',
+			duplicates.length ? tr.editor.importSkippedDuplicates(duplicates.length, dupNames) : ''
+		].filter(Boolean).join(' · ');
+		clearTimeout(importMessageTimer);
+		importMessageTimer = setTimeout(() => { importMessage = null; }, duplicates.length ? 9000 : 5000);
 	}
 
 	function updateGuestNote(id: string, note: string) {
@@ -811,9 +863,21 @@
 	const allSeats  = $derived(allFloors.reduce(
 		(n, f) => n + (f.tables ?? []).reduce((m, t) => m + totalChairs(t), 0) + (f.seats?.length ?? 0), 0));
 
+	// Table numbers across every floor: T1, T2… on the plan, in seat chips and on the
+	// printed manifest alike (all tables of one type share a label).
+	const tableNums = $derived(tableNumbers(allFloors));
+	function tagOf(t: TableObj): string {
+		return tableTag(tableNums.get(t.id) ?? t.num);
+	}
+	/** "T3 · Okrúhly stôl", or just "T3" when the table has no label of its own. */
+	function tableName(t: TableObj): string {
+		const tag = tagOf(t), label = (t.label ?? '').trim();
+		return label && label !== tag ? `${tag} · ${label}` : tag;
+	}
+
 	/** Where a guest sits, as the list prints it. */
 	function seatRefOf(guestId: string): string | null {
-		for (const t of tables) { const i = t.assignments.indexOf(guestId); if (i >= 0) return tr.editor.seatRef(t.label, i + 1); }
+		for (const t of tables) { const i = t.assignments.indexOf(guestId); if (i >= 0) return tr.editor.seatRef(tagOf(t), i + 1); }
 		const si = seats.findIndex(s => s.assignment === guestId);
 		if (si >= 0) return tr.editor.chairRef(si + 1);
 		for (let fi = 0; fi < floors.length; fi++) {
@@ -967,8 +1031,10 @@
 		chairPopover = null; helpOpen = false;
 		partDrag = null; selectedPart = null;
 		if (!visited.includes(step)) visited = [...visited, step];
-		// Moving between steps saves what was done, without waiting for autosave.
-		if (onSave && saveState === 'dirty' && id !== step) onSave();
+		// Moving between steps saves what was done, without waiting for autosave —
+		// except where nothing may be saved until the user says so (an AI draft).
+		if (autosave && onSave && saveState === 'dirty' && id !== step) onSave();
+		roomNotice = null;
 		step = id as StepId;
 		tool = 'select';
 	}
@@ -1022,6 +1088,8 @@
 		if (t !== 'bounds') boundsStart = null;
 		if (t !== 'measure') { measureStart = null; measureEnd = null; }
 		chairPopover = null;
+		// A refusal from the previous tool must not hide what this one asks for.
+		roomNotice = null;
 	}
 
 	/** The one line at the top of the canvas that says what to do now. */
@@ -1231,7 +1299,7 @@
 	function selectedPolyPoints(): Point[] | null {
 		if (!selectedId) return null;
 		const w = wallsOff ? undefined : walls.find(x => x.id === selectedId);
-		const z = zonesOff ? undefined : zones.find(x => x.id === selectedId);
+		const z = zoneEditable(selectedId) ? zones.find(x => x.id === selectedId) : undefined;
 		return w?.points ?? z?.points ?? null;
 	}
 	function setSelectedPoints(points: Point[]) {
@@ -1273,7 +1341,7 @@
 	/** The shapes the active drawing tool works on. */
 	function toolShapes(): { id: string; points: Point[] }[] {
 		if (tool === 'wall') return wallsOff ? [] : walls;
-		if (tool === 'zone') return zonesOff ? [] : zones;
+		if (tool === 'zone') return zones.filter(z => zoneEditable(z.id));
 		return [];
 	}
 	/** With the Wall or Zone tool, a corner of ANY wall (or zone) can be grabbed and
@@ -1354,11 +1422,8 @@
 		}
 
 		if (tool === 'pillar') {
-			const s = 0.25;
 			pushUndo();
-			walls = [...walls, { id: crypto.randomUUID(), points: [
-				{ x: pos.x - s, y: pos.y - s }, { x: pos.x + s, y: pos.y - s }, { x: pos.x + s, y: pos.y + s }, { x: pos.x - s, y: pos.y + s }
-			] }];
+			walls = [...walls, pillarAt(pos)];
 			return;
 		}
 
@@ -1391,7 +1456,9 @@
 				id: crypto.randomUUID(), x: pos.x, y: pos.y,
 				width: useWidth, height: useHeight, radius: useRadius,
 				shape: useShape, chairs: useChairs, rotation: 0,
-				label: st ? st.name : `T${tables.length + 1}`,
+				// The number tells tables apart; the label says what kind of table it is.
+				label: st ? st.name : '',
+				num: nextTableNumber(allFloors),
 				...sides,
 				chairSpacing: tChairSpacing,
 				assignments: Array(useShape === 'round' ? useChairs : (sides.chairsTop + sides.chairsBottom + sides.chairsLeft + sides.chairsRight)).fill(null),
@@ -1419,10 +1486,8 @@
 			for (let i = tables.length - 1; i >= 0; i--) {
 				if (tableHit(tables[i], raw)) { pushUndo(); tables = tables.filter((_, j) => j !== i); return; }
 			}
-			if (!zonesOff) {
-				for (let i = zones.length - 1; i >= 0; i--) {
-					if (pointInPoly(raw, zones[i].points)) { pushUndo(); zones = zones.filter((_, j) => j !== i); return; }
-				}
+			for (let i = zones.length - 1; i >= 0; i--) {
+				if (zoneEditable(zones[i].id) && pointInPoly(raw, zones[i].points)) { pushUndo(); zones = zones.filter((_, j) => j !== i); return; }
 			}
 			if (!wallsOff) {
 				for (let i = walls.length - 1; i >= 0; i--) {
@@ -1441,8 +1506,11 @@
 				const w = Math.abs(pos.x - boundsStart.x);
 				const h = Math.abs(pos.y - boundsStart.y);
 				if (w > 0.5 && h > 0.5) {
-					// A new part must join the room: overlap it or share a doorway's width of edge.
-					if (partsConnected([...roomRects, { x, y, w, h }])) {
+					// A new part must add floor (one drawn wholly inside the room is a
+					// part that does nothing, and a trap later when it is moved), and must
+					// join the room: overlap it or share a doorway's width of edge.
+					if (rectCovered({ x, y, w, h }, roomRects)) noticeRoom(tr.editor.roomPartInside);
+					else if (partsConnected([...roomRects, { x, y, w, h }])) {
 						pushUndo();
 						roomRects = [...roomRects, { x, y, w, h }];
 					} else noticeRoom(tr.editor.roomNotJoined);
@@ -1477,15 +1545,16 @@
 					openSeatPopover(t, ci);
 					return;
 				}
-				// Then table body (drag)
+				// Then table body (drag — unless the venue fixes where tables stand)
 				if (tableBodyHit(t, raw)) {
+					if (lockTables) { selectedId = t.id; selectedPart = null; return; }
 					pushUndo(); selectedId = t.id; selectedPart = null; isDragging = true; dragStart = raw; elemStart = { x: t.x, y: t.y }; return;
 				}
 			}
-			// Zones — select + drag
+			// Zones — select + drag (the hall's own zones are part of the room here)
 			if (!zonesOff) {
 				for (let i = zones.length - 1; i >= 0; i--) {
-					if (pointInPoly(raw, zones[i].points)) {
+					if (zoneEditable(zones[i].id) && pointInPoly(raw, zones[i].points)) {
 						pushUndo(); selectedId = zones[i].id; selectedPart = null;
 						isPolyDragging = true; polyDragStart = raw;
 						polyOrigPoints = zones[i].points.map(p => ({ ...p }));
@@ -1578,8 +1647,10 @@
 		const current = snapTables(tables);
 		const step = Math.max(Number(t.width), Number(t.radius) * 2, 1) + 1;
 		for (const [dx, dy] of [[step, 0], [0, step], [-step, 0], [0, -step], [step, step], [-step, step], [step, -step], [-step, -step]]) {
+			// The copy keeps the kind of table (its label) and gets a number of its own.
 			const c: TableObj = { ...t, id: crypto.randomUUID(), x: snap({ x: Number(t.x) + dx, y: 0 }).x, y: snap({ x: 0, y: Number(t.y) + dy }).y,
-				label: `T${tables.length + 1}`, assignments: Array(totalChairs(t)).fill(null) };
+				label: /^T\d+$/.test((t.label ?? '').trim()) ? '' : t.label, num: nextTableNumber(allFloors),
+				assignments: Array(totalChairs(t)).fill(null) };
 			if (!tableHasCollision(c, undefined, current)) { pushUndo(); tables = [...tables, c]; selectedId = c.id; return true; }
 		}
 		return false;
@@ -1601,7 +1672,7 @@
 		if (readOnly) return { title: tr.editor.readOnlyStep, items: [{ label: tr.editor.fitRoom, kbd: '⇧1', run: fitToRoom }] };
 
 		const shapes: { id: string; points: Point[]; kind: 'wall' | 'zone' }[] = [
-			...(zonesOff ? [] : zones.map(z => ({ id: z.id, points: z.points, kind: 'zone' as const }))),
+			...zones.filter(z => zoneEditable(z.id)).map(z => ({ id: z.id, points: z.points, kind: 'zone' as const })),
 			...(wallsOff ? [] : walls.map(w => ({ id: w.id, points: w.points, kind: 'wall' as const }))),
 		];
 		const shapeItems = (sh: { id: string; kind: 'wall' | 'zone' }): CtxItem[] => [
@@ -1630,8 +1701,11 @@
 				items.push({ label: tr.editor.assign, run: () => { chairPopover = { seatId: st.id, x: wx(st.x), y: wy(st.y) }; guestSearch = ''; } });
 				if (st.assignment) items.push({ label: tr.editor.ctxClearSeat, run: () => clearSeat({ seatId: st.id }) });
 			}
-			items.push({ label: tr.editor.ctxRotate90, run: () => { pushUndo(); seats = seats.map(x => x.id === st.id ? { ...x, rotation: (Number(x.rotation) + 90) % 360 } : x); } });
-			items.push({ label: tr.editor.ctxDeleteChair, danger: true, kbd: 'Del', run: () => { pushUndo(); seats = seats.filter(x => x.id !== st.id); selectedId = null; } });
+			if (!lockTables) {
+				items.push({ label: tr.editor.ctxRotate90, run: () => { pushUndo(); seats = seats.map(x => x.id === st.id ? { ...x, rotation: (Number(x.rotation) + 90) % 360 } : x); } });
+				items.push({ label: tr.editor.ctxDeleteChair, danger: true, kbd: 'Del', run: () => { pushUndo(); seats = seats.filter(x => x.id !== st.id); selectedId = null; } });
+			}
+			if (!items.length) break;
 			return { title: tr.editor.chairRef(i + 1), items };
 		}
 		// A table chair, then the table itself
@@ -1647,13 +1721,14 @@
 				if (t.assignments[ci]) items.push({ label: tr.editor.ctxClearSeat, run: () => clearSeat({ tableId: t.id, chairIdx: ci }) });
 			}
 			const tt = t.typeId ? tableTypes?.find(x => x.id === t.typeId) : null;
-			items.push(
+			if (!lockTables) items.push(
 				{ label: tr.editor.ctxRotate90, run: () => rotateTable(t.id, 90) },
 				{ label: tr.editor.ctxDuplicate, disabled: !!tt && typeLeft(tt) <= 0, run: () => { duplicateTable(t); } },
 			);
 			if (allowGuests && t.assignments.some(Boolean)) items.push({ label: tr.editor.clearSeats, run: () => clearTableSeats(t.id) });
-			items.push({ label: tr.editor.deleteTable, danger: true, kbd: 'Del', run: () => { pushUndo(); tables = tables.filter(x => x.id !== t.id); selectedId = null; } });
-			return { title: ci >= 0 ? tr.editor.seatRef(t.label, ci + 1) : t.label, items };
+			if (!lockTables) items.push({ label: tr.editor.deleteTable, danger: true, kbd: 'Del', run: () => { pushUndo(); tables = tables.filter(x => x.id !== t.id); selectedId = null; } });
+			if (!items.length) break;
+			return { title: ci >= 0 ? tr.editor.seatRef(tableName(t), ci + 1) : tableName(t), items };
 		}
 		// An edge of a shape: add a corner there
 		for (const sh of ordered) {
@@ -1692,7 +1767,7 @@
 		}
 		// Empty canvas: the view, and what the current tool can do here
 		const items: CtxItem[] = [];
-		if (tool === 'pillar') items.push({ label: tr.editor.ctxPillarHere, run: () => { pushUndo(); const c = snap(raw), h = 0.25; walls = [...walls, { id: crypto.randomUUID(), points: [{ x: c.x - h, y: c.y - h }, { x: c.x + h, y: c.y - h }, { x: c.x + h, y: c.y + h }, { x: c.x - h, y: c.y + h }] }]; } });
+		if (tool === 'pillar') items.push({ label: tr.editor.ctxPillarHere, run: () => { pushUndo(); walls = [...walls, pillarAt(snap(raw))]; } });
 		if (tool === 'chair') items.push({ label: tr.editor.ctxChairHere, run: () => { const st: SeatObj = { id: crypto.randomUUID(), ...snap(raw), rotation: 0, assignment: null }; if (!seatHasCollision(st)) { pushUndo(); seats = [...seats, st]; } } });
 		if (tool !== 'select') items.push({ label: tr.editor.ctxBackToSelect, kbd: 'V', run: () => pickTool('select') });
 		items.push({ label: tr.editor.fitRoom, kbd: '⇧1', run: fitToRoom });
@@ -1803,16 +1878,23 @@
 		}
 		if (!selectedId) return;
 		pushUndo();
-		tables = tables.filter(t => t.id !== selectedId);
+		if (!lockTables) {
+			tables = tables.filter(t => t.id !== selectedId);
+			seats = seats.filter(s => s.id !== selectedId);
+		}
 		if (!wallsOff) walls = walls.filter(w => w.id !== selectedId);
-		if (!zonesOff) zones = zones.filter(z => z.id !== selectedId);
-		seats = seats.filter(s => s.id !== selectedId);
+		zones = zones.filter(z => z.id !== selectedId || !zoneEditable(z.id));
 		selectedId = null;
 	}
 
+	/** Inputs that take no typing: focus left on one (the drag-to-draw checkbox) must
+	 *  not switch the canvas shortcuts off. */
+	const NON_TEXT_INPUTS = new Set(['checkbox', 'radio', 'button', 'submit', 'reset', 'range', 'color', 'file']);
 	function isTyping(e: KeyboardEvent): boolean {
 		const el = e.target as HTMLElement | null;
-		return !!el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable);
+		if (!el) return false;
+		if (el.tagName === 'INPUT') return !NON_TEXT_INPUTS.has((el as HTMLInputElement).type);
+		return el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable;
 	}
 
 	function onKeyDown(e: KeyboardEvent) {
@@ -1841,7 +1923,8 @@
 		if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z' && !e.shiftKey) { e.preventDefault(); undo(); return; }
 		if ((e.ctrlKey || e.metaKey) && (e.key.toLowerCase() === 'y' || (e.key.toLowerCase() === 'z' && e.shiftKey))) { e.preventDefault(); redo(); return; }
 		if (e.ctrlKey || e.metaKey || e.altKey) return;
-		if (e.key === '1' && e.shiftKey) { fitToRoom(); return; }
+		// By the physical key: Shift+1 is "!" on a US keyboard, "1" on a Slovak one.
+		if (e.shiftKey && (e.code === 'Digit1' || e.code === 'Numpad1' || e.key === '1')) { fitToRoom(); return; }
 		if (e.key.toLowerCase() === 'd' && !e.shiftKey) { showDims = !showDims; return; }
 		// Single-key tools, only the ones this step offers.
 		const t = toolForKey(e.key);
@@ -1881,6 +1964,24 @@
 			return u;
 		});
 	}
+	/** A number field whose value was capped: show the capped value. Svelte leaves the
+	 *  typed text when the bound value comes out unchanged, so a field could read 12
+	 *  on a table that only takes 10. An emptied field is left to be typed into. */
+	function showClamped(el: HTMLInputElement, v: number) {
+		if (el.value !== '' && String(v) !== el.value) el.value = String(v);
+	}
+	/** One side's chair count: on a table, as `updateTable` allowed it (a table type
+	 *  caps the total); on the new-table settings, as typed. */
+	function setSideChairs(e: Event, key: 'chairsTop' | 'chairsBottom' | 'chairsLeft' | 'chairsRight', T: TableObj | null, setNew: (v: number) => void) {
+		const el = e.target as HTMLInputElement;
+		let v = Math.max(0, Math.floor(+el.value || 0));
+		if (T) {
+			updateTable({ [key]: v });
+			v = Number(tables.find(t => t.id === T.id)?.[key]) || 0;
+		} else setNew(v);
+		showClamped(el, v);
+	}
+
 	function updateZone(patch: Partial<ZoneObj>) {
 		zones = zones.map(z => z.id === selectedId ? { ...z, ...patch } : z);
 	}
@@ -1931,6 +2032,52 @@
 		}).filter(e => e.len >= min);
 		return out.sort((a, b) => b.len - a.len).slice(0, max);
 	}
+	/** The measurement labels (screen pixels), most telling first; one that would cover
+	 *  another is left out rather than printed on top of it. */
+	type DimLabel = { x: number; y: number; text: string; size: number; cls: string };
+	const dimLabels = $derived.by((): DimLabel[] => {
+		if (!dimsOn) return [];
+		const out: DimLabel[] = [];
+		const reserved: LabelBox[] = [];
+		if (bounds) {
+			// The overall width above the room and height left of it are always shown.
+			const top = wy(bounds.y) - 26, left = wx(bounds.x) - 26;
+			reserved.push(labelBox({ x: wx(bounds.x + bounds.w / 2), y: top - 11, text: `${bounds.w.toFixed(2)} m`, size: 12 }));
+			const hb = labelBox({ x: 0, y: 0, text: `${bounds.h.toFixed(2)} m`, size: 12 });
+			const cy = wy(bounds.y + bounds.h / 2), half = (hb.x1 - hb.x0) / 2;
+			reserved.push({ x0: left - 18, y0: cy - half, x1: left, y1: cy + half });
+			// Each stretch of an L- or U-shaped outline
+			if (roomRects.length > 1) {
+				for (const [a, b] of roomEdges) {
+					const len = Math.hypot(b.x - a.x, b.y - a.y);
+					if (len >= 1) out.push({ x: wx((a.x + b.x) / 2), y: wy((a.y + b.y) / 2) + (a.y === b.y ? -10 : 0), text: `${len.toFixed(2)} m`, size: 11, cls: 'dim-label dim-edge dim-room' });
+				}
+			}
+		}
+		for (const wall of walls) {
+			for (const d of edgeDims(wall.points, wall.points.length > 12 ? 8 : 12)) out.push({ x: wx(d.x), y: wy(d.y), text: d.len.toFixed(2), size: 11, cls: 'dim-label dim-edge' });
+		}
+		for (const zone of zones) {
+			const xs = zone.points.map(p => p.x), ys = zone.points.map(p => p.y);
+			out.push({
+				x: wx(xs.reduce((a, v) => a + v, 0) / xs.length), y: wy(ys.reduce((a, v) => a + v, 0) / ys.length) + 14,
+				text: `${polyAreaM2(zone.points).toFixed(1)} m² · ${(Math.max(...xs) - Math.min(...xs)).toFixed(1)} × ${(Math.max(...ys) - Math.min(...ys)).toFixed(1)} m`,
+				size: 11, cls: 'dim-label dim-edge'
+			});
+		}
+		for (const zone of zones) {
+			for (const d of edgeDims(zone.points, 8)) out.push({ x: wx(d.x), y: wy(d.y), text: d.len.toFixed(2), size: 10, cls: 'dim-label dim-edge dim-zone' });
+		}
+		for (const t of tables) {
+			out.push({
+				x: wx(Number(t.x)), y: wy(Number(t.y)) + ws(t.shape === 'round' ? Number(t.radius) : Number(t.height) / 2) + 22,
+				text: `${t.shape === 'round' ? `⌀ ${(Number(t.radius) * 2).toFixed(1)}` : `${Number(t.width).toFixed(1)} × ${Number(t.height).toFixed(1)}`} m`,
+				size: 11, cls: 'dim-label dim-edge'
+			});
+		}
+		return placeLabels(out, reserved);
+	});
+
 	const roomPerimeter = $derived(roomEdges.reduce((a, [p, q]) => a + Math.hypot(q.x - p.x, q.y - p.y), 0));
 	const zonesArea = $derived(zones.reduce((a, z) => a + polyAreaM2(z.points), 0));
 
@@ -1945,6 +2092,20 @@
 
 	const zoomPercent = $derived(Math.round((zoom / 60) * 100));
 	const saveStateText = $derived(saveState === 'saved' ? tr.editor.saved : saveState === 'saving' ? tr.editor.saving : saveState === 'dirty' ? tr.editor.unsaved : '');
+
+	// ─── Small screens ───────────────────────────────────────────────────────
+	// Three columns do not fit a phone: the canvas came out 0 px wide and the save
+	// controls were cut off. Below a tablet's width the editor shows the plan, read
+	// only, and says where it can be edited.
+	let narrow = $state(false);
+
+	onMount(() => {
+		const mq = window.matchMedia('(max-width: 760px)');
+		narrow = mq.matches;
+		const onNarrow = (e: MediaQueryListEvent) => { narrow = e.matches; if (!e.matches) requestAnimationFrame(() => fitToRoom()); };
+		mq.addEventListener('change', onNarrow);
+		return () => mq.removeEventListener('change', onNarrow);
+	});
 
 	onMount(() => {
 		uiStore.setSidebarRail(true);
@@ -2003,9 +2164,25 @@
 {/snippet}
 
 <!-- ─── Layout ─────────────────────────────────────────────────────────────── -->
-<div class="app">
+<div class="app" class:narrow-app={narrow}>
+	{#if narrow}
+	<div class="narrow">
+		<div class="narrow-msg" role="note">
+			<b>{tr.editor.smallScreenTitle}</b>
+			<p>{tr.editor.smallScreenText}</p>
+		</div>
+		{#each allFloors as f (f.id)}
+			<section class="narrow-floor">
+				{#if allFloors.length > 1}<h3>{f.name}</h3>{/if}
+				<FloorplanPrint floor={f} {guests} numbers={tableNums} />
+			</section>
+		{/each}
+		{#if allowGuests && guests.length}<p class="narrow-facts">{tr.editor.seatedOf(totalAssigned, guests.length)}</p>{/if}
+		{#if printHref}<a class="btn-sm narrow-print" href={printHref}>{tr.editor.printPlan}</a>{/if}
+	</div>
+	{:else}
 	<StepStrip steps={stepItems} onPick={goStep}
-		note={editorMode === 'room' ? tr.editor.stepsNoteRoom : tr.editor.stepsNoteLocked}
+		note={editorMode === 'room' ? tr.editor.stepsNoteRoom : editorMode === 'seating' ? tr.editor.stepsNoteSeating : tr.editor.stepsNoteLocked}
 		right={stripRight} />
 
 	<div class="body">
@@ -2020,8 +2197,23 @@
 				canUndo={undoStack.length > 0} canRedo={redoStack.length > 0} onUndo={undo} onRedo={redo}
 				undoLabel={tr.editor.undo} redoLabel={tr.editor.redo}>
 				{#if step === 'tables' && tablesFromTypesOnly && !(tableTypes && tableTypes.length)}
-					<p class="tool-note">{tr.editor.tablesNeedTypes}</p>
+					<!-- Only staff can define table types; a client is told who can help. -->
+					<p class="tool-note">{audience === 'client' ? tr.editor.tablesNeedTypesClient : tr.editor.tablesNeedTypes}</p>
 				{:else if step === 'walls'}
+					{#if tool === 'pillar'}
+						<!-- The next pillar: how big, and square or round. -->
+						<div class="tool-opts">
+							<label class="opt-field">
+								<span>{tr.editor.pillarSize}</span>
+								<input type="number" min="0.1" max="3" step="0.05" value={pillarSize}
+									oninput={(e) => { const el = e.target as HTMLInputElement; const v = Math.min(3, Math.max(0.1, +el.value || 0.5)); pillarSize = v; }} />
+							</label>
+							<div class="seg" role="group" aria-label={tr.editor.shape}>
+								<button type="button" class:on={!pillarRound} aria-pressed={!pillarRound} onclick={() => pillarRound = false}>{tr.editor.pillarSquare}</button>
+								<button type="button" class:on={pillarRound} aria-pressed={pillarRound} onclick={() => pillarRound = true}>{tr.editor.round}</button>
+							</div>
+						</div>
+					{/if}
 					<label class="mode-switch"><input type="checkbox" checked={rectDraw} onchange={(e) => setRectDraw((e.target as HTMLInputElement).checked)} />{tr.editor.rectDrawMode}</label>
 					<p class="tool-note">{tr.editor.wallsOptional}</p>
 				{:else if step === 'zones'}
@@ -2136,9 +2328,9 @@
 					{@const sel = zone.id === selectedId}
 					<polygon points={pts} fill={zone.color} fill-opacity={sel ? 0.5 : 0.28}
 						stroke={zone.color} stroke-width={sel ? 2.5 : 1.5} stroke-opacity="0.7"
-						style={tool === 'select' && !zonesOff && !readOnly ? 'cursor:move' : ''}
+						style={tool === 'select' && zoneEditable(zone.id) && !readOnly ? 'cursor:move' : ''}
 						pointer-events={tool === 'select' || tool === 'eraser' ? 'auto' : 'none'}/>
-					{#if sel && !zonesOff && !readOnly}
+					{#if sel && zoneEditable(zone.id) && !readOnly}
 						{#each zone.points as p, vi}
 							<circle cx={wx(p.x)} cy={wy(p.y)} r="6"
 								fill={vertexDragIdx === vi && isVertexDragging ? zone.color : 'white'}
@@ -2183,33 +2375,10 @@
 						<text x={wx(bounds.x + bounds.w / 2)} y={top - 7} text-anchor="middle" class="dim-label" pointer-events="none">{bounds.w.toFixed(2)} m</text>
 						<text x={left - 7} y={wy(bounds.y + bounds.h / 2)} text-anchor="middle" class="dim-label"
 							transform={`rotate(-90 ${left - 7} ${wy(bounds.y + bounds.h / 2)})`} pointer-events="none">{bounds.h.toFixed(2)} m</text>
-						<!-- Each stretch of an L- or U-shaped outline -->
-						{#if roomRects.length > 1}
-							{#each roomEdges as [a, b]}
-								{@const len = Math.hypot(b.x - a.x, b.y - a.y)}
-								{#if len >= 1}
-									<text x={wx((a.x + b.x) / 2)} y={wy((a.y + b.y) / 2) + (a.y === b.y ? -6 : 4)} text-anchor="middle" class="dim-label dim-edge dim-room" pointer-events="none">{len.toFixed(2)} m</text>
-								{/if}
-							{/each}
-						{/if}
 					{/if}
-					{#each walls as wall}
-						{#each edgeDims(wall.points, wall.points.length > 12 ? 8 : 12) as d}
-							<text x={wx(d.x)} y={wy(d.y)} text-anchor="middle" dominant-baseline="middle" class="dim-label dim-edge" pointer-events="none">{d.len.toFixed(2)}</text>
-						{/each}
-					{/each}
-					{#each zones as zone}
-						{@const xs = zone.points.map(p => p.x)}
-						{@const ys = zone.points.map(p => p.y)}
-						<text x={wx(xs.reduce((a, v) => a + v, 0) / xs.length)} y={wy(ys.reduce((a, v) => a + v, 0) / ys.length) + 18}
-							text-anchor="middle" class="dim-label dim-edge" pointer-events="none">{polyAreaM2(zone.points).toFixed(1)} m² · {(Math.max(...xs) - Math.min(...xs)).toFixed(1)} × {(Math.max(...ys) - Math.min(...ys)).toFixed(1)} m</text>
-						{#each edgeDims(zone.points, 8) as d}
-							<text x={wx(d.x)} y={wy(d.y)} text-anchor="middle" dominant-baseline="middle" class="dim-label dim-edge dim-zone" pointer-events="none">{d.len.toFixed(2)}</text>
-						{/each}
-					{/each}
-					{#each tables as t}
-						<text x={wx(Number(t.x))} y={wy(Number(t.y)) + ws(t.shape === 'round' ? Number(t.radius) : Number(t.height) / 2) + 26}
-							text-anchor="middle" class="dim-label dim-edge" pointer-events="none">{t.shape === 'round' ? `⌀ ${(Number(t.radius) * 2).toFixed(1)}` : `${Number(t.width).toFixed(1)} × ${Number(t.height).toFixed(1)}`} m</text>
+					<!-- Every other measurement, the ones that would cover another left out -->
+					{#each dimLabels as l}
+						<text x={l.x} y={l.y} text-anchor="middle" dominant-baseline="middle" class={l.cls} pointer-events="none">{l.text}</text>
 					{/each}
 				{/if}
 
@@ -2238,6 +2407,9 @@
 					{@const sel = table.id === selectedId}
 					{@const clash = collidingIds.has(table.id)}
 					{@const rotH  = table.shape === 'rect' ? table.height/2 : table.radius}
+					{@const tag = tagOf(table)}
+					{@const sub = (table.label ?? '').trim() !== tag ? (table.label ?? '').trim() : ''}
+					{@const fs = Math.max(6, Math.min(ws(0.18), 12))}
 					<!-- svelte-ignore a11y_no_static_element_interactions -->
 					<g transform={`translate(${wx(table.x)},${wy(table.y)}) rotate(${table.rotation})`}
 						class="table-g"
@@ -2245,7 +2417,7 @@
 							if (e.button !== 0 || spaceDown || e.altKey) return;
 							e.stopPropagation();
 							if (chairPopover) { chairPopover = null; guestSearch = ''; return; }
-							if (readOnly) { selectedId = table.id; return; }
+							if (readOnly || lockTables) { selectedId = table.id; selectedPart = null; return; }
 							if (tool === 'eraser') { pushUndo(); tables = tables.filter(t => t.id !== table.id); return; }
 							if (tool === 'select') {
 								pushUndo();
@@ -2266,13 +2438,15 @@
 								stroke-width={sel || clash ? 3 : 1.5}/>
 						{/if}
 
-						<!-- Label -->
-						<text x={0} y={ws(0.1)} text-anchor="middle" dominant-baseline="middle"
-							font-size={Math.max(6,Math.min(ws(0.18),12))}
-							font-family="system-ui,sans-serif" font-weight="600"
-							fill="rgba(255,250,240,0.95)" pointer-events="none">
-							{table.label}
-						</text>
+						<!-- Number (T3), and the label under it when it says more -->
+						<text x={0} y={sub ? -fs * 0.45 : 0} text-anchor="middle" dominant-baseline="middle"
+							font-size={fs * 1.1} font-family="system-ui,sans-serif" font-weight="700"
+							fill="rgba(255,250,240,0.98)" pointer-events="none">{tag}</text>
+						{#if sub}
+							<text x={0} y={fs * 0.75} text-anchor="middle" dominant-baseline="middle"
+								font-size={fs * 0.85} font-family="system-ui,sans-serif" font-weight="550"
+								fill="rgba(255,250,240,0.85)" pointer-events="none">{sub}</text>
+						{/if}
 
 						<!-- Chairs (on top of table body) -->
 						{#each chairs as ch, ci}
@@ -2320,7 +2494,7 @@
 						{/each}
 
 						<!-- Rotation handle -->
-						{#if sel && !readOnly}
+						{#if sel && !readOnly && !lockTables}
 							<line x1={0} y1={-ws(rotH)} x2={0} y2={-ws(rotH+0.65)}
 								stroke="var(--accent)" stroke-width="1.5" stroke-dasharray="3,2" pointer-events="none"/>
 							<circle cx={0} cy={-ws(rotH+0.65)} r={6}
@@ -2344,10 +2518,11 @@
 							e.stopPropagation();
 							if (chairPopover) { chairPopover = null; guestSearch = ''; return; }
 							if (readOnly) { selectedId = seat.id; return; }
-							if (tool === 'eraser') { pushUndo(); seats = seats.filter(s => s.id !== seat.id); return; }
+							if (tool === 'eraser' && !lockTables) { pushUndo(); seats = seats.filter(s => s.id !== seat.id); return; }
 							if (tool === 'select') {
 								selectedId = seat.id; selectedPart = null;
-								isDragging = true;
+								// With the tables fixed a press only opens the seat, never moves it.
+								isDragging = !lockTables;
 								dragStart = svgCoords(e);
 								elemStart = { x: seat.x, y: seat.y };
 								const r = svgEl.getBoundingClientRect();
@@ -2407,7 +2582,7 @@
 
 				<!-- ── Where a click adds a corner: the middle of each edge of the selected shape ── -->
 				{#if rectDraw && !readOnly && !isDrawing && (tool === 'select' || tool === 'wall' || tool === 'zone')}
-					{@const pts = (selectedWall && !wallsOff ? selectedWall.points : selectedZone && !zonesOff ? selectedZone.points : null)}
+					{@const pts = (selectedWall && !wallsOff ? selectedWall.points : selectedZone && zoneEditable(selectedZone.id) ? selectedZone.points : null)}
 					{#if pts}
 						{#each pts as p, i}
 							{@const q = pts[(i + 1) % pts.length]}
@@ -2430,6 +2605,13 @@
 						x2={wx(cursorPos.x)} y2={wy(cursorPos.y)}
 						stroke={tool==='wall'?'#2b3462':zoneColor} stroke-width="1.5"
 						stroke-dasharray="4,3" opacity="0.6" pointer-events="none"/>
+					<!-- The length of the side being drawn, as it is drawn -->
+					{@const last = drawPts[drawPts.length - 1]}
+					{@const segLen = Math.hypot(cursorPos.x - last.x, cursorPos.y - last.y)}
+					{#if segLen >= 0.05}
+						<text x={(wx(last.x) + wx(cursorPos.x)) / 2} y={(wy(last.y) + wy(cursorPos.y)) / 2 - 10} text-anchor="middle"
+							dominant-baseline="middle" class="dim-label" pointer-events="none">{segLen.toFixed(2)} m</text>
+					{/if}
 					{#each drawPts as p, i}
 						{@const near = i===0 && nearFirstPoint(cursorPos)}
 						<circle cx={wx(p.x)} cy={wy(p.y)} r={i===0?(near?9:6):4}
@@ -2440,8 +2622,13 @@
 
 				<!-- ── Pillar ghost ── -->
 				{#if tool === 'pillar' && !readOnly}
-					<rect x={wx(cursorPos.x - 0.25)} y={wy(cursorPos.y - 0.25)} width={ws(0.5)} height={ws(0.5)}
-						fill="rgba(43,52,98,0.35)" stroke="#2b3462" stroke-width="1.5" stroke-dasharray="4,3" pointer-events="none"/>
+					{#if pillarRound}
+						<circle cx={wx(cursorPos.x)} cy={wy(cursorPos.y)} r={ws(pillarSize / 2)}
+							fill="rgba(43,52,98,0.35)" stroke="#2b3462" stroke-width="1.5" stroke-dasharray="4,3" pointer-events="none"/>
+					{:else}
+						<rect x={wx(cursorPos.x - pillarSize / 2)} y={wy(cursorPos.y - pillarSize / 2)} width={ws(pillarSize)} height={ws(pillarSize)}
+							fill="rgba(43,52,98,0.35)" stroke="#2b3462" stroke-width="1.5" stroke-dasharray="4,3" pointer-events="none"/>
+					{/if}
 				{/if}
 
 				<!-- ── Table ghost ── -->
@@ -2671,7 +2858,7 @@
 					<div class="pop-header">
 						<span>
 							{#if popoverTable && chairPopover.chairIdx != null}
-								{tr.editor.seatRef(popoverTable.label, chairPopover.chairIdx + 1)}
+								{tr.editor.seatRef(tableName(popoverTable), chairPopover.chairIdx + 1)}
 							{:else if popoverSeat}
 								{tr.editor.chairRef(seats.indexOf(popoverSeat) + 1)}
 							{/if}
@@ -2805,9 +2992,26 @@
 							{/if}
 						</section>
 					{:else if selectedWall}
+						{@const wr = axisRect(selectedWall.points)}
 						<section>
 							<div class="sec-title">{tr.editor.wall}</div>
 							<div class="stat"><span>{tr.editor.vertices}</span><b>{selectedWall.points.length}</b></div>
+							{#if wr && !wallsOff}
+								<!-- A straight run of wall or a square pillar: its size typed in. -->
+								<div class="field-row">
+									<div class="field">
+										<label for="w-w">{tr.editor.widthM}</label>
+										<input id="w-w" type="number" min="0.05" step="0.05" value={wr.w}
+											onfocus={pushUndo} oninput={(e) => setWallSize(selectedWall.id, { w: +((e.target as HTMLInputElement).value) })}/>
+									</div>
+									<div class="field">
+										<label for="w-h">{tr.editor.depthM}</label>
+										<input id="w-h" type="number" min="0.05" step="0.05" value={wr.h}
+											onfocus={pushUndo} oninput={(e) => setWallSize(selectedWall.id, { h: +((e.target as HTMLInputElement).value) })}/>
+									</div>
+								</div>
+								<p class="help-text">{tr.editor.wallThicknessHelp}</p>
+							{/if}
 							<p class="help-text">{tr.editor.wallHelp}</p>
 							{#if !wallsOff}
 								<button type="button" class="btn-del" onclick={() => { pushUndo(); walls=walls.filter(w=>w.id!==selectedId); selectedId=null; }}>{tr.editor.deleteWall}</button>
@@ -2822,8 +3026,8 @@
 				{/if}
 
 				<!-- ── Zone options: the zones step, or a zone in the chairs step ── -->
-				{#if (step === 'zones' || step === 'chairs') && (tool === 'zone' || selectedZone)}
-					{@const Z = selectedZone}
+				{#if (step === 'zones' || step === 'chairs') && (tool === 'zone' || (selectedZone && zoneEditable(selectedZone.id)))}
+					{@const Z = selectedZone && zoneEditable(selectedZone.id) ? selectedZone : null}
 					<section>
 						<div class="sec-title">{Z ? Z.label || tr.editor.zoneOptions : tr.editor.zoneNew}</div>
 						{#if Z}
@@ -2846,7 +3050,7 @@
 									title={tr.editor.custom}/>
 							</div>
 						</div>
-						{#if Z && !zonesOff}
+						{#if Z}
 							<button type="button" class="btn-del" onclick={() => { pushUndo(); zones=zones.filter(z=>z.id!==selectedId); selectedId=null; }}>{tr.editor.deleteZone}</button>
 						{/if}
 					</section>
@@ -2898,7 +3102,7 @@
 					{@const isInventoryTable = T?.typeId && tableTypes?.find(tt => tt.id === T.typeId)}
 					{@const maxChairs = isInventoryTable ? Number((tableTypes?.find(tt => tt.id === T?.typeId))?.max_chairs ?? 999) : 999}
 					<section>
-						<div class="sec-title">{T ? T.label : tr.editor.freeformTable}</div>
+						<div class="sec-title">{T ? tableName(T) : tr.editor.freeformTable}</div>
 
 						{#if T}
 							<div class="field">
@@ -2956,7 +3160,7 @@
 								<label for="t-ch">{tr.editor.chairs} {maxChairs < 999 ? `(${tr.editor.max} ${maxChairs})` : ''}</label>
 								<input id="t-ch" type="number" min="0" max={maxChairs} step="1"
 									value={T?.chairs ?? tChairs}
-									oninput={(e) => { const v=Math.min(+((e.target as HTMLInputElement).value), maxChairs); if(T) updateTable({chairs:v}); else tChairs=v; }}/>
+									oninput={(e) => { const el = e.target as HTMLInputElement; const v = Math.max(0, Math.min(Math.floor(+el.value || 0), maxChairs)); if(T) updateTable({chairs:v}); else tChairs=v; showClamped(el, v); }}/>
 							</div>
 						{:else}
 							{@const currentTotal = T ? (Number(T.chairsTop)||0)+(Number(T.chairsBottom)||0)+(Number(T.chairsLeft)||0)+(Number(T.chairsRight)||0) : tChairsTop+tChairsBottom+tChairsLeft+tChairsRight}
@@ -2968,13 +3172,13 @@
 									<label for="t-ct">{tr.editor.top}</label>
 									<input id="t-ct" type="number" min="0" max={maxChairs} step="1"
 										value={T?.chairsTop ?? tChairsTop}
-										oninput={(e) => { const v=Math.max(0,+((e.target as HTMLInputElement).value)||0); if(T) updateTable({chairsTop:v}); else tChairsTop=v; }}/>
+										oninput={(e) => setSideChairs(e, 'chairsTop', T, v => tChairsTop = v)}/>
 								</div>
 								<div class="field">
 									<label for="t-cb">{tr.editor.bottom}</label>
 									<input id="t-cb" type="number" min="0" max={maxChairs} step="1"
 										value={T?.chairsBottom ?? tChairsBottom}
-										oninput={(e) => { const v=Math.max(0,+((e.target as HTMLInputElement).value)||0); if(T) updateTable({chairsBottom:v}); else tChairsBottom=v; }}/>
+										oninput={(e) => setSideChairs(e, 'chairsBottom', T, v => tChairsBottom = v)}/>
 								</div>
 							</div>
 							<div class="field-row">
@@ -2982,13 +3186,13 @@
 									<label for="t-cl">{tr.editor.left}</label>
 									<input id="t-cl" type="number" min="0" max={maxChairs} step="1"
 										value={T?.chairsLeft ?? tChairsLeft}
-										oninput={(e) => { const v=Math.max(0,+((e.target as HTMLInputElement).value)||0); if(T) updateTable({chairsLeft:v}); else tChairsLeft=v; }}/>
+										oninput={(e) => setSideChairs(e, 'chairsLeft', T, v => tChairsLeft = v)}/>
 								</div>
 								<div class="field">
 									<label for="t-cr">{tr.editor.right}</label>
 									<input id="t-cr" type="number" min="0" max={maxChairs} step="1"
 										value={T?.chairsRight ?? tChairsRight}
-										oninput={(e) => { const v=Math.max(0,+((e.target as HTMLInputElement).value)||0); if(T) updateTable({chairsRight:v}); else tChairsRight=v; }}/>
+										oninput={(e) => setSideChairs(e, 'chairsRight', T, v => tChairsRight = v)}/>
 								</div>
 							</div>
 						{/if}
@@ -3056,7 +3260,7 @@
 						{@const free = T.assignments.filter(a => !a).length}
 						<section>
 							<div class="sec-title-row">
-								<span class="sec-title" style="margin-bottom:0">{T.label}</span>
+								<span class="sec-title" style="margin-bottom:0">{tableName(T)}</span>
 								<span class="muted">{T.assignments.length - free}/{T.assignments.length} · {free} {tr.editor.seatEmpty.toLowerCase()}</span>
 							</div>
 							<ol class="seats">
@@ -3186,6 +3390,7 @@
 			</div>
 		</aside>
 	</div>
+	{/if}
 
 	<!-- The guest being dragged follows the pointer -->
 	{#if dragGuest && dragGuestRecord}
@@ -3200,6 +3405,17 @@
 <!-- ─── Styles ──────────────────────────────────────────────────────────────── -->
 <style>
 .app { display:flex; flex-direction:column; height:100%; min-height:0; overflow:hidden; background:var(--bg-base); position:relative; }
+
+/* ── Small screens: the plan, read only, and where to edit it ── */
+.app.narrow-app { overflow-y:auto; }
+.narrow { display:flex; flex-direction:column; gap:14px; padding:16px; }
+.narrow-msg { padding:12px 14px; border-radius:var(--radius-lg); background:var(--warning-dim); color:var(--text-base); font-size:13px; line-height:1.45; }
+.narrow-msg b { display:block; font-weight:650; margin-bottom:2px; }
+.narrow-msg p { margin:0; color:var(--text-muted); }
+.narrow-floor { padding:0; border:0; }
+.narrow-floor h3 { font-size:13px; font-weight:650; margin:0 0 6px; }
+.narrow-facts { margin:0; font-size:12.5px; color:var(--text-muted); }
+.narrow-print { align-self:flex-start; height:34px; padding:0 14px; }
 
 /* ── Floors and help, inside the step strip ── */
 .floors { display:flex; align-items:center; gap:3px; flex-shrink:0; }
@@ -3268,13 +3484,23 @@
 .coach-pos { position:absolute; left:16px; top:66px; z-index:31; }
 /* With rulers on, the overlays move clear of them. */
 .canvas-wrap.rulers .instr { top:30px; }
-.canvas-wrap.rulers .legend { top:30px; }
+.canvas-wrap.rulers .legend { top:78px; }
 .canvas-wrap.rulers .coach-pos { left:34px; top:84px; }
 .canvas-wrap.rulers .status-strip { left:30px; }
 .mode-switch { display:flex; align-items:center; gap:8px; margin:8px 10px 0; padding:8px 10px; border-radius:var(--radius); background:var(--bg-panel2); font-size:12px; font-weight:500; color:var(--text-base); cursor:pointer; }
 .mode-switch input { accent-color:var(--accent); margin:0; }
+.tool-opts { display:flex; flex-direction:column; gap:8px; margin:8px 10px 0; padding:10px; border-radius:var(--radius); background:var(--bg-panel2); }
+.opt-field { display:flex; align-items:center; justify-content:space-between; gap:8px; font-size:12px; font-weight:500; color:var(--text-base); }
+.opt-field input { width:76px; height:28px; border:1px solid var(--border); border-radius:var(--radius); padding:0 8px; font:inherit; font-size:12.5px; background:var(--bg-panel); color:var(--text-base); box-sizing:border-box; }
+.opt-field input:focus { outline:none; border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-dim); }
+.seg { display:flex; gap:2px; padding:2px; border-radius:var(--radius); background:var(--bg-panel); border:1px solid var(--border); }
+.seg button { flex:1; height:26px; border:0; border-radius:var(--radius-sm); background:none; font:inherit; font-size:12px; font-weight:500; color:var(--text-muted); cursor:pointer; }
+.seg button:hover { color:var(--text-base); }
+.seg button.on { background:var(--accent-dim); color:var(--accent-ink); font-weight:600; }
 
-.legend { position:absolute; right:16px; top:14px; z-index:20; display:flex; gap:12px; font-size:11px; color:var(--text-muted); background:color-mix(in srgb, var(--bg-panel) 85%, transparent); padding:6px 10px; border-radius:var(--radius); border:1px solid var(--border); }
+/* Below the instruction bar, not beside it: a long instruction is centred and wide
+   enough to run under a legend sitting at the same height. */
+.legend { position:absolute; right:16px; top:60px; z-index:20; display:flex; gap:12px; font-size:11px; color:var(--text-muted); background:color-mix(in srgb, var(--bg-panel) 85%, transparent); padding:6px 10px; border-radius:var(--radius); border:1px solid var(--border); }
 .legend span { display:inline-flex; align-items:center; gap:6px; }
 .legend i { width:12px; height:12px; border-radius:3px; display:inline-block; }
 .legend i.ring { background:none; border:2px solid var(--accent); border-radius:50%; box-sizing:border-box; }

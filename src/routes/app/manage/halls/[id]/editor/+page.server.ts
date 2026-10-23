@@ -5,6 +5,7 @@ import { st } from '$lib/i18n-server';
 import type { Actions, PageServerLoad } from './$types';
 import { requireOrgPermission } from '$lib/server/access';
 import { floorplanDraft, markProposalApplied } from '$lib/server/ai/proposals';
+import { layoutVersion } from '$lib/floorplan-layout';
 
 export const load: PageServerLoad = async ({ params, locals, url }) => {
 	await requireOrgPermission(locals, 'floorplans.manage');
@@ -26,7 +27,10 @@ export const load: PageServerLoad = async ({ params, locals, url }) => {
 	return {
 		hall,
 		tableTypes,
-		draft: draft ? { id: draft.proposalId, stale: draft.stale, state: draft.stale ? null : draft.state } : null
+		draft: draft ? { id: draft.proposalId, stale: draft.stale, state: draft.stale ? null : draft.state } : null,
+		// Which stored plan the editor starts from, so a save can tell whether someone
+		// else (another tab, a colleague, the assistant) has saved over it since.
+		floorplanVersion: await layoutVersion(hall.floorplan_json as string | null),
 	};
 };
 
@@ -54,7 +58,25 @@ export const actions: Actions = {
 		}
 
 		if (!floorplanJson) return fail(400, { error: st(locals.locale).serverErrors.noData });
-		await dbRun(locals.db, 'UPDATE halls SET floorplan_json=? WHERE id=? AND org_id=?', floorplanJson, params.id, orgId);
-		return { success: true };
+
+		// Only over the plan this editor started from. Two tabs (or two people) on the
+		// same floor plan used to overwrite each other in silence, last autosave wins;
+		// now the later one is told, and chooses to reload or to overwrite.
+		const baseVersion = String(data.get('baseVersion') ?? '');
+		const force = data.get('force') === '1';
+		if (baseVersion && !force) {
+			const current = await dbFirst<{ floorplan_json: string | null }>(locals.db,
+				'SELECT floorplan_json FROM halls WHERE id = ? AND org_id = ?', params.id, orgId);
+			if (!current) return fail(404, { error: st(locals.locale).serverErrors.hallNotFound });
+			const conflict = () => fail(409, { conflict: true, error: st(locals.locale).serverErrors.floorplanChangedElsewhere });
+			if ((await layoutVersion(current.floorplan_json)) !== baseVersion) return conflict();
+			const write = await dbRun(locals.db,
+				'UPDATE halls SET floorplan_json = ? WHERE id = ? AND org_id = ? AND floorplan_json IS ?',
+				floorplanJson, params.id, orgId, current.floorplan_json);
+			if (write.meta.changes !== 1) return conflict();
+		} else {
+			await dbRun(locals.db, 'UPDATE halls SET floorplan_json=? WHERE id=? AND org_id=?', floorplanJson, params.id, orgId);
+		}
+		return { success: true, version: await layoutVersion(floorplanJson) };
 	}
 };

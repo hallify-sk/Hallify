@@ -1,6 +1,8 @@
 <script lang="ts">
 	import MapEditor from '$lib/MapEditor.svelte';
 	import { enhance } from '$app/forms';
+	import { untrack } from 'svelte';
+	import { LayoutSaver, guardUnsaved } from '$lib/editor/layout-saver.svelte';
 	import { t } from '$lib/i18n.svelte';
 	import { EVENT_TYPE_KEYS, parseEventTypes } from '$lib/eventTypes';
 	import type { PageData, ActionData } from './$types';
@@ -8,20 +10,12 @@
 	interface Props { data: PageData; form: ActionData; }
 	const { data, form }: Props = $props();
 
-	const initialLayout = data.template.layout_json ?? null;
+	const initialLayout = untrack(() => data.template.layout_json ?? null);
 
-	let layoutJson = $state<string | null>(initialLayout ? JSON.stringify(initialLayout) : null);
-	let saveState = $state<'idle' | 'dirty' | 'saving' | 'saved'>('idle');
-	let formRef: HTMLFormElement | undefined = $state();
-	let autoTimer: ReturnType<typeof setTimeout> | undefined;
-
-	// Autosave: debounce a save shortly after the last meaningful change.
-	function onLayoutChange(json: string) {
-		layoutJson = json;
-		saveState = 'dirty';
-		clearTimeout(autoTimer);
-		autoTimer = setTimeout(() => formRef?.requestSubmit(), 900);
-	}
+	// Autosave shortly after the last change; the last edits are saved (or the
+	// browser asks) on the way out.
+	const saver = new LayoutSaver({ action: '?/saveLayout', field: 'layoutJson', failedMessage: () => t.editor.saveFailed });
+	guardUnsaved(saver, { leaveUnsaved: () => t.editor.leaveUnsaved, leaveFailed: () => t.editor.leaveSaveFailed });
 
 	// ── Edit details (name + event types) ──
 	let metaOpen  = $state(false);
@@ -57,33 +51,29 @@
 				<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
 				{t.hallAdmin.editDetails}
 			</button>
-			<span class="save-status save-{saveState}">
-				{#if saveState === 'saving'}{t.hallAdmin.saving}
-				{:else if saveState === 'dirty'}{t.hallAdmin.unsavedChanges}
-				{:else if saveState === 'saved'}{t.hallAdmin.allChangesSaved}{/if}
+			<span class="save-status save-{saver.state}">
+				{#if saver.state === 'saving'}{t.hallAdmin.saving}
+				{:else if saver.state === 'dirty'}{t.hallAdmin.unsavedChanges}
+				{:else if saver.state === 'saved'}{t.hallAdmin.allChangesSaved}{/if}
 			</span>
-			<form method="POST" action="?/saveLayout" bind:this={formRef} use:enhance={() => {
-				saveState = 'saving';
-				return async ({ update, result }) => { await update({ reset: false }); saveState = result.type === 'success' ? 'saved' : 'dirty'; };
-			}}>
-				<input type="hidden" name="layoutJson" value={layoutJson ?? ''} />
-				<button type="submit" class="btn-action btn-sm" disabled={!layoutJson}>
-					{t.common.save}
-				</button>
-			</form>
+			<button type="button" class="btn-action btn-sm" disabled={saver.json === null || saver.saving} onclick={() => saver.save({ force: true })}>
+				{t.common.save}
+			</button>
 		</div>
 	</div>
-	{#if form?.error}<div class="save-err" role="alert">{form.error}</div>{/if}
+	{#if saver.error}<div class="save-err" role="alert">{saver.error}</div>{/if}
 
 	<div class="editor-wrap">
 		<MapEditor
 			initialState={initialLayout}
-			onchange={onLayoutChange}
+			onchange={(json) => saver.change(json)}
 			tableTypes={data.tableTypes}
 			mode="template"
-			{saveState}
-			onSave={() => formRef?.requestSubmit()}
+			saveState={saver.state}
+			onSave={() => saver.save({ force: true })}
 			saveLabel={t.common.save}
+			printHref={`/app/manage/halls/${data.hallId}/templates/${data.template.id}/print`}
+			lockedZoneIds={data.hallZoneIds}
 			protectWallsZones={true}
 			allowZones={true}
 			lockFloors={true}
@@ -146,6 +136,9 @@
 		border-bottom: 1px solid var(--border);
 		background: var(--bg-panel);
 		flex-shrink: 0;
+		/* On a narrow screen the actions go to a second line instead of off-screen. */
+		flex-wrap: wrap;
+		gap: 8px 12px;
 	}
 
 	.layout-toolbar h1 {
@@ -153,12 +146,15 @@
 		font-weight: 600;
 		letter-spacing: -0.03em;
 		margin: 0;
+		min-width: 0;
+		overflow-wrap: anywhere;
 	}
 
 	.layout-toolbar .toolbar-actions {
 		display: flex;
 		gap: 10px;
 		align-items: center;
+		flex-wrap: wrap;
 	}
 
 	.editor-wrap {
