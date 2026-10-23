@@ -5,6 +5,7 @@
 	import MiniCalendar from '$lib/components/MiniCalendar.svelte';
 	import KpiCard from '$lib/components/KpiCard.svelte';
 	import StatusBadge from '$lib/components/StatusBadge.svelte';
+	import PersonalHome from '$lib/components/PersonalHome.svelte';
 	import type { PageData } from './$types';
 
 	interface Props { data: PageData; }
@@ -15,8 +16,12 @@
 	}
 </script>
 
-<svelte:head><title>{t.dashboard.eventOverview} – Hallify</title></svelte:head>
+<svelte:head><title>{data.personal ? t.nav.home : t.dashboard.eventOverview} – Hallify</title></svelte:head>
 
+<!-- An account with no organisation gets a home of its own; members get their events. -->
+{#if data.personal}
+<PersonalHome firstName={data.personal.firstName} invites={data.personal.invites} />
+{:else}
 <div class="wrap">
 	<div class="section section--lead page-top">
 		<SectionHeader overline={t.dashboard.overview} title={t.dashboard.infoPanel} />
@@ -105,6 +110,7 @@
 		</div>
 	</section>
 </div>
+{/if}
 
 <style>
 	/* flex-END, like the admin dashboard's header: the action sits on the title's

@@ -20,3 +20,5 @@
 | B30 | done | Every wizard action requires settings.manage, and createVenue/saveDetails also halls.manage (requireOrgPermission); the page sends members without it home instead of a 403. |
 | B119 | done | Plan step shows the current plan's limits (unlimited spelled out), custom domain on/off from the plan, only higher plans as offers, and "Pokračovať" instead of "stay on free" for paid orgs; the venue step says "add another venue" when the org already has halls. |
 | B156 | done | Wizard errors carry the step that produced them and only show on that step; the register "Prihláste sa" link keeps ?redirect. (Org switcher part belongs to shell.) |
+| B116 | done | /app is now a home for accounts with no organisation (invitations waiting for them, find a venue, create an organisation, profile) instead of redirecting to /priestory; /app/messages without an org goes there instead of the create-org form; /app/welcome redirects (sign-in or home) instead of a raw 401/403. |
+| B117 | done | /app sends anyone with console access to /app/manage, so sign-in, the logo and Home all reach the real dashboard. |
