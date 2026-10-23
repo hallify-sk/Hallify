@@ -1,12 +1,13 @@
 <script lang="ts">
   import Icon from './Icon.svelte';
-  import { onMount, untrack } from 'svelte';
+  import { onMount, tick, untrack } from 'svelte';
   import { dev } from '$app/environment';
   import { goto, replaceState } from '$app/navigation';
   import { page } from '$app/state';
   import { getLocale, t } from '$lib/i18n.svelte';
   import { hasCoordinates } from '$lib/venue-location';
-  import { DEFAULT_CENTER, demoVenues, distanceKm, filterVenues, featuredVenues } from './discovery';
+  import { DEFAULT_CENTER, demoVenues, distanceKm, filterVenues, featuredVenues, parseVenueSort, sortVenues, type VenueSort } from './discovery';
+  import { formatDate } from '$lib/format';
   import { userLocation, locateUser, locateIfGranted } from './user-location.svelte';
   import { createSearchCenter } from './search-center.svelte';
   import { venueHref, bookingHref, PRICE_BANDS, parsePriceBands, priceBandLabel, priceGlyphs, type PriceBand, type PublicVenue } from './types';
@@ -41,20 +42,52 @@
   const nearLabel = $derived(searchCenter.center ? (searchCenter.label || query).split(',')[0].trim() || null : null);
   const venues = $derived([...halls, ...(demo ? demoVenues(rankCenter ?? DEFAULT_CENTER, !!rankCenter, en) : [])]);
   const base = $derived({ query, guests, floorplan, booking, center: nearby ? rankCenter : null, radius, centerIsQuery: !!searchCenter.center });
-  const matching = $derived(filterVenues(venues, base).filter(v => !amenity || v.amenities.includes(amenity)));
-  const visible = $derived(filterVenues(venues, { ...base, bands }).filter(v => !amenity || v.amenities.includes(amenity)));
+  // Sort order and a date, both kept in the URL so a result list can be shared.
+  let sort = $state<VenueSort>(untrack(() => parseVenueSort(page.url.searchParams.get('sort'))));
+  let date = $state(untrack(() => page.url.searchParams.get('date') ?? ''));
+  // Which venues are free on the date. Asked of the server, because it depends on
+  // bookings, blocked days and the plan's monthly cap, none of which the page has.
+  let availability = $state<{ date: string; ids: Set<string> } | null>(null);
+  let availabilityState = $state<'idle' | 'loading' | 'error'>('idle');
+  $effect(() => {
+    const wanted = date;
+    if (!wanted) { availability = null; availabilityState = 'idle'; return; }
+    availabilityState = 'loading';
+    const controller = new AbortController();
+    fetch(`/api/venues/availability?date=${encodeURIComponent(wanted)}`, { signal: controller.signal, headers: { accept: 'application/json' } })
+      .then(response => response.ok ? response.json() as Promise<{ date: string; available: string[] }> : Promise.reject(new Error(String(response.status))))
+      .then(body => { availability = { date: body.date, ids: new Set(body.available) }; availabilityState = 'idle'; })
+      .catch(() => { if (!controller.signal.aborted) { availability = null; availabilityState = 'error'; } });
+    return () => controller.abort();
+  });
+  const dateActive = $derived(!!date && availability?.date === date);
+  // Demo venues have no calendar; the ones that "take bookings" count as free.
+  const freeOnDate = (venue: PublicVenue) => !dateActive || (venue.demo ? !!venue.allow_reservations : !!availability?.ids.has(venue.id));
+  const today = new Date(Date.now() - new Date().getTimezoneOffset() * 60_000).toISOString().slice(0, 10);
+  const matching = $derived(filterVenues(venues, base).filter(v => (!amenity || v.amenities.includes(amenity)) && freeOnDate(v)));
+  const visible = $derived(filterVenues(venues, { ...base, bands }).filter(v => (!amenity || v.amenities.includes(amenity)) && freeOnDate(v)));
   // A venue that never stated a price cannot satisfy a band filter, so say how many
   // the filter is holding back rather than letting them vanish without explanation.
   const unstatedHidden = $derived(bands.length ? matching.filter(v => v.price_band === null).length : 0);
   let searchSubmitted = $state(false);
-  const searching = $derived(searchSubmitted || !!query.trim() || guests > 0 || floorplan || booking || !!amenity || radius !== 50 || bands.length > 0);
-  const featured = $derived(featuredVenues(visible, rankCenter));
+  const searching = $derived(searchSubmitted || !!query.trim() || guests > 0 || floorplan || booking || !!amenity || radius !== 50 || bands.length > 0 || !!date);
+  const featured = $derived(sort === 'recommended' ? featuredVenues(visible, rankCenter) : []);
   const others = $derived(visible.filter(venue => !featured.some(item => item.id === venue.id)));
+  // The list in display order. Featured partners lead only the recommended order.
+  const ordered = $derived(sort === 'recommended' ? [...featured, ...others] : sortVenues(visible, sort, rankCenter));
+  // The list is paged; the map always shows every match.
+  const PAGE_SIZE = 24;
+  let shown = $state(PAGE_SIZE);
+  const filterKey = $derived(JSON.stringify([query, guests, floorplan, booking, amenity, radius, nearby, bands, date, sort, demo]));
+  $effect(() => { void filterKey; shown = PAGE_SIZE; });
   const selected = $derived(visible.find(v => v.id === selectedId) ?? null);
   const points = $derived(visible.filter(v => hasCoordinates(v)).map(v => ({ id:v.id, name:v.name, latitude:v.latitude!, longitude:v.longitude!, label:`${v.max_people} ${en ? 'guests' : 'hostí'}`, demo:v.demo })));
   onMount(() => { if (!query) void locateIfGranted(); });
-  function select(id: string, fromMap = false) {
+  async function select(id: string, fromMap = false) {
     selectedId = id; selectionRevision += 1;
+    // A pin can belong to a result further down than the list shows yet.
+    const index = ordered.findIndex(venue => venue.id === id);
+    if (fromMap && index >= shown) { shown = Math.ceil((index + 1) / PAGE_SIZE) * PAGE_SIZE; await tick(); }
     if (fromMap) list?.querySelector<HTMLElement>(`[data-venue-id="${CSS.escape(id)}"]`)?.scrollIntoView({ block:'nearest', behavior:matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth' });
   }
   function open(venue: PublicVenue) { if (venue.demo) preview.open(venue); else void goto(venueHref(venue)); }
@@ -71,6 +104,11 @@
     if (bands.length) url.searchParams.set('price', bands.join(',')); else url.searchParams.delete('price');
     replaceState(url, {});
   }
+  function writeParam(name: string, value: string) {
+    const url = new URL(location.href);
+    if (value) url.searchParams.set(name, value); else url.searchParams.delete(name);
+    replaceState(url, {});
+  }
   function toggleNearby() {
     if (nearby && rankCenter) { nearby = false; return; }
     nearby = true;
@@ -80,8 +118,8 @@
     if (!userLocation.center) void locateUser();
   }
   function reset() {
-    query = ''; guests = 0; searchSubmitted = false; radius = 50; floorplan = false; booking = false; amenity = ''; nearby = false; bands = []; selectedId = null;
-    const url = new URL(location.href); url.searchParams.delete('q'); url.searchParams.delete('guests'); url.searchParams.delete('floorplan'); url.searchParams.delete('price'); replaceState(url, {});
+    query = ''; guests = 0; searchSubmitted = false; radius = 50; floorplan = false; booking = false; amenity = ''; nearby = false; bands = []; selectedId = null; date = ''; sort = 'recommended';
+    const url = new URL(location.href); for (const name of ['q', 'guests', 'floorplan', 'price', 'date', 'sort']) url.searchParams.delete(name); replaceState(url, {});
   }
   function search(event: SubmitEvent) {
     event.preventDefault(); searchSubmitted = true; const url = new URL(location.href);
@@ -118,6 +156,8 @@
       <div class="explorer-title"><h1>{en ? 'Find your place.' : 'Nájdite svoje miesto.'}</h1><span>{visible.length}</span><button class="mobile-filter-toggle" aria-expanded={filtersOpen} onclick={() => filtersOpen = !filtersOpen}>{en ? "Filters" : "Filtre"} {filtersOpen ? "−" : "+"}</button></div>
       <form onsubmit={search} method="GET" action="/priestory"><label class="explorer-query-label"><span class="sr-only">{en ? 'Search venues or cities' : 'Vyhľadať priestor alebo mesto'}</span><input type="search" name="q" bind:value={query} maxlength="150" placeholder={en ? 'Venue name or location' : 'Názov priestoru alebo miesto'}><button type="submit" aria-label={en ? 'Search' : 'Vyhľadať'}><Icon name="search" /></button></label></form>
       <div class="explorer-filter-body" class:collapsed={!filtersOpen}><div class="explorer-filter-row"><label>{en ? 'Guests' : 'Počet hostí'}<span class="select-wrap"><select bind:value={guests}><option value={0}>{en ? 'Any' : 'Ľubovoľný'}</option>{#each [30,60,100,150,250] as count}<option value={count}>{count}+</option>{/each}{#if guests > 0 && ![30,60,100,150,250].includes(guests)}<option value={guests}>{guests}+</option>{/if}</select><Icon name="chevron" /></span></label><label>{en ? 'Amenities' : 'Vybavenie'}<span class="select-wrap"><select bind:value={amenity}><option value="">{en ? 'Any' : 'Ľubovoľné'}</option><option value="parking">{en ? 'Parking' : 'Parkovanie'}</option><option value="catering">Catering</option><option value="outdoor">{en ? 'Outdoor space' : 'Vonkajší priestor'}</option><option value="accessible">{en ? 'Accessible' : 'Bezbariérový'}</option></select><Icon name="chevron" /></span></label></div>
+      <div class="explorer-filter-row"><label>{t.appHalls.dateLabel}<input class="explorer-date" type="date" min={today} bind:value={date} onchange={() => writeParam('date', date)}></label><label>{t.appHalls.sortLabel}<span class="select-wrap"><select bind:value={sort} onchange={() => writeParam('sort', sort === 'recommended' ? '' : sort)}><option value="recommended">{t.appHalls.sortRecommended}</option><option value="distance" disabled={!rankCenter}>{t.appHalls.sortDistance}</option><option value="capacity-desc">{t.appHalls.sortCapacityDesc}</option><option value="capacity-asc">{t.appHalls.sortCapacityAsc}</option><option value="price">{t.appHalls.sortPrice}</option><option value="name">{t.appHalls.sortName}</option></select><Icon name="chevron" /></span></label></div>
+      {#if date}<p class="price-filter-note" aria-live="polite">{availabilityState === 'loading' ? t.appHalls.dateChecking : availabilityState === 'error' ? t.appHalls.dateFailed : t.appHalls.dateNote(formatDate(date, getLocale()))} <button type="button" class="filter-clear" onclick={() => { date = ''; writeParam('date', ''); }}>{t.appHalls.dateClear}</button></p>{/if}
       <div class="explorer-chips"><button aria-pressed={floorplan} onclick={() => floorplan = !floorplan}>{en ? 'With a floorplan' : 'S pôdorysom'} {floorplan ? '✓' : '+'}</button><button aria-pressed={booking} onclick={() => booking = !booking}>{en ? 'Booking available' : 'Možnosť rezervácie'} {booking ? '✓' : '+'}</button></div>
       <div class="explorer-chips price-filter" role="group" aria-label={en ? 'Price range' : 'Cenové rozpätie'}><span class="filter-label">{en ? 'Price' : 'Cena'}</span>{#each PRICE_BANDS as band (band)}<button type="button" aria-pressed={bands.includes(band)} onclick={() => toggleBand(band)}><span class="sr-only">{priceBandLabel(band, en)}</span><span aria-hidden="true">{priceGlyphs(band)}</span></button>{/each}{#if bands.length}<button type="button" class="filter-clear" onclick={() => { bands = []; writeBands(); }}>{en ? 'Any price' : 'Ľubovoľná cena'}</button>{/if}</div>
       {#if bands.length}<p class="price-filter-note">{en ? 'Only venues that stated a price range are shown.' : 'Zobrazujú sa len priestory s uvedenou cenovou úrovňou.'}{#if unstatedHidden} {en ? `${unstatedHidden} without a stated price are hidden.` : `${unstatedHidden} bez uvedenej ceny je skrytých.`}{/if}</p>{/if}
@@ -130,11 +170,12 @@
       {#if featured.length}
         <h2 class="explorer-group-heading">{nearLabel ? (en ? `Partners near ${nearLabel}` : `Partneri v okolí: ${nearLabel}`) : rankCenter ? (en ? 'Featured partners nearby' : 'Partneri vo vašom okolí') : (en ? 'Featured Hallify partners' : 'Vybrané priestory partnerov')}</h2>
         {@render resultCards(featured,true)}
-        {#if others.length}<h2 class="explorer-group-heading secondary">{searching ? (en ? 'Other results' : 'Ďalšie výsledky') : (en ? 'More venues' : 'Ďalšie priestory')}</h2>{@render resultCards(others,false)}{/if}
+        {#if others.length}<h2 class="explorer-group-heading secondary">{searching ? (en ? 'Other results' : 'Ďalšie výsledky') : (en ? 'More venues' : 'Ďalšie priestory')}</h2>{@render resultCards(others.slice(0, Math.max(0, shown - featured.length)),false)}{/if}
       {:else}
         <h2 class="explorer-group-heading">{searching ? (en ? 'Search results' : 'Výsledky vyhľadávania') : (en ? 'All venues' : 'Všetky priestory')}</h2>
-        {@render resultCards(visible,false)}
+        {@render resultCards(ordered.slice(0, shown),false)}
       {/if}
+      {#if ordered.length > shown}<button type="button" class="explorer-more" onclick={() => (shown += PAGE_SIZE)}>{t.appHalls.showMore(ordered.length - shown)}</button>{/if}
       {#if visible.some(v => !hasCoordinates(v))}<p class="fine">{en ? 'Venues without a saved position appear in the list.' : 'Priestory bez nastavenej polohy nájdete v zozname.'}</p>{/if}
     </div>
   </aside>

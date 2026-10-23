@@ -39,6 +39,9 @@
   const unstatedHidden = $derived(bands.length ? matching.filter(venue => venue.price_band === null).length : 0);
   const featured = $derived(featuredVenues(visible, rankCenter));
   const others = $derived(visible.filter(venue => !featured.some(item => item.id === venue.id)));
+  // The landing page shows a first selection, not every venue; the directory has the rest.
+  const LANDING_LIMIT = 12;
+  const othersShown = $derived(others.slice(0, Math.max(0, LANDING_LIMIT - featured.length)));
   const active = $derived(visible.find(h => h.id === activeId) ?? null);
   const points = $derived(visible.filter(h => hasCoordinates(h)).map(h => ({ id: h.id, name: h.name, latitude: h.latitude!, longitude: h.longitude!, label: `${h.max_people} ${en ? 'guests' : 'hostí'}`, demo: h.demo })));
   const explorerHref = $derived(`/priestory?${new URLSearchParams({ ...(query.trim() ? { q: query.trim() } : {}), ...(guests ? { guests: String(guests) } : {}), ...(floorplanOnly ? { floorplan: '1' } : {}), ...(bands.length ? { price: bands.join(',') } : {}), demo: demo ? '1' : '0', ...(en ? { lang: 'en' } : {}) })}`);
@@ -125,8 +128,9 @@
     {#if featured.length}
       <h3 class="discovery-group-heading">{nearLabel ? (en ? `Partners near ${nearLabel}` : `Partneri v okolí: ${nearLabel}`) : rankCenter ? (en ? 'Featured partners near you' : 'Partneri vo vašom okolí') : (en ? 'Featured Hallify partners' : 'Vybrané priestory partnerov Hallify')}</h3>
       {@render venueCards(featured,true)}
-      {#if others.length}<h3 class="discovery-group-heading secondary">{searching ? (en ? 'Other results' : 'Ďalšie výsledky') : (en ? 'More venues' : 'Ďalšie priestory')}</h3>{@render venueCards(others,false)}{/if}
-    {:else}{@render venueCards(visible,false)}{/if}
+      {#if othersShown.length}<h3 class="discovery-group-heading secondary">{searching ? (en ? 'Other results' : 'Ďalšie výsledky') : (en ? 'More venues' : 'Ďalšie priestory')}</h3>{@render venueCards(othersShown,false)}{/if}
+    {:else}{@render venueCards(othersShown,false)}{/if}
+    {#if visible.length > featured.length + othersShown.length}<div class="venues-more"><a class="primary" href={explorerHref}>{t.appHalls.seeAllVenues(visible.length)} <Icon /></a></div>{/if}
     {#if visible.some(h => !hasCoordinates(h))}<p class="fine location-note">{en ? 'Some venues have not set their map location yet. They remain available in this list.' : 'Niektoré priestory zatiaľ nemajú nastavenú polohu na mape. Nájdete ich v tomto zozname.'}</p>{/if}
   {:else}
     <div class="empty-state"><h3>{halls.length ? (en ? 'No venues match this selection.' : 'Tomuto výberu zatiaľ nezodpovedá žiadny priestor.') : (en ? 'The first venues are on their way.' : 'Prvé priestory sú na ceste.')}</h3><p>{halls.length ? (en ? 'Try a different location or a smaller guest count.' : 'Skúste inú lokalitu alebo menší počet hostí.') : (en ? 'Run a venue? Publish it and help people find their next event space.' : 'Prevádzkujete sálu? Zverejnite ju a pomôžte ľuďom nájsť miesto na ich ďalšiu akciu.')}</p>{#if halls.length}<button class="primary" onclick={reset}>{en ? 'Reset search' : 'Obnoviť vyhľadávanie'}</button>{:else}<a class="primary" href="/pre-prevadzkovatelov">{en ? 'List your venue' : 'Predstaviť svoj priestor'} <Icon /></a>{/if}</div>

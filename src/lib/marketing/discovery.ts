@@ -128,3 +128,33 @@ export function filterVenues(venues: PublicVenue[], filters: { query: string; gu
     (!filters.booking || !!venue.allow_reservations) && place(venue) &&
     (!bands || (venue.price_band !== null && bands.has(venue.price_band))));
 }
+
+/** The orders the directory offers. 'recommended' keeps featured partners first. */
+export const VENUE_SORTS = ['recommended', 'distance', 'capacity-desc', 'capacity-asc', 'price', 'name'] as const;
+export type VenueSort = typeof VENUE_SORTS[number];
+
+export function parseVenueSort(value: string | null | undefined): VenueSort {
+  return (VENUE_SORTS as readonly string[]).includes(value ?? '') ? value as VenueSort : 'recommended';
+}
+
+/**
+ * Sort a result list. Ties fall back to the name, so the order is stable. What a
+ * sort cannot rank goes last rather than first: a venue without a map position when
+ * sorting by distance, one that never stated a price when sorting by price.
+ * 'recommended' (and 'distance' with no known centre) keeps the given order.
+ */
+export function sortVenues(venues: PublicVenue[], sort: VenueSort, center?: MapCenter | null): PublicVenue[] {
+  const byName = (a: PublicVenue, b: PublicVenue) => a.name.localeCompare(b.name, 'sk');
+  const last = (value: number | null) => value ?? Number.POSITIVE_INFINITY;
+  const distance = (venue: PublicVenue) => center && venue.latitude !== null && venue.longitude !== null
+    ? distanceKm(center, { latitude: venue.latitude, longitude: venue.longitude }) : null;
+  const list = [...venues];
+  switch (sort) {
+    case 'distance': return center ? list.sort((a, b) => last(distance(a)) - last(distance(b)) || byName(a, b)) : list;
+    case 'capacity-desc': return list.sort((a, b) => b.max_people - a.max_people || byName(a, b));
+    case 'capacity-asc': return list.sort((a, b) => a.max_people - b.max_people || byName(a, b));
+    case 'price': return list.sort((a, b) => last(a.price_band) - last(b.price_band) || byName(a, b));
+    case 'name': return list.sort(byName);
+    default: return list;
+  }
+}

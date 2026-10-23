@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_CENTER, demoVenues, destination, distanceKm, filterVenues, featuredVenues } from './discovery';
+import { DEFAULT_CENTER, demoVenues, destination, distanceKm, filterVenues, featuredVenues, parseVenueSort, sortVenues } from './discovery';
 
 describe('venue explorer', () => {
   it('places every sample within 50 km and retains a clear demo flag', () => {
@@ -62,6 +62,22 @@ describe('venue explorer', () => {
     expect(filterVenues(venues, base).map(v => v.name)).toEqual(['Mestská galéria']);
     expect(filterVenues(venues, { ...base, guests: 200 })).toEqual([]);
     expect(filterVenues(venues, { query: '', guests: 0, floorplan: false, booking: false, center: DEFAULT_CENTER, radius: 10 })).toHaveLength(2);
+  });
+  it('sorts by distance, capacity, price and name, with what cannot be ranked last', () => {
+    const base = demoVenues()[0];
+    const v = (id: string, name: string, max_people: number, price_band: 1 | 2 | 3 | null, latitude: number | null) =>
+      ({ ...base, id, name, max_people, price_band, latitude, longitude: latitude === null ? null : 17 });
+    const venues = [v('a', 'Cyprus', 100, 3, 48.5), v('b', 'Agáta', 300, null, 48.1), v('c', 'Breza', 50, 1, null)];
+    const ids = (sort: Parameters<typeof sortVenues>[1], center?: { latitude: number; longitude: number }) => sortVenues(venues, sort, center).map(x => x.id);
+    expect(ids('recommended')).toEqual(['a', 'b', 'c']);
+    expect(ids('distance', { latitude: 48.1, longitude: 17 })).toEqual(['b', 'a', 'c']);
+    expect(ids('distance')).toEqual(['a', 'b', 'c']);
+    expect(ids('capacity-desc')).toEqual(['b', 'a', 'c']);
+    expect(ids('capacity-asc')).toEqual(['c', 'a', 'b']);
+    expect(ids('price')).toEqual(['c', 'a', 'b']);
+    expect(ids('name')).toEqual(['b', 'c', 'a']);
+    expect(parseVenueSort('price')).toBe('price');
+    expect(parseVenueSort('drop table')).toBe('recommended');
   });
   it('finds a venue searched for by name or town even when the geocoder places the query elsewhere', () => {
     const venue = (id: string, name: string, address: string | null, latitude: number | null, longitude: number | null) =>

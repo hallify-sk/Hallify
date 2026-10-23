@@ -1,6 +1,7 @@
 import { dbAll } from '$lib/db/index';
 import { getPlan, type PlanId } from '$lib/plans';
 import { isReservedSubdomain } from '$lib/reserved-subdomains';
+import { DOW_KEYS, earliestBookableISO, isDateBlocked, isoLocal, parseDow, parseISO, type BlockRow } from '$lib/availability';
 
 /**
  * What the public directory, the apex venue pages and the sitemap agree a "listed"
@@ -93,4 +94,92 @@ export function venueSiteOrigin(
     return `${requestUrl.protocol}//${slug}.${appDomain}${port}`;
   }
   return `https://${slug}.${appDomain}`;
+}
+
+// ── Availability on a date, for the directory's date filter ──
+
+/** How far ahead the directory answers availability questions. */
+const AVAILABILITY_HORIZON_DAYS = 2 * 366;
+
+/**
+ * A YYYY-MM-DD the directory can be asked about: a real calendar date, not in the
+ * past and not absurdly far ahead. Anything else is null and the filter is ignored.
+ */
+export function parseSearchDate(raw: string | null | undefined, today = isoLocal(new Date())): string | null {
+  const value = raw?.trim() ?? '';
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
+  if (isoLocal(parseISO(value)) !== value) return null; // 2026-02-31 rolls over: not a date
+  if (value < today) return null;
+  const limit = parseISO(today);
+  limit.setDate(limit.getDate() + AVAILABILITY_HORIZON_DAYS);
+  return value > isoLocal(limit) ? null : value;
+}
+
+export interface AvailabilityFacts {
+  min_days_advance: number | null;
+  opening_hours: string | null;
+  /** Reservations already in the date's month (non-cancelled). */
+  month_count: number;
+  /** The plan's monthly cap per hall, -1 for none. */
+  month_limit: number;
+  taken: boolean;
+  blocks: BlockRow[];
+}
+
+/**
+ * Whether a hall could be booked on `date`, by the rules the booking form enforces
+ * (assertCanBook): notice period, the plan's monthly cap, days marked closed,
+ * blocked dates and an existing booking. A short hold by someone in the middle of
+ * booking does not count; it expires within minutes.
+ */
+export function isBookableOn(facts: AvailabilityFacts, date: string): boolean {
+  if (date < earliestBookableISO(facts.min_days_advance)) return false;
+  if (facts.month_limit !== -1 && facts.month_count >= facts.month_limit) return false;
+  if (facts.opening_hours) {
+    try {
+      const hours = JSON.parse(facts.opening_hours) as Record<string, { open?: boolean }>;
+      const dow = parseISO(date).getDay();
+      const day = hours[DOW_KEYS[dow]] ?? hours[String(dow)];
+      if (day && day.open === false) return false;
+    } catch { /* malformed: the booking form does not block on it either */ }
+  }
+  if (isDateBlocked(facts.blocks, date)) return false;
+  return !facts.taken;
+}
+
+/** Ids of listed halls that take bookings and are free on `date`. */
+export async function availableHallIds(db: App.Locals['db'], date: string): Promise<string[]> {
+  const listed = `FROM halls h JOIN organizations o ON o.id = h.org_id
+    LEFT JOIN subscriptions s ON s.org_id = o.id
+    WHERE ${LISTED_HALL_SQL} AND h.allow_reservations = 1`;
+  const [halls, taken, months, blocks] = await Promise.all([
+    dbAll<{ id: string; min_days_advance: number | null; opening_hours: string | null; plan: string | null }>(db,
+      `SELECT h.id, h.min_days_advance, h.opening_hours, s.plan AS plan ${listed}`),
+    dbAll<{ hall_id: string }>(db,
+      `SELECT DISTINCT r.hall_id FROM reservations r
+        WHERE substr(r.event_date, 1, 10) = ? AND r.status != 'cancelled'`, date),
+    dbAll<{ hall_id: string; n: number }>(db,
+      `SELECT r.hall_id, COUNT(*) AS n FROM reservations r
+        WHERE substr(r.event_date, 1, 7) = ? AND r.status != 'cancelled'
+        GROUP BY r.hall_id`, date.slice(0, 7)),
+    dbAll<{ hall_id: string; block_type: string; date_from: string | null; date_to: string | null; days_of_week: unknown }>(db,
+      `SELECT b.hall_id, b.block_type, b.date_from, b.date_to, b.days_of_week FROM hall_blocks b
+        WHERE b.hall_id IN (SELECT h.id ${listed})`),
+  ]);
+  const takenIds = new Set(taken.map(row => row.hall_id));
+  const monthCounts = new Map(months.map(row => [row.hall_id, row.n]));
+  const blocksByHall = new Map<string, BlockRow[]>();
+  for (const block of blocks) {
+    const list = blocksByHall.get(block.hall_id) ?? [];
+    list.push({ block_type: block.block_type, date_from: block.date_from, date_to: block.date_to, days_of_week: parseDow(block.days_of_week) });
+    blocksByHall.set(block.hall_id, list);
+  }
+  return halls.filter(hall => isBookableOn({
+    min_days_advance: hall.min_days_advance,
+    opening_hours: hall.opening_hours,
+    month_count: monthCounts.get(hall.id) ?? 0,
+    month_limit: getPlan((hall.plan ?? 'free') as PlanId).limits.maxReservationsPerHallMonth,
+    taken: takenIds.has(hall.id),
+    blocks: blocksByHall.get(hall.id) ?? [],
+  }, date)).map(hall => hall.id);
 }
