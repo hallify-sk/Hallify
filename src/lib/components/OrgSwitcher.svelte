@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { OrgContext } from '../../app.d';
   import { t } from '$lib/i18n.svelte';
+  import { afterNavigate } from '$app/navigation';
 
   interface OrgOption {
     id: string;
@@ -43,16 +44,28 @@
     if (!(e.target as HTMLElement).closest('.org-switcher')) open = false;
   }
 
+  function onKeydown(e: KeyboardEvent) {
+    if (e.key === 'Escape') open = false;
+  }
+
   $effect(() => {
     if (open) {
       document.addEventListener('click', close, true);
-      return () => document.removeEventListener('click', close, true);
+      document.addEventListener('keydown', onKeydown);
+      return () => {
+        document.removeEventListener('click', close, true);
+        document.removeEventListener('keydown', onKeydown);
+      };
     }
   });
+
+  // The switcher lives in the sidebar, which persists across pages, so a menu left
+  // open (or opened, then "Create organization" followed) stayed open on the next page.
+  afterNavigate(() => { open = false; search = ''; });
 </script>
 
 <div class="org-switcher">
-  <button class="org-btn" onclick={() => open = !open} type="button">
+  <button class="org-btn" onclick={() => open = !open} type="button" aria-expanded={open} title={currentOrg ? `${currentOrg.name} (${currentOrg.slug})` : undefined}>
     <div class="org-icon">{currentOrg?.name?.[0]?.toUpperCase() ?? '?'}</div>
     <span class="org-name">{currentOrg?.name ?? t.sidebar.noOrganization}</span>
     <svg class="chevron" class:rotated={open} width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
@@ -81,7 +94,11 @@
               <div class="org-option-icon">{org.name[0].toUpperCase()}</div>
               <div class="org-option-info">
                 <span class="org-option-name">{org.name}</span>
-                <span class="org-option-role" class:viewas={org.role === 'view as'}>{org.role}</span>
+                <!-- The slug tells apart organisations that share a name. -->
+                <span class="org-option-meta">
+                  <span class="org-option-role" class:viewas={org.role === 'view as'}>{org.role}</span>
+                  {#if org.slug}<span class="org-option-slug">· {org.slug}</span>{/if}
+                </span>
               </div>
               {#if org.id === currentOrg?.id}
                 <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
@@ -220,7 +237,9 @@
     min-width: 0;
   }
   .org-option-name { font-size: 12px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .org-option-role { font-size: 10px; color: var(--text-subtle); text-transform: capitalize; }
+  .org-option-meta { display: flex; gap: 4px; min-width: 0; }
+  .org-option-role { font-size: 10px; color: var(--text-subtle); text-transform: capitalize; flex-shrink: 0; }
+  .org-option-slug { font-size: 10px; color: var(--text-subtle); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
   .dropdown-divider { height: 1px; background: var(--border-subtle); margin: 4px 0; }
 

@@ -316,8 +316,17 @@ textarea:focus {
 	box-shadow: 0 0 0 3px var(--accent-dim);
 }
 /* The focus ring above already marks the field; a second outline on top of it
-   reads as a rendering bug. */
-input:focus-visible, select:focus-visible, textarea:focus-visible { outline: none; }
+   reads as a rendering bug. Only the fields that GET that ring drop the outline:
+   this used to say `input:focus-visible`, which also took it from checkboxes,
+   radios, range sliders and file inputs, so tabbing onto them showed nothing. */
+input:is([type="number"], [type="text"], [type="email"], [type="url"], [type="tel"], [type="password"], [type="date"], [type="time"]):focus-visible,
+select:focus-visible, textarea:focus-visible { outline: none; }
+
+/* Checkboxes and radios keep the global outline, offset so it clears the box. */
+input:is([type="checkbox"], [type="radio"]):focus-visible {
+	outline: 2px solid var(--accent-ink);
+	outline-offset: 2px;
+}
 
 /* ─── Number fields ───────────────────────────────────────────────── */
 /* The native spinner is the one piece of control chrome the browser still

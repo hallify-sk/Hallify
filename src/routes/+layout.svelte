@@ -11,8 +11,32 @@
 	import { setUserContext } from '$lib/analytics';
 	import { cameFromHallify } from '$lib/analytics-referral';
 	import { readableInkOn, inkOnLight, inkOnDark } from '$lib/contrast';
+	import { usesPersonalTheme } from '$lib/theme-scope';
+	import { t } from '$lib/i18n.svelte';
+	import { afterNavigate } from '$app/navigation';
+	import { fade, fly } from 'svelte/transition';
+	import { dialog } from '$lib/actions/dialog';
 
 	const { children, data } = $props();
+
+	// ─── Phone drawer ───
+	// Below 900 px the sidebar leaves the row and opens from a top-bar menu button as
+	// a drawer, so the page gets the full width (it used to keep 240 px of a 390 px
+	// screen). It closes on navigation, on Escape (the dialog action), on the
+	// backdrop, and when the window grows back to desktop width.
+	const DRAWER_QUERY = '(max-width: 899.98px)';
+	let navOpen = $state(false);
+	let motionMs = $state(200);
+	function closeNav() { navOpen = false; }
+	afterNavigate(() => { navOpen = false; });
+	onMount(() => {
+		const reduce = window.matchMedia('(prefers-reduced-motion: reduce)');
+		motionMs = reduce.matches ? 0 : 200;
+		const narrow = window.matchMedia(DRAWER_QUERY);
+		const onChange = () => { if (!narrow.matches) navOpen = false; };
+		narrow.addEventListener('change', onChange);
+		return () => narrow.removeEventListener('change', onChange);
+	});
 
 	// Sync the reactive locale with the server-resolved locale. Runs synchronously during
 	// SSR render (before children) so server HTML matches, and re-syncs on navigation
@@ -61,6 +85,33 @@
 		return () => clearInterval(timer);
 	});
 
+	// ─── Presence heartbeat ───
+	// "Online" means "working in the console", so the shell sends it for signed-in
+	// staff on every console page. It used to come only from the Messages page, so an
+	// owner working on the dashboard showed as offline. A hidden tab skips the beat
+	// and so drops out after the two-minute window; coming back sends one at once.
+	// A platform admin viewing an org is not one of its members, so sends none.
+	const presenceOrgId = $derived(
+		data.user && data.user.account_type !== 'client' && data.currentOrg && !data.currentOrg.impersonated
+			&& ($page.url.pathname === '/app' || $page.url.pathname.startsWith('/app/'))
+			? data.currentOrg.id
+			: null
+	);
+	$effect(() => {
+		if (!presenceOrgId) return;
+		const beat = () => {
+			if (document.hidden) return;
+			fetch('/api/presence', { method: 'POST' }).catch(() => {});
+		};
+		beat();
+		const timer = setInterval(beat, 30_000);
+		document.addEventListener('visibilitychange', beat);
+		return () => {
+			clearInterval(timer);
+			document.removeEventListener('visibilitychange', beat);
+		};
+	});
+
 	// Push segmentation context on load and whenever it changes (login, org switch,
 	// plan change). setUserContext de-dupes, so navigation doesn't spam the dataLayer.
 	// $effect.pre, so the context is in place before a page's first event (its onMount).
@@ -96,8 +147,6 @@
 			: ''
 	);
 
-	const orgTheme = $derived(branding?.theme ?? 'slate');
-
 	const AUTH_PATHS = ['/app/login', '/app/register', '/app/forgot-password', '/app/reset-password', '/app/invite', '/login'];
 	const isAuthPage = $derived(AUTH_PATHS.some(p => $page.url.pathname.startsWith(p)));
 	const isLandingPage = $derived(['/', '/pre-prevadzkovatelov', '/priestory'].includes($page.url.pathname));
@@ -129,19 +178,18 @@
 		return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'slate';
 	}
 
-	onMount(() => {
-		const saved = localStorage.getItem('hallify-theme');
-		themeStore.set(saved ?? osTheme());
-	});
-
-	// When org theme changes (e.g. org switch) and user has no personal preference,
-	// fall back to OS preference rather than the org default.
+	// The personal theme applies in the console only; the public site, marketing and
+	// legal pages stay light. Re-evaluated on every navigation, because "Public site"
+	// in the sidebar is a client-side navigation out of the console (and back).
+	const personalTheme = $derived(usesPersonalTheme($page.url.pathname));
 	$effect(() => {
-		const _o = orgTheme;
-		if (typeof localStorage !== 'undefined') {
-			const saved = localStorage.getItem('hallify-theme');
-			if (!saved) themeStore.set(osTheme());
+		if (!personalTheme) {
+			document.documentElement.removeAttribute('data-theme');
+			return;
 		}
+		let saved: string | null = null;
+		try { saved = localStorage.getItem('hallify-theme'); } catch { /* storage blocked */ }
+		themeStore.set(saved ?? osTheme());
 	});
 </script>
 
@@ -156,18 +204,63 @@
 		{@render children()}
 	</div>
 {:else}
+	{#snippet sidebar(inDrawer: boolean)}
+		<Sidebar
+			user={data.user}
+			branding={branding}
+			currentOrg={data.currentOrg}
+			orgs={data.orgs ?? []}
+			allOrgs={data.allOrgs ?? []}
+			onBubble={data.onBubble ?? false}
+			unreadMessages={liveUnreadMessages}
+			unreadAnnouncements={liveUnreadAnnouncements}
+			permissions={data.navPermissions ?? []}
+			venueSiteUrl={data.venueSiteUrl ?? null}
+			{inDrawer}
+			onclose={inDrawer ? closeNav : undefined}
+		/>
+	{/snippet}
 	<div class="app-shell" style={brandStyle} data-density={density}>
 		{#if !isAuthPage}
-			<Sidebar
-				user={data.user}
-				branding={branding}
-				currentOrg={data.currentOrg}
-				orgs={data.orgs ?? []}
-				allOrgs={data.allOrgs ?? []}
-				onBubble={data.onBubble ?? false}
-				unreadMessages={liveUnreadMessages}
-				unreadAnnouncements={liveUnreadAnnouncements}
-			/>
+			<!-- Desktop: the sidebar in the row. Below 900 px it is hidden and the top bar
+			     opens the same menu as a drawer instead. -->
+			<div class="shell-side">{@render sidebar(false)}</div>
+
+			<header class="mobile-bar">
+				<button
+					class="menu-btn"
+					type="button"
+					aria-label={t.sidebar.openMenu}
+					aria-expanded={navOpen}
+					aria-controls="mobile-nav"
+					onclick={() => (navOpen = true)}
+				>
+					<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+						<line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>
+					</svg>
+					{#if liveUnreadMessages > 0 || liveUnreadAnnouncements > 0}<span class="menu-ping" aria-hidden="true"></span>{/if}
+				</button>
+				<a href="/app/" class="mobile-brand">
+					<img src={branding?.logoUrl || '/Hallify.svg'} alt="" width="22" height="22" />
+					<span>{branding?.appName || 'Hallify'}</span>
+				</a>
+				{#if data.currentOrg}<span class="mobile-org">{data.currentOrg.name}</span>{/if}
+			</header>
+
+			{#if navOpen}
+				<button type="button" class="drawer-backdrop" tabindex="-1" aria-label={t.sidebar.closeMenu} transition:fade={{ duration: motionMs }} onclick={closeNav}></button>
+				<div
+					id="mobile-nav"
+					class="drawer"
+					role="dialog"
+					aria-modal="true"
+					aria-label={t.sidebar.menu}
+					use:dialog={{ onclose: closeNav }}
+					transition:fly={{ x: -320, duration: motionMs, opacity: 1 }}
+				>
+					{@render sidebar(true)}
+				</div>
+			{/if}
 		{/if}
 		<main class="app-main" class:full-page={isAuthPage}>
 			{#if !isAuthPage && data.currentOrg?.impersonated}
@@ -195,7 +288,103 @@
 		display: flex;
 		flex-direction: row;
 		height: 100vh;
+		height: 100dvh;
 		overflow: hidden;
+	}
+
+	/* ─── Phone layout ─── */
+	.shell-side { display: contents; }
+	.mobile-bar { display: none; }
+
+	.drawer-backdrop {
+		position: fixed;
+		inset: 0;
+		z-index: 140;
+		border: none;
+		padding: 0;
+		cursor: default;
+		background: rgba(20, 22, 21, 0.45);
+	}
+	.drawer {
+		position: fixed;
+		top: 0;
+		left: 0;
+		bottom: 0;
+		z-index: 150;
+		width: min(300px, 86vw);
+		height: 100dvh;
+		background: var(--bg-panel);
+		box-shadow: var(--shadow);
+	}
+
+	@media (max-width: 899.98px) {
+		.app-shell { flex-direction: column; }
+		.shell-side { display: none; }
+		.app-main { flex: 1 1 auto; min-height: 0; }
+
+		.mobile-bar {
+			display: flex;
+			align-items: center;
+			gap: 10px;
+			flex-shrink: 0;
+			min-height: 52px;
+			padding: 6px 12px;
+			background: var(--bg-panel);
+			border-bottom: 1px solid var(--border);
+		}
+		.menu-btn {
+			position: relative;
+			width: 40px;
+			height: 40px;
+			flex-shrink: 0;
+			display: inline-flex;
+			align-items: center;
+			justify-content: center;
+			border: 1px solid var(--border);
+			border-radius: var(--radius-sm);
+			background: none;
+			color: var(--text-base);
+			cursor: pointer;
+		}
+		.menu-btn:hover { background: var(--bg-hover); }
+		.menu-ping {
+			position: absolute;
+			top: 6px;
+			right: 6px;
+			width: 8px;
+			height: 8px;
+			border-radius: 50%;
+			background: var(--danger);
+		}
+		.mobile-brand {
+			display: inline-flex;
+			align-items: center;
+			gap: 8px;
+			text-decoration: none;
+			flex-shrink: 0;
+		}
+		.mobile-brand span {
+			font-family: 'Poppins', 'Segoe UI', system-ui, -apple-system, sans-serif;
+			font-weight: 900;
+			font-style: italic;
+			font-size: 15px;
+			letter-spacing: -0.05em;
+			color: var(--text-base);
+		}
+		.mobile-org {
+			margin-left: auto;
+			min-width: 0;
+			overflow: hidden;
+			text-overflow: ellipsis;
+			white-space: nowrap;
+			font-size: 12px;
+			font-weight: 600;
+			color: var(--text-muted);
+		}
+	}
+	/* A drawer left open while the window widens past the breakpoint. */
+	@media (min-width: 900px) {
+		.drawer, .drawer-backdrop { display: none; }
 	}
 
 	.app-main {
