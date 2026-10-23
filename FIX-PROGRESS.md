@@ -13,5 +13,6 @@
 | B125 | partial | Code side done (same listing gate as B73). Removing the three test venues on production is the owner's call. |
 | B126 | done | Venue links go to indexable /priestory/<org>/<hall>; "Detail" is a link; /app/halls/* redirect there. |
 | B163 | done | Marketing theme choice is kept for the visit (module state) and in a cookie the page loads read, so it survives navigation and reloads without a flash; <html lang> follows chooseLocale and the marketing shell. |
+| B164 | done | Cards on the landing page, the explorer and the preview fall back to the placeholder when a cover fails to load; no "Hallify" stand-in for a missing address; the card top line wraps (address ellipsised, partner label on its own) at 10px on phones. |
 | M19 | done | Indexable venue page with canonical, hreflang, og:image, JSON-LD EventVenue; og:image on marketing pages; canonical/OG on venue sites (VenueSiteMeta in the halls layout); venue pages in the apex sitemap. |
 | I33 | done | One robots group, Allow /uploads/halls/, client pages disallowed on venue sites; lastmod from halls.updated_at (migration 0020, trigger-maintained). |
