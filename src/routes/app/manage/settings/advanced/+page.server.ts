@@ -4,7 +4,12 @@ import { dbAll, dbFirst, dbRun, toJson, fromJson, fromJsonArr } from '$lib/db/in
 import { st } from '$lib/i18n-server';
 import { PLANS } from '$lib/plans';
 import { requireOrgPermission } from '$lib/server/access';
-import { archiveAndDeleteOrg, orgMemberCount } from '$lib/orgLifecycle';
+import { canManageSettings, leaveRefusalMessage } from '$lib/server/settings-access';
+import { requireOrg } from '$lib/guards';
+import { archiveAndDeleteOrg, leaveOrganization, upcomingClientBookings, BillingCancelError } from '$lib/orgLifecycle';
+import { deliverWebhook, type WebhookPayload } from '$lib/notifications';
+import { isSafeWebhookUrl } from '$lib/safe-url';
+import { CLOSED_COOKIE } from '$lib/org-closure-email';
 import type { TeamNotifyEvent } from '$lib/email';
 
 // Webhooks are a paid feature (Starter and up).
@@ -48,9 +53,41 @@ const ALL_EVENTS = [
   'reservation.status_changed',
 ] as const;
 
+/** The fields of the create and edit forms, validated. `values` is echoed back on an
+ *  error so the form keeps what was typed (the secret never is). */
+function readWebhookForm(data: FormData, locale: App.Locals['locale']) {
+  const t = st(locale);
+  const name   = String(data.get('name') ?? '').trim().slice(0, 100);
+  const url    = String(data.get('url') ?? '').trim();
+  const secret = String(data.get('secret') ?? '').trim().slice(0, 64) || null;
+  const events: string[] = ALL_EVENTS.filter(e => data.get(`event_${e}`) === 'on');
+  const values = { name, url, events };
+
+  if (!name || !url) return { error: t.serverErrors.nameAndUrlRequired, values };
+  // https only, and never a private or internal address: the server POSTs client
+  // data to this URL, so plain http leaks it and an internal host is SSRF.
+  if (!isSafeWebhookUrl(url)) return { error: t.settingsPages.webhookUrlRules, values };
+  if (!events.length) return { error: t.serverErrors.selectAtLeastOneEvent, values };
+  return { name, url, secret, events, values };
+}
+
 export const load: PageServerLoad = async ({ locals }) => {
   if (!locals.user) redirect(303, '/app/login');
-  const org = await requireOrgPermission(locals, 'settings.manage');
+  // Any member may open this tab to leave the organisation; everything else on it
+  // needs settings.manage, so a member without it sees only the danger zone.
+  const org = requireOrg(locals);
+  if (!(await canManageSettings(locals))) {
+    return {
+      canManage: false,
+      notifications: null, recipients: null, staff: [] as StaffRow[],
+      locked: true, plan: org.subscription.plan, webhooks: [], recentDeliveries: [],
+      orgName: org.name,
+      isOwner: false,
+      impersonated: !!org.impersonated,
+      upcomingClients: 0,
+      hasSubscription: false,
+    };
+  }
 
   // ── Email notifications ──────────────────────────────────────────────
   const notifyRow = await dbFirst<{ value: string | null }>(locals.db,
@@ -81,9 +118,12 @@ export const load: PageServerLoad = async ({ locals }) => {
   }
 
   // ── Webhooks (paid) ──────────────────────────────────────────────────
+  // After a downgrade the webhooks stay stored but stop firing. They used to vanish
+  // from this page as well, so nobody could tell they had stopped; now they stay
+  // listed as paused by the plan, and can still be deleted.
   const locked = !planHasWebhooks(org.subscription.plan);
 
-  const rawWebhooks = locked ? [] : await dbAll<{
+  const rawWebhooks = await dbAll<{
     id: string; name: string; url: string; events: string | null;
     secret: string | null; enabled: number; created_at: string;
   }>(locals.db,
@@ -98,13 +138,13 @@ export const load: PageServerLoad = async ({ locals }) => {
     enabled: !!w.enabled,
   }));
 
-  const recentDeliveries = locked ? [] : await dbAll<{
+  const recentDeliveries = await dbAll<{
     id: string; webhook_id: string; event: string; status: string;
     response_code: number | null; error: string | null; delivered_at: string;
-    webhook_name: string;
+    webhook_name: string; payload: string;
   }>(locals.db,
     `SELECT d.id, d.webhook_id, d.event, d.status, d.response_code, d.error, d.delivered_at,
-           w.name AS webhook_name
+           w.name AS webhook_name, d.payload
     FROM webhook_deliveries d
     JOIN org_webhooks w ON w.id = d.webhook_id
     WHERE w.org_id = ?
@@ -112,12 +152,27 @@ export const load: PageServerLoad = async ({ locals }) => {
     org.id
   );
 
+  // What closing would do, so the owner reads it before confirming.
+  const isOwner = org.role === 'owner';
+  let upcomingClients = 0;
+  let hasSubscription = false;
+  if (isOwner) {
+    const rows = await upcomingClientBookings(locals.db, org.id);
+    upcomingClients = new Set(rows.map((r) => (r.email ?? '').toLowerCase()).filter(Boolean)).size;
+    const sub = await dbFirst<{ stripe_subscription_id: string | null; status: string | null }>(locals.db,
+      'SELECT stripe_subscription_id, status FROM subscriptions WHERE org_id = ?', org.id);
+    hasSubscription = !!sub?.stripe_subscription_id && sub.status !== 'cancelled';
+  }
+
   return {
+    canManage: true,
     notifications, recipients, staff,
     locked, plan: org.subscription.plan, webhooks, recentDeliveries,
     orgName: org.name,
-    isOwner: org.role === 'owner',
+    isOwner,
     impersonated: !!org.impersonated,
+    upcomingClients,
+    hasSubscription,
   };
 };
 
@@ -176,19 +231,77 @@ export const actions: Actions = {
     if (!planHasWebhooks(org.subscription.plan)) return fail(403, { error: st(locals.locale).serverErrors.webhooksPaidPlan });
 
     const data = await request.formData();
-    const name   = String(data.get('name') ?? '').trim();
-    const url    = String(data.get('url') ?? '').trim();
-    const secret = String(data.get('secret') ?? '').trim() || null;
-    const events = ALL_EVENTS.filter(e => data.get(`event_${e}`) === 'on');
-
-    if (!name || !url) return fail(400, { error: st(locals.locale).serverErrors.nameAndUrlRequired });
-    try { new URL(url); } catch { return fail(400, { error: st(locals.locale).serverErrors.invalidUrl }); }
-    if (!events.length) return fail(400, { error: st(locals.locale).serverErrors.selectAtLeastOneEvent });
+    const parsed = readWebhookForm(data, locals.locale);
+    if ('error' in parsed) return fail(400, { webhookError: parsed.error, webhookForm: 'create', values: parsed.values });
 
     await dbRun(locals.db,
       'INSERT INTO org_webhooks (id, org_id, name, url, events, secret) VALUES (?, ?, ?, ?, ?, ?)',
-      crypto.randomUUID(), org.id, name, url, toJson(events), secret
+      crypto.randomUUID(), org.id, parsed.name, parsed.url, toJson(parsed.events), parsed.secret
     );
+    return { webhookSaved: true };
+  },
+
+  /** Edit a webhook. An empty secret field keeps the stored secret; "remove secret"
+   *  clears it. */
+  update: async ({ request, locals }) => {
+    await requireOrgPermission(locals, 'settings.manage');
+    const org = locals.currentOrg!;
+    if (!planHasWebhooks(org.subscription.plan)) return fail(403, { error: st(locals.locale).serverErrors.webhooksPaidPlan });
+    const data = await request.formData();
+    const id = String(data.get('id') ?? '');
+    const current = await dbFirst<{ secret: string | null }>(locals.db,
+      'SELECT secret FROM org_webhooks WHERE id = ? AND org_id = ?', id, org.id);
+    if (!current) return fail(404, { error: st(locals.locale).settingsPages.webhookNotFound });
+
+    const parsed = readWebhookForm(data, locals.locale);
+    if ('error' in parsed) return fail(400, { webhookError: parsed.error, webhookForm: id, values: parsed.values });
+    const secret = data.get('clear_secret') === 'on' ? null : (parsed.secret ?? current.secret);
+
+    await dbRun(locals.db,
+      'UPDATE org_webhooks SET name = ?, url = ?, events = ?, secret = ? WHERE id = ? AND org_id = ?',
+      parsed.name, parsed.url, toJson(parsed.events), secret, id, org.id
+    );
+    return { webhookSaved: true };
+  },
+
+  /** Send a test payload now and report what the endpoint answered. */
+  test: async ({ request, locals }) => {
+    await requireOrgPermission(locals, 'settings.manage');
+    const org = locals.currentOrg!;
+    if (!planHasWebhooks(org.subscription.plan)) return fail(403, { error: st(locals.locale).serverErrors.webhooksPaidPlan });
+    const data = await request.formData();
+    const id = String(data.get('id') ?? '');
+    const wh = await dbFirst<{ id: string; url: string; secret: string | null }>(locals.db,
+      'SELECT id, url, secret FROM org_webhooks WHERE id = ? AND org_id = ?', id, org.id);
+    if (!wh) return fail(404, { error: st(locals.locale).settingsPages.webhookNotFound });
+
+    const payload: WebhookPayload = {
+      event: 'webhook.test',
+      org_id: org.id,
+      timestamp: new Date().toISOString(),
+      data: { message: 'Test from Hallify', organization: org.name },
+    };
+    const result = await deliverWebhook(locals.db, wh.id, wh.url, wh.secret, payload);
+    return { webhookResult: { id: wh.id, ...result } };
+  },
+
+  /** Send a logged delivery again, with the payload it carried the first time. */
+  retry: async ({ request, locals }) => {
+    await requireOrgPermission(locals, 'settings.manage');
+    const org = locals.currentOrg!;
+    if (!planHasWebhooks(org.subscription.plan)) return fail(403, { error: st(locals.locale).serverErrors.webhooksPaidPlan });
+    const data = await request.formData();
+    const deliveryId = String(data.get('delivery_id') ?? '');
+    const row = await dbFirst<{ payload: string; webhook_id: string; url: string; secret: string | null }>(locals.db,
+      `SELECT d.payload, d.webhook_id, w.url, w.secret
+       FROM webhook_deliveries d JOIN org_webhooks w ON w.id = d.webhook_id
+       WHERE d.id = ? AND w.org_id = ?`, deliveryId, org.id);
+    if (!row) return fail(404, { error: st(locals.locale).settingsPages.webhookNotFound });
+    let payload: WebhookPayload;
+    try { payload = JSON.parse(row.payload) as WebhookPayload; }
+    catch { return fail(400, { error: st(locals.locale).settingsPages.webhookNotFound }); }
+    const result = await deliverWebhook(locals.db, row.webhook_id, row.url, row.secret, payload);
+    return { webhookResult: { id: row.webhook_id, ...result } };
   },
 
   toggle: async ({ request, locals }) => {
@@ -210,10 +323,10 @@ export const actions: Actions = {
     );
   },
 
+  // Deleting stays possible on any plan, so an organisation that downgraded can tidy up.
   delete: async ({ request, locals }) => {
     await requireOrgPermission(locals, 'settings.manage');
     const org = locals.currentOrg!;
-    if (!planHasWebhooks(org.subscription.plan)) return fail(403, { error: st(locals.locale).serverErrors.webhooksPaidPlan });
     const data = await request.formData();
     const id = String(data.get('id') ?? '');
     await dbRun(locals.db, 'DELETE FROM org_webhooks WHERE id = ? AND org_id = ?', id, org.id);
@@ -221,55 +334,50 @@ export const actions: Actions = {
 
   // ── Danger zone (moved here from the Members page) ────────────────────
   // Current user leaves the org. The last member (usually the owner) cannot
-  // leave — they must explicitly close the organization.
-  leave: async ({ locals, cookies }) => {
-    await requireOrgPermission(locals, 'settings.manage');
-    if (locals.currentOrg?.impersonated) return fail(403, { error: st(locals.locale).serverErrors.impersonationBlockThisOrg });
-    const orgId = locals.currentOrg!.id;
-    const userId = locals.user!.id;
-
-    const me = await dbFirst<{ role: string }>(locals.db,
-      'SELECT role FROM organization_members WHERE org_id = ? AND user_id = ?', orgId, userId);
-    if (!me) return fail(400, { error: st(locals.locale).serverErrors.notMemberOfOrg });
-
-    if (await orgMemberCount(locals.db, orgId) <= 1) {
-      return fail(400, { error: st(locals.locale).serverErrors.lastMemberCloseOrgInstead });
-    }
-    if (me.role === 'owner') {
-      const owners = await dbFirst<{ count: number }>(locals.db,
-        `SELECT COUNT(*) AS count FROM organization_members WHERE org_id = ? AND role = 'owner'`, orgId);
-      if (Number(owners?.count ?? 0) <= 1) {
-        return fail(400, { error: st(locals.locale).serverErrors.onlyOwnerPromoteOrClose });
-      }
-    }
-
-    await dbRun(locals.db, 'DELETE FROM organization_members WHERE org_id = ? AND user_id = ?', orgId, userId);
-    const sessionId = cookies.get('session_id');
-    if (sessionId) await dbRun(locals.db, 'UPDATE sessions SET current_org_id = NULL WHERE id = ?', sessionId);
+  // leave — they must explicitly close the organization. Leaving is about your own
+  // membership, not about managing the organisation, so any member may do it.
+  leave: async ({ locals }) => {
+    if (!locals.user) redirect(303, '/app/login');
+    requireOrg(locals);
+    if (locals.currentOrg?.impersonated) return fail(403, { dangerError: st(locals.locale).serverErrors.impersonationBlockThisOrg });
+    const refused = await leaveOrganization(locals.db, locals.currentOrg!.id, locals.user.id);
+    if (refused) return fail(400, { dangerError: leaveRefusalMessage(refused, locals.locale) });
     redirect(303, '/app/');
   },
 
-  // Owner-only: permanently close the organization. Archives a legal/accounting
-  // record (kept indefinitely) then deletes all live data. Requires typing the
-  // org name to confirm.
-  closeOrg: async ({ request, locals }) => {
+  // Owner-only: permanently close the organization. Cancels the Stripe subscription,
+  // emails clients with upcoming bookings, archives a legal/accounting record (kept
+  // indefinitely) then deletes all live data. Requires typing the org name.
+  closeOrg: async ({ request, locals, cookies }) => {
     await requireOrgPermission(locals, 'settings.manage');
     const org = locals.currentOrg!;
-    if (org.impersonated) return fail(403, { error: st(locals.locale).serverErrors.impersonationBlockThisOrg });
-    if (org.role !== 'owner') return fail(403, { error: st(locals.locale).serverErrors.onlyOwnerCanCloseOrg });
+    if (org.impersonated) return fail(403, { dangerError: st(locals.locale).serverErrors.impersonationBlockThisOrg });
+    if (org.role !== 'owner') return fail(403, { dangerError: st(locals.locale).serverErrors.onlyOwnerCanCloseOrg });
 
     const data = await request.formData();
     const confirmName = String(data.get('confirm_name') ?? '').trim();
     if (confirmName !== org.name) {
-      return fail(400, { error: st(locals.locale).serverErrors.typeOrgNameToConfirm(org.name) });
+      return fail(400, { dangerError: st(locals.locale).serverErrors.typeOrgNameToConfirm(org.name) });
     }
 
-    await archiveAndDeleteOrg(locals.db, org.id, {
-      closedBy: locals.user!.id,
-      closedByEmail: locals.user!.email,
-      reason: 'owner_closed',
-    });
+    let result;
+    try {
+      result = await archiveAndDeleteOrg(locals.db, org.id, {
+        closedBy: locals.user!.id,
+        closedByEmail: locals.user!.email,
+        reason: 'owner_closed',
+        // Never delete an organisation that Stripe would go on charging.
+        strictBilling: true,
+      });
+    } catch (e) {
+      if (e instanceof BillingCancelError) return fail(502, { dangerError: st(locals.locale).settingsPages.closeBillingFailed });
+      throw e;
+    }
 
-    redirect(303, '/app/');
+    // The confirmation page reads this once and deletes it.
+    cookies.set(CLOSED_COOKIE, JSON.stringify({ name: org.name, ...result }), {
+      path: '/app/org-closed', httpOnly: true, sameSite: 'lax', maxAge: 600,
+    });
+    redirect(303, '/app/org-closed');
   },
 };

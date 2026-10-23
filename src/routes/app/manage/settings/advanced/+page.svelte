@@ -1,6 +1,8 @@
 <script lang="ts">
   import { enhance } from '$app/forms';
-  import { t } from '$lib/i18n.svelte';
+  import { t, getLocale } from '$lib/i18n.svelte';
+  import { confirmFirst } from '$lib/forms';
+  import { timeAgo, formatDateTime } from '$lib/format';
   import RecipientPicker from './RecipientPicker.svelte';
   import type { PageData, ActionData } from './$types';
 
@@ -28,32 +30,67 @@
     { id: 'reservation.new',            label: t.settingsPages.eventReservationNew },
     { id: 'reservation.status_changed', label: t.settingsPages.eventReservationStatus },
   ]);
+  const eventLabel = (id: string) =>
+    id === 'webhook.test' ? t.settingsPages.eventWebhookTest : (ALL_EVENTS.find((e) => e.id === id)?.label ?? id);
+  const statusLabel = (s: string) =>
+    s === 'delivered' ? t.settingsPages.whStatusDelivered
+    : s === 'failed' ? t.settingsPages.whStatusFailed
+    : t.settingsPages.whStatusPending;
 
   let showCreate = $state(false);
+  let editId = $state<string | null>(null);
   let showSecret = $state<string | null>(null);
+
+  /** What the server sent back when a create/edit was refused, so the form keeps it. */
+  const echoed = (formId: string) =>
+    form && 'webhookForm' in form && form.webhookForm === formId ? form.values : null;
+  const webhookError = (formId: string) =>
+    form && 'webhookForm' in form && form.webhookForm === formId ? form.webhookError : null;
+
+  /** Close a create/edit form only once the server has accepted it. A refused form
+   *  stays open with what was typed (it used to close before the request). */
+  const saveWebhook = () => async ({ result, update }: { result: { type: string }; update: (o?: { reset?: boolean }) => Promise<void> }) => {
+    if (result.type === 'success') {
+      showCreate = false;
+      editId = null;
+      await update();
+    } else {
+      await update({ reset: false });
+    }
+  };
+
+  const webhookResult = $derived(form && 'webhookResult' in form ? form.webhookResult : null);
+
+  function prettyPayload(raw: string): string {
+    try { return JSON.stringify(JSON.parse(raw), null, 2); } catch { return raw; }
+  }
 
   // ── Danger zone ────────────────────────────────────────────────────
   let confirmName = $state('');
+  const dangerError = $derived(form && 'dangerError' in form ? form.dangerError : null);
 
-  function timeAgo(d: Date | string) {
-    const diff = Date.now() - new Date(d).getTime();
-    const mins = Math.floor(diff / 60000);
-    if (mins < 1) return t.settingsPages.justNow;
-    if (mins < 60) return `${mins}${t.settingsPages.minutesAgo}`;
-    const hrs = Math.floor(mins / 60);
-    if (hrs < 24) return `${hrs}${t.settingsPages.hoursAgo}`;
-    return `${Math.floor(hrs / 24)}${t.settingsPages.daysAgo}`;
-  }
+  /** Everything closing will do, said again in the confirm dialog. */
+  const closeConfirmText = () => [
+    `${t.membersAdmin.confirmClosePre} ${data.orgName}?`,
+    data.upcomingClients > 0 ? t.membersAdmin.closeOrgWillEmailClients(data.upcomingClients) : '',
+    data.hasSubscription ? t.membersAdmin.closeOrgWillCancelBilling : '',
+    t.membersAdmin.confirmClosePost,
+  ].filter(Boolean).join('\n\n');
 </script>
 
 <svelte:head><title>{t.settingsPages.tabAdvanced} – {t.settings.title} – Hallify</title></svelte:head>
 
-<p class="tab-intro">{t.settingsPages.advancedSub}</p>
-
-{#if form?.error}
-  <div class="alert-error">{form.error}</div>
+{#if data.canManage}
+  <p class="tab-intro">{t.settingsPages.advancedSub}</p>
+{:else}
+  <p class="tab-intro">{t.settingsPages.leaveOnlyHint}</p>
 {/if}
 
+{#if form && 'error' in form && form.error}
+  <div class="alert-error" role="alert">{form.error}</div>
+{/if}
+
+{#if data.canManage && data.notifications && data.recipients}
 <!-- ══ Email ══════════════════════════════════════════════════════ -->
 <section class="section section--lead" id="email">
   <div class="section-head">
@@ -61,8 +98,8 @@
     <p>{t.settingsPages.emailIntroPre} <strong>noreply@hallify.sk</strong>. {t.settingsPages.emailIntroPost}</p>
   </div>
 
-  {#if form?.success}
-    <div class="alert-success">{t.settings.saved}</div>
+  {#if form && 'success' in form && form.success}
+    <div class="alert-success" role="status">{t.settings.saved}</div>
   {/if}
 
   <form method="POST" action="?/saveNotifications" use:enhance={() => async ({ update }) => { await update({ reset: false }); }}>
@@ -107,6 +144,37 @@
 </section>
 
 <!-- ══ Webhooks ═══════════════════════════════════════════════════ -->
+{#snippet webhookFields(prefix: string, values: { name?: string; url?: string; events?: string[] } | null, editing: boolean)}
+  <div class="fields">
+    <div class="field">
+      <label for="{prefix}-name">{t.common.name}</label>
+      <input id="{prefix}-name" name="name" value={values?.name ?? ''} placeholder={t.settingsPages.webhookNamePlaceholder} maxlength="100" required />
+    </div>
+    <div class="field">
+      <label for="{prefix}-url">{t.settingsPages.endpointUrl}</label>
+      <input id="{prefix}-url" name="url" type="url" value={values?.url ?? ''} placeholder="https://hooks.slack.com/…" pattern="https://.*" required />
+    </div>
+    <div class="field">
+      <label for="{prefix}-secret">{t.settingsPages.secret} <span class="optional">{t.settingsPages.optionalParen}</span></label>
+      <input id="{prefix}-secret" name="secret" type="password" maxlength="64" placeholder={editing ? t.settingsPages.whSecretKeep : t.settingsPages.secretPlaceholder} autocomplete="new-password" />
+      {#if editing}
+        <label class="event-check"><input type="checkbox" name="clear_secret" /> <span>{t.settingsPages.whSecretClear}</span></label>
+      {/if}
+    </div>
+    <div class="field">
+      <span class="field-label">{t.settingsPages.eventsToSend}</span>
+      <div class="event-grid">
+        {#each ALL_EVENTS as ev (ev.id)}
+          <label class="event-check">
+            <input type="checkbox" name="event_{ev.id}" checked={values?.events?.includes(ev.id) ?? false} />
+            <span>{ev.label}</span>
+          </label>
+        {/each}
+      </div>
+    </div>
+  </div>
+{/snippet}
+
 <section class="section" id="webhooks">
   <div class="section-head section-head--row">
     <div>
@@ -114,11 +182,15 @@
       <p>{t.settingsPages.webhooksDesc}</p>
     </div>
     {#if !data.locked}
-      <button class="btn-action btn-sm" type="button" onclick={() => showCreate = !showCreate}>
+      <button class="btn-action btn-sm" type="button" onclick={() => { showCreate = !showCreate; editId = null; }}>
         {showCreate ? t.common.cancel : '+ ' + t.settingsPages.addWebhook}
       </button>
     {/if}
   </div>
+
+  {#if form && 'webhookSaved' in form && form.webhookSaved}
+    <div class="alert-success" role="status">{t.settingsPages.whSaved}</div>
+  {/if}
 
   {#if data.locked}
     <div class="card--inset locked-card">
@@ -129,39 +201,36 @@
       <p>{t.settingsPages.upgradeTo} <strong>Starter</strong> {t.settingsPages.webhooksLockedHint}</p>
       <a href="/app/billing" class="btn-action locked-cta">{t.settingsPages.viewPlans}</a>
     </div>
+    {#if data.webhooks.length > 0}
+      <!-- Kept after a downgrade: stored, not sent. They used to disappear from here. -->
+      <p class="group-sub locked-list-hint">{t.settingsPages.webhookLockedListHint}</p>
+      <div class="row-list">
+        {#each data.webhooks as wh (wh.id)}
+          <div class="row-item wh-row disabled">
+            <div class="wh-info">
+              <span class="wh-name">{wh.name}</span>
+              <span class="wh-url">{wh.url}</span>
+            </div>
+            <div class="wh-actions">
+              <span class="wh-status">{t.settingsPages.whPausedByPlan}</span>
+              <form method="POST" action="?/delete" use:enhance={confirmFirst(() => t.settingsPages.confirmDeleteWebhook)} style="display:contents">
+                <input type="hidden" name="id" value={wh.id} />
+                <button type="submit" class="btn-danger btn-sm">{t.common.delete}</button>
+              </form>
+            </div>
+          </div>
+        {/each}
+      </div>
+    {/if}
   {:else}
     {#if showCreate}
       <div class="card--inset create-card">
         <h3 class="card-title">{t.settingsPages.newWebhook}</h3>
-        <form method="POST" action="?/create" use:enhance={() => {
-          showCreate = false;
-          return async ({ update }) => update();
-        }}>
-          <div class="fields">
-            <div class="field">
-              <label for="wh-name">{t.common.name}</label>
-              <input id="wh-name" name="name" placeholder={t.settingsPages.webhookNamePlaceholder} required />
-            </div>
-            <div class="field">
-              <label for="wh-url">{t.settingsPages.endpointUrl}</label>
-              <input id="wh-url" name="url" type="url" placeholder="https://hooks.slack.com/…" required />
-            </div>
-            <div class="field">
-              <label for="wh-secret">{t.settingsPages.secret} <span class="optional">{t.settingsPages.optionalParen}</span></label>
-              <input id="wh-secret" name="secret" type="password" placeholder={t.settingsPages.secretPlaceholder} autocomplete="new-password" />
-            </div>
-            <div class="field">
-              <span class="field-label">{t.settingsPages.eventsToSend}</span>
-              <div class="event-grid">
-                {#each ALL_EVENTS as ev (ev.id)}
-                  <label class="event-check">
-                    <input type="checkbox" name="event_{ev.id}" />
-                    <span>{ev.label}</span>
-                  </label>
-                {/each}
-              </div>
-            </div>
-          </div>
+        <form method="POST" action="?/create" use:enhance={saveWebhook}>
+          {#if webhookError('create')}
+            <div class="alert-error" role="alert">{webhookError('create')}</div>
+          {/if}
+          {@render webhookFields('wh-new', echoed('create'), false)}
           <div class="form-actions">
             <button type="submit" class="btn-action btn-sm">{t.common.create}</button>
             <button type="button" class="btn-outline btn-sm" onclick={() => showCreate = false}>{t.common.cancel}</button>
@@ -180,81 +249,130 @@
     {:else}
       <div class="row-list">
         {#each data.webhooks as wh (wh.id)}
-          <div class="row-item wh-row" class:disabled={!wh.enabled}>
-            <div class="wh-info">
-              <span class="wh-name">{wh.name}</span>
-              <span class="wh-url">{wh.url}</span>
+          <div class="row-item wh-block" class:disabled={!wh.enabled && editId !== wh.id}>
+            <div class="wh-row">
+              <div class="wh-info">
+                <span class="wh-name">{wh.name}</span>
+                <span class="wh-url">{wh.url}</span>
 
-              <div class="wh-events">
-                {#each wh.events as ev}
-                  {@const evLabel = ALL_EVENTS.find(e => e.id === ev)?.label ?? ev}
-                  <span class="event-tag">{evLabel}</span>
-                {/each}
+                <div class="wh-events">
+                  {#each wh.events as ev}
+                    <span class="event-tag">{eventLabel(ev)}</span>
+                  {/each}
+                </div>
+
+                {#if wh.secret}
+                  <div class="wh-secret-row">
+                    <span class="wh-secret-label">{t.settingsPages.secretLabel}</span>
+                    {#if showSecret === wh.id}
+                      <code class="wh-secret-val">{wh.secret}</code>
+                      <button class="link-btn" type="button" onclick={() => showSecret = null}>{t.settingsPages.hide}</button>
+                    {:else}
+                      <code class="wh-secret-val">••••••••</code>
+                      <button class="link-btn" type="button" onclick={() => showSecret = wh.id}>{t.settingsPages.reveal}</button>
+                    {/if}
+                  </div>
+                {/if}
+
+                {#if webhookResult && webhookResult.id === wh.id}
+                  <p class="wh-result" class:ok={webhookResult.status === 'delivered'} role="status">
+                    {webhookResult.status === 'delivered'
+                      ? t.settingsPages.whTestOk(webhookResult.responseCode)
+                      : t.settingsPages.whTestFailed(webhookResult.error ?? String(webhookResult.responseCode ?? ''))}
+                  </p>
+                {/if}
               </div>
 
-              {#if wh.secret}
-                <div class="wh-secret-row">
-                  <span class="wh-secret-label">{t.settingsPages.secretLabel}</span>
-                  {#if showSecret === wh.id}
-                    <code class="wh-secret-val">{wh.secret}</code>
-                    <button class="link-btn" type="button" onclick={() => showSecret = null}>{t.settingsPages.hide}</button>
-                  {:else}
-                    <code class="wh-secret-val">••••••••</code>
-                    <button class="link-btn" type="button" onclick={() => showSecret = wh.id}>{t.settingsPages.reveal}</button>
-                  {/if}
-                </div>
-              {/if}
-            </div>
+              <div class="wh-actions">
+                <span class="wh-status" class:enabled={wh.enabled}>{wh.enabled ? t.settingsPages.whActive : t.settingsPages.whPaused}</span>
 
-            <div class="wh-actions">
-              <span class="wh-status" class:enabled={wh.enabled}>{wh.enabled ? t.settingsPages.whActive : t.settingsPages.whPaused}</span>
+                <form method="POST" action="?/test" use:enhance={() => async ({ update }) => { await update({ reset: false }); }} style="display:contents">
+                  <input type="hidden" name="id" value={wh.id} />
+                  <button type="submit" class="btn-outline btn-sm">{t.settingsPages.whTest}</button>
+                </form>
 
-              <form method="POST" action="?/toggle" use:enhance style="display:contents">
-                <input type="hidden" name="id" value={wh.id} />
-                <button type="submit" class="btn-outline btn-sm">{wh.enabled ? t.settingsPages.whPause : t.settingsPages.whResume}</button>
-              </form>
-
-              <form method="POST" action="?/delete" use:enhance style="display:contents">
-                <input type="hidden" name="id" value={wh.id} />
-                <button type="submit" class="btn-danger btn-sm"
-                  onclick={(e) => { if (!confirm(t.settingsPages.confirmDeleteWebhook)) e.preventDefault(); }}>
-                  {t.common.delete}
+                <button type="button" class="btn-outline btn-sm" aria-expanded={editId === wh.id}
+                  onclick={() => { editId = editId === wh.id ? null : wh.id; showCreate = false; }}>
+                  {editId === wh.id ? t.common.cancel : t.settingsPages.whEdit}
                 </button>
-              </form>
+
+                <form method="POST" action="?/toggle" use:enhance style="display:contents">
+                  <input type="hidden" name="id" value={wh.id} />
+                  <button type="submit" class="btn-outline btn-sm">{wh.enabled ? t.settingsPages.whPause : t.settingsPages.whResume}</button>
+                </form>
+
+                <form method="POST" action="?/delete" use:enhance={confirmFirst(() => t.settingsPages.confirmDeleteWebhook)} style="display:contents">
+                  <input type="hidden" name="id" value={wh.id} />
+                  <button type="submit" class="btn-danger btn-sm">{t.common.delete}</button>
+                </form>
+              </div>
             </div>
+
+            {#if editId === wh.id}
+              <form method="POST" action="?/update" class="wh-edit" use:enhance={saveWebhook}>
+                <h3 class="card-title">{t.settingsPages.whEditTitle}</h3>
+                {#if webhookError(wh.id)}
+                  <div class="alert-error" role="alert">{webhookError(wh.id)}</div>
+                {/if}
+                <input type="hidden" name="id" value={wh.id} />
+                {@render webhookFields(`wh-${wh.id}`, echoed(wh.id) ?? wh, true)}
+                <div class="form-actions">
+                  <button type="submit" class="btn-action btn-sm">{t.common.save}</button>
+                  <button type="button" class="btn-outline btn-sm" onclick={() => editId = null}>{t.common.cancel}</button>
+                </div>
+              </form>
+            {/if}
           </div>
         {/each}
       </div>
     {/if}
 
-    {#if data.recentDeliveries.length > 0}
-      <h3 class="group-title">{t.settingsPages.recentDeliveries}</h3>
-      <div class="deliveries-table">
-        <div class="dt-head">
-          <span>{t.settingsPages.colWebhook}</span>
-          <span>{t.adminReservations.event}</span>
-          <span>{t.common.status}</span>
-          <span>{t.settingsPages.colCode}</span>
-          <span>{t.settingsPages.colWhen}</span>
-        </div>
-        {#each data.recentDeliveries as d (d.id)}
-          <div class="dt-row" title={d.error ?? ''}>
+  {/if}
+
+  {#if data.recentDeliveries.length > 0}
+    <h3 class="group-title">{t.settingsPages.recentDeliveries}</h3>
+    <div class="deliveries-table">
+      <div class="dt-head">
+        <span>{t.settingsPages.colWebhook}</span>
+        <span>{t.adminReservations.event}</span>
+        <span>{t.common.status}</span>
+        <span>{t.settingsPages.colCode}</span>
+        <span>{t.settingsPages.colWhen}</span>
+      </div>
+      {#each data.recentDeliveries as d (d.id)}
+        <details class="dt-item">
+          <summary class="dt-row">
             <span class="dt-name">{d.webhook_name}</span>
-            <code class="dt-event">{d.event}</code>
+            <span class="dt-event">{eventLabel(d.event)}</span>
             <span class="dt-status" class:success={d.status === 'delivered'} class:fail={d.status === 'failed'}>
-              {d.status}
+              {statusLabel(d.status)}
             </span>
             <span class="dt-code">{d.response_code ?? '—'}</span>
-            <span class="dt-when">{timeAgo(d.delivered_at)}</span>
+            <span class="dt-when" title={formatDateTime(d.delivered_at, getLocale())}>{timeAgo(d.delivered_at, getLocale())}</span>
+          </summary>
+          <div class="dt-detail">
+            <p class="dt-meta"><code>{d.event}</code> · {formatDateTime(d.delivered_at, getLocale())}</p>
+            {#if d.error}
+              <p class="dt-error"><strong>{t.settingsPages.whError}:</strong> {d.error}</p>
+            {/if}
+            <span class="field-label">{t.settingsPages.whPayload}</span>
+            <pre class="dt-payload">{prettyPayload(d.payload)}</pre>
+            {#if !data.locked}
+              <form method="POST" action="?/retry" use:enhance={() => async ({ update }) => { await update({ reset: false }); }}>
+                <input type="hidden" name="delivery_id" value={d.id} />
+                <button type="submit" class="btn-outline btn-sm">{t.settingsPages.whRetry}</button>
+              </form>
+            {/if}
           </div>
-        {/each}
-      </div>
-    {/if}
+        </details>
+      {/each}
+    </div>
   {/if}
 </section>
+{/if}
 
 <!-- ══ Danger zone ════════════════════════════════════════════════ -->
-<section class="section danger-section">
+<section class="section danger-section" id="danger" class:section--lead={!data.canManage}>
   <div class="section-head">
     <h2 class="danger-label">{t.membersAdmin.dangerZone}</h2>
     <p>{t.settingsPages.dangerZoneSub}</p>
@@ -266,15 +384,33 @@
     <p class="danger-note">{t.serverErrors.impersonationBlockThisOrg}</p>
   {/if}
 
+  <!-- Errors from leaving or closing appear here, next to the buttons that caused
+       them, not at the top of a long page. -->
+  {#if dangerError}
+    <div class="alert-error" role="alert">{dangerError}</div>
+  {/if}
+
   <div class="row-list">
+    {#if data.isOwner && !data.impersonated}
+      <div class="row-item danger-row">
+        <div class="danger-text">
+          <strong>{t.settingsPages.exportTitle}</strong>
+          <p>{t.settingsPages.exportDesc}</p>
+        </div>
+        <div class="export-actions">
+          <a class="btn-outline btn-sm" href="/app/manage/settings/advanced/export?format=json" download>{t.settingsPages.exportJson}</a>
+          <a class="btn-outline btn-sm" href="/app/manage/settings/advanced/export?format=csv" download>{t.settingsPages.exportCsv}</a>
+        </div>
+      </div>
+    {/if}
+
     <div class="row-item danger-row">
       <div class="danger-text">
         <strong>{t.membersAdmin.leaveOrg}</strong>
         <p>{t.membersAdmin.leaveOrgDescPre} {data.orgName}. {t.membersAdmin.leaveOrgDescPost}</p>
       </div>
-      <form method="POST" action="?/leave" use:enhance>
-        <button type="submit" class="btn-outline btn-sm danger-btn" disabled={data.impersonated}
-          onclick={(e) => { if (!confirm(t.membersAdmin.confirmLeave)) e.preventDefault(); }}>{t.membersAdmin.leave}</button>
+      <form method="POST" action="?/leave" use:enhance={confirmFirst(() => t.membersAdmin.confirmLeave)}>
+        <button type="submit" class="btn-outline btn-sm danger-btn" disabled={data.impersonated}>{t.membersAdmin.leave}</button>
       </form>
     </div>
 
@@ -283,10 +419,15 @@
         <div class="danger-text">
           <strong>{t.membersAdmin.closeOrg}</strong>
           <p>{t.membersAdmin.closeOrgDescPre} <strong>{data.orgName}</strong> {t.membersAdmin.closeOrgDescPost}</p>
+          <ul class="danger-consequences">
+            <li>{data.upcomingClients > 0 ? t.membersAdmin.closeOrgWillEmailClients(data.upcomingClients) : t.membersAdmin.closeOrgNoUpcoming}</li>
+            {#if data.hasSubscription}<li>{t.membersAdmin.closeOrgWillCancelBilling}</li>{/if}
+          </ul>
         </div>
-        <form method="POST" action="?/closeOrg" class="close-form" use:enhance
-          onsubmit={(e) => { if (!confirm(`${t.membersAdmin.confirmClosePre} ${data.orgName}? ${t.membersAdmin.confirmClosePost}`)) e.preventDefault(); }}>
-          <input type="text" name="confirm_name" bind:value={confirmName} placeholder={`${t.membersAdmin.confirmTypePre} “${data.orgName}” ${t.membersAdmin.confirmTypePost}`} autocomplete="off" />
+        <!-- confirmFirst, not onsubmit+preventDefault: enhance ignores
+             defaultPrevented, so Cancel used to close the organisation anyway. -->
+        <form method="POST" action="?/closeOrg" class="close-form" use:enhance={confirmFirst(closeConfirmText)}>
+          <input type="text" name="confirm_name" bind:value={confirmName} aria-label={t.membersAdmin.closeOrg} placeholder={`${t.membersAdmin.confirmTypePre} “${data.orgName}” ${t.membersAdmin.confirmTypePost}`} autocomplete="off" />
           <button type="submit" class="btn-danger close-btn" disabled={data.impersonated || confirmName.trim() !== data.orgName}>{t.membersAdmin.closeOrg}</button>
         </form>
       </div>
@@ -380,8 +521,15 @@
   }
   .empty p { margin: 0; }
 
-  .wh-row { align-items: flex-start; justify-content: space-between; }
+  .wh-block { flex-direction: column; align-items: stretch; }
+  .wh-block.disabled .wh-row { opacity: .6; }
+  .wh-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; }
   .wh-row.disabled { opacity: .6; }
+  .wh-edit { padding: 14px 0 4px; border-top: 1px solid var(--border-subtle); margin-top: 4px; }
+  .wh-actions { flex-wrap: wrap; justify-content: flex-end; }
+  .wh-result { font-size: 12px; margin: 8px 0 0; color: var(--danger); }
+  .wh-result.ok { color: var(--success); }
+  .locked-list-hint { margin-top: 20px; }
   .wh-info { flex: 1; min-width: 0; }
   .wh-name { display: block; font-size: 14px; font-weight: 600; color: var(--text-base); }
   .wh-url {
@@ -424,9 +572,20 @@
     font-size: 10px; font-weight: 650; text-transform: uppercase; letter-spacing: .1em;
     color: var(--text-subtle); border-bottom: 1px solid var(--border);
   }
-  .dt-row { border-bottom: 1px solid var(--border-subtle); }
-  .dt-row:last-child { border-bottom: none; }
+  .dt-item { border-bottom: 1px solid var(--border-subtle); }
+  .dt-item:last-child { border-bottom: none; }
+  .dt-row { cursor: pointer; list-style: none; }
+  .dt-row::-webkit-details-marker { display: none; }
   .dt-row:hover { background: var(--bg-hover); }
+  .dt-row:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+  .dt-detail { padding: 4px 0 14px; display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
+  .dt-meta, .dt-error { margin: 0; font-size: 12px; color: var(--text-muted); }
+  .dt-error { color: var(--danger); }
+  .dt-payload {
+    width: 100%; box-sizing: border-box; margin: 0; max-height: 260px; overflow: auto;
+    padding: 10px 12px; border-radius: var(--radius-sm); background: var(--bg-panel2);
+    border: 1px solid var(--border); font-size: 11px; line-height: 1.5; color: var(--text-base);
+  }
   .dt-name { font-weight: 500; color: var(--text-base); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .dt-event { font-size: 10px; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .dt-status { font-weight: 600; }
@@ -434,10 +593,6 @@
   .dt-status.fail    { color: var(--danger); }
   .dt-code { color: var(--text-muted); }
   .dt-when { color: var(--text-subtle); }
-
-  /* ── Analytics ── */
-  /* Field and button are one control: equal heights, no stray chip. */
-
 
   /* ── Danger zone ── */
   .danger-section { border-top-color: color-mix(in srgb, var(--danger) 30%, var(--border)); }
@@ -463,6 +618,9 @@
   }
   .close-form input:focus { outline: none; border-color: var(--danger); box-shadow: 0 0 0 3px var(--danger-dim); }
   .close-btn { justify-content: center; }
+  .danger-consequences { margin: 8px 0 0; padding-left: 18px; font-size: 12.5px; line-height: 1.5; color: var(--text-base); max-width: 56ch; }
+  .export-actions { display: flex; gap: 8px; flex-shrink: 0; flex-wrap: wrap; }
+  .export-actions a { text-decoration: none; }
   .close-btn:disabled { opacity: .5; cursor: not-allowed; }
 
   @media (max-width: 720px) {

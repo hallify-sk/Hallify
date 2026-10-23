@@ -1,5 +1,5 @@
 import { getStripe, getWebhookSecret } from '$lib/stripe';
-import { dbRun } from '$lib/db/index';
+import { dbRun, dbFirst } from '$lib/db/index';
 import { planFromAmount } from '$lib/plans';
 import type { PlanId } from '$lib/plans';
 import { enforcePlanLimits } from '$lib/limits';
@@ -25,6 +25,9 @@ function toStatus(stripeStatus: string): SubscriptionStatus {
 async function handleSubscriptionEvent(sub: Stripe.Subscription, db: D1Database) {
   const orgId = sub.metadata?.orgId;
   if (!orgId) return;
+  // A closed organisation is deleted while Stripe still sends the cancellation
+  // events for it; inserting a row for it would fail the foreign key and 500.
+  if (!(await dbFirst<{ id: string }>(db, 'SELECT id FROM organizations WHERE id = ?', orgId))) return;
 
   const amount = sub.items.data[0]?.price?.unit_amount ?? 0;
   const status = toStatus(sub.status);

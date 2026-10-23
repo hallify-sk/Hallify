@@ -104,9 +104,14 @@
 			</div>
 		</div>
 	</section>
+
+	<!-- A plain member never reaches Settings, so leaving the organisation is linked here. -->
+	<p class="leave-link"><a href="/app/org/leave">{t.membersAdmin.leaveOrg}</a></p>
 </div>
 
 <style>
+	.leave-link { margin: 24px 0 0; font-size: 12px; }
+	.leave-link a { color: var(--text-subtle); }
 	/* flex-END, like the admin dashboard's header: the action sits on the title's
 	   baseline rather than floating up beside the eyebrow. */
 	.page-top {

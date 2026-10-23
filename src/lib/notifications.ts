@@ -2,13 +2,17 @@ import { createHmac } from 'crypto';
 import { dbAll, dbFirst, dbRun, toJson } from '$lib/db/index';
 import type { WebhookEvent } from '$lib/db/index';
 import { getPlan } from '$lib/plans';
+import { isSafeWebhookUrl } from '$lib/safe-url';
 import type { PlanId } from '$lib/plans';
 import type { D1Database } from '@cloudflare/workers-types';
 
 export type { WebhookEvent };
 
+/** `webhook.test` is the "Send test" button in Settings; it is never dispatched for real events. */
+export type WebhookPayloadEvent = WebhookEvent | 'webhook.test';
+
 export interface WebhookPayload {
-  event: WebhookEvent;
+  event: WebhookPayloadEvent;
   org_id: string;
   timestamp: string;
   data: Record<string, unknown>;
@@ -58,17 +62,25 @@ export async function dispatchWebhooks(
 
   for (const wh of webhooks) {
     // intentionally not awaited — fire and forget
-    deliver(db, wh.id, wh.url, wh.secret, payload).catch(() => {});
+    deliverWebhook(db, wh.id, wh.url, wh.secret, payload).catch(() => {});
   }
 }
 
-async function deliver(
+export interface DeliveryResult {
+  status: 'delivered' | 'failed';
+  responseCode: number | null;
+  error: string | null;
+}
+
+/** POST one payload to one endpoint and log the attempt. Used by dispatch, by the
+ *  "Send test" button and by "Retry" in Settings, which await the result. */
+export async function deliverWebhook(
   db: D1Database,
   webhookId: string,
   url: string,
   secret: string | null,
   payload: WebhookPayload
-): Promise<void> {
+): Promise<DeliveryResult> {
   const body = JSON.stringify(payload);
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -85,18 +97,26 @@ async function deliver(
   let responseCode: number | null = null;
   let error: string | null = null;
 
-  try {
-    const res = await fetch(url, {
-      method: 'POST',
-      headers,
-      body,
-      signal: AbortSignal.timeout(10_000),
-    });
-    responseCode = res.status;
-    status = res.ok ? 'delivered' : 'failed';
-    if (!res.ok) error = `HTTP ${res.status}`;
-  } catch (e) {
-    error = e instanceof Error ? e.message : 'Delivery failed';
+  // Checked again at send time: webhooks saved before the https / public-host rule
+  // existed must not reach internal addresses either. Redirects are not followed,
+  // so a public endpoint cannot bounce the request to an internal one.
+  if (!isSafeWebhookUrl(url)) {
+    error = 'Blocked: the endpoint must be a public https:// address';
+  } else {
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers,
+        body,
+        redirect: 'manual',
+        signal: AbortSignal.timeout(10_000),
+      });
+      responseCode = res.status;
+      status = res.ok ? 'delivered' : 'failed';
+      if (!res.ok) error = `HTTP ${res.status}`;
+    } catch (e) {
+      error = e instanceof Error ? e.message : 'Delivery failed';
+    }
   }
 
   await dbRun(
@@ -110,4 +130,5 @@ async function deliver(
     responseCode,
     error
   ).catch(() => {});
+  return { status, responseCode, error };
 }
