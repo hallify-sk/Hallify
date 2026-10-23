@@ -8,7 +8,7 @@ import { st } from '$lib/i18n-server';
 import type { Actions, PageServerLoad } from './$types';
 import { sendEmail } from '$lib/email';
 import { OPERATOR } from '$lib/legal';
-import { requireOrgPermission } from '$lib/server/access';
+import { requireOrgArea, requireOrgPermission } from '$lib/server/access';
 import { canManageSettings } from '$lib/server/settings-access';
 import { parseCoordinates } from '$lib/venue-location';
 import { geocodeAddress } from '$lib/server/geocode';
@@ -115,7 +115,10 @@ function extraFromForm(data: FormData): ExtraInput {
 }
 
 export const load: PageServerLoad = async ({ params, locals }) => {
-	await requireOrgPermission(locals, 'halls.manage');
+	// halls.view opens the hall read-only, and so do floorplans.manage and
+	// templates.manage: the plan and the templates live on this page, and their
+	// editors lead back here. Every action below still asks for its own permission.
+	const { access } = await requireOrgArea(locals, 'halls');
 	const orgId = locals.currentOrg!.id;
 	// price_band arrived with 0006 and is not on HallRow yet; widen it here rather
 	// than wait for the shared type.
@@ -139,11 +142,14 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		'SELECT * FROM table_types WHERE hall_id = ? ORDER BY name',
 		params.id
 	);
-	const reservations = await dbAll<Pick<ReservationRow, 'id' | 'title' | 'event_date' | 'status'>>(
-		locals.db,
-		"SELECT id, title, event_date, status FROM reservations WHERE hall_id = ? AND status != 'cancelled' ORDER BY event_date",
-		params.id
-	);
+	// The hall's bookings are shown to those who may see bookings.
+	const reservations = access.reservations.view
+		? await dbAll<Pick<ReservationRow, 'id' | 'title' | 'event_date' | 'status'>>(
+			locals.db,
+			"SELECT id, title, event_date, status FROM reservations WHERE hall_id = ? AND status != 'cancelled' ORDER BY event_date",
+			params.id
+		)
+		: [];
 
 	const extras = await dbAll<HallExtraRow>(locals.db,
 		'SELECT * FROM hall_extras WHERE hall_id = ? ORDER BY created_at', params.id);
@@ -179,7 +185,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 	}
 
 	// What stands between this hall and being retired (see $lib/server/hall-archive).
-	const blocking = hall.archived_at ? [] : await blockingReservations(locals.db, hall.id);
+	const blocking = hall.archived_at || !access.halls.manage ? [] : await blockingReservations(locals.db, hall.id);
 	const unused = await hallIsUnused(locals.db, hall.id);
 
 	// A hall suspended by a downgrade, with the plan full: the halls that could be
@@ -193,7 +199,8 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 
 	// Ordering (or withdrawing) the paid mapping add-on needs settings.manage (I29).
 	const canOrderAddons = await canManageSettings(locals);
-	return { hall, templates, blocks, tableTypes, reservations, extras, plan, orgAmenities, floorplanRequest, blocking, unused, planFull, swapCandidates, canOrderAddons };
+	const hallAccess = { manage: access.halls.manage, floorplans: access.halls.floorplans, templates: access.halls.templates };
+	return { hall, templates, blocks, tableTypes, reservations, extras, plan, orgAmenities, floorplanRequest, blocking, unused, planFull, swapCandidates, canOrderAddons, hallAccess };
 };
 
 /** The hall in the URL must belong to the acting organization. Every action below

@@ -3,8 +3,14 @@ import { requireOrg } from '$lib/guards';
 import type { OrgContext } from '../../app.d';
 import { dbAll, dbFirst } from '$lib/db/index';
 import {
+	AREA_OPENERS,
 	CONSOLE_PERMISSIONS,
+	PERMISSIONS,
+	areaAccess,
+	consoleEntryPermissions,
 	effectivePermissions,
+	type AreaAccess,
+	type ConsoleArea,
 	parsePermissions,
 	withLegacyAdmin,
 	type MemberAccess,
@@ -194,7 +200,64 @@ export async function hasConsoleAccess(locals: App.Locals): Promise<boolean> {
 	if (!org || !locals.user) return false;
 	if (org.role === 'owner' || org.role === 'admin') return true;
 
-	const access = await loadMemberAccess(locals.db, org.id, locals.user.id, { isOwner: false });
-	const held = effectivePermissions(access);
+	const held = await orgPermissions(locals);
 	return CONSOLE_PERMISSIONS.some((p) => held.has(p));
+}
+
+/**
+ * May this caller through the /app/manage door at all: a manage permission (the
+ * dashboard) or a view permission that opens a read-only page (reservations, halls,
+ * calendar, members, client messages). Which page then opens is each page's load to
+ * answer; the dashboard itself still asks `hasConsoleAccess`.
+ */
+export async function hasConsoleEntry(locals: App.Locals): Promise<boolean> {
+	const org = locals.currentOrg;
+	if (!org || !locals.user || locals.user.account_type === 'client') return false;
+	if (org.role === 'owner' || org.role === 'admin') return true;
+
+	const held = await orgPermissions(locals);
+	return consoleEntryPermissions().some((p) => held.has(p));
+}
+
+/**
+ * The caller's effective permissions in the active organisation, resolved exactly as
+ * `requireOrgPermission` resolves them: the owner holds everything, the legacy admin
+ * flag adds the Administrator set (a deny override still wins), a client account
+ * holds nothing.
+ */
+export async function orgPermissions(locals: App.Locals): Promise<Set<Permission>> {
+	const org = locals.currentOrg;
+	const user = locals.user;
+	if (!org || !user || user.account_type === 'client') return new Set();
+	if (org.role === 'owner') return new Set(PERMISSIONS);
+	const access = await loadMemberAccess(locals.db, org.id, user.id, { isOwner: false, legacyRole: org.role });
+	return effectivePermissions(access);
+}
+
+/**
+ * Guard a page load on an area (D3): passes when the caller holds ANY permission
+ * that opens it — the view permission or a manage one — and returns what they may
+ * do there, so the page can show its edit controls only to those whose actions
+ * would accept them. Actions still call `requireOrgPermission` with the manage
+ * permission they need.
+ */
+export async function requireOrgArea(
+	locals: App.Locals,
+	area: ConsoleArea
+): Promise<{ org: OrgContext; access: AreaAccess; permissions: Set<Permission> }> {
+	const org = requireOrg(locals);
+	const permissions = await orgPermissions(locals);
+	if (!AREA_OPENERS[area].some((p) => permissions.has(p))) error(403, 'Forbidden');
+	return { org, access: areaAccess(permissions), permissions };
+}
+
+/** Guard on several permissions at once: passes when the caller holds ANY of them. */
+export async function requireOrgAnyPermission(
+	locals: App.Locals,
+	permissions: readonly Permission[]
+): Promise<{ org: OrgContext; permissions: Set<Permission> }> {
+	const org = requireOrg(locals);
+	const held = await orgPermissions(locals);
+	if (!permissions.some((p) => held.has(p))) error(403, 'Forbidden');
+	return { org, permissions: held };
 }

@@ -1,6 +1,6 @@
 import { dbAll, fromJsonArr } from '$lib/db/index';
 import type { PageServerLoad } from './$types';
-import { requireOrgPermission } from '$lib/server/access';
+import { requireOrgArea } from '$lib/server/access';
 
 type View = 'month' | 'week' | 'day' | 'agenda';
 
@@ -23,8 +23,10 @@ function mondayIndex(jsDay: number): number {
 }
 
 export const load: PageServerLoad = async ({ locals, url }) => {
-  await requireOrgPermission(locals, 'reservations.manage');
-  const orgId = locals.currentOrg!.id;
+  // calendar.view shows occupancy; who booked, and the booking itself, need
+  // reservations.view; entering a new one needs reservations.manage.
+  const { org, access } = await requireOrgArea(locals, 'calendar');
+  const orgId = org.id;
 
   const allowed: View[] = ['month', 'week', 'day', 'agenda'];
   const viewParam = url.searchParams.get('view') as View | null;
@@ -56,7 +58,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
     rangeEnd.setDate(anchor.getDate() + 90);
   }
 
-  const events = await dbAll<{
+  const rawEvents = await dbAll<{
     id: string; title: string; event_date: string;
     start_time: string | null; end_time: string | null; status: string;
     hall_name: string; hall_id: string;
@@ -77,6 +79,10 @@ export const load: PageServerLoad = async ({ locals, url }) => {
      ORDER BY r.event_date, r.start_time`,
     orgId, isoLocal(rangeStart), isoLocal(rangeEnd)
   );
+
+  const events = access.calendar.openReservations
+    ? rawEvents
+    : rawEvents.map((e) => ({ ...e, booker_first: null, booker_last: null }));
 
   // An archived hall is listed only while the visible range holds one of its events:
   // its history stays on the calendar without leaving a filter chip behind for good.
@@ -131,5 +137,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
     halls,
     blocks,
     summary: { statusCounts, busiest: busiest[0] ?? null },
+    canOpenReservations: access.calendar.openReservations,
+    canCreate: access.calendar.create,
   };
 };

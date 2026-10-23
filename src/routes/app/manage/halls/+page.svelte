@@ -65,13 +65,13 @@
   <div class="page-head">
     <div class="page-head-text">
       <p class="eyebrow">{t.nav.halls}</p>
-      <h1 class="page-title">{t.halls.manageHalls}</h1>
-      <p class="page-sub">{t.hallAdmin.createOpensProfile}</p>
+      <h1 class="page-title">{data.canManage ? t.halls.manageHalls : t.nav.halls}</h1>
+      <p class="page-sub">{data.canManage ? t.hallAdmin.createOpensProfile : t.accessUi.hallsReadOnly}</p>
     </div>
-    {@render createButton()}
+    {#if data.canManage}{@render createButton()}{/if}
   </div>
 
-  {#if atLimit}
+  {#if atLimit && data.canManage}
     <p class="limit-note" role="note">
       {t.hallAdmin.hallLimitReachedNote(data.hallLimit)}
       <a href="/app/billing">{t.hallAdmin.upgrade}</a>
@@ -96,8 +96,12 @@
           </svg>
         </span>
         <h2 class="empty-title">{t.hallAdmin.noHallsYet}</h2>
-        <p class="empty-sub">{t.hallAdmin.noHallsSub}</p>
-        {@render createButton()}
+        {#if data.canManage}
+          <p class="empty-sub">{t.hallAdmin.noHallsSub}</p>
+          {@render createButton()}
+        {:else}
+          <p class="empty-sub">{t.accessUi.noHallsYet}</p>
+        {/if}
       </div>
     </section>
 
@@ -162,7 +166,7 @@
             </div>
 
             <div class="media-bottom">
-              <a href="/app/manage/halls/{h.id}" class="btn-manage">{t.hallAdmin.manageAction}</a>
+              <a href="/app/manage/halls/{h.id}" class="btn-manage">{data.canManage ? t.hallAdmin.manageAction : t.accessUi.viewAction}</a>
             </div>
           </article>
         {/each}

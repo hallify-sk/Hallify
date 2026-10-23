@@ -89,6 +89,7 @@
 			<h1 class="page-title">{t.adminReservations.title}</h1>
 			<span class="total-badge">{data.total}</span>
 		</div>
+		{#if data.canManage}
 		<button type="button" class="btn-action" aria-expanded={showManual} aria-controls="manual-panel"
 			onclick={() => showManual = !showManual}>
 			<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
@@ -96,11 +97,12 @@
 			</svg>
 			{t.manualReservation.open}
 		</button>
+		{/if}
 	</div>
 
 	<CapNotices caps={data.caps} canUpgrade={data.navPermissions.includes('billing.manage')} />
 
-	{#if showManual}
+	{#if showManual && data.canManage}
 		<section id="manual-panel" class="section section--lead">
 			<div class="section-head">
 				<h2>{t.manualReservation.title}</h2>

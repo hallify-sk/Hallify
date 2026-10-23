@@ -47,10 +47,15 @@ export const load: LayoutServerLoad = async ({ locals, url }) => {
   let orgs: { id: string; name: string; slug: string; role: string }[] = [];
   let allOrgs: { id: string; name: string; slug: string }[] = [];
 
+  // The console sidebar shows each link by the permission its page requires.
+  const navPermissions = await orgPermissionList(locals);
+
   if (locals.user) {
     const orgId = locals.currentOrg?.id ?? null;
     const isStaff = locals.currentOrg?.role === 'owner' || locals.currentOrg?.role === 'admin';
-    unreadMessages = await unreadMessageCount(locals.db, locals.user.id, orgId, isStaff);
+    // The client inbox and the team channels both open on messages.view (D3).
+    const readsMessages = navPermissions.includes('messages.view');
+    unreadMessages = await unreadMessageCount(locals.db, locals.user.id, orgId, readsMessages, readsMessages);
     if (isStaff && orgId) {
       unreadAnnouncements = await unreadAnnouncementCount(locals.db, locals.user.id, orgId);
     }
@@ -96,9 +101,6 @@ export const load: LayoutServerLoad = async ({ locals, url }) => {
     venue_id: locals.domainOrg?.id,
     locale: locals.locale,
   };
-
-  // The console sidebar shows each link by the permission its page requires.
-  const navPermissions = await orgPermissionList(locals);
 
   // "Public site" in the sidebar: on the venue's own host that is its /halls; on the
   // apex it is the venue's own domain (null on localhost, where there is none).

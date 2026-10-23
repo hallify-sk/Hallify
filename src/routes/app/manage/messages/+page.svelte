@@ -116,7 +116,9 @@
           </a>
 
           <div class="thread-actions">
-            {#if ticket.status === 'open'}
+            {#if !data.canSend}
+              <!-- Read-only: answering, closing and reopening need messages.send. -->
+            {:else if ticket.status === 'open'}
               <form method="POST" action="?/close" use:enhance style="display:contents">
                 <input type="hidden" name="id" value={ticket.id} />
                 <button type="submit" class="action-btn action-close"

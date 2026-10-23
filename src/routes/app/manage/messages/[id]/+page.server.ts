@@ -6,17 +6,23 @@ import { notifyNewMessage } from '$lib/email';
 import { st } from '$lib/i18n-server';
 import { markTicketRead } from '$lib/unread';
 import { MESSAGE_MAX } from '$lib/server/threads';
-// NOT converted to requireOrgPermission on purpose — see the note in
-// ../+page.server.ts. messages.view and messages.send are both held by the seeded
-// default "Member" role, so gating this thread view and its five mutating actions
-// on them would open every customer conversation to any member of the org.
-import { requireOrgStaff } from '$lib/guards';
+// Read on messages.view, answer / edit / delete / close / reopen on messages.send
+// (see ../+page.server.ts).
+import { requireOrgArea } from '$lib/server/access';
+
+/** Every action here writes to the thread. */
+async function requireSend(locals: App.Locals) {
+	const { org, access } = await requireOrgArea(locals, 'messages');
+	if (!access.messages.send) error(403, 'Forbidden');
+	return org;
+}
 
 /** Image types /api/upload/image accepts — the only uploads a message can carry. */
 const ATTACHMENT_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
 
 export const load: PageServerLoad = async ({ params, locals }) => {
-	const orgId = requireOrgStaff(locals).id;
+	const { org, access } = await requireOrgArea(locals, 'messages');
+	const orgId = org.id;
 	const ticket = await dbFirst<TicketRow & { user_first_name: string; user_last_name: string; user_email: string; user_is_member: number }>(
 		locals.db,
 		`SELECT t.*, u.first_name AS user_first_name, u.last_name AS user_last_name, u.email AS user_email,
@@ -39,12 +45,18 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 	// Opening the thread is reading it: clears this staff member's unread badge.
 	if (locals.user) await markTicketRead(locals.db, locals.user.id, ticket.id);
 
-	return { ticket: { ...ticket, user_is_member: !!ticket.user_is_member }, messages };
+	return {
+		ticket: { ...ticket, user_is_member: !!ticket.user_is_member },
+		messages,
+		canSend: access.messages.send,
+		// Owners and admins may remove anybody's message (moderation); others their own.
+		canModerate: org.role === 'owner' || org.role === 'admin'
+	};
 };
 
 export const actions: Actions = {
 	send: async ({ request, params, locals }) => {
-	  const org = requireOrgStaff(locals);
+	  const org = await requireSend(locals);
 		if (!locals.user) return fail(401);
 		const d = st(locals.locale);
 
@@ -90,7 +102,7 @@ export const actions: Actions = {
 		return { success: true };
 	},
 	editMessage: async ({ request, locals }) => {
-	  const org = requireOrgStaff(locals);
+	  const org = await requireSend(locals);
 		if (!locals.user) return fail(401);
 		const data = await request.formData();
 		const messageId = String(data.get('messageId') ?? '');
@@ -113,7 +125,7 @@ export const actions: Actions = {
 		return { success: true };
 	},
 	deleteMessage: async ({ request, locals }) => {
-	  const org = requireOrgStaff(locals);
+	  const org = await requireSend(locals);
 		if (!locals.user) return fail(401);
 		const data = await request.formData();
 		const messageId = String(data.get('messageId') ?? '');
@@ -135,12 +147,12 @@ export const actions: Actions = {
 		return { success: true };
 	},
 	close: async ({ params, locals }) => {
-	  const org = requireOrgStaff(locals);
+	  const org = await requireSend(locals);
 		await dbRun(locals.db, `UPDATE tickets SET status = 'closed', updated_at = datetime('now') WHERE id = ? AND org_id = ?`, params.id, org.id);
 		return { success: true };
 	},
 	reopen: async ({ params, locals }) => {
-	  const org = requireOrgStaff(locals);
+	  const org = await requireSend(locals);
 		await dbRun(locals.db, `UPDATE tickets SET status = 'open', updated_at = datetime('now') WHERE id = ? AND org_id = ?`, params.id, org.id);
 		return { success: true };
 	}

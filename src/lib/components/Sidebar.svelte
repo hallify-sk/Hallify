@@ -128,7 +128,8 @@
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
             </svg>
-            {t.nav.messages}
+            <!-- With the client inbox below, this one is the team's own chat. -->
+            {nav.clientMessages ? t.sidebar.teamChat : t.nav.messages}
             {#if unreadMessages > 0}
               <span class="nav-badge">{unreadMessages}</span>
             {/if}
@@ -136,10 +137,12 @@
         </div>
       {/if}
 
-      <!-- Console: each link by the permission its page requires -->
-      {#if nav.console}
+      <!-- Console: each link by the permission its page requires. View permissions
+           bring their read-only pages without the dashboard. -->
+      {#if nav.section}
         <div class="nav-section">
           <span class="nav-label">{t.sidebar.sectionAdmin}</span>
+          {#if nav.console}
           <a href="/app/manage" class="nav-item" class:active={$page.url.pathname === '/app/manage'}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/>
@@ -147,6 +150,7 @@
             </svg>
             {t.nav.dashboard}
           </a>
+          {/if}
           {#if nav.halls}
           <a href="/app/manage/halls" class="nav-item" class:active={$page.url.pathname.startsWith('/app/manage/halls')}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">

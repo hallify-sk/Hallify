@@ -193,6 +193,7 @@
 
 	// ── Quick-create ──
 	function quickCreate(dateISO: string) {
+		if (!data.canCreate) return;
 		const onlyHall = visibleHallIds.length === 1 ? `&hall=${visibleHallIds[0]}` : '';
 		goto(`/app/reservation/new?date=${dateISO}${onlyHall}`);
 	}
@@ -239,10 +240,12 @@
 					<button class="seg-btn" class:active={view === v.id} onclick={() => setView(v.id)}>{v.label}</button>
 				{/each}
 			</div>
+			{#if data.canCreate}
 			<a href="/app/reservation/new" class="btn-action">
 				<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
 				{t.calendar.newEvent}
 			</a>
+			{/if}
 		</div>
 	</div>
 
@@ -319,9 +322,11 @@
 										{#if blockedDates.has(cell.iso)}
 											<span class="block-reason">{(blockReasons.get(cell.iso) ?? []).join(', ') || t.calendar.blocked}</span>
 										{/if}
+										{#if data.canCreate}
 										<button class="add-day" title={t.calendar.newEvent} onclick={() => quickCreate(cell.iso)} aria-label={t.calendar.newEvent}>
 											<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
 										</button>
+										{/if}
 									</div>
 									<div class="mcell-evs">
 										{#each evs.slice(0, 3) as ev}
@@ -453,10 +458,12 @@
 					</div>
 				{/if}
 			</div>
+			{#if data.canOpenReservations}
 			<a href="/app/reservation/{active.id}" class="btn-action pop-open">
 				{t.calendar.openReservation}
 				<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
 			</a>
+			{/if}
 		</div>
 	</div>
 {/if}
