@@ -11,6 +11,7 @@
 	import { setUserContext } from '$lib/analytics';
 	import { cameFromHallify } from '$lib/analytics-referral';
 	import { readableInkOn, inkOnLight, inkOnDark } from '$lib/contrast';
+	import { usesPersonalTheme } from '$lib/theme-scope';
 
 	const { children, data } = $props();
 
@@ -96,8 +97,6 @@
 			: ''
 	);
 
-	const orgTheme = $derived(branding?.theme ?? 'slate');
-
 	const AUTH_PATHS = ['/app/login', '/app/register', '/app/forgot-password', '/app/reset-password', '/app/invite', '/login'];
 	const isAuthPage = $derived(AUTH_PATHS.some(p => $page.url.pathname.startsWith(p)));
 	const isLandingPage = $derived(['/', '/pre-prevadzkovatelov', '/priestory'].includes($page.url.pathname));
@@ -129,19 +128,18 @@
 		return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'slate';
 	}
 
-	onMount(() => {
-		const saved = localStorage.getItem('hallify-theme');
-		themeStore.set(saved ?? osTheme());
-	});
-
-	// When org theme changes (e.g. org switch) and user has no personal preference,
-	// fall back to OS preference rather than the org default.
+	// The personal theme applies in the console only; the public site, marketing and
+	// legal pages stay light. Re-evaluated on every navigation, because "Public site"
+	// in the sidebar is a client-side navigation out of the console (and back).
+	const personalTheme = $derived(usesPersonalTheme($page.url.pathname));
 	$effect(() => {
-		const _o = orgTheme;
-		if (typeof localStorage !== 'undefined') {
-			const saved = localStorage.getItem('hallify-theme');
-			if (!saved) themeStore.set(osTheme());
+		if (!personalTheme) {
+			document.documentElement.removeAttribute('data-theme');
+			return;
 		}
+		let saved: string | null = null;
+		try { saved = localStorage.getItem('hallify-theme'); } catch { /* storage blocked */ }
+		themeStore.set(saved ?? osTheme());
 	});
 </script>
 

@@ -15,7 +15,9 @@
 		%sveltekit.head%
 	</head>
 	<body data-sveltekit-preload-data="hover">
-		<script>try{var __t=localStorage.getItem('hallify-theme');if(!__t){__t=window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'slate';}document.documentElement.setAttribute('data-theme',__t);}catch(e){}</script>
+		<!-- The personal theme belongs to the console only (see $lib/theme-scope.ts, which
+		     this test mirrors): a venue's public site and the marketing pages stay light. -->
+		<script>try{var __p=location.pathname;if((__p==='/app'||__p.indexOf('/app/')===0)&&__p!=='/app/manage/settings/site/preview'){var __t=localStorage.getItem('hallify-theme');if(!__t){__t=window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'slate';}document.documentElement.setAttribute('data-theme',__t);}}catch(e){}</script>
 		<div style="display: contents">%sveltekit.body%</div>
 	</body>
 </html>
