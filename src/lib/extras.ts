@@ -3,6 +3,7 @@
 // against the current extras so it's an informational overview, not a snapshot.
 
 import type { HallExtraRow } from '$lib/db/index';
+import { formatMoney, type Locale } from '$lib/format';
 
 export interface ExtraLine {
 	id: string;
@@ -42,7 +43,7 @@ export function computeExtras(
 	return { lines, totalCents: lines.reduce((s, l) => s + l.line_cents, 0) };
 }
 
-/** Format cents as a EUR string. */
-export function eur(cents: number): string {
-	return '€' + (cents / 100).toFixed(2);
+/** Format cents as a EUR string in the viewer's style: 11,50 € (sk) · €11.50 (en). */
+export function eur(cents: number, locale: Locale | string = 'sk'): string {
+	return formatMoney(cents, locale);
 }

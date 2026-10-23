@@ -387,7 +387,7 @@
           <a href="/app/manage/halls/{h.id}" class="row-item row-item--bleed halls-row">
             <span class="halls-color-strip" style="background:{h.color}"></span>
             <span class="halls-name-text">{h.name}</span>
-            <span class="halls-cap-cell">{h.max_people} {t.common.people}</span>
+            <span class="halls-cap-cell">{h.max_people} {t.units.people(h.max_people)}</span>
             <span class="halls-bar-cell">
               <span class="halls-bar-count">{h.reservation_count}</span>
               <span class="halls-bar-track">
@@ -412,12 +412,12 @@
   <div class="section footer-stats">
     <div class="footer-stat">
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
-      <span><strong>{data.stats.total_halls}</strong> {t.adminPages.hallsLower}</span>
+      <span><strong>{data.stats.total_halls}</strong> {t.units.halls(Number(data.stats.total_halls))}</span>
     </div>
     <div class="footer-sep"></div>
     <div class="footer-stat">
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-      <span><strong>{data.stats.total_members}</strong> {t.adminPages.teamMembers}</span>
+      <span><strong>{data.stats.total_members}</strong> {t.units.members(Number(data.stats.total_members))}</span>
     </div>
     <div class="footer-sep"></div>
     <div class="footer-stat">

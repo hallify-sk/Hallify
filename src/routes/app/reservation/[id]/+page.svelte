@@ -365,7 +365,7 @@
 				<div>
 					<div class="detail-label">{t.event.venue}</div>
 					<div class="detail-value">{data.reservation.hall_name}</div>
-					<div class="detail-sub">{t.common.capacity}: {data.reservation.hall_max_people} {t.common.people}</div>
+					<div class="detail-sub">{t.common.capacity}: {data.reservation.hall_max_people} {t.units.people(data.reservation.hall_max_people)}</div>
 				</div>
 			</div>
 
@@ -379,7 +379,7 @@
 				</div>
 				<div>
 					<div class="detail-label">{t.event.attendees}</div>
-					<div class="detail-value">{data.reservation.num_guests ?? 0} {t.common.people}</div>
+					<div class="detail-value">{data.reservation.num_guests ?? 0} {t.units.people(data.reservation.num_guests ?? 0)}</div>
 					<div class="detail-sub">{t.event.seats}: {layoutStats.seats}</div>
 				</div>
 			</div>
@@ -485,7 +485,7 @@
 		<section class="section">
 			<div class="section-head section-head--row">
 				<h2>{t.myRes.extras}</h2>
-				<span class="extras-block-total">{eur(extrasOverview.totalCents)}</span>
+				<span class="extras-block-total">{eur(extrasOverview.totalCents, getLocale())}</span>
 			</div>
 			{#if isAdmin}
 				<form method="POST" action="?/editExtras" use:enhance class="extras-form">
@@ -495,7 +495,7 @@
 						<label class="row-item exr" class:on>
 							<input type="checkbox" checked={on} onchange={() => toggleExtra(ex.id)} />
 							<span class="exr-main"><span class="exr-name">{ex.name}</span>{#if ex.description}<span class="exr-desc">{ex.description}</span>{/if}</span>
-							<span class="exr-price">{eur(ex.price_cents)}{ex.pricing === 'per_guest' ? ` ${t.myRes.perGuest}` : ''}</span>
+							<span class="exr-price">{eur(ex.price_cents, getLocale())}{ex.pricing === 'per_guest' ? ` ${t.myRes.perGuest}` : ''}</span>
 						</label>
 						{#if on}<input type="hidden" name="extras" value={ex.id} />{/if}
 					{/each}
@@ -508,7 +508,7 @@
 			{:else}
 				<div class="row-list">
 				{#each extrasOverview.lines as l}
-					<div class="row-item exr-line"><span>{l.name}{l.pricing === 'per_guest' ? ` (×${l.qty})` : ''}</span><span>{eur(l.line_cents)}</span></div>
+					<div class="row-item exr-line"><span>{l.name}{l.pricing === 'per_guest' ? ` (×${l.qty})` : ''}</span><span>{eur(l.line_cents, getLocale())}</span></div>
 				{:else}
 					<p class="exr-empty">{t.reservationAdmin.extrasNoneSelected}</p>
 				{/each}
@@ -635,8 +635,8 @@
 		{:else}
 			<div class="layout-summary">
 				<div class="ls-stats">
-					<div class="ls-stat"><span class="ls-num">{layoutStats.tables}</span><span class="ls-lbl">{t.event.tables}</span></div>
-					<div class="ls-stat"><span class="ls-num">{layoutStats.seats}</span><span class="ls-lbl">{t.event.seats}</span></div>
+					<div class="ls-stat"><span class="ls-num">{layoutStats.tables}</span><span class="ls-lbl">{t.units.tables(layoutStats.tables)}</span></div>
+					<div class="ls-stat"><span class="ls-num">{layoutStats.seats}</span><span class="ls-lbl">{t.units.seats(layoutStats.seats)}</span></div>
 				</div>
 				{#if canEditLayout}
 					<div class="ls-actions">

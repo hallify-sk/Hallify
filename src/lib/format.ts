@@ -45,6 +45,11 @@ export function timeAgo(v: string | number | Date | null | undefined, locale: Lo
 	return formatDate(d, locale);
 }
 
+/** A measurement with a fixed number of decimals in the viewer's style: 25,10 (sk) · 25.10 (en). */
+export function formatNumber(n: number | null | undefined, locale: Locale | string = 'sk', digits = 1): string {
+	return new Intl.NumberFormat(localeTag(locale), { minimumFractionDigits: digits, maximumFractionDigits: digits, useGrouping: false }).format(Number(n ?? 0));
+}
+
 /** 11,50 € (sk) · €11.50 (en). Amounts are cents. */
 export function formatMoney(cents: number | null | undefined, locale: Locale | string = 'sk', currency = 'EUR'): string {
 	const n = Number(cents ?? 0) / 100;

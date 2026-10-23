@@ -1,5 +1,6 @@
 <script lang="ts">
   import { enhance } from '$app/forms';
+  import { planName } from '$lib/plans';
   import { t, getLocale } from '$lib/i18n.svelte';
   import { confirmFirst } from '$lib/forms';
   import { formatDate } from '$lib/format';
@@ -63,7 +64,7 @@
         <div role="row" class="row-item" class:suspended={!!org.suspended_at}>
           <span role="cell" class="cell-name"><a class="org-link" href="/app/platform/orgs/{org.id}"><strong>{org.name}</strong></a></span>
           <span role="cell" class="muted">{org.slug}</span>
-          <span role="cell"><span class="badge badge-{org.plan ?? 'free'}">{org.plan ?? 'free'}</span></span>
+          <span role="cell"><span class="badge badge-{org.plan ?? 'free'}">{planName(org.plan)}</span></span>
           <span role="cell" class="muted">{org.member_count}</span>
           <span role="cell" class="muted">{formatDate(org.created_at, getLocale())}</span>
           <span role="cell">

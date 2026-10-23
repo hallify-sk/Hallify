@@ -50,7 +50,7 @@
                 <span class="ann-level">{lvl.label}</span>
               </div>
               <p class="ann-text">{a.body}</p>
-              <div class="ann-meta">{t.accountExtra.announcementSignature} · {fmtDate(a.created_at)}{#if a.updated_at} · {t.platformMisc.editedTag}{/if}</div>
+              <div class="ann-meta">{t.accountExtra.announcementSignature} · {fmtDate(a.created_at)}{#if a.updated_at}{' '}· {t.platformMisc.editedTag}{/if}</div>
             </div>
           </article>
         {/each}

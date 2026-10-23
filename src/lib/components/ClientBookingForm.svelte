@@ -118,6 +118,8 @@
 		extras.filter((e) => selectedExtras.includes(e.id))
 			.reduce((s, e) => s + e.price_cents * (e.pricing === 'per_guest' ? guestsForExtras : 1), 0)
 	);
+	// "(pre 30 hostí)" only says something when a per-guest extra is in the total.
+	const extrasPerGuest = $derived(extras.some((e) => selectedExtras.includes(e.id) && e.pricing === 'per_guest'));
 
 	const blockedStrings = $derived.by(() => {
 		if (unavailableDates) return unavailableDates;
@@ -273,7 +275,7 @@
 				</div>
 				{#if extrasTotalCents > 0}
 					<div class="bk-extras-total">
-						<span>{t.publicBooking.extrasTotal}{guestsForExtras > 1 ? ` (${t.publicBooking.forGuestsPrefix} ${guestsForExtras} ${t.publicBooking.guestsWord})` : ''}</span>
+						<span>{t.publicBooking.extrasTotal}{extrasPerGuest && guestsForExtras > 1 ? ` (${t.publicBooking.forGuestsPrefix} ${guestsForExtras} ${t.publicBooking.guestsWord})` : ''}</span>
 						<b>{eur(extrasTotalCents)}</b>
 					</div>
 				{/if}

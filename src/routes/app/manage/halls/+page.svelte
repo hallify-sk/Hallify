@@ -106,8 +106,7 @@
       <div class="section-head section-head--row">
         <h2>{t.halls.hallOverview}</h2>
         <p class="footer-note">
-          {activeHalls.length}
-          {activeHalls.length === 1 ? t.hallAdmin.hallConfiguredSingular : t.hallAdmin.hallsConfiguredPlural}{#if limitNote} · {limitNote}{/if}
+          {t.hallAdmin.hallsConfigured(activeHalls.length)}{#if limitNote}{` · ${limitNote}`}{/if}
         </p>
       </div>
 

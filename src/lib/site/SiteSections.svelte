@@ -112,7 +112,7 @@
         <h1>{featured.name}</h1>
         {#if featured.description}<p class="sx-lead">{featured.description}</p>{/if}
         <p class="sx-meta">
-          {featured.max_people} {labels.guests}{#if featured.address} · {featured.address}{/if}
+          {featured.max_people} {labels.guests}{#if featured.address}{' '}· {featured.address}{/if}
         </p>
         <a class="btn-action" href={href(featured)} tabindex={inert ? -1 : undefined}>{labels.viewVenue}</a>
       </div>

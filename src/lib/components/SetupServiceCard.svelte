@@ -76,7 +76,7 @@
 
     <form method="POST" {action} class="su-form card--inset" use:enhance>
       <p class="su-price">
-        <strong>{eur(priceCents)}</strong>
+        <strong>{eur(priceCents, getLocale())}</strong>
         <span>{t.setupService.oneOff}</span>
       </p>
       <label class="su-note-label" for="su-note">{t.setupService.noteLabel}</label>

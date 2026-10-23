@@ -257,7 +257,7 @@
                         </span>
                         <span class="perm-sub">
                           {p.inherited.includes(perm) ? t.peopleArea.inheritedYes : t.peopleArea.inheritedNo}
-                          {#if !editable} · {t.peopleArea.lockedHint}{/if}
+                          {#if !editable}{' '}· {t.peopleArea.lockedHint}{/if}
                         </span>
                       </div>
 

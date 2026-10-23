@@ -144,7 +144,7 @@
       <section class="section" use:reveal>
         <div class="section-head">
           <p class="eyebrow">{t.hallProfile.reservations}</p>
-          <h2>{t.hallProfile.bookCta} {hall.name}</h2>
+          <h2>{t.hallProfile.bookCta(hall.name)}</h2>
         </div>
         {#if user}
           <p class="cta-sub">{t.hallProfile.bookSubLoggedIn}</p>

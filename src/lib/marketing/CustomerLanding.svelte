@@ -79,14 +79,14 @@
   {#each PRICE_BANDS as band (band)}<button type="button" aria-pressed={bands.includes(band)} onclick={() => toggleBand(band)}><span class="sr-only">{priceBandLabel(band, en)}</span><span aria-hidden="true">{priceGlyphs(band)}</span></button>{/each}
   {#if bands.length}<button type="button" class="filter-clear" onclick={() => bands = []}>{en ? 'Any price' : 'Ľubovoľná cena'}</button>{/if}
 </div>
-{#if bands.length}<p class="price-filter-note">{en ? 'Only venues that stated a price range are shown.' : 'Zobrazujú sa len priestory s uvedenou cenovou úrovňou.'}{#if unstatedHidden} {en ? `${unstatedHidden} without a stated price are hidden.` : `${unstatedHidden} bez uvedenej ceny je skrytých.`}{/if}</p>{/if}
+{#if bands.length}<p class="price-filter-note">{en ? 'Only venues that stated a price range are shown.' : 'Zobrazujú sa len priestory s uvedenou cenovou úrovňou.'}{#if unstatedHidden}{' '}{en ? `${unstatedHidden} without a stated price ${unstatedHidden === 1 ? 'is' : 'are'} hidden.` : `${unstatedHidden} ${t.units.venues(unstatedHidden)} bez uvedenej ceny ${unstatedHidden === 1 ? 'je skrytý' : unstatedHidden <= 4 ? 'sú skryté' : 'je skrytých'}.`}{/if}</p>{/if}
 {/snippet}
 
 {#snippet venueCards(collection: PublicVenue[], highlight: boolean)}
 <div class="venue-results">{#each collection as venue (venue.id)}<article class="venue-card" class:venue-active={active?.id === venue.id} class:venue-featured={highlight}>
       <a class="venue-photo" href={venueHref(venue)} onclick={(event) => { if (venue.demo) { event.preventDefault(); preview.open(venue); } }}>{#if venue.cover_image_url && !failedCovers[venue.id]}<img src={venue.cover_image_url} alt={venue.name} loading="lazy" width="440" height="280" onerror={() => (failedCovers[venue.id] = true)}>{:else}<div class="no-photo"><img src="/Hallify.svg" alt="" width="45" height="45"><span>{en ? 'Explore venue details' : 'Spoznajte priestor'}</span></div>{/if}</a>
       <div class="venue-topline">{#if venue.demo || venue.address}<span class="venue-place">{venue.demo ? (en ? "Demo venue" : "Ukážkový priestor") : venue.address}</span>{/if}{#if venue.is_partner}<span class="partner-label">{en ? "Hallify partner" : "Partner Hallify"}</span>{:else if venue.has_floorplan}<span class="partner-label">{en ? 'Floorplan available' : 'S pôdorysom'}</span>{/if}</div>
-      <h3><a href={venueHref(venue)} onclick={(event) => { if (venue.demo) { event.preventDefault(); preview.open(venue); } }}>{venue.name}</a></h3><p class="venue-meta">{en ? 'Up to' : 'Do'} {venue.max_people} {en ? 'guests' : 'hostí'}{#if distanceLabel(venue)} · {distanceLabel(venue)}{/if}</p>
+      <h3><a href={venueHref(venue)} onclick={(event) => { if (venue.demo) { event.preventDefault(); preview.open(venue); } }}>{venue.name}</a></h3><p class="venue-meta">{en ? 'Up to' : 'Do'} {venue.max_people} {en ? 'guests' : 'hostí'}{#if distanceLabel(venue)}{' '}· {distanceLabel(venue)}{/if}</p>
       <div class="venue-bottom"><span class="venue-price">{@render priceTag(venue)}</span><a href={venueHref(venue)} onclick={(event) => { if (venue.demo) { event.preventDefault(); preview.open(venue); } }} aria-label={`${en ? 'View' : 'Zobraziť'} ${venue.name}`}><Icon /></a></div>
       {#if hasCoordinates(venue) || bookingHref(venue)}<div class="venue-card-actions">
         {#if hasCoordinates(venue)}<button class="show-on-map" type="button" onclick={() => { activeId = venue.id; selectionRevision += 1; document.getElementById('main')?.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth' }); }}>{en ? 'Show on map' : 'Zobraziť na mape'}</button>{/if}
@@ -123,7 +123,7 @@
 </section>
 
 <section use:reveal class="wrap venues-section" id="discover">
-  <div class="section-heading"><p class="eyebrow">{en ? 'From an idea to a place' : 'Od nápadu k miestu'}</p><h2>{searching ? (en ? 'Your search results.' : 'Priestory vo vašom výbere.') : (en ? 'Find your kind of space.' : 'Vyberte si svoj priestor.')}</h2><p aria-live="polite">{visible.length} {en ? 'venues match your selection. Confirm dates and pricing with the operator.' : 'priestorov vo vašom výbere. Termín aj cenu potvrdí prevádzkovateľ.'}</p></div>
+  <div class="section-heading"><p class="eyebrow">{en ? 'From an idea to a place' : 'Od nápadu k miestu'}</p><h2>{searching ? (en ? 'Your search results.' : 'Priestory vo vašom výbere.') : (en ? 'Find your kind of space.' : 'Vyberte si svoj priestor.')}</h2><p aria-live="polite">{visible.length} {t.units.venues(visible.length)} {en ? `${visible.length === 1 ? 'matches' : 'match'} your selection. Confirm dates and pricing with the operator.` : 'vo vašom výbere. Termín aj cenu potvrdí prevádzkovateľ.'}</p></div>
   {#if visible.length}
     {#if featured.length}
       <h3 class="discovery-group-heading">{nearLabel ? (en ? `Partners near ${nearLabel}` : `Partneri v okolí: ${nearLabel}`) : rankCenter ? (en ? 'Featured partners near you' : 'Partneri vo vašom okolí') : (en ? 'Featured Hallify partners' : 'Vybrané priestory partnerov Hallify')}</h3>

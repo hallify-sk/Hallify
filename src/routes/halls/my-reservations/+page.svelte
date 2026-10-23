@@ -126,7 +126,7 @@
                 {#if r.num_guests}
                   <span class="meta-item">
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
-                    {r.num_guests} {t.myRes.guestsSuffix}
+                    {r.num_guests} {t.units.guests(r.num_guests)}
                   </span>
                 {/if}
               </div>

@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount, untrack } from 'svelte';
-	import { t as tr } from '$lib/i18n.svelte';
+	import { t as tr, getLocale } from '$lib/i18n.svelte';
+	import { formatNumber } from '$lib/format';
 	import { migrateToMultiFloor } from '$lib/floorplan-types';
 	import {
 		CHAIR_R, SEAT_R, localChairs, totalChairs, defaultChairSides, tableHitbox, seatHitbox, hitboxesOverlap,
@@ -20,6 +21,8 @@
 	import FloorplanPrint from '$lib/FloorplanPrint.svelte';
 	import { labelBox, placeLabels, type LabelBox } from '$lib/editor/label-layout';
 
+	/** A measurement with fixed decimals in the viewer's style (25,1 m in Slovak, not 25.1 m). */
+	const num = (n: number, digits: number) => formatNumber(n, getLocale(), digits);
 	// ─── Props ────────────────────────────────────────────────────────────────
 	interface TableType {
 		id: string; name: string; shape: 'rect' | 'round';
@@ -1007,10 +1010,10 @@
 	/** What the progress list says next to each step. */
 	function stepFact(id: StepId): string {
 		switch (id) {
-			case 'room': return bounds ? `${bounds.w.toFixed(1)} × ${bounds.h.toFixed(1)} m · ${roomArea(roomRects).toFixed(1)} m²` : tr.editor.roomNone;
+			case 'room': return bounds ? `${num(bounds.w, 1)} × ${num(bounds.h, 1)} m · ${num(roomArea(roomRects), 1)} m²` : tr.editor.roomNone;
 			case 'walls': return `${walls.length}`;
 			case 'zones': return zones.length ? zones.slice(0, 2).map(z => z.label).filter(Boolean).join(', ') + (zones.length > 2 ? ` +${zones.length - 2}` : '') || `${zones.length}` : '0';
-			case 'tables': return `${tables.length} · ${totalSeats} ${tr.editor.totalSeats.toLowerCase()}`;
+			case 'tables': return `${tables.length} ${tr.units.tables(tables.length)} · ${totalSeats} ${tr.units.seats(totalSeats)}`;
 			case 'chairs': return `${seats.length}`;
 			case 'guests': return tr.editor.seatedOf(totalAssigned, guests.length);
 			case 'check': return saveState === 'saved' ? tr.editor.saved : saveState === 'saving' ? tr.editor.saving : saveState === 'dirty' ? tr.editor.unsaved : '';
@@ -1107,7 +1110,7 @@
 				if (isDrawing) return tr.editor.instrDrawing(drawPts.length);
 				if (rectStart && rectMoved) {
 					const w = Math.abs(cursorPos.x - rectStart.x), h = Math.abs(cursorPos.y - rectStart.y);
-					return tr.editor.instrRectDragging(w.toFixed(1), h.toFixed(1));
+					return tr.editor.instrRectDragging(num(w, 1), num(h, 1));
 				}
 				if (rectDraw && (tool === 'wall' ? selectedWall : selectedZone)) return tr.editor.instrEditShape;
 				if (rectDraw) return tr.editor.instrRectStart;
@@ -2042,36 +2045,36 @@
 		if (bounds) {
 			// The overall width above the room and height left of it are always shown.
 			const top = wy(bounds.y) - 26, left = wx(bounds.x) - 26;
-			reserved.push(labelBox({ x: wx(bounds.x + bounds.w / 2), y: top - 11, text: `${bounds.w.toFixed(2)} m`, size: 12 }));
-			const hb = labelBox({ x: 0, y: 0, text: `${bounds.h.toFixed(2)} m`, size: 12 });
+			reserved.push(labelBox({ x: wx(bounds.x + bounds.w / 2), y: top - 11, text: `${num(bounds.w, 2)} m`, size: 12 }));
+			const hb = labelBox({ x: 0, y: 0, text: `${num(bounds.h, 2)} m`, size: 12 });
 			const cy = wy(bounds.y + bounds.h / 2), half = (hb.x1 - hb.x0) / 2;
 			reserved.push({ x0: left - 18, y0: cy - half, x1: left, y1: cy + half });
 			// Each stretch of an L- or U-shaped outline
 			if (roomRects.length > 1) {
 				for (const [a, b] of roomEdges) {
 					const len = Math.hypot(b.x - a.x, b.y - a.y);
-					if (len >= 1) out.push({ x: wx((a.x + b.x) / 2), y: wy((a.y + b.y) / 2) + (a.y === b.y ? -10 : 0), text: `${len.toFixed(2)} m`, size: 11, cls: 'dim-label dim-edge dim-room' });
+					if (len >= 1) out.push({ x: wx((a.x + b.x) / 2), y: wy((a.y + b.y) / 2) + (a.y === b.y ? -10 : 0), text: `${num(len, 2)} m`, size: 11, cls: 'dim-label dim-edge dim-room' });
 				}
 			}
 		}
 		for (const wall of walls) {
-			for (const d of edgeDims(wall.points, wall.points.length > 12 ? 8 : 12)) out.push({ x: wx(d.x), y: wy(d.y), text: d.len.toFixed(2), size: 11, cls: 'dim-label dim-edge' });
+			for (const d of edgeDims(wall.points, wall.points.length > 12 ? 8 : 12)) out.push({ x: wx(d.x), y: wy(d.y), text: num(d.len, 2), size: 11, cls: 'dim-label dim-edge' });
 		}
 		for (const zone of zones) {
 			const xs = zone.points.map(p => p.x), ys = zone.points.map(p => p.y);
 			out.push({
 				x: wx(xs.reduce((a, v) => a + v, 0) / xs.length), y: wy(ys.reduce((a, v) => a + v, 0) / ys.length) + 14,
-				text: `${polyAreaM2(zone.points).toFixed(1)} m² · ${(Math.max(...xs) - Math.min(...xs)).toFixed(1)} × ${(Math.max(...ys) - Math.min(...ys)).toFixed(1)} m`,
+				text: `${num(polyAreaM2(zone.points), 1)} m² · ${num((Math.max(...xs) - Math.min(...xs)), 1)} × ${num((Math.max(...ys) - Math.min(...ys)), 1)} m`,
 				size: 11, cls: 'dim-label dim-edge'
 			});
 		}
 		for (const zone of zones) {
-			for (const d of edgeDims(zone.points, 8)) out.push({ x: wx(d.x), y: wy(d.y), text: d.len.toFixed(2), size: 10, cls: 'dim-label dim-edge dim-zone' });
+			for (const d of edgeDims(zone.points, 8)) out.push({ x: wx(d.x), y: wy(d.y), text: num(d.len, 2), size: 10, cls: 'dim-label dim-edge dim-zone' });
 		}
 		for (const t of tables) {
 			out.push({
 				x: wx(Number(t.x)), y: wy(Number(t.y)) + ws(t.shape === 'round' ? Number(t.radius) : Number(t.height) / 2) + 22,
-				text: `${t.shape === 'round' ? `⌀ ${(Number(t.radius) * 2).toFixed(1)}` : `${Number(t.width).toFixed(1)} × ${Number(t.height).toFixed(1)}`} m`,
+				text: `${t.shape === 'round' ? `⌀ ${num((Number(t.radius) * 2), 1)}` : `${num(Number(t.width), 1)} × ${num(Number(t.height), 1)}`} m`,
 				size: 11, cls: 'dim-label dim-edge'
 			});
 		}
@@ -2319,7 +2322,7 @@
 						stroke-dasharray="6,3" pointer-events="none"/>
 					<text x={wx(bx + bw / 2)} y={wy(by + bh / 2)} text-anchor="middle" dominant-baseline="middle"
 						font-size="12" font-weight="600" fill="var(--accent-ink)" pointer-events="none"
-						style="paint-order:stroke" stroke="var(--bg-panel)" stroke-width="3">{bw.toFixed(1)} × {bh.toFixed(1)} m</text>
+						style="paint-order:stroke" stroke="var(--bg-panel)" stroke-width="3">{num(bw, 1)} × {num(bh, 1)} m</text>
 				{/if}
 
 				<!-- ── Zones ── -->
@@ -2372,9 +2375,9 @@
 							<line x1={left - 5} y1={wy(bounds.y)} x2={left + 5} y2={wy(bounds.y)}/>
 							<line x1={left - 5} y1={wy(bounds.y + bounds.h)} x2={left + 5} y2={wy(bounds.y + bounds.h)}/>
 						</g>
-						<text x={wx(bounds.x + bounds.w / 2)} y={top - 7} text-anchor="middle" class="dim-label" pointer-events="none">{bounds.w.toFixed(2)} m</text>
+						<text x={wx(bounds.x + bounds.w / 2)} y={top - 7} text-anchor="middle" class="dim-label" pointer-events="none">{num(bounds.w, 2)} m</text>
 						<text x={left - 7} y={wy(bounds.y + bounds.h / 2)} text-anchor="middle" class="dim-label"
-							transform={`rotate(-90 ${left - 7} ${wy(bounds.y + bounds.h / 2)})`} pointer-events="none">{bounds.h.toFixed(2)} m</text>
+							transform={`rotate(-90 ${left - 7} ${wy(bounds.y + bounds.h / 2)})`} pointer-events="none">{num(bounds.h, 2)} m</text>
 					{/if}
 					<!-- Every other measurement, the ones that would cover another left out -->
 					{#each dimLabels as l}
@@ -2566,7 +2569,7 @@
 						stroke={tool === 'wall' ? '#2b3462' : zoneColor} stroke-width="2" stroke-dasharray="6,3" pointer-events="none"/>
 					<text x={wx(rx + rw / 2)} y={wy(ry + rh / 2)} text-anchor="middle" dominant-baseline="middle"
 						font-size="12" font-weight="600" fill="var(--accent-ink)" pointer-events="none"
-						style="paint-order:stroke" stroke="var(--bg-panel)" stroke-width="3">{rw.toFixed(1)} × {rh.toFixed(1)} m</text>
+						style="paint-order:stroke" stroke="var(--bg-panel)" stroke-width="3">{num(rw, 1)} × {num(rh, 1)} m</text>
 				{/if}
 
 				<!-- ── Draggable corners of every wall / zone while its tool is active ── -->
@@ -2610,7 +2613,7 @@
 					{@const segLen = Math.hypot(cursorPos.x - last.x, cursorPos.y - last.y)}
 					{#if segLen >= 0.05}
 						<text x={(wx(last.x) + wx(cursorPos.x)) / 2} y={(wy(last.y) + wy(cursorPos.y)) / 2 - 10} text-anchor="middle"
-							dominant-baseline="middle" class="dim-label" pointer-events="none">{segLen.toFixed(2)} m</text>
+							dominant-baseline="middle" class="dim-label" pointer-events="none">{num(segLen, 2)} m</text>
 					{/if}
 					{#each drawPts as p, i}
 						{@const near = i===0 && nearFirstPoint(cursorPos)}
@@ -2679,9 +2682,9 @@
 				{#if partDrag && roomRects[partDrag.idx]}
 					{@const r = roomRects[partDrag.idx]}
 					<text x={wx(r.x + r.w / 2)} y={wy(r.y + r.h / 2)} text-anchor="middle" dominant-baseline="middle"
-						class="dim-label" pointer-events="none">{r.w.toFixed(1)} × {r.h.toFixed(1)} m</text>
-					<text x={wx(r.x + r.w / 2)} y={wy(r.y) - 8} text-anchor="middle" class="dim-label dim-edge" pointer-events="none">{r.w.toFixed(1)} m</text>
-					<text x={wx(r.x) + 8} y={wy(r.y + r.h / 2)} text-anchor="start" dominant-baseline="middle" class="dim-label dim-edge" pointer-events="none">{r.h.toFixed(1)} m</text>
+						class="dim-label" pointer-events="none">{num(r.w, 1)} × {num(r.h, 1)} m</text>
+					<text x={wx(r.x + r.w / 2)} y={wy(r.y) - 8} text-anchor="middle" class="dim-label dim-edge" pointer-events="none">{num(r.w, 1)} m</text>
+					<text x={wx(r.x) + 8} y={wy(r.y + r.h / 2)} text-anchor="start" dominant-baseline="middle" class="dim-label dim-edge" pointer-events="none">{num(r.h, 1)} m</text>
 				{/if}
 
 				<!-- ── Live dimensions while a corner of a wall or zone is dragged ── -->
@@ -2695,9 +2698,9 @@
 						{@const bw = Math.max(...xs) - Math.min(...xs)}
 						{@const bh = Math.max(...ys) - Math.min(...ys)}
 						<text x={wx((Math.max(...xs) + Math.min(...xs)) / 2)} y={wy((Math.max(...ys) + Math.min(...ys)) / 2)} text-anchor="middle" dominant-baseline="middle"
-							class="dim-label" pointer-events="none">{bw.toFixed(1)} × {bh.toFixed(1)} m</text>
+							class="dim-label" pointer-events="none">{num(bw, 1)} × {num(bh, 1)} m</text>
 						{#each [pts[(vertexDragIdx - 1 + n) % n], pts[(vertexDragIdx + 1) % n]] as q}
-							<text x={wx((v.x + q.x) / 2)} y={wy((v.y + q.y) / 2) - 8} text-anchor="middle" class="dim-label dim-edge" pointer-events="none">{Math.hypot(v.x - q.x, v.y - q.y).toFixed(2)} m</text>
+							<text x={wx((v.x + q.x) / 2)} y={wy((v.y + q.y) / 2) - 8} text-anchor="middle" class="dim-label dim-edge" pointer-events="none">{num(Math.hypot(v.x - q.x, v.y - q.y), 2)} m</text>
 						{/each}
 					{/if}
 				{/if}
@@ -2715,7 +2718,7 @@
 					<rect x={mx - 28} y={my - 10} width="56" height="20" rx="4"
 						fill="var(--bg-panel)" stroke="var(--accent)" stroke-width="1" pointer-events="none"/>
 					<text x={mx} y={my + 4} text-anchor="middle" font-size="11" font-weight="600"
-						fill="var(--accent-ink)" font-family="monospace" pointer-events="none">{dist.toFixed(2)}m</text>
+						fill="var(--accent-ink)" font-family="monospace" pointer-events="none">{num(dist, 2)}m</text>
 				{/if}
 				{#if measureStart && measureEnd}
 					<line x1={wx(measureStart.x)} y1={wy(measureStart.y)}
@@ -2731,7 +2734,7 @@
 					<rect x={mx - 28} y={my - 10} width="56" height="20" rx="4"
 						fill="var(--bg-panel)" stroke="var(--accent)" stroke-width="1" pointer-events="none"/>
 					<text x={mx} y={my + 4} text-anchor="middle" font-size="11" font-weight="600"
-						fill="var(--accent-ink)" font-family="monospace" pointer-events="none">{dist.toFixed(2)}m</text>
+						fill="var(--accent-ink)" font-family="monospace" pointer-events="none">{num(dist, 2)}m</text>
 				{/if}
 			</svg>
 
@@ -2834,7 +2837,7 @@
 				{#if allowGuests}
 					<button type="button" class="toggle" class:on={showNames} onclick={() => showNames = !showNames} aria-pressed={showNames}>{tr.editor.namesOnChairs}</button>
 				{/if}
-				<span class="coords">{cursorPos.x.toFixed(2)} m · {cursorPos.y.toFixed(2)} m</span>
+				<span class="coords">{num(cursorPos.x, 2)} m · {num(cursorPos.y, 2)} m</span>
 				{#if collidingIds.size > 0}
 					<span class="status-warn">{tr.editor.tablesClash(collidingIds.size)}</span>
 				{/if}
@@ -2958,7 +2961,7 @@
 								{#each roomRects as r, ri}
 									<li class:on={selectedPart === ri} onmouseenter={() => hoverPart = ri} onmouseleave={() => hoverPart = null}>
 										<button type="button" class="part-pick" onclick={() => { selectedPart = ri; selectedId = null; tool = 'select'; }}>
-											{tr.editor.roomPart(ri + 1)} · {r.w.toFixed(1)} × {r.h.toFixed(1)} m
+											{tr.editor.roomPart(ri + 1)} · {num(r.w, 1)} × {num(r.h, 1)} m
 										</button>
 										{#if !boundsLocked}
 											<button type="button" class="part-del" title={tr.editor.removePart} aria-label={tr.editor.removePart}
@@ -2967,7 +2970,7 @@
 									</li>
 								{/each}
 							</ul>
-							<div class="stat"><span>{tr.editor.roomArea}</span><b>{roomArea(roomRects).toFixed(1)} m²</b></div>
+							<div class="stat"><span>{tr.editor.roomArea}</span><b>{num(roomArea(roomRects), 1)} m²</b></div>
 							{#if !partsConnected(roomRects)}<p class="warn-text">{tr.editor.roomDisconnected}</p>{/if}
 							{#if tool === 'bounds'}<p class="help-text">{tr.editor.boundsAddHint}</p>{/if}
 							{#if !boundsLocked}
@@ -2988,7 +2991,7 @@
 							{#if drawPts.length >= 2}
 								{@const a = drawPts[drawPts.length - 2]}
 								{@const b = drawPts[drawPts.length - 1]}
-								<div class="stat"><span>{tr.editor.lastEdge}</span><b>{Math.hypot(b.x - a.x, b.y - a.y).toFixed(2)} m</b></div>
+								<div class="stat"><span>{tr.editor.lastEdge}</span><b>{num(Math.hypot(b.x - a.x, b.y - a.y), 2)} m</b></div>
 							{/if}
 						</section>
 					{:else if selectedWall}
@@ -3086,7 +3089,7 @@
 									</div>
 									<div class="inv-info">
 										<span class="inv-name">{tt.name}</span>
-										<span class="inv-detail">{tr.editor.tableTypeFacts(tt.shape === 'round' ? `⌀ ${(Number(tt.radius) * 2).toFixed(1)} m` : `${tt.width} × ${tt.height} m`, Number(tt.max_chairs))}</span>
+										<span class="inv-detail">{tr.editor.tableTypeFacts(tt.shape === 'round' ? `⌀ ${num((Number(tt.radius) * 2), 1)} m` : `${num(Number(tt.width), 1)} × ${num(Number(tt.height), 1)} m`, Number(tt.max_chairs))}</span>
 										{#if Number.isFinite(left)}
 											<span class="inv-stock" class:none={left <= 0}>{tr.editor.inventoryLeft(Math.max(0, left), typeLimit(tt))}</span>
 										{/if}
@@ -3150,7 +3153,7 @@
 							{/if}
 						{:else if isInventoryTable && T}
 							<div class="inv-locked-info">
-								{T.shape === 'round' ? `⌀ ${(Number(T.radius) * 2).toFixed(1)} m` : `${T.width} × ${T.height} m`}
+								{T.shape === 'round' ? `⌀ ${num((Number(T.radius) * 2), 1)} m` : `${num(Number(T.width), 1)} × ${num(Number(T.height), 1)} m`}
 								· {tr.editor.inventoryType}
 							</div>
 						{/if}
@@ -3165,7 +3168,7 @@
 						{:else}
 							{@const currentTotal = T ? (Number(T.chairsTop)||0)+(Number(T.chairsBottom)||0)+(Number(T.chairsLeft)||0)+(Number(T.chairsRight)||0) : tChairsTop+tChairsBottom+tChairsLeft+tChairsRight}
 							{#if maxChairs < 999}
-								<div class="chair-limit-hint">{currentTotal} / {maxChairs} {tr.editor.chairsWord}</div>
+								<div class="chair-limit-hint">{currentTotal} / {maxChairs} {tr.units.chairs(maxChairs)}</div>
 							{/if}
 							<div class="field-row">
 								<div class="field">
@@ -3205,7 +3208,7 @@
 									value={T?.chairSpacing ?? tChairSpacing}
 									oninput={(e) => { const v=+((e.target as HTMLInputElement).value); if(T) updateTable({chairSpacing:v}); else tChairSpacing=v; }}
 									style="flex:1"/>
-								<span class="val">{((T?.chairSpacing ?? tChairSpacing)*100).toFixed(0)} cm</span>
+								<span class="val">{num(((T?.chairSpacing ?? tChairSpacing)*100), 0)} cm</span>
 							</div>
 						</div>
 						{/if}
@@ -3317,22 +3320,22 @@
 					<section>
 						<div class="sec-title">{tr.editor.summary}</div>
 						{#if bounds}
-							<div class="stat"><span>{tr.editor.stepRoom}</span><b>{bounds.w.toFixed(2)} × {bounds.h.toFixed(2)} m</b></div>
-							<div class="stat"><span>{tr.editor.roomArea}</span><b>{roomArea(roomRects).toFixed(1)} m²</b></div>
-							<div class="stat"><span>{tr.editor.perimeter}</span><b>{roomPerimeter.toFixed(1)} m</b></div>
+							<div class="stat"><span>{tr.editor.stepRoom}</span><b>{num(bounds.w, 2)} × {num(bounds.h, 2)} m</b></div>
+							<div class="stat"><span>{tr.editor.roomArea}</span><b>{num(roomArea(roomRects), 1)} m²</b></div>
+							<div class="stat"><span>{tr.editor.perimeter}</span><b>{num(roomPerimeter, 1)} m</b></div>
 						{/if}
 						{#each zones as z}
-							<div class="stat"><span>· {z.label || tr.editor.zoneOptions}</span><b>{polyAreaM2(z.points).toFixed(1)} m²</b></div>
+							<div class="stat"><span>· {z.label || tr.editor.zoneOptions}</span><b>{num(polyAreaM2(z.points), 1)} m²</b></div>
 						{/each}
 						{#if zones.length && roomRects.length}
-							<div class="stat"><span>{tr.editor.freeFloor}</span><b>{Math.max(0, roomArea(roomRects) - zonesArea).toFixed(1)} m²</b></div>
+							<div class="stat"><span>{tr.editor.freeFloor}</span><b>{num(Math.max(0, roomArea(roomRects) - zonesArea), 1)} m²</b></div>
 						{/if}
 						<div class="stat"><span>{tr.editor.walls}</span><b>{walls.length}</b></div>
 						<div class="stat"><span>{tr.editor.zones}</span><b>{zones.length}</b></div>
 						<div class="stat"><span>{tr.editor.tables}</span><b>{tables.length}</b></div>
 						<div class="stat"><span>{tr.editor.chairsCount}</span><b>{seats.length}</b></div>
 						<div class="stat"><span>{tr.editor.totalSeats}</span><b>{totalSeats}</b></div>
-						{#if allowGuests}<div class="stat"><span>{tr.editor.assigned}</span><b>{totalAssigned}/{guests.length} {tr.editor.guestsWord}</b></div>{/if}
+						{#if allowGuests}<div class="stat"><span>{tr.editor.assigned}</span><b>{totalAssigned}/{guests.length} {tr.units.guests(guests.length)}</b></div>{/if}
 						{#if floors.length > 1}
 							<div class="stat stat-total"><span>{tr.editor.allFloors}</span><b>{allTables} · {allSeats} · {allWalls} · {allZones}</b></div>
 						{/if}

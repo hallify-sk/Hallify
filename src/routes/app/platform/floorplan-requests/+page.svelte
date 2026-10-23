@@ -1,5 +1,6 @@
 <script lang="ts">
   import { enhance } from '$app/forms';
+  import { planName } from '$lib/plans';
   import { t, getLocale } from '$lib/i18n.svelte';
   import { formatDate, parseDbTime } from '$lib/format';
   import { eur } from '$lib/extras';
@@ -47,7 +48,7 @@
         <h1>{t.floorplanService.queueTitle}</h1>
         <p>{t.floorplanService.queueLead}</p>
       </div>
-      <span class="count">{data.openCount} {t.floorplanService.openCount}</span>
+      <span class="count">{data.openCount} {t.units.openItems(data.openCount)}</span>
     </div>
 
     {#if form?.saved}<div class="alert-success">{t.settingsPages.changesSaved}</div>{/if}
@@ -83,9 +84,9 @@
               {/if}
             </span>
             <span role="cell" class="muted">{r.org_name}</span>
-            <span role="cell"><span class="badge">{r.plan ?? 'free'}</span></span>
+            <span role="cell"><span class="badge">{planName(r.plan)}</span></span>
             <span role="cell" class="muted">{r.max_people}</span>
-            <span role="cell" class="muted">{waiting(r.created_at)} {t.floorplanService.days}</span>
+            <span role="cell" class="muted">{waiting(r.created_at)} {t.units.days(waiting(r.created_at))}</span>
             <span role="cell"><span class="badge badge--{r.status}">{STATUS_LABEL[r.status] ?? r.status}</span></span>
             <span role="cell" class="row-actions">
               <button class="btn-outline btn-sm" aria-expanded={openId === r.id} onclick={() => toggle(r.id)}>
@@ -145,7 +146,7 @@
         <h2>{t.setupService.queueTitle}</h2>
         <p>{t.setupService.queueLead}</p>
       </div>
-      <span class="count">{data.setupOpenCount} {t.floorplanService.openCount}</span>
+      <span class="count">{data.setupOpenCount} {t.units.openItems(data.setupOpenCount)}</span>
     </div>
 
     {#if data.setupRequests.length === 0}
@@ -170,11 +171,11 @@
           <div class="row-item" class:is-done={r.status === 'delivered' || r.status === 'cancelled'} role="row">
             <span role="cell">
               <strong>{r.org_name}</strong>
-              <span class="muted"> · {r.hall_count} {t.floorplanService.colVenue.toLowerCase()}</span>
+              <span class="muted"> · {r.hall_count} {t.units.venues(r.hall_count)}</span>
             </span>
-            <span role="cell"><span class="badge">{r.plan ?? 'free'}</span></span>
-            <span role="cell" class="muted">{eur(r.price_cents)}</span>
-            <span role="cell" class="muted">{waiting(r.created_at)} {t.floorplanService.days}</span>
+            <span role="cell"><span class="badge">{planName(r.plan)}</span></span>
+            <span role="cell" class="muted">{eur(r.price_cents, getLocale())}</span>
+            <span role="cell" class="muted">{waiting(r.created_at)} {t.units.days(waiting(r.created_at))}</span>
             <span role="cell"><span class="badge badge--{r.status}">{SETUP_STATUS_LABEL[r.status] ?? r.status}</span></span>
             <span role="cell" class="row-actions">
               <button class="btn-outline btn-sm" aria-expanded={openSetupId === r.id} onclick={() => toggleSetup(r.id)}>

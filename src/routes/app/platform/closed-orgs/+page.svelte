@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { PageData } from './$types';
+  import { planName } from '$lib/plans';
   import { t, getLocale } from '$lib/i18n.svelte';
   import { formatDate } from '$lib/format';
   let { data }: { data: PageData } = $props();
@@ -40,7 +41,7 @@
         {#each data.closedOrgs as o}
           <div class="row-item" role="row">
             <span role="cell"><strong>{o.name}</strong>{#if o.slug}<span class="muted"> · {o.slug}</span>{/if}</span>
-            <span role="cell"><span class="badge">{o.plan ?? 'free'}</span></span>
+            <span role="cell"><span class="badge">{planName(o.plan)}</span></span>
             <span role="cell" class="muted">{o.member_count}</span>
             <span role="cell" class="muted">{o.reservation_count}</span>
             <span role="cell" class="muted">{fmt(o.closed_at)}</span>

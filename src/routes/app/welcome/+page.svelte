@@ -187,7 +187,7 @@
           </span>
           <div>
             <strong>{data.hall.name}</strong>
-            <span>{data.hall.max_people} {t.common.people}</span>
+            <span>{data.hall.max_people} {t.units.people(data.hall.max_people)}</span>
           </div>
         </div>
         <button class="btn-action" onclick={() => (viewing = 'details')}>{t.onboarding.next}</button>
@@ -305,7 +305,7 @@
             <div class="ob-plan">
               <div class="ob-plan-head">
                 <strong>{plan.name}</strong>
-                <span>€{plan.priceMonthly}<small>{t.onboarding.perMonth}</small></span>
+                <span>{eur(Math.round((plan.priceMonthly ?? 0) * 100), getLocale())}<small>{t.onboarding.perMonth}</small></span>
               </div>
               <ul>
                 <li>{t.onboarding.limitHallsLabel}: {limitValue(plan.limits.maxHalls)}</li>
@@ -340,7 +340,7 @@
         </div>
       {:else}
         <div class="ob-offer card--inset">
-          <p class="ob-price"><strong>{eur(data.setupPriceCents)}</strong> <span>{t.setupService.oneOff}</span></p>
+          <p class="ob-price"><strong>{eur(data.setupPriceCents, getLocale())}</strong> <span>{t.setupService.oneOff}</span></p>
           <ul class="ob-offer-list">
             {#each SETUP_SERVICE_INCLUDES as item (item.en)}
               <li>

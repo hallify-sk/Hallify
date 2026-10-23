@@ -1,5 +1,6 @@
 <script lang="ts">
   import { enhance } from '$app/forms';
+  import { planName } from '$lib/plans';
   import { t, getLocale } from '$lib/i18n.svelte';
   import { formatDate } from '$lib/format';
   import type { PageData, ActionData } from './$types';
@@ -91,7 +92,7 @@
             <a href="/app/platform/orgs/{m.org_id}" class="org-name">{m.name}</a>
             <span class="org-meta">
               <span class="role role-{m.role}">{m.role}</span>
-              <span class="plan-badge plan-{m.plan ?? 'free'}">{m.plan ?? 'free'}</span>
+              <span class="plan-badge plan-{m.plan ?? 'free'}">{planName(m.plan)}</span>
               <span class="muted">{m.slug}</span>
             </span>
           </li>

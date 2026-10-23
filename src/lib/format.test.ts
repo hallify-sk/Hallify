@@ -78,7 +78,8 @@ describe('safe URLs', () => {
 
 describe('reservation status helpers', () => {
 	it('translate status and dates for the viewer', () => {
-		expect(statusLabel('pending', 'sk')).toBe('Čakajúci');
+		expect(statusLabel('pending', 'sk')).toBe('Čakajúca');
+		expect(statusLabel('approved', 'sk')).toBe('Schválená');
 		expect(statusLabel('waiting_payment', 'en')).toBe('Waiting for payment');
 		expect(statusLabel('weird', 'sk')).toBe('weird');
 		expect(fmtDate('2026-11-21', 'en')).toBe('21 Nov 2026');

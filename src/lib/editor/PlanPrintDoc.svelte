@@ -64,7 +64,7 @@
 				<div class="floor-head">
 					<h2>{fl.name}</h2>
 					<span class="floor-stat">
-						{#if fl.size}{fl.size}{/if}{#if fl.area} · {fl.area}{/if}{#if showTables} · {fl.tables.length} {t.editor.tables.toLowerCase()} · {fl.seats} {t.myRes.seatsSuffix}{/if}
+						{#if fl.size}{fl.size}{/if}{#if fl.area}{' '}· {fl.area}{/if}{#if showTables}{' '}· {fl.tables.length} {t.units.tables(fl.tables.length)} · {fl.seats} {t.units.seats(fl.seats)}{/if}
 					</span>
 				</div>
 				<div class="floor-map">

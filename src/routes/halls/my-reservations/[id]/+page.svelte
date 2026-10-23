@@ -324,7 +324,7 @@
 			     that the server would refuse. -->
 			<p class="status-note">{t.myRes.cancelWindowClosed.replace('{date}', formatDate(data.cancelDeadline, getLocale(), { day: 'numeric', month: 'long', year: 'numeric' }))}</p>
 		{:else if !data.editable}
-			<p class="status-note">{t.myRes.lockedNotePrefix} {statusLabel(r.status, getLocale()).toLowerCase()} {t.myRes.lockedNoteMid} {orgName} {t.myRes.lockedNoteSuffix}</p>
+			<p class="status-note">{t.myRes.lockedNotePrefix} {t.myRes.lockedNoteStatus(statusLabel(r.status, getLocale()))} {t.myRes.lockedNoteMid} {orgName} {t.myRes.lockedNoteSuffix}</p>
 		{/if}
 	{/if}
 </section>

@@ -65,6 +65,11 @@ export function getPlan(planId: PlanId): Plan {
   return PLANS[planId] ?? PLANS.free;
 }
 
+/** A plan's display name ('Free', 'Professional') from its stored id; no plan reads as Free. */
+export function planName(planId: string | null | undefined): string {
+  return PLANS[(planId ?? 'free') as PlanId]?.name ?? String(planId);
+}
+
 export function isWithinLimit(limit: number, current: number): boolean {
   return limit === -1 || current < limit;
 }

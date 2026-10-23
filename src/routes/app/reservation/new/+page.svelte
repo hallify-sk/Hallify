@@ -287,7 +287,7 @@
 									<div class="hall-info">
 										<span class="hall-name">{h.name}</span>
 										<div class="hall-tags">
-											<span class="hall-badge">{h.max_people} {t.common.people}</span>
+											<span class="hall-badge">{h.max_people} {t.units.people(h.max_people)}</span>
 											{#if h.auto_approve}<span class="hall-tag ok">{t.createEvent?.autoApprove ?? 'Auto-approve'}</span>{/if}
 											{#if h.min_days_advance > 0}<span class="hall-tag">{h.min_days_advance}d {t.createEvent?.advance ?? 'advance'}</span>{/if}
 											{#if !h.allow_reservations}<span class="hall-tag warn">{t.createEvent?.closed ?? 'Closed'}</span>{/if}

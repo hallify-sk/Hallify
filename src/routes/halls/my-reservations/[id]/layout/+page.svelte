@@ -152,7 +152,7 @@
 											{#if tm.id === recommendedId}<span class="tmpl-rec">{t.myRes.recommended}</span>{/if}
 										</span>
 										<span class="tmpl-item-meta">
-											<span class="tmpl-seats">{tm.seats} {t.myRes.seatsSuffix}</span>
+											<span class="tmpl-seats">{tm.seats} {t.units.seats(tm.seats)}</span>
 											{#each tm.eventTypes as key}<span class="tmpl-item-type">{t.eventTypes[key]}</span>{/each}
 										</span>
 									</button>

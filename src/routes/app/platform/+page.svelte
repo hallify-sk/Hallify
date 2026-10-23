@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { planName } from '$lib/plans';
   import { t, getLocale } from '$lib/i18n.svelte';
   import { formatDate } from '$lib/format';
   import type { PageData } from './$types';
@@ -205,7 +206,7 @@
         <div role="row" class="row-item">
           <span role="cell" class="cell-name"><a href="/app/platform/orgs/{org.id}">{org.name}</a></span>
           <span role="cell" class="muted">{org.slug}</span>
-          <span role="cell"><span class="badge badge-{org.plan ?? 'free'}">{org.plan ?? 'free'}</span></span>
+          <span role="cell"><span class="badge badge-{org.plan ?? 'free'}">{planName(org.plan)}</span></span>
           <span role="cell" class="muted">{formatDate(org.created_at, getLocale())}</span>
         </div>
       {/each}

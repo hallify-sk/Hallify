@@ -89,7 +89,7 @@
       <div class="row-actions-end">
         {#if data.updatedAt}
           <span class="meta">
-            {t.platformSettings.lastChanged} {fmt(data.updatedAt)}{#if data.updatedBy} · {data.updatedBy}{/if}
+            {t.platformSettings.lastChanged} {fmt(data.updatedAt)}{#if data.updatedBy}{' '}· {data.updatedBy}{/if}
           </span>
         {/if}
         <button type="submit" class="btn-action">{t.common.save}</button>

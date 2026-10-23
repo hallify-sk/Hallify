@@ -20,7 +20,7 @@
   import { registerAssistantPage } from '$lib/assistant/page-hooks';
   import { slugify } from '$lib/slug';
   import { completeOpeningHours } from '$lib/opening-hours';
-  import { formatDate as fmtDbDate } from '$lib/format';
+  import { formatDate as fmtDbDate, formatNumber } from '$lib/format';
   import { confirmFirst } from '$lib/forms';
   import { dialog } from '$lib/actions/dialog';
 
@@ -235,12 +235,15 @@
     (p.shape === 'round' ? Math.abs(ttRadius - p.radius) < 1e-6 : Math.abs(ttWidth - p.width) < 1e-6 && Math.abs(ttHeight - p.height) < 1e-6);
   const clampN = (v: number, lo: number, hi: number, step = 0.1) => Math.round(Math.min(hi, Math.max(lo, v)) / step) * step;
 
+  /** A measurement with fixed decimals in the viewer's style (25,1 m in Slovak). */
+  const num = (n: number, digits: number) => formatNumber(n, getLocale(), digits);
+
   function ttMeta(tt: TableTypeRow): string {
     // ⌀ is the diameter everywhere in the app (the stored value is the radius).
-    const m = (v: number) => `${+Number(v).toFixed(2)}`;
+    const m = (v: number) => (+Number(v).toFixed(2)).toLocaleString(getLocale() === 'en' ? 'en-GB' : 'sk-SK');
     const dims = tt.shape === 'round' ? `⌀ ${m(tt.radius * 2)} m` : `${m(tt.width)} × ${m(tt.height)} m`;
     const qty = tt.amount > 0 ? `×${tt.amount}` : '∞';
-    return `${dims} · ${tt.max_chairs} ${t.event.seats} · ${qty}`;
+    return `${dims} · ${tt.max_chairs} ${t.units.seats(Number(tt.max_chairs))} · ${qty}`;
   }
 
   // Preview-bound state (feeds both the form and the live preview)
@@ -723,7 +726,7 @@
     <p class="fp-text">{mappingStatusHint(req.status)}</p>
     <p class="fp-request-meta">
       {t.floorplanService.requestedOn} {fmtDbDate(req.created_at, getLocale())}
-      {#if req.updated_at && req.updated_at !== req.created_at} · {t.floorplanService.lastUpdate} {fmtDbDate(req.updated_at, getLocale())}{/if}
+      {#if req.updated_at && req.updated_at !== req.created_at}{' '}· {t.floorplanService.lastUpdate} {fmtDbDate(req.updated_at, getLocale())}{/if}
     </p>
     {#if req.note}<p class="fp-request-note">{req.note}</p>{/if}
     {#if form?.fpError}<div class="inline-err" role="alert">{form.fpError}</div>{/if}
@@ -1243,7 +1246,7 @@
                   {#if previewMaxPeople}
                     <span class="preview-meta-chip">
                       <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
-                      {previewMaxPeople} {t.hallDir.guests}
+                      {previewMaxPeople} {t.units.guests(Number(previewMaxPeople))}
                     </span>
                   {/if}
                   {#if previewAddress}
@@ -1378,7 +1381,7 @@
             </div>
             {#if ex.description}<p class="extra-tile-desc">{ex.description}</p>{/if}
             <div class="extra-tile-foot">
-              <span class="extra-tile-price">{eur(ex.price_cents)}</span>
+              <span class="extra-tile-price">{eur(ex.price_cents, getLocale())}</span>
               <div class="extra-tile-actions">
                 <button type="button" class="extra-icon" onclick={() => openExtraEdit(ex)} aria-label="{t.common.edit} {ex.name}">
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4z"/></svg>
@@ -1400,7 +1403,7 @@
     {#if extrasAtLimit}
       <p class="extras-limit">{t.hallAdmin.planLimitReached} ({extrasLimit} {t.hallAdmin.perHall}). <a href="/app/billing">{t.hallAdmin.upgrade}</a> {t.hallAdmin.toAddMore}</p>
     {:else if data.extras.length > 0}
-      <p class="extras-count">{data.extras.length}{extrasLimit === -1 ? '' : ` ${t.common.of} ${extrasLimit}`} {t.hallAdmin.extras.toLowerCase()}</p>
+      <p class="extras-count">{data.extras.length}{extrasLimit === -1 ? '' : ` ${t.common.of} ${extrasLimit}`} {t.units.extras(extrasLimit === -1 ? data.extras.length : extrasLimit)}</p>
     {/if}
   </section>
 
@@ -1667,8 +1670,8 @@
           </a>
           <div class="fp-facts">
             {#if floor0.bounds}
-              <strong class="fp-size">{floor0.bounds.w.toFixed(1)} × {floor0.bounds.h.toFixed(1)} m</strong>
-              <span class="fp-sub">{roomArea(parts).toFixed(0)} m² · {parts.length > 1 ? t.hallAdmin.fpShapeParts(parts.length) : t.hallAdmin.fpShapeRect} · {t.hallAdmin.fpWalls(mfState.floors.reduce((n, f) => n + f.walls.length, 0))}</span>
+              <strong class="fp-size">{num(floor0.bounds.w, 1)} × {num(floor0.bounds.h, 1)} m</strong>
+              <span class="fp-sub">{num(roomArea(parts), 0)} m² · {parts.length > 1 ? t.hallAdmin.fpShapeParts(parts.length) : t.hallAdmin.fpShapeRect} · {t.hallAdmin.fpWalls(mfState.floors.reduce((n, f) => n + f.walls.length, 0))}</span>
             {:else}
               <strong class="fp-size fp-size--muted">{t.hallAdmin.fpNoRoom}</strong>
               <span class="fp-sub">{t.hallAdmin.fpNoRoomHint}</span>
@@ -1779,7 +1782,7 @@
                   </span>
                   <span class="fp-row-text">
                     <b>{tmpl.name}</b>
-                    <span>{[`${countSeats(tmpl.layout_json)} ${t.event.seats}`, ...parseEventTypes(tmpl.event_type).map((k) => t.eventTypes[k])].join(' · ')}</span>
+                    <span>{[`${countSeats(tmpl.layout_json)} ${t.units.seats(countSeats(tmpl.layout_json))}`, ...parseEventTypes(tmpl.event_type).map((k) => t.eventTypes[k])].join(' · ')}</span>
                   </span>
                 </a>
                 <form method="POST" action="?/deleteTemplate" use:enhance>
@@ -1926,7 +1929,7 @@
       {#if rangeFrom && rangeTo}
         <div class="dialog-range-bar">
           <span>{formatDate(rangeFrom)} – {formatDate(rangeTo)}</span>
-          <span class="range-pill">{daysBetween(rangeFrom, rangeTo)} {t.halls.nDays}</span>
+          <span class="range-pill">{daysBetween(rangeFrom, rangeTo)} {t.units.days(daysBetween(rangeFrom, rangeTo))}</span>
         </div>
       {/if}
 
@@ -1934,7 +1937,7 @@
         <div class="conflict-box">
           <div class="conflict-title">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-            {conflictingEvents.length} {t.halls.reservations} {t.hallAdmin.inThisRange}
+            {conflictingEvents.length} {t.units.reservations(conflictingEvents.length)} {t.hallAdmin.inThisRange}
           </div>
           <ul class="conflict-list">{#each conflictingEvents as ev}<li>{ev.title} — {formatDate(ev.event_date)}</li>{/each}</ul>
           <button type="button" class="btn-ghost-sm" onclick={openRangeCancel}>{t.hallAdmin.cancelTheseReservations}</button>
@@ -2092,7 +2095,7 @@
 
       <div class="dialog-body tt2">
         <!-- Left: the table to scale, exactly as the floor-plan editor will place it. -->
-        <figure class="tt2-preview" aria-label={t.hallAdmin.ttFootprint((P.ex * 2).toFixed(1), (P.ey * 2).toFixed(1))}>
+        <figure class="tt2-preview" aria-label={t.hallAdmin.ttFootprint(num((P.ex * 2), 1), num((P.ey * 2), 1))}>
           <svg viewBox="{-P.ex - pad} {-P.ey - pad} {(P.ex + pad) * 2} {(P.ey + pad) * 2}" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
             <defs>
               <pattern id="tt2-grid" x="0" y="0" width="0.5" height="0.5" patternUnits="userSpaceOnUse">
@@ -2113,10 +2116,10 @@
             {:else}
               <rect x={-P.w / 2} y={-P.h / 2} width={P.w} height={P.h} rx="0.06" fill="#92400e" stroke="#78350f" stroke-width="0.02"/>
             {/if}
-            <text x="0" y="0" text-anchor="middle" dominant-baseline="middle" class="tt2-dim-in">{P.round ? `⌀ ${(P.tbl.radius * 2).toFixed(2)} m` : `${P.w.toFixed(2)} × ${P.h.toFixed(2)} m`}</text>
+            <text x="0" y="0" text-anchor="middle" dominant-baseline="middle" class="tt2-dim-in">{P.round ? `⌀ ${num((P.tbl.radius * 2), 2)} m` : `${num(P.w, 2)} × ${num(P.h, 2)} m`}</text>
           </svg>
           <figcaption>
-            <span>{t.hallAdmin.ttFootprint((P.ex * 2).toFixed(1), (P.ey * 2).toFixed(1))}</span>
+            <span>{t.hallAdmin.ttFootprint(num((P.ex * 2), 1), num((P.ey * 2), 1))}</span>
             <span>{t.hallAdmin.ttGridNote}</span>
           </figcaption>
         </figure>
