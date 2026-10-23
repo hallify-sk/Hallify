@@ -10,11 +10,13 @@
 	import type { FloorData, MultiFloorState, WallObj, ZoneObj, TableObj, SeatObj, Guest, BoundsRect, Point, TableShape } from '$lib/floorplan-types';
 	import { stepsFor, toolsFor, TOOL_KEYS, toolForKey, type EditorMode, type StepId, type Tool } from '$lib/editor-steps';
 	import { parseGuestCsv, splitDuplicateGuests } from '$lib/guest-csv';
+	import { tableNumbers, nextTableNumber, withTableNumbers, tableTag } from '$lib/floorplan-layout';
 	import { uiStore } from '$lib/stores/ui.svelte';
 	import StepStrip, { type StepItem } from '$lib/editor/StepStrip.svelte';
 	import ToolCards, { type ToolCard } from '$lib/editor/ToolCards.svelte';
 	import GuestList, { type GuestRow } from '$lib/editor/GuestList.svelte';
 	import CoachMark from '$lib/editor/CoachMark.svelte';
+	import FloorplanPrint from '$lib/FloorplanPrint.svelte';
 
 	// ─── Props ────────────────────────────────────────────────────────────────
 	interface TableType {
@@ -350,8 +352,11 @@
 		try {
 			const raw = typeof initialState === 'string' ? JSON.parse(initialState) : initialState;
 			const state = migrateToMultiFloor(raw);
-			const f0 = state.floors[0]; // use local var, NOT reactive `floors`
-			floors = state.floors;
+			// Every table gets its number now, so it is stored with the next save and
+			// stays put when other tables come and go.
+			const numbered = withTableNumbers(state.floors);
+			const f0 = numbered[0]; // use local var, NOT reactive `floors`
+			floors = numbered;
 			guests = state.guests;
 			activeFloorIdx = 0;
 			walls = f0.walls; zones = f0.zones; tables = f0.tables; seats = f0.seats ?? []; roomRects = roomParts(f0);
@@ -838,9 +843,21 @@
 	const allSeats  = $derived(allFloors.reduce(
 		(n, f) => n + (f.tables ?? []).reduce((m, t) => m + totalChairs(t), 0) + (f.seats?.length ?? 0), 0));
 
+	// Table numbers across every floor: T1, T2… on the plan, in seat chips and on the
+	// printed manifest alike (all tables of one type share a label).
+	const tableNums = $derived(tableNumbers(allFloors));
+	function tagOf(t: TableObj): string {
+		return tableTag(tableNums.get(t.id) ?? t.num);
+	}
+	/** "T3 · Okrúhly stôl", or just "T3" when the table has no label of its own. */
+	function tableName(t: TableObj): string {
+		const tag = tagOf(t), label = (t.label ?? '').trim();
+		return label && label !== tag ? `${tag} · ${label}` : tag;
+	}
+
 	/** Where a guest sits, as the list prints it. */
 	function seatRefOf(guestId: string): string | null {
-		for (const t of tables) { const i = t.assignments.indexOf(guestId); if (i >= 0) return tr.editor.seatRef(t.label, i + 1); }
+		for (const t of tables) { const i = t.assignments.indexOf(guestId); if (i >= 0) return tr.editor.seatRef(tagOf(t), i + 1); }
 		const si = seats.findIndex(s => s.assignment === guestId);
 		if (si >= 0) return tr.editor.chairRef(si + 1);
 		for (let fi = 0; fi < floors.length; fi++) {
@@ -1422,7 +1439,9 @@
 				id: crypto.randomUUID(), x: pos.x, y: pos.y,
 				width: useWidth, height: useHeight, radius: useRadius,
 				shape: useShape, chairs: useChairs, rotation: 0,
-				label: st ? st.name : `T${tables.length + 1}`,
+				// The number tells tables apart; the label says what kind of table it is.
+				label: st ? st.name : '',
+				num: nextTableNumber(allFloors),
 				...sides,
 				chairSpacing: tChairSpacing,
 				assignments: Array(useShape === 'round' ? useChairs : (sides.chairsTop + sides.chairsBottom + sides.chairsLeft + sides.chairsRight)).fill(null),
@@ -1611,8 +1630,10 @@
 		const current = snapTables(tables);
 		const step = Math.max(Number(t.width), Number(t.radius) * 2, 1) + 1;
 		for (const [dx, dy] of [[step, 0], [0, step], [-step, 0], [0, -step], [step, step], [-step, step], [step, -step], [-step, -step]]) {
+			// The copy keeps the kind of table (its label) and gets a number of its own.
 			const c: TableObj = { ...t, id: crypto.randomUUID(), x: snap({ x: Number(t.x) + dx, y: 0 }).x, y: snap({ x: 0, y: Number(t.y) + dy }).y,
-				label: `T${tables.length + 1}`, assignments: Array(totalChairs(t)).fill(null) };
+				label: /^T\d+$/.test((t.label ?? '').trim()) ? '' : t.label, num: nextTableNumber(allFloors),
+				assignments: Array(totalChairs(t)).fill(null) };
 			if (!tableHasCollision(c, undefined, current)) { pushUndo(); tables = [...tables, c]; selectedId = c.id; return true; }
 		}
 		return false;
@@ -1690,7 +1711,7 @@
 			if (allowGuests && t.assignments.some(Boolean)) items.push({ label: tr.editor.clearSeats, run: () => clearTableSeats(t.id) });
 			if (!lockTables) items.push({ label: tr.editor.deleteTable, danger: true, kbd: 'Del', run: () => { pushUndo(); tables = tables.filter(x => x.id !== t.id); selectedId = null; } });
 			if (!items.length) break;
-			return { title: ci >= 0 ? tr.editor.seatRef(t.label, ci + 1) : t.label, items };
+			return { title: ci >= 0 ? tr.editor.seatRef(tableName(t), ci + 1) : tableName(t), items };
 		}
 		// An edge of a shape: add a corner there
 		for (const sh of ordered) {
@@ -2009,6 +2030,20 @@
 	const zoomPercent = $derived(Math.round((zoom / 60) * 100));
 	const saveStateText = $derived(saveState === 'saved' ? tr.editor.saved : saveState === 'saving' ? tr.editor.saving : saveState === 'dirty' ? tr.editor.unsaved : '');
 
+	// ─── Small screens ───────────────────────────────────────────────────────
+	// Three columns do not fit a phone: the canvas came out 0 px wide and the save
+	// controls were cut off. Below a tablet's width the editor shows the plan, read
+	// only, and says where it can be edited.
+	let narrow = $state(false);
+
+	onMount(() => {
+		const mq = window.matchMedia('(max-width: 760px)');
+		narrow = mq.matches;
+		const onNarrow = (e: MediaQueryListEvent) => { narrow = e.matches; if (!e.matches) requestAnimationFrame(() => fitToRoom()); };
+		mq.addEventListener('change', onNarrow);
+		return () => mq.removeEventListener('change', onNarrow);
+	});
+
 	onMount(() => {
 		uiStore.setSidebarRail(true);
 		try { tipsSeen = JSON.parse(localStorage.getItem(TIPS_KEY) ?? '[]'); } catch { tipsSeen = []; }
@@ -2066,7 +2101,23 @@
 {/snippet}
 
 <!-- ─── Layout ─────────────────────────────────────────────────────────────── -->
-<div class="app">
+<div class="app" class:narrow-app={narrow}>
+	{#if narrow}
+	<div class="narrow">
+		<div class="narrow-msg" role="note">
+			<b>{tr.editor.smallScreenTitle}</b>
+			<p>{tr.editor.smallScreenText}</p>
+		</div>
+		{#each allFloors as f (f.id)}
+			<section class="narrow-floor">
+				{#if allFloors.length > 1}<h3>{f.name}</h3>{/if}
+				<FloorplanPrint floor={f} {guests} numbers={tableNums} />
+			</section>
+		{/each}
+		{#if allowGuests && guests.length}<p class="narrow-facts">{tr.editor.seatedOf(totalAssigned, guests.length)}</p>{/if}
+		{#if printHref}<a class="btn-sm narrow-print" href={printHref}>{tr.editor.printPlan}</a>{/if}
+	</div>
+	{:else}
 	<StepStrip steps={stepItems} onPick={goStep}
 		note={editorMode === 'room' ? tr.editor.stepsNoteRoom : editorMode === 'seating' ? tr.editor.stepsNoteSeating : tr.editor.stepsNoteLocked}
 		right={stripRight} />
@@ -2302,6 +2353,9 @@
 					{@const sel = table.id === selectedId}
 					{@const clash = collidingIds.has(table.id)}
 					{@const rotH  = table.shape === 'rect' ? table.height/2 : table.radius}
+					{@const tag = tagOf(table)}
+					{@const sub = (table.label ?? '').trim() !== tag ? (table.label ?? '').trim() : ''}
+					{@const fs = Math.max(6, Math.min(ws(0.18), 12))}
 					<!-- svelte-ignore a11y_no_static_element_interactions -->
 					<g transform={`translate(${wx(table.x)},${wy(table.y)}) rotate(${table.rotation})`}
 						class="table-g"
@@ -2330,13 +2384,15 @@
 								stroke-width={sel || clash ? 3 : 1.5}/>
 						{/if}
 
-						<!-- Label -->
-						<text x={0} y={ws(0.1)} text-anchor="middle" dominant-baseline="middle"
-							font-size={Math.max(6,Math.min(ws(0.18),12))}
-							font-family="system-ui,sans-serif" font-weight="600"
-							fill="rgba(255,250,240,0.95)" pointer-events="none">
-							{table.label}
-						</text>
+						<!-- Number (T3), and the label under it when it says more -->
+						<text x={0} y={sub ? -fs * 0.45 : 0} text-anchor="middle" dominant-baseline="middle"
+							font-size={fs * 1.1} font-family="system-ui,sans-serif" font-weight="700"
+							fill="rgba(255,250,240,0.98)" pointer-events="none">{tag}</text>
+						{#if sub}
+							<text x={0} y={fs * 0.75} text-anchor="middle" dominant-baseline="middle"
+								font-size={fs * 0.85} font-family="system-ui,sans-serif" font-weight="550"
+								fill="rgba(255,250,240,0.85)" pointer-events="none">{sub}</text>
+						{/if}
 
 						<!-- Chairs (on top of table body) -->
 						{#each chairs as ch, ci}
@@ -2736,7 +2792,7 @@
 					<div class="pop-header">
 						<span>
 							{#if popoverTable && chairPopover.chairIdx != null}
-								{tr.editor.seatRef(popoverTable.label, chairPopover.chairIdx + 1)}
+								{tr.editor.seatRef(tableName(popoverTable), chairPopover.chairIdx + 1)}
 							{:else if popoverSeat}
 								{tr.editor.chairRef(seats.indexOf(popoverSeat) + 1)}
 							{/if}
@@ -2963,7 +3019,7 @@
 					{@const isInventoryTable = T?.typeId && tableTypes?.find(tt => tt.id === T.typeId)}
 					{@const maxChairs = isInventoryTable ? Number((tableTypes?.find(tt => tt.id === T?.typeId))?.max_chairs ?? 999) : 999}
 					<section>
-						<div class="sec-title">{T ? T.label : tr.editor.freeformTable}</div>
+						<div class="sec-title">{T ? tableName(T) : tr.editor.freeformTable}</div>
 
 						{#if T}
 							<div class="field">
@@ -3121,7 +3177,7 @@
 						{@const free = T.assignments.filter(a => !a).length}
 						<section>
 							<div class="sec-title-row">
-								<span class="sec-title" style="margin-bottom:0">{T.label}</span>
+								<span class="sec-title" style="margin-bottom:0">{tableName(T)}</span>
 								<span class="muted">{T.assignments.length - free}/{T.assignments.length} · {free} {tr.editor.seatEmpty.toLowerCase()}</span>
 							</div>
 							<ol class="seats">
@@ -3251,6 +3307,7 @@
 			</div>
 		</aside>
 	</div>
+	{/if}
 
 	<!-- The guest being dragged follows the pointer -->
 	{#if dragGuest && dragGuestRecord}
@@ -3265,6 +3322,17 @@
 <!-- ─── Styles ──────────────────────────────────────────────────────────────── -->
 <style>
 .app { display:flex; flex-direction:column; height:100%; min-height:0; overflow:hidden; background:var(--bg-base); position:relative; }
+
+/* ── Small screens: the plan, read only, and where to edit it ── */
+.app.narrow-app { overflow-y:auto; }
+.narrow { display:flex; flex-direction:column; gap:14px; padding:16px; }
+.narrow-msg { padding:12px 14px; border-radius:var(--radius-lg); background:var(--warning-dim); color:var(--text-base); font-size:13px; line-height:1.45; }
+.narrow-msg b { display:block; font-weight:650; margin-bottom:2px; }
+.narrow-msg p { margin:0; color:var(--text-muted); }
+.narrow-floor { padding:0; border:0; }
+.narrow-floor h3 { font-size:13px; font-weight:650; margin:0 0 6px; }
+.narrow-facts { margin:0; font-size:12.5px; color:var(--text-muted); }
+.narrow-print { align-self:flex-start; height:34px; padding:0 14px; }
 
 /* ── Floors and help, inside the step strip ── */
 .floors { display:flex; align-items:center; gap:3px; flex-shrink:0; }

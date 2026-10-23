@@ -1,6 +1,8 @@
 <script lang="ts">
 	import FloorplanPrint from '$lib/FloorplanPrint.svelte';
-	import type { TableObj, Guest } from '$lib/floorplan-types';
+	import type { Guest } from '$lib/floorplan-types';
+	import { tableNumbers } from '$lib/floorplan-layout';
+	import { manifestFloors } from '$lib/floorplan-manifest';
 	import { seatingManifestCsv, downloadCsv, fileSlug } from '$lib/csvExport';
 	import { t, getLocale } from '$lib/i18n.svelte';
 	import type { PageData } from './$types';
@@ -8,11 +10,8 @@
 	interface Props { data: PageData; }
 	const { data }: Props = $props();
 
-	const guestById = new Map<string, Guest>(data.layout.guests.map((g) => [g.id, g]));
-
-	function tableLabel(t: TableObj, i: number): string {
-		return (t.label ?? '').trim() || `T${i + 1}`;
-	}
+	// Table numbers across every floor: the same T1, T2… as in the editor.
+	const tableNums = $derived(tableNumbers(data.layout.floors));
 
 	function fullName(g: Guest): string {
 		return `${g.lastName}, ${g.firstName}`.replace(/^,\s*/, '').trim();
@@ -34,28 +33,9 @@
 		return new Date(d).toLocaleDateString(getLocale() === 'en' ? 'en-GB' : 'sk-SK', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
 	}
 
-	// Per-floor breakdown: tables with their seated guests, plus a floor-level
-	// roll-up of every note/allergy so staff can scan one box per floor.
-	const floors = $derived(data.layout.floors.map((f, fi) => {
-		const tables = f.tables.map((t, ti) => {
-			const seats = t.assignments
-				.map((gid, idx) => ({ idx, guest: gid ? guestById.get(gid) ?? null : null }))
-				.filter((s) => s.guest);
-			// Unique tag (T1, T2…) so two tables with the same name stay distinguishable.
-			return { tag: `T${ti + 1}`, label: tableLabel(t, ti), total: t.assignments.length, seats };
-		});
-		// Standalone chairs (concert-style seating, not attached to a table)
-		const standalone = (f.seats ?? [])
-			.map((s, i) => ({ idx: i, guest: s.assignment ? guestById.get(s.assignment) ?? null : null }))
-			.filter((s) => s.guest);
-
-		const seatedIds = new Set<string>();
-		for (const t of f.tables) for (const a of t.assignments) if (a) seatedIds.add(a);
-		for (const s of f.seats ?? []) if (s.assignment) seatedIds.add(s.assignment);
-		const seatedCount = seatedIds.size;
-		const totalSeats = f.tables.reduce((n, t) => n + t.assignments.length, 0) + (f.seats?.length ?? 0);
-		return { name: f.name || `Floor ${fi + 1}`, idx: fi, tables, standalone, seatedCount, totalSeats, floor: f };
-	}));
+	// Per-floor breakdown: tables (by their number) with their seated guests and the
+	// notes for staff.
+	const floors = $derived(manifestFloors(data.layout, (i) => `${t.manifest.csvFloor} ${i + 1}`));
 </script>
 
 <svelte:head><title>{data.reservation.title} — {t.manifest.seatingManifest}</title></svelte:head>
@@ -97,7 +77,7 @@
 			</div>
 
 			<div class="floor-map">
-				<FloorplanPrint floor={fl.floor} guests={data.layout.guests} {tableLabel} />
+				<FloorplanPrint floor={fl.floor} guests={data.layout.guests} numbers={tableNums} />
 			</div>
 
 			<div class="legend-key">
@@ -105,6 +85,18 @@
 				<span class="key-item"><span class="dot dot-empty"></span> {t.manifest.emptySeat}</span>
 				<span class="key-item">{t.manifest.seatNumbersMatch} <b>{t.manifest.seat}</b> {t.manifest.columnOverleaf}</span>
 			</div>
+
+			<!-- Notes for staff on the tables ("one high chair"), next to the plan they belong to. -->
+			{#if fl.tables.some((tb) => tb.note)}
+				<div class="table-notes">
+					<h3 class="notes-title">{t.manifest.tableNotes}</h3>
+					<ul>
+						{#each fl.tables.filter((tb) => tb.note) as tb (tb.id)}
+							<li><span class="grp-tag">{tb.tag}</span> {tb.note}</li>
+						{/each}
+					</ul>
+				</div>
+			{/if}
 
 			<!-- ── Check-in roster (starts a fresh page when printed) ── -->
 			<div class="roster-wrap">
@@ -126,7 +118,7 @@
 						<tbody>
 							{#each fl.tables as tbl}
 								{#if tbl.seats.length}
-									<tr class="grp"><td colspan="5"><span class="grp-tag">{tbl.tag}</span> {tbl.label}</td></tr>
+									<tr class="grp"><td colspan="5"><span class="grp-tag">{tbl.tag}</span> {tbl.label !== tbl.tag ? tbl.label : ''}{#if tbl.note}<span class="grp-note"> — {tbl.note}</span>{/if}</td></tr>
 									{#each tbl.seats as s}
 										<tr>
 											<td class="c-chk"><span class="chk"></span></td>
@@ -238,6 +230,14 @@
 	.c-name { font-weight: 600; }
 	.c-grp { color: var(--doc-muted); }
 	.c-note { color: var(--doc-warning); }
+	.grp-note { font-weight: 500; color: var(--doc-warning); }
+	.table-notes { margin: 0 0 14px; font-size: 12px; }
+	.notes-title {
+		font-size: 10px; font-weight: 650; text-transform: uppercase; letter-spacing: .13em;
+		color: var(--doc-muted); margin: 0 0 6px;
+	}
+	.table-notes ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+	.table-notes li { color: var(--doc-ink); }
 	.chk {
 		display: inline-block; width: 15px; height: 15px;
 		/* The radius stays small on purpose: doubled on a 15px box it would round

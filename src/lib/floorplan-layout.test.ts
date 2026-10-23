@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { applyTemplateKeepingGuests, arrangementKey, layoutVersion } from './floorplan-layout';
+import { applyTemplateKeepingGuests, arrangementKey, layoutVersion, nextTableNumber, tableNumbers, tableTag, withTableNumbers } from './floorplan-layout';
+import type { TableObj } from './floorplan-types';
 
 const table = (id: string, over: Record<string, unknown> = {}) => ({
 	id, x: 2, y: 2, width: 2, height: 1, radius: 0.8, shape: 'rect', chairs: 0, rotation: 0, label: id,
@@ -45,6 +46,37 @@ describe('applyTemplateKeepingGuests', () => {
 		const before = JSON.stringify(current);
 		applyTemplateKeepingGuests(current, { version: 2, guests: [], floors: [floor([table('t1')])] });
 		expect(JSON.stringify(current)).toBe(before);
+	});
+});
+
+describe('tableNumbers', () => {
+	const floors = [
+		{ tables: [{ id: 'a', num: 2 }, { id: 'b' }, { id: 'c', num: 2 }] },
+		{ tables: [{ id: 'd' }, { id: 'e', num: 7 }] }
+	];
+
+	it('keeps given numbers, and numbers the rest with the lowest free ones in order', () => {
+		const n = tableNumbers(floors);
+		expect([...n.entries()]).toEqual([['a', 2], ['e', 7], ['b', 1], ['c', 3], ['d', 4]]);
+	});
+
+	it('gives a new table one above the highest', () => {
+		expect(nextTableNumber(floors)).toBe(8);
+		expect(nextTableNumber([])).toBe(1);
+	});
+
+	it('writes the numbers onto the tables without touching numbered ones', () => {
+		const tables = [{ id: 'x', num: 1 }, { id: 'y' }] as unknown as TableObj[];
+		const [f] = withTableNumbers([{ tables }]);
+		expect(f.tables.map((t) => t.num)).toEqual([1, 2]);
+		expect(f.tables[0]).toBe(tables[0]);
+	});
+
+	it('survives a table being removed: the others keep their numbers', () => {
+		const once = withTableNumbers([{ tables: [{ id: 'a' }, { id: 'b' }, { id: 'c' }] as unknown as TableObj[] }]);
+		const after = tableNumbers([{ tables: once[0].tables.filter((t) => t.id !== 'b') }]);
+		expect(after.get('c')).toBe(3);
+		expect(tableTag(after.get('c'))).toBe('T3');
 	});
 });
 

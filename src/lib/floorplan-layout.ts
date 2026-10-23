@@ -6,7 +6,7 @@
  * Pure, so the staff and the client routes share one rule and it is tested.
  */
 
-import { migrateToMultiFloor, type MultiFloorState } from './floorplan-types';
+import { migrateToMultiFloor, type MultiFloorState, type TableObj } from './floorplan-types';
 import { totalChairs } from './floorplan-geometry';
 
 export interface TemplateApplied {
@@ -78,6 +78,56 @@ export function arrangementKey(raw: unknown): string {
 		seats: (f.seats ?? []).map((s) => [s.id, r3(s.x), r3(s.y), r3(s.rotation)]),
 		zones: (f.zones ?? []).map((z) => [z.id, (z.points ?? []).map((p) => [r3(p.x), r3(p.y)])])
 	})));
+}
+
+/**
+ * Table numbers, T1, T2…, one per table across every floor.
+ *
+ * All tables of one type share their label ("Okrúhly stôl 10"), so the label alone
+ * made seat chips ambiguous, and the manifest numbered tables by their position on
+ * each floor, which matched nothing in the editor. A table keeps the number it was
+ * given (`num`); a table without one, or with one another table took first, gets
+ * the lowest free number, in floor and table order — the same answer wherever it
+ * is asked, so the editor and the printed manifest agree even before a save.
+ */
+export function tableNumbers(floors: { tables?: { id: string; num?: number }[] }[]): Map<string, number> {
+	const out = new Map<string, number>();
+	const used = new Set<number>();
+	const pending: string[] = [];
+	for (const f of floors) for (const t of f.tables ?? []) {
+		const n = Number(t.num);
+		if (Number.isInteger(n) && n > 0 && !used.has(n) && !out.has(t.id)) { out.set(t.id, n); used.add(n); }
+		else if (!out.has(t.id)) pending.push(t.id);
+	}
+	let next = 1;
+	for (const id of pending) {
+		if (out.has(id)) continue;
+		while (used.has(next)) next++;
+		out.set(id, next);
+		used.add(next);
+	}
+	return out;
+}
+
+/** The number for a new table: one above the highest in use. */
+export function nextTableNumber(floors: { tables?: { id: string; num?: number }[] }[]): number {
+	let max = 0;
+	for (const n of tableNumbers(floors).values()) if (n > max) max = n;
+	return max + 1;
+}
+
+/** Write the numbers onto the tables, so they are stored and stay put. */
+export function withTableNumbers<F extends { tables: TableObj[] }>(floors: F[]): F[] {
+	const nums = tableNumbers(floors);
+	return floors.map((f) => ({
+		...f,
+		tables: f.tables.map((t) => (t.num === nums.get(t.id) ? t : { ...t, num: nums.get(t.id) }))
+	}));
+}
+
+/** "T3", the tag printed on the plan, in seat chips and on the manifest. */
+export function tableTag(n: number | undefined): string {
+	return n ? `T${n}` : 'T?';
 }
 
 /**

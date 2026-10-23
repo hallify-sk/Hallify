@@ -15,6 +15,9 @@ export interface TableObj {
 	assignments: (string | null)[];
 	typeId?: string;
 	note?: string;       // a note for staff ("one high chair"), shown in the seating editor
+	/** The table's number (T1, T2…), unique across a layout's floors and kept when
+	 *  other tables come and go, so seat chips, the manifest and the room agree. */
+	num?: number;
 	chairsOnShortSide?: boolean; // legacy compat
 }
 export interface Guest {

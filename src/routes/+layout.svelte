@@ -102,8 +102,12 @@
 	const isAuthPage = $derived(AUTH_PATHS.some(p => $page.url.pathname.startsWith(p)));
 	const isLandingPage = $derived(['/', '/pre-prevadzkovatelov', '/priestory'].includes($page.url.pathname));
 	const isPublicHallsPage = $derived($page.url.pathname.startsWith('/halls'));
-	// Document-style pages (printable seating manifest) render without the app shell.
-	const isDocPage = $derived($page.url.pathname.endsWith('/manifest'));
+	// Document-style pages (printable seating manifest, printable floor plans and
+	// templates) render without the app shell.
+	const isDocPage = $derived(
+		$page.url.pathname.endsWith('/manifest') ||
+		/^\/app\/manage\/halls\/[^/]+\/(editor|templates\/[^/]+)\/print$/.test($page.url.pathname)
+	);
 	// Legal documents render standalone, like the landing page.
 	const isLegalPage = $derived(['/terms', '/privacy', '/dpa'].includes($page.url.pathname));
 	// The site builder's preview is a public site inside an iframe: it must render
