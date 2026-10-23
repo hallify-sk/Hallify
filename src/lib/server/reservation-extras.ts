@@ -8,7 +8,8 @@
 
 import { dbAll, dbFirst, dbRun } from '$lib/db/index';
 import type { HallExtraRow } from '$lib/db/index';
-import { computeExtras, parseExtraIds, parseExtrasSnapshot, snapshotExtras, withBookedPrices, type ExtraSnapshotItem } from '$lib/extras';
+import { extrasSummary, parseExtrasSnapshot, snapshotExtras, withBookedPrices, type ExtraSnapshotItem } from '$lib/extras';
+import type { ReservationChange } from '$lib/email';
 import type { D1Database } from '@cloudflare/workers-types';
 
 /** The booking's stored snapshot, or [] (no column yet, or nothing booked). */
@@ -47,16 +48,21 @@ export async function saveExtrasSnapshot(
 	return snapshot;
 }
 
-/** What a booking's extras come to, priced as booked (legacy rows without a snapshot
- *  fall back to today's prices). For emails and summaries. */
-export async function bookedExtrasTotal(
+/**
+ * The extras change between two selections, for the "what changed" lines of an email,
+ * or null when the selection and its total are the same. Each side is priced with its
+ * own snapshot, so a total shown is the one the client agreed to.
+ */
+export async function extrasChange(
 	db: D1Database,
-	reservation: { id: string; hall_id: string; extras_json: string | null; num_guests: number | null }
-): Promise<{ names: string[]; totalCents: number }> {
-	const ids = parseExtraIds(reservation.extras_json);
-	if (!ids.length) return { names: [], totalCents: 0 };
-	const live = await dbAll<HallExtraRow>(db, 'SELECT * FROM hall_extras WHERE hall_id = ?', reservation.hall_id);
-	const priced = withBookedPrices(live, await loadExtrasSnapshot(db, reservation.id));
-	const { lines, totalCents } = computeExtras(priced, ids, reservation.num_guests);
-	return { names: lines.map((l) => (l.pricing === 'per_guest' ? `${l.name} ×${l.qty}` : l.name)), totalCents };
+	hallId: string,
+	numGuests: number | null,
+	before: { ids: string[]; snapshot: ExtraSnapshotItem[] },
+	after: { ids: string[]; snapshot: ExtraSnapshotItem[] }
+): Promise<ReservationChange | null> {
+	const live = await dbAll<HallExtraRow>(db, 'SELECT * FROM hall_extras WHERE hall_id = ? ORDER BY created_at, id', hallId);
+	const from = extrasSummary(withBookedPrices(live, before.snapshot), before.ids, numGuests);
+	const to = extrasSummary(withBookedPrices(live, after.snapshot), after.ids, numGuests);
+	if (from.text === to.text && from.cents === to.cents) return null;
+	return { field: 'extras', from: from.text, to: to.text, fromCents: from.cents, toCents: to.cents };
 }

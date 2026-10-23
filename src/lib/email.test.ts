@@ -16,6 +16,7 @@ vi.mock('$env/dynamic/private', () => envMock);
 import {
 	describeChanges, getEmailHealth, isConfigError, isDefaultTemplate, notifyGuestMessage, notifyNewReservation,
 	notifyStatusChange, reservationChanges, resolveTemplates, staffRecipients,
+	notifyBookingReceived, notifyClientCancelled, notifyEventReminder, notifyVenueChange,
 } from './email';
 import { renderTemplate, styleBody } from './server/email-layout';
 import { DEFAULT_TEMPLATES, EMAIL_COPY, LEGACY_DEFAULT_TEMPLATES } from './server/email-copy';
@@ -230,6 +231,57 @@ describe('notification emails', () => {
 		expect(waitUntil).toHaveBeenCalled();
 		await p;
 		expect(sent).toHaveLength(1);
+	});
+});
+
+describe('client emails (M4)', () => {
+	it('booking receipt: "request received" while pending, linking to the booking', async () => {
+		expect(await notifyBookingReceived(db, 'org', 'res')).toBe(true);
+		expect(sent).toHaveLength(1);
+		expect(sent[0].to).toBe('client@example.com');
+		expect(sent[0].subject).toBe('Žiadosť o rezerváciu prijatá: Svadba <img src=x>');
+		expect(sent[0].html).toContain(EMAIL_COPY.sk.statusInfo.pending);
+		expect(sent[0].html).not.toContain('<img src=x>');
+		expect(sent[0].html).toContain('https://kastiel.hallify.sk/halls/my-reservations/res');
+	});
+
+	it('booking receipt: "confirmed" when the hall approved it by itself', async () => {
+		sqlite.exec("UPDATE reservations SET status = 'approved' WHERE id = 'res'");
+		await notifyBookingReceived(db, 'org', 'res');
+		expect(sent[0].subject).toBe('Rezervácia potvrdená: Svadba <img src=x>');
+	});
+
+	it('is not sent for a staff member\'s own event, nor when the venue switched it off', async () => {
+		sqlite.exec(`INSERT INTO reservations (id, org_id, hall_id, user_id, title, event_date, status, invite_code)
+			VALUES ('own', 'org', 'hall', 'owner', 'Interné', '2027-06-01', 'approved', 'OWN')`);
+		expect(await notifyBookingReceived(db, 'org', 'own')).toBe(false);
+		sqlite.exec(`INSERT INTO org_settings (org_id, key, value) VALUES ('org', 'email_notifications', '{"bookingReceipt":false}')`);
+		expect(await notifyBookingReceived(db, 'org', 'res')).toBe(false);
+		expect(await notifyClientCancelled(db, 'org', 'res')).toBe(false);
+		expect(sent).toHaveLength(0);
+	});
+
+	it('venue changes: the client is told what changed, extras with their totals', async () => {
+		await notifyVenueChange(db, 'org', 'res', [
+			{ field: 'extras', from: 'Catering ×80', to: 'Catering ×80, Projektor', fromCents: 200000, toCents: 205000 },
+			{ field: 'layout', from: null, to: null },
+		]);
+		expect(sent).toHaveLength(1);
+		expect(sent[0].subject).toBe('Prevádzka upravila vašu rezerváciu: Svadba <img src=x>');
+		expect(sent[0].html).toMatch(/Doplnky: Catering ×80 \(2\s000,00\s€\) → Catering ×80, Projektor \(2\s050,00\s€\)/);
+		expect(sent[0].html).toContain(EMAIL_COPY.sk.changes.layoutReset);
+	});
+
+	it('venue changes: nothing for a cancelled booking or an empty change list', async () => {
+		expect(await notifyVenueChange(db, 'org', 'res', [])).toBe(false);
+		sqlite.exec("UPDATE reservations SET status = 'cancelled' WHERE id = 'res'");
+		expect(await notifyVenueChange(db, 'org', 'res', [{ field: 'guests', from: '80', to: '90' }])).toBe(false);
+		expect(sent).toHaveLength(0);
+	});
+
+	it('reminder names the event and its date in the subject', async () => {
+		await notifyEventReminder(db, 'org', 'res');
+		expect(sent[0].subject).toBe('Pripomienka: Svadba <img src=x> – 22. mája 2027');
 	});
 });
 

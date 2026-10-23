@@ -18,7 +18,7 @@ const overrides = (submitted: Record<string, string>) => Object.fromEntries(
   Object.entries(templateOverrides(submitted, DEFAULT_TEMPLATES)).filter(([k, v]) => !isDefaultTemplate(k as TemplateKey, v))
 );
 
-const TEMPLATE_KEYS = ['newReservation', 'guestMessage', 'guestCancel', 'guestEdit', 'statusChange', 'hallCancellation', 'newMessage', 'passwordReset', 'testEmail'] as const;
+const TEMPLATE_KEYS = ['newReservation', 'guestMessage', 'guestCancel', 'guestEdit', 'statusChange', 'hallCancellation', 'newMessage', 'passwordReset', 'testEmail', 'bookingReceived', 'bookingConfirmed', 'clientEdited', 'clientCancelled', 'venueChanged', 'eventReminder'] as const;
 
 export const load: PageServerLoad = async ({ locals }) => {
   const templates = await getEmailTemplates(locals.db);

@@ -6,7 +6,7 @@ import type { UserRow } from '$lib/db/index';
 import { st } from '$lib/i18n-server';
 import bcrypt from 'bcryptjs';
 import { endSessions, isValidEmail, normaliseEmail } from '$lib/server/account';
-import { sendEmailChangedNotice } from '$lib/server/account-emails';
+import { sendEmailChangedNotice, sendPasswordChangedNotice } from '$lib/server/account-emails';
 import { rateLimit, rateLimitKey, rateLimitStatus, tooManyAttemptsMessage, RATE_LIMITS } from '$lib/rateLimit';
 
 /** Check the account's current password, counting only wrong guesses against the
@@ -130,6 +130,8 @@ export const actions: Actions = {
 		await dbRun(locals.db, 'UPDATE users SET password_hash = ? WHERE id = ?', hash, locals.user.id);
 		// This device stays signed in; every other one has to use the new password.
 		await endSessions(locals.db, locals.user.id, cookies.get('session_id'));
+		// If it was not them, this is how the owner of the account finds out.
+		sendPasswordChangedNotice(locals.db, locals.locale, locals.user.email).catch(() => {});
 
 		return { success: true, section: 'password' };
 	},

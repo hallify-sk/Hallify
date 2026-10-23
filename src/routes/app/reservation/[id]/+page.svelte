@@ -158,6 +158,7 @@
 	const FIELD_LABEL = $derived<Record<string, string>>({
 		date: t.resOps.fieldDate, time: t.resOps.fieldTime, guests: t.resOps.fieldGuests,
 		notes: t.resOps.fieldNotes, internal: t.resOps.fieldInternal, client: t.resOps.fieldBooking,
+		extras: t.resOps.fieldExtras, layout: t.resOps.fieldLayout,
 	});
 
 	function activityText(a: { kind: string; status: string | null; note: string | null }) {

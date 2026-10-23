@@ -18,6 +18,12 @@
 		{ key: 'statusChange', label: t.platformMisc.tplStatusChange, vars: 'title, status' },
 		{ key: 'hallCancellation', label: t.platformMisc.tplHallCancellation, vars: 'title, hallName, date, message' },
 		{ key: 'newMessage', label: t.platformMisc.tplNewMessage, vars: 'senderName, subject' },
+		{ key: 'bookingReceived', label: t.platformMisc.tplBookingReceived, vars: 'title, hallName, date, statusInfo' },
+		{ key: 'bookingConfirmed', label: t.platformMisc.tplBookingConfirmed, vars: 'title, hallName, date, statusInfo' },
+		{ key: 'clientEdited', label: t.platformMisc.tplClientEdited, vars: 'title, changes' },
+		{ key: 'clientCancelled', label: t.platformMisc.tplClientCancelled, vars: 'title, hallName, date' },
+		{ key: 'venueChanged', label: t.platformMisc.tplVenueChanged, vars: 'title, changes' },
+		{ key: 'eventReminder', label: t.platformMisc.tplEventReminder, vars: 'title, hallName, date' },
 		{ key: 'passwordReset', label: t.platformMisc.tplPasswordReset, vars: 'resetUrl' },
 		{ key: 'testEmail', label: t.platformMisc.tplTestEmail, vars: '' },
 	] as const);

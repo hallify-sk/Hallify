@@ -23,13 +23,14 @@ function planHasWebhooks(plan: string): boolean {
  *  back when it sends, so the two can never drift apart silently. */
 const TEAM_EVENTS = ['newReservation', 'guestMessage', 'guestCancel', 'guestEdit'] as const satisfies readonly TeamNotifyEvent[];
 /** Emails addressed to the guest. These stay a plain on/off switch. */
-const GUEST_EVENTS = ['statusChange', 'newMessage'] as const;
+const GUEST_EVENTS = ['statusChange', 'newMessage', 'bookingReceipt', 'venueChanges', 'eventReminder'] as const;
 
 type TeamEvent = (typeof TEAM_EVENTS)[number];
 
 interface StoredNotifications {
   newReservation?: boolean; guestMessage?: boolean; guestCancel?: boolean; guestEdit?: boolean;
   statusChange?: boolean; newMessage?: boolean;
+  bookingReceipt?: boolean; venueChanges?: boolean; eventReminder?: boolean;
   /** Per-event staff recipients. `null`/absent means "every member of the team". */
   recipients?: Partial<Record<TeamEvent, string[] | null>>;
 }
@@ -109,6 +110,9 @@ export const load: PageServerLoad = async ({ locals, url }) => {
     guestEdit:      saved.guestEdit      ?? true,
     statusChange:   saved.statusChange   ?? true,
     newMessage:     saved.newMessage     ?? true,
+    bookingReceipt: saved.bookingReceipt ?? true,
+    venueChanges:   saved.venueChanges   ?? true,
+    eventReminder:  saved.eventReminder  ?? true,
   };
 
   const staff = await loadStaff(locals.db, org.id);
@@ -225,6 +229,9 @@ export const actions: Actions = {
       guestEdit:      flags.guestEdit,
       statusChange:   flags.statusChange,
       newMessage:     flags.newMessage,
+      bookingReceipt: flags.bookingReceipt,
+      venueChanges:   flags.venueChanges,
+      eventReminder:  flags.eventReminder,
       recipients,
     };
 

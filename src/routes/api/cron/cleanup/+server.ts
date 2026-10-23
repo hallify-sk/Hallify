@@ -1,6 +1,7 @@
 import { json, error } from '@sveltejs/kit';
 import { env } from '$env/dynamic/private';
 import { runCleanup } from '$lib/cleanup';
+import { sendEventReminders } from '$lib/server/reminders';
 import type { RequestHandler } from './$types';
 
 /** Explicit housekeeping run, for an external scheduler.
@@ -28,5 +29,6 @@ export const POST: RequestHandler = async ({ request, locals }) => {
   if (diff !== 0) error(401, 'Unauthorized');
 
   const results = await runCleanup(locals.db);
-  return json({ ok: true, results }, { headers: { 'cache-control': 'no-store' } });
+  const reminders = await sendEventReminders(locals.db);
+  return json({ ok: true, results, reminders }, { headers: { 'cache-control': 'no-store' } });
 };

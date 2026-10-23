@@ -4,7 +4,7 @@ import { dbAll, dbFirst, dbRun, fromJsonArr } from '$lib/db/index';
 import type { HallRow, HallBlockRow } from '$lib/db/index';
 import type { PageServerLoad, Actions } from './$types';
 import { assertCanBook, getTakenDates, getHeldDatesByOthers, getUnavailableDates, getFullMonths, releaseHold, earliestBookableISO, isoLocal, addDays, HOLD_MINUTES } from '$lib/availability';
-import { notifyNewReservation } from '$lib/email';
+import { notifyNewReservation, notifyBookingReceived } from '$lib/email';
 import { dispatchWebhooks } from '$lib/notifications';
 import { st } from '$lib/i18n-server';
 import { loadBookableExtras } from '$lib/site/bookable-extras';
@@ -111,6 +111,9 @@ export const actions: Actions = {
 		// Let the venue's owners/admins know a guest has requested a booking.
 		const guestName = `${locals.user.first_name} ${locals.user.last_name}`;
 		notifyNewReservation(locals.db, orgId, title, guestName, hall.name, eventDate, { reservationId }).catch(() => {});
+		// And give the client a receipt: "we have your request", or "confirmed" when
+		// the hall approves bookings by itself.
+		notifyBookingReceived(locals.db, orgId, reservationId).catch(() => {});
 
 		// Same webhook as a staff-made booking (src/lib/server/reservations.ts):
 		// bookings from the venue site fired none.

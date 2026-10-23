@@ -1,6 +1,8 @@
 import type { PageServerLoad, Actions } from './$types';
 import { fail, redirect } from '@sveltejs/kit';
 import { completePasswordReset, findPasswordResetRow } from '$lib/server/account';
+import { sendPasswordChangedNotice } from '$lib/server/account-emails';
+import { dbFirst } from '$lib/db/index';
 import { st } from '$lib/i18n-server';
 import bcrypt from 'bcryptjs';
 import { rateLimit, rateLimitKey, tooManyAttemptsMessage, RATE_LIMITS } from '$lib/rateLimit';
@@ -60,6 +62,9 @@ export const actions: Actions = {
     if (!(await completePasswordReset(locals.db, reset, hash))) {
       return fail(400, { error: st(locals.locale).serverErrors.invalidOrExpiredResetLink });
     }
+    // Under the venue's name: the client knows the venue, not Hallify.
+    const account = await dbFirst<{ email: string }>(locals.db, 'SELECT email FROM users WHERE id = ?', reset.user_id);
+    if (account) sendPasswordChangedNotice(locals.db, locals.locale, account.email, locals.domainOrg.name).catch(() => {});
 
     redirect(303, '/login?reset=success');
   },

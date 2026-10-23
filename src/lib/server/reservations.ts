@@ -10,7 +10,7 @@ import { dbFirst, dbRun } from '$lib/db/index';
 import type { HallRow, ReservationStatus, TemplateRow } from '$lib/db/index';
 import { assertCanBook, releaseHold } from '$lib/availability';
 import { st } from '$lib/i18n-server';
-import { notifyNewReservation } from '$lib/email';
+import { notifyNewReservation, notifyBookingReceived } from '$lib/email';
 import { postSystemMessage } from '$lib/tickets';
 import { dispatchWebhooks } from '$lib/notifications';
 import {
@@ -170,6 +170,8 @@ export async function createReservation(
 		await postSystemMessage(locals.db, user.id, title, `reservation_created:${initialStatus}:${userName}`, user.id, newId);
 		// Staff are not e-mailed about a booking one of them typed in.
 		if (!staff) notifyNewReservation(locals.db, input.orgId, title, userName, hall.name, eventDate, { reservationId: newId }).catch(() => {});
+		// A client booking for themselves gets a receipt (staff do not, for their own events).
+		if (!staff && user.account_type === 'client') notifyBookingReceived(locals.db, input.orgId, newId).catch(() => {});
 	}
 	// `reservation.new` is declared in WebhookEvent and offered in the webhook
 	// settings UI, but nothing ever dispatched it — subscribing was a no-op.

@@ -8,7 +8,8 @@ export type EmailLocale = 'sk' | 'en';
 
 export type TemplateKey =
 	| 'newReservation' | 'guestMessage' | 'guestCancel' | 'guestEdit'
-	| 'statusChange' | 'hallCancellation' | 'newMessage' | 'passwordReset' | 'testEmail';
+	| 'statusChange' | 'hallCancellation' | 'newMessage' | 'passwordReset' | 'testEmail'
+	| 'bookingReceived' | 'bookingConfirmed' | 'clientEdited' | 'clientCancelled' | 'venueChanged' | 'eventReminder';
 
 /** Default bodies of the templates platform admins can override on /app/platform/email.
  *  Every {{variable}} is HTML-escaped when rendered, and line breaks are kept. */
@@ -34,6 +35,23 @@ export const DEFAULT_TEMPLATES: Record<EmailLocale, Record<TemplateKey, string>>
 		newMessage: `<h2>Nová správa</h2>
 <p><b>{{senderName}}</b> vám napísal(a) v konverzácii <b>{{subject}}</b>:</p>
 <blockquote>{{message}}</blockquote>`,
+		bookingReceived: `<h2>Vašu žiadosť sme prijali</h2>
+<p>Ďakujeme, žiadosť o rezerváciu <b>{{title}}</b> v sále <b>{{hallName}}</b> na <b>{{date}}</b> je u prevádzky.</p>
+<p>{{statusInfo}}</p>`,
+		bookingConfirmed: `<h2>Vaša rezervácia je potvrdená</h2>
+<p>Rezervácia <b>{{title}}</b> v sále <b>{{hallName}}</b> na <b>{{date}}</b> je potvrdená.</p>
+<p>{{statusInfo}}</p>`,
+		clientEdited: `<h2>Zmeny vašej rezervácie sú uložené</h2>
+<p>V rezervácii <b>{{title}}</b> ste zmenili:</p>
+<p>{{changes}}</p>`,
+		clientCancelled: `<h2>Rezervácia je zrušená</h2>
+<p>Zrušili ste rezerváciu <b>{{title}}</b> v sále <b>{{hallName}}</b> na <b>{{date}}</b>. Prevádzka o tom dostala správu.</p>`,
+		venueChanged: `<h2>Prevádzka upravila vašu rezerváciu</h2>
+<p>V rezervácii <b>{{title}}</b> sa zmenilo:</p>
+<p>{{changes}}</p>`,
+		eventReminder: `<h2>Vaše podujatie sa blíži</h2>
+<p><b>{{title}}</b> v sále <b>{{hallName}}</b> sa koná <b>{{date}}</b>.</p>
+<p>Podrobnosti, zasadací poriadok a správy pre prevádzku nájdete vo svojej rezervácii.</p>`,
 		passwordReset: `<h2>Obnovenie hesla</h2>
 <p>Požiadali ste o obnovenie hesla. Nové heslo si nastavíte cez tento odkaz:</p>
 <p><a href="{{resetUrl}}">{{resetUrl}}</a></p>
@@ -62,6 +80,23 @@ export const DEFAULT_TEMPLATES: Record<EmailLocale, Record<TemplateKey, string>>
 		newMessage: `<h2>New message</h2>
 <p><b>{{senderName}}</b> wrote to you in the conversation <b>{{subject}}</b>:</p>
 <blockquote>{{message}}</blockquote>`,
+		bookingReceived: `<h2>We have received your request</h2>
+<p>Thank you, your booking request <b>{{title}}</b> at <b>{{hallName}}</b> on <b>{{date}}</b> is with the venue.</p>
+<p>{{statusInfo}}</p>`,
+		bookingConfirmed: `<h2>Your reservation is confirmed</h2>
+<p>Your reservation <b>{{title}}</b> at <b>{{hallName}}</b> on <b>{{date}}</b> is confirmed.</p>
+<p>{{statusInfo}}</p>`,
+		clientEdited: `<h2>Your changes are saved</h2>
+<p>You changed the reservation <b>{{title}}</b>:</p>
+<p>{{changes}}</p>`,
+		clientCancelled: `<h2>Your reservation is cancelled</h2>
+<p>You cancelled the reservation <b>{{title}}</b> at <b>{{hallName}}</b> on <b>{{date}}</b>. The venue has been told.</p>`,
+		venueChanged: `<h2>The venue changed your reservation</h2>
+<p>In your reservation <b>{{title}}</b>, this changed:</p>
+<p>{{changes}}</p>`,
+		eventReminder: `<h2>Your event is coming up</h2>
+<p><b>{{title}}</b> at <b>{{hallName}}</b> takes place on <b>{{date}}</b>.</p>
+<p>You will find the details, the seating plan and your messages with the venue in your reservation.</p>`,
 		passwordReset: `<h2>Password reset</h2>
 <p>You asked to reset your password. Set a new one with this link:</p>
 <p><a href="{{resetUrl}}">{{resetUrl}}</a></p>
@@ -111,6 +146,12 @@ const sk = {
 		statusChange: (title: string, status: string) => `${title}: ${status}`,
 		hallCancellation: (title: string) => `Rezervácia zrušená: ${title}`,
 		newMessage: (subject: string) => `Nová správa: ${subject}`,
+		bookingReceived: (title: string) => `Žiadosť o rezerváciu prijatá: ${title}`,
+		bookingConfirmed: (title: string) => `Rezervácia potvrdená: ${title}`,
+		clientEdited: (title: string) => `Zmeny uložené: ${title}`,
+		clientCancelled: (title: string) => `Rezervácia zrušená: ${title}`,
+		venueChanged: (title: string) => `Prevádzka upravila vašu rezerváciu: ${title}`,
+		eventReminder: (title: string, date: string) => `Pripomienka: ${title} – ${date}`,
 		passwordReset: 'Obnovenie hesla',
 		testEmail: 'Hallify – testovací e-mail',
 		announcement: (title: string) => `Oznámenie Hallify: ${title}`,
@@ -142,6 +183,10 @@ const sk = {
 		endTime: 'Koniec',
 		guests: 'Počet hostí',
 		description: 'Popis',
+		extras: 'Doplnky',
+		layout: 'Rozloženie stolov',
+		layoutReset: 'Rozloženie stolov je opäť predvolené. Stoly a usadenie hostí pripravíte znova vo svojej rezervácii.',
+		layoutTemplate: (name: string) => `Rozloženie stolov je teraz podľa šablóny „${name}“. Usadenie hostí si skontrolujte vo svojej rezervácii.`,
 		empty: '–',
 		unknown: 'Podrobnosti zmeny nájdete v rezervácii.',
 	},
@@ -186,6 +231,12 @@ const en: typeof sk = {
 		statusChange: (title: string, status: string) => `${title}: ${status}`,
 		hallCancellation: (title: string) => `Reservation cancelled: ${title}`,
 		newMessage: (subject: string) => `New message: ${subject}`,
+		bookingReceived: (title: string) => `Booking request received: ${title}`,
+		bookingConfirmed: (title: string) => `Reservation confirmed: ${title}`,
+		clientEdited: (title: string) => `Changes saved: ${title}`,
+		clientCancelled: (title: string) => `Reservation cancelled: ${title}`,
+		venueChanged: (title: string) => `The venue changed your reservation: ${title}`,
+		eventReminder: (title: string, date: string) => `Reminder: ${title} – ${date}`,
 		passwordReset: 'Password reset',
 		testEmail: 'Hallify – test email',
 		announcement: (title: string) => `Hallify announcement: ${title}`,
@@ -217,6 +268,10 @@ const en: typeof sk = {
 		endTime: 'End',
 		guests: 'Guests',
 		description: 'Description',
+		extras: 'Extras',
+		layout: 'Table layout',
+		layoutReset: 'The table layout is back to the default. You can set up the tables and seat your guests again in your reservation.',
+		layoutTemplate: (name: string) => `The table layout now follows the template "${name}". Please check your seating in your reservation.`,
 		empty: '–',
 		unknown: 'You will find the details of the change in the reservation.',
 	},

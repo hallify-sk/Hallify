@@ -4,6 +4,7 @@ import { isReservedSubdomain } from '$lib/reserved-subdomains';
 import { getBrandingCacheTime, setBrandingCacheTime, BRANDING_CACHE_TTL } from '$lib/branding-cache';
 import { dbAll, dbFirst, dbRun } from '$lib/db';
 import { runCleanup } from '$lib/cleanup';
+import { sendEventReminders } from '$lib/server/reminders';
 import { expirePastRequests } from '$lib/server/reservation-activity';
 import { getPlan } from '$lib/plans';
 import type { PlanId } from '$lib/plans';
@@ -213,7 +214,11 @@ function housekeeping(db: D1Database, ctx: { waitUntil?: (p: Promise<unknown>) =
   const now = Date.now();
   if (now - lastCleanup < CLEANUP_INTERVAL) return;
   lastCleanup = now;
-  const job = runCleanup(db).catch(() => []);
+  // Event reminders ride on the same hourly tick: there is no Cron Trigger.
+  const job = Promise.all([
+    runCleanup(db).catch(() => []),
+    sendEventReminders(db).catch(() => 0),
+  ]);
   if (ctx?.waitUntil) ctx.waitUntil(job);
 }
 

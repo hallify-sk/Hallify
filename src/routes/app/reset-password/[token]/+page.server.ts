@@ -4,6 +4,8 @@ import bcrypt from 'bcryptjs';
 import { st } from '$lib/i18n-server';
 import { rateLimit, rateLimitKey, tooManyAttemptsMessage, RATE_LIMITS } from '$lib/rateLimit';
 import { completePasswordReset, findPasswordReset } from '$lib/server/account';
+import { sendPasswordChangedNotice } from '$lib/server/account-emails';
+import { dbFirst } from '$lib/db/index';
 
 // Hallify accounts only (no org): a venue client's link is redeemed on the venue's own
 // site, in src/routes/reset-password.
@@ -46,6 +48,8 @@ export const actions: Actions = {
 		if (!(await completePasswordReset(locals.db, reset, hash))) {
 			return fail(400, { error: st(locals.locale).serverErrors.invalidOrExpiredResetLink });
 		}
+		const account = await dbFirst<{ email: string }>(locals.db, 'SELECT email FROM users WHERE id = ?', reset.user_id);
+		if (account) sendPasswordChangedNotice(locals.db, locals.locale, account.email).catch(() => {});
 
 		// /login is the bubble-only route; on the apex it bounces to /app/login and the
 		// ?reset=success flag is lost, so the user never sees the confirmation.

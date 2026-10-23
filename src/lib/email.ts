@@ -6,7 +6,7 @@ import { DEFAULT_TEMPLATES, LEGACY_DEFAULT_TEMPLATES, emailCopy, type EmailLocal
 import { escapeHtml, renderLayout, renderTemplate } from '$lib/server/email-layout';
 import { isUserLocale, orgDefaultLocale, recipientLocale, storedLocaleForEmail } from '$lib/server/user-locale';
 import { statusLabel } from '$lib/reservationStatus';
-import { formatDate } from '$lib/format';
+import { formatDate, formatMoney } from '$lib/format';
 import { st } from '$lib/i18n-server';
 import { orgPublicBaseUrl } from '$lib/orgUrl';
 
@@ -38,6 +38,12 @@ export interface EmailNotifyConfig {
 	// Notify the guest
 	statusChange: boolean;
 	newMessage: boolean;
+	/** The client's own booking, change or cancellation is confirmed to them. */
+	bookingReceipt: boolean;
+	/** The client is told when the venue changes their extras, details or table layout. */
+	venueChanges: boolean;
+	/** The client is reminded a few days before the event. */
+	eventReminder: boolean;
 	/** Per-event staff recipients, written by Settings → Advanced. `null` or absent
 	 *  means "every member of the organisation", so a member invited tomorrow is
 	 *  included without anyone revisiting that screen. An explicit list is honoured
@@ -55,6 +61,12 @@ export interface EmailTemplates {
 	newMessage?: string;
 	passwordReset?: string;
 	testEmail?: string;
+	bookingReceived?: string;
+	bookingConfirmed?: string;
+	clientEdited?: string;
+	clientCancelled?: string;
+	venueChanged?: string;
+	eventReminder?: string;
 }
 
 const TEMPLATE_KEYS = Object.keys(DEFAULT_TEMPLATES.sk) as TemplateKey[];
@@ -71,6 +83,7 @@ export async function getNotifyConfig(db: D1Database, orgId: string): Promise<Em
 	return {
 		newReservation: true, guestMessage: true, guestCancel: true, guestEdit: true,
 		statusChange: true, newMessage: true,
+		bookingReceipt: true, venueChanges: true, eventReminder: true,
 		...(config ?? {}),
 	};
 }
@@ -317,6 +330,8 @@ interface ReservationContext {
 	clientEmail: string | null;
 	clientName: string | null;
 	clientLocale: EmailLocale | null;
+	/** True when the booking belongs to a venue client (not a staff member's own event). */
+	clientIsClient: boolean;
 }
 
 async function loadReservation(db: D1Database, id: string | null | undefined): Promise<ReservationContext | null> {
@@ -325,11 +340,12 @@ async function loadReservation(db: D1Database, id: string | null | undefined): P
 		id: string; org_id: string; title: string; event_date: string; start_time: string | null; end_time: string | null;
 		num_guests: number | null; status: string; hall_name: string; hall_email: string | null;
 		client_id: string | null; client_email: string | null; first_name: string | null; last_name: string | null; client_locale?: string | null;
+		client_account_type: string | null;
 	};
 	const sql = (withLocale: boolean) => `
 		SELECT r.id, r.org_id, r.title, r.event_date, r.start_time, r.end_time, r.num_guests, r.status,
 		       h.name AS hall_name, h.contact_email AS hall_email,
-		       u.id AS client_id, u.email AS client_email, u.first_name, u.last_name
+		       u.id AS client_id, u.email AS client_email, u.first_name, u.last_name, u.account_type AS client_account_type
 		       ${withLocale ? ', u.locale AS client_locale' : ''}
 		  FROM reservations r
 		  JOIN halls h ON h.id = r.hall_id
@@ -357,6 +373,7 @@ async function loadReservation(db: D1Database, id: string | null | undefined): P
 		clientEmail: row.client_email,
 		clientName: [row.first_name, row.last_name].filter(Boolean).join(' ') || null,
 		clientLocale: isUserLocale(row.client_locale) ? row.client_locale : null,
+		clientIsClient: row.client_account_type === 'client',
 	};
 }
 
@@ -553,9 +570,12 @@ export const notifyGuestCancel = inBackground(async function notifyGuestCancel(
 
 /** One field a client changed on their booking. */
 export interface ReservationChange {
-	field: 'title' | 'date' | 'startTime' | 'endTime' | 'guests' | 'description';
+	field: 'title' | 'date' | 'startTime' | 'endTime' | 'guests' | 'description' | 'extras' | 'layout';
 	from: string | null;
 	to: string | null;
+	/** Extras: what the selection before and after comes to, shown in the reader's currency format. */
+	fromCents?: number | null;
+	toCents?: number | null;
 }
 
 export interface ReservationSnapshot {
@@ -588,13 +608,21 @@ export function reservationChanges(before: ReservationSnapshot, after: Reservati
 export function describeChanges(changes: ReservationChange[] | null | undefined, locale: EmailLocale): string {
 	const c = emailCopy(locale).changes;
 	if (!changes?.length) return c.unknown;
-	const show = (field: ReservationChange['field'], v: string | null) => {
+	const show = (field: ReservationChange['field'], v: string | null, cents?: number | null) => {
+		if (field === 'extras') {
+			const names = v ?? c.empty;
+			return cents != null && cents > 0 ? `${names} (${formatMoney(cents, locale)})` : names;
+		}
 		if (v == null) return c.empty;
 		if (field === 'date') return eventDate(v, locale);
 		if (field === 'description') return v.length > 200 ? `${v.slice(0, 199)}…` : v;
 		return v;
 	};
-	return changes.map((ch) => `${c[ch.field]}: ${show(ch.field, ch.from)} → ${show(ch.field, ch.to)}`).join('\n');
+	return changes.map((ch) => {
+		// A replaced table layout has no "before → after" worth printing.
+		if (ch.field === 'layout') return ch.to ? c.layoutTemplate(ch.to) : c.layoutReset;
+		return `${c[ch.field]}: ${show(ch.field, ch.from, ch.fromCents)} → ${show(ch.field, ch.to, ch.toCents)}`;
+	}).join('\n');
 }
 
 // Guest edited a booking → email the organization's team, saying what changed.
@@ -737,6 +765,108 @@ export const notifyNewMessage = inBackground(async function notifyNewMessage(
 			bodyHtml: renderTemplate(tpl.newMessage, { subject: ticketSubject, senderName, message: extra.message ?? '' }),
 		}),
 		link: { url, label: (c) => (res ? c.cta.reply : c.cta.viewMessages) },
+	});
+});
+
+// The client's own booking → a receipt: "we have your request" while the venue
+// decides, "confirmed" when the hall approves bookings automatically (the client
+// used to hear nothing until a member of staff changed the status).
+export const notifyBookingReceived = inBackground(async function notifyBookingReceived(
+	db: D1Database, orgId: string, reservationId: string
+): Promise<boolean> {
+	const notify = await getNotifyConfig(db, orgId);
+	if (!notify.bookingReceipt) return false;
+	const res = await loadReservation(db, reservationId);
+	if (!res?.clientEmail || !res.clientIsClient) return false;
+	const confirmed = res.status === 'approved' || res.status === 'planned';
+	return emailClient(db, {
+		orgId, to: res.clientEmail, templateName: confirmed ? 'bookingConfirmed' : 'bookingReceived', res,
+		build: (c, locale, tpl) => ({
+			subject: confirmed ? c.subject.bookingConfirmed(res.title) : c.subject.bookingReceived(res.title),
+			bodyHtml: renderTemplate(confirmed ? tpl.bookingConfirmed : tpl.bookingReceived, {
+				title: res.title, hallName: res.hallName, date: eventDate(res.eventDate, locale),
+				statusInfo: c.statusInfo[res.status] ?? '',
+			}),
+		}),
+		link: { url: await clientReservationUrl(db, orgId, res.id), label: (c) => c.cta.viewBooking },
+	});
+});
+
+// The client changed or cancelled their own booking → confirm it to them, with what
+// changed. The venue's staff get their own email (notifyGuestEdit / notifyGuestCancel).
+export const notifyClientEdited = inBackground(async function notifyClientEdited(
+	db: D1Database, orgId: string, reservationId: string, changes: ReservationChange[]
+): Promise<boolean> {
+	if (!changes.length) return false;
+	const notify = await getNotifyConfig(db, orgId);
+	if (!notify.bookingReceipt) return false;
+	const res = await loadReservation(db, reservationId);
+	if (!res?.clientEmail || !res.clientIsClient) return false;
+	return emailClient(db, {
+		orgId, to: res.clientEmail, templateName: 'clientEdited', res,
+		build: (c, locale, tpl) => ({
+			subject: c.subject.clientEdited(res.title),
+			bodyHtml: renderTemplate(tpl.clientEdited, { title: res.title, changes: describeChanges(changes, locale) }),
+		}),
+		link: { url: await clientReservationUrl(db, orgId, res.id), label: (c) => c.cta.viewBooking },
+	});
+});
+
+export const notifyClientCancelled = inBackground(async function notifyClientCancelled(
+	db: D1Database, orgId: string, reservationId: string
+): Promise<boolean> {
+	const notify = await getNotifyConfig(db, orgId);
+	if (!notify.bookingReceipt) return false;
+	const res = await loadReservation(db, reservationId);
+	if (!res?.clientEmail || !res.clientIsClient) return false;
+	return emailClient(db, {
+		orgId, to: res.clientEmail, templateName: 'clientCancelled', res,
+		build: (c, locale, tpl) => ({
+			subject: c.subject.clientCancelled(res.title),
+			bodyHtml: renderTemplate(tpl.clientCancelled, { title: res.title, hallName: res.hallName, date: eventDate(res.eventDate, locale) }),
+		}),
+		link: { url: await clientReservationUrl(db, orgId, res.id), label: (c) => c.cta.viewBooking },
+	});
+});
+
+// The venue changed a client's booking (extras, date, time, guests, notes, or replaced
+// the table layout the client may have arranged) → tell the client what changed.
+// These used to change silently: only status changes reached the client.
+export const notifyVenueChange = inBackground(async function notifyVenueChange(
+	db: D1Database, orgId: string, reservationId: string, changes: ReservationChange[]
+): Promise<boolean> {
+	if (!changes.length) return false;
+	const notify = await getNotifyConfig(db, orgId);
+	if (!notify.venueChanges) return false;
+	const res = await loadReservation(db, reservationId);
+	if (!res?.clientEmail || !res.clientIsClient) return false;
+	if (res.status === 'cancelled' || res.status === 'completed') return false;
+	return emailClient(db, {
+		orgId, to: res.clientEmail, templateName: 'venueChanged', res,
+		build: (c, locale, tpl) => ({
+			subject: c.subject.venueChanged(res.title),
+			bodyHtml: renderTemplate(tpl.venueChanged, { title: res.title, changes: describeChanges(changes, locale) }),
+		}),
+		link: { url: await clientReservationUrl(db, orgId, res.id), label: (c) => c.cta.viewBooking },
+	});
+});
+
+// A few days before the event → remind the client (src/lib/server/reminders.ts picks
+// the bookings and makes sure each is reminded once).
+export const notifyEventReminder = inBackground(async function notifyEventReminder(
+	db: D1Database, orgId: string, reservationId: string
+): Promise<boolean> {
+	const notify = await getNotifyConfig(db, orgId);
+	if (!notify.eventReminder) return false;
+	const res = await loadReservation(db, reservationId);
+	if (!res?.clientEmail || !res.clientIsClient) return false;
+	return emailClient(db, {
+		orgId, to: res.clientEmail, templateName: 'eventReminder', res,
+		build: (c, locale, tpl) => ({
+			subject: c.subject.eventReminder(res.title, eventDate(res.eventDate, locale)),
+			bodyHtml: renderTemplate(tpl.eventReminder, { title: res.title, hallName: res.hallName, date: eventDate(res.eventDate, locale) }),
+		}),
+		link: { url: await clientReservationUrl(db, orgId, res.id), label: (c) => c.cta.viewBooking },
 	});
 });
 

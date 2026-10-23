@@ -1,6 +1,6 @@
 import { dbAll, dbFirst, dbRun } from '$lib/db/index';
 import type { HallRow, ReservationRow, ReservationStatus } from '$lib/db/index';
-import { notifyStatusChange, notifyNewMessage, notifyHallCancellation } from '$lib/email';
+import { notifyStatusChange, notifyNewMessage, notifyHallCancellation, notifyVenueChange, reservationChanges, type ReservationChange } from '$lib/email';
 import { dispatchWebhooks } from '$lib/notifications';
 import { assertCanBook } from '$lib/availability';
 import { st } from '$lib/i18n-server';
@@ -8,7 +8,9 @@ import { formatDate } from '$lib/format';
 import { logReservationActivity } from '$lib/server/reservation-activity';
 import { findOrCreateReservationThread, MESSAGE_MAX } from '$lib/server/threads';
 import { checkStatusTransition, normalizeTime, todayUtcISO } from '$lib/server/reservation-rules';
-import { loadExtrasSnapshot, saveExtrasSnapshot } from '$lib/server/reservation-extras';
+import { extrasChange, loadExtrasSnapshot, saveExtrasSnapshot } from '$lib/server/reservation-extras';
+import { parseExtraIds } from '$lib/extras';
+import { clearReminder } from '$lib/server/reminders';
 
 /**
  * What staff can do to a booking, in one place: the reservation page's actions and
@@ -177,9 +179,13 @@ export async function setReservationExtras(
 	db: App.Locals['db'],
 	orgId: string,
 	reservationId: string,
-	requested: string[]
+	requested: string[],
+	/** Who made the change. With it, the change goes into the booking's history and
+	 *  the client is emailed what changed (old and new total). */
+	actor?: Actor
 ): Promise<OpResult<{ kept: string[] }>> {
-	const res = await dbFirst<{ hall_id: string }>(db, 'SELECT hall_id FROM reservations WHERE id = ? AND org_id = ?', reservationId, orgId);
+	const res = await dbFirst<{ hall_id: string; extras_json: string | null; num_guests: number | null }>(db,
+		'SELECT hall_id, extras_json, num_guests FROM reservations WHERE id = ? AND org_id = ?', reservationId, orgId);
 	if (!res) return { ok: false, status: 404, error: 'not_found' };
 	// A booked extra the hall no longer offers may stay, at the price it was booked at.
 	const snapshot = await loadExtrasSnapshot(db, reservationId);
@@ -190,7 +196,19 @@ export async function setReservationExtras(
 	const kept = [...new Set(requested)].filter((id) => valid.has(id));
 	await dbRun(db, 'UPDATE reservations SET extras_json = ? WHERE id = ? AND org_id = ?',
 		kept.length ? JSON.stringify(kept) : null, reservationId, orgId);
-	await saveExtrasSnapshot(db, reservationId, res.hall_id, kept, snapshot);
+	const after = await saveExtrasSnapshot(db, reservationId, res.hall_id, kept, snapshot);
+
+	if (actor) {
+		const change = await extrasChange(db, res.hall_id, res.num_guests,
+			{ ids: parseExtraIds(res.extras_json), snapshot }, { ids: kept, snapshot: after });
+		if (change) {
+			await logReservationActivity(db, {
+				reservationId, orgId, actorId: actor.id, actorName: `${actor.first_name} ${actor.last_name}`.trim(),
+				kind: 'edited', note: 'extras',
+			});
+			notifyVenueChange(db, orgId, reservationId, [change]).catch(() => {});
+		}
+	}
 	return { ok: true, kept };
 }
 
@@ -279,5 +297,11 @@ export async function editReservationDetails(
 		reservationId, orgId, actorId: actor.id, actorName: `${actor.first_name} ${actor.last_name}`.trim(),
 		kind: 'edited', note: changed.join(','),
 	});
+	// A moved event is reminded again before its new date.
+	if (changed.includes('date')) await clearReminder(locals.db, reservationId);
+	// Tell the client what the venue changed (the internal note is not theirs to see).
+	const seen: ReservationChange[] = reservationChanges(res,
+		{ title: res.title, event_date: eventDate, start_time: startTime, end_time: endTime, num_guests: numGuests, description: description || null });
+	if (seen.length) notifyVenueChange(locals.db, orgId, reservationId, seen).catch(() => {});
 	return { ok: true, changed };
 }

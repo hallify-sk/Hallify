@@ -131,6 +131,20 @@ export function computeExtras(
 	return { lines, totalCents: lines.reduce((s, l) => s + l.line_cents, 0) };
 }
 
+/** The selection in words and what it comes to: "Catering ×80, Projektor" / 2 900 €.
+ *  `text` is null when nothing is selected. For change summaries in emails. */
+export function extrasSummary(
+	extras: HallExtraRow[],
+	selectedIds: string[],
+	numGuests: number | null
+): { text: string | null; cents: number } {
+	const { lines, totalCents } = computeExtras(extras, selectedIds, numGuests);
+	return {
+		text: lines.length ? lines.map((l) => (l.pricing === 'per_guest' ? `${l.name} ×${l.qty}` : l.name)).join(', ') : null,
+		cents: totalCents,
+	};
+}
+
 /** Format cents as a EUR string in the viewer's style: 11,50 € (sk) · €11.50 (en). */
 export function eur(cents: number, locale: Locale | string = 'sk'): string {
 	return formatMoney(cents, locale);

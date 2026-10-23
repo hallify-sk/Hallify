@@ -2,16 +2,19 @@ import { describe, expect, it, beforeEach, vi } from 'vitest';
 import type { D1Database } from '@cloudflare/workers-types';
 
 // No e-mail or webhook leaves a test run.
-vi.mock('$lib/email', () => ({
+vi.mock('$lib/email', async (importOriginal) => ({
+	reservationChanges: (await importOriginal<typeof import('$lib/email')>()).reservationChanges,
 	notifyStatusChange: vi.fn(async () => {}),
 	notifyNewMessage: vi.fn(async () => {}),
 	notifyHallCancellation: vi.fn(async () => {}),
+	notifyVenueChange: vi.fn(async () => true),
 }));
+vi.mock('$lib/server/reminders', () => ({ clearReminder: vi.fn(async () => {}) }));
 vi.mock('$lib/notifications', () => ({ dispatchWebhooks: vi.fn(async () => {}) }));
 
 import { testD1 } from '../test-d1';
 import { changeReservationStatus, editReservationDetails, messageReservationClient, setReservationExtras } from './reservation-ops';
-import { notifyHallCancellation, notifyStatusChange } from '$lib/email';
+import { notifyHallCancellation, notifyStatusChange, notifyVenueChange } from '$lib/email';
 
 let db: D1Database;
 let exec: (sql: string) => void;
@@ -80,6 +83,9 @@ describe('editReservationDetails', () => {
 		const res = await editReservationDetails(locals(), 'o1', 'r1', { ...base, eventDate: future(31) }, actor);
 		expect(res.ok).toBe(true);
 		expect(await row('r1')).toMatchObject({ event_date: future(31), start_time: '18:00', num_guests: 50, internal_notes: 'Len pre tím' });
+		// The client hears what changed, but not about the internal note (M4).
+		const changes = vi.mocked(notifyVenueChange).mock.calls[0][3];
+		expect(changes.map((c) => c.field)).toEqual(['date', 'startTime', 'guests', 'description']);
 	});
 
 	it('refuses a date another booking holds, and too many guests', async () => {
@@ -123,5 +129,25 @@ describe('setReservationExtras (price snapshot, I8)', () => {
 		const res = await setReservationExtras(db, 'o1', 'r1', ['x1', 'x2']);
 		expect(res.ok && res.kept).toEqual(['x1', 'x2']);
 		expect((await snap('r1')).map((s) => s.id)).toEqual(['x1', 'x2']);
+	});
+});
+
+describe('setReservationExtras by staff (M4)', () => {
+	beforeEach(() => {
+		exec(`INSERT INTO hall_extras (id, hall_id, name, price_cents, pricing) VALUES ('x1', 'h1', 'Catering', 2500, 'fixed');`);
+	});
+
+	it('logs the change and tells the client, old and new total', async () => {
+		await setReservationExtras(db, 'o1', 'r1', ['x1'], actor);
+		const change = vi.mocked(notifyVenueChange).mock.calls[0][3][0];
+		expect(change).toMatchObject({ field: 'extras', from: null, to: 'Catering', fromCents: 0, toCents: 2500 });
+		const act = await db.prepare("SELECT kind, note FROM reservation_activity WHERE reservation_id = 'r1'").first();
+		expect(act).toMatchObject({ kind: 'edited', note: 'extras' });
+	});
+
+	it('stays quiet when nothing changed, or without an actor', async () => {
+		await setReservationExtras(db, 'o1', 'r1', ['x1']);
+		await setReservationExtras(db, 'o1', 'r1', ['x1'], actor);
+		expect(notifyVenueChange).not.toHaveBeenCalled();
 	});
 });

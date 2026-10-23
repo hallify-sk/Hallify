@@ -20,6 +20,9 @@
   const guestItems = $derived([
     { key: 'statusChange', title: t.settingsPages.notifyStatusUpdateTitle, desc: t.settingsPages.notifyStatusUpdateDesc },
     { key: 'newMessage',   title: t.settingsPages.notifyRepliesTitle, desc: t.settingsPages.notifyRepliesDesc },
+    { key: 'bookingReceipt', title: t.settingsPages.notifyReceiptTitle, desc: t.settingsPages.notifyReceiptDesc },
+    { key: 'venueChanges',   title: t.settingsPages.notifyVenueChangesTitle, desc: t.settingsPages.notifyVenueChangesDesc },
+    { key: 'eventReminder',  title: t.settingsPages.notifyReminderTitle, desc: t.settingsPages.notifyReminderDesc },
   ] as const);
 
   // ── Webhooks ───────────────────────────────────────────────────────

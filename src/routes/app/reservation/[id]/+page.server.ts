@@ -4,7 +4,7 @@ import { dbAll, dbFirst, dbRun, fromJson, toJson } from '$lib/db/index';
 import type { ReservationRow, RsvpRow, TableTypeRow, TemplateRow, ReservationStatus, RsvpConfig, HallExtraRow } from '$lib/db/index';
 import { parseExtraIds, parseExtrasSnapshot, withBookedPrices } from '$lib/extras';
 import type { Actions, PageServerLoad } from './$types';
-import { notifyStatusChange, sendReservationInviteEmail, notifyEventAssigned } from '$lib/email';
+import { notifyStatusChange, sendReservationInviteEmail, notifyEventAssigned, notifyVenueChange } from '$lib/email';
 import { postSystemMessage } from '$lib/tickets';
 import {
 	changeReservationStatus, editReservationDetails, messageReservationClient, setReservationExtras,
@@ -36,6 +36,21 @@ type Extra = { customer_name: string | null; customer_contact: string | null; in
  *  member could cancel, re-layout or reset a colleague's (or a client's) booking. */
 function canActOnReservation(access: ReservationAccess, locals: App.Locals, reservationUserId: string): boolean {
 	return access.canManage || reservationUserId === locals.user?.id;
+}
+
+/** The booking's table layout was replaced wholesale (reset to the hall's plan, or a
+ *  template loaded): record it, and tell a client who may have arranged it. */
+async function layoutReplaced(locals: App.Locals, orgId: string, reservationId: string, templateName: string | null) {
+	const user = locals.user!;
+	await logReservationActivity(locals.db, {
+		reservationId, orgId, actorId: user.id, actorName: `${user.first_name} ${user.last_name}`.trim(),
+		kind: 'edited', note: 'layout',
+	});
+	// Only the venue's own changes: a client resetting their own layout needs no email.
+	const owner = await dbFirst<{ user_id: string }>(locals.db, 'SELECT user_id FROM reservations WHERE id = ?', reservationId);
+	if (owner && owner.user_id !== user.id) {
+		notifyVenueChange(locals.db, orgId, reservationId, [{ field: 'layout', from: null, to: templateName }]).catch(() => {});
+	}
 }
 
 /** The common preamble of a staff-only action. */
@@ -245,7 +260,8 @@ export const actions: Actions = {
 		const ctx = await staffAction(locals, 'error');
 		if ('fail' in ctx) return ctx.fail;
 		const requested = (await request.formData()).getAll('extras').map(String);
-		const res = await setReservationExtras(locals.db, ctx.orgId, params.id, requested);
+		// With the actor: the change is logged and the client is told (old and new total).
+		const res = await setReservationExtras(locals.db, ctx.orgId, params.id, requested, ctx.user);
 		if (!res.ok) return fail(404, { error: st(locals.locale).serverErrors.notFound });
 		return { extrasSaved: true };
 	},
@@ -364,8 +380,9 @@ export const actions: Actions = {
 		if (!locals.user) return fail(403, { error: st(locals.locale).serverErrors.unauthorized });
 		const orgId = locals.currentOrg?.id;
 		if (!orgId) return fail(403, { error: st(locals.locale).serverErrors.accessDenied });
-		const reservation = await dbFirst<ReservationRow>(locals.db,
-			'SELECT user_id, hall_id FROM reservations WHERE id = ? AND org_id = ?',
+		const reservation = await dbFirst<ReservationRow & { hall_floorplan: string | null }>(locals.db,
+			`SELECT r.user_id, r.hall_id, r.layout_json, h.floorplan_json AS hall_floorplan
+			   FROM reservations r JOIN halls h ON h.id = r.hall_id WHERE r.id = ? AND r.org_id = ?`,
 			params.id, orgId
 		);
 		if (!reservation) return fail(404, { error: st(locals.locale).serverErrors.notFound });
@@ -374,6 +391,11 @@ export const actions: Actions = {
 			'UPDATE reservations SET layout_json = (SELECT floorplan_json FROM halls WHERE id = ?) WHERE id = ? AND org_id = ?',
 			reservation.hall_id, params.id, orgId
 		);
+		// The client may have placed tables and seated guests: say so in the history and
+		// tell them (it used to vanish silently). Nothing to say if nothing changed.
+		if ((reservation.layout_json ?? null) !== (reservation.hall_floorplan ?? null)) {
+			await layoutReplaced(locals, orgId, params.id, null);
+		}
 		return { success: true };
 	},
 
@@ -394,7 +416,7 @@ export const actions: Actions = {
 
 		// Template must belong to the same hall (and therefore the same org).
 		const tmpl = await dbFirst<TemplateRow>(locals.db,
-			'SELECT layout_json FROM floorplan_templates WHERE id = ? AND hall_id = ?',
+			'SELECT name, layout_json FROM floorplan_templates WHERE id = ? AND hall_id = ?',
 			templateId, reservation.hall_id
 		);
 		if (!tmpl) return fail(404, { error: st(locals.locale).serverErrors.templateNotFound });
@@ -403,6 +425,7 @@ export const actions: Actions = {
 			'UPDATE reservations SET layout_json = ? WHERE id = ? AND org_id = ?',
 			toJson(fromJson(tmpl.layout_json as string | null)), params.id, orgId
 		);
+		await layoutReplaced(locals, orgId, params.id, tmpl.name || null);
 		return { success: true };
 	},
 

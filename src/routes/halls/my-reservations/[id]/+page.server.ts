@@ -3,9 +3,10 @@ import { loginUrl } from '$lib/login-redirect';
 import { dbAll, dbFirst, dbRun, fromJsonArr } from '$lib/db/index';
 import type { HallRow, HallBlockRow, ReservationRow } from '$lib/db/index';
 import { parseExtraIds, parseExtrasSnapshot, withBookedPrices } from '$lib/extras';
-import { saveExtrasSnapshot } from '$lib/server/reservation-extras';
+import { extrasChange, saveExtrasSnapshot } from '$lib/server/reservation-extras';
+import { clearReminder } from '$lib/server/reminders';
 import { dispatchWebhooks } from '$lib/notifications';
-import { notifyGuestMessage, notifyGuestCancel, notifyGuestEdit, reservationChanges } from '$lib/email';
+import { notifyGuestMessage, notifyGuestCancel, notifyGuestEdit, notifyClientEdited, notifyClientCancelled, reservationChanges } from '$lib/email';
 import {
 	assertCanBook, getTakenDates, getHeldDatesByOthers, getUnavailableDates, getFullMonths,
 	earliestBookableISO, isoLocal, addDays,
@@ -146,7 +147,20 @@ export const actions: Actions = {
 		const ids = [...new Set(requested.filter(id => valid.includes(id)))];
 		await dbRun(locals.db, 'UPDATE reservations SET extras_json = ? WHERE id = ? AND user_id = ? AND org_id = ?',
 			ids.length ? JSON.stringify(ids) : null, params.id, locals.user.id, orgId);
-		await saveExtrasSnapshot(locals.db, params.id, reservation.hall_id, ids, snapshot);
+		const after = await saveExtrasSnapshot(locals.db, params.id, reservation.hall_id, ids, snapshot);
+
+		// The venue hears about it (it used to change silently), and the client gets a
+		// copy of what they changed, with the old and the new total.
+		const change = await extrasChange(locals.db, reservation.hall_id, reservation.num_guests,
+			{ ids: previousIds, snapshot }, { ids, snapshot: after });
+		if (change) {
+			const guestName = `${locals.user.first_name} ${locals.user.last_name}`;
+			await logReservationActivity(locals.db, { reservationId: params.id, orgId, actorId: locals.user.id, actorName: guestName, kind: 'edited', note: 'extras' });
+			notifyGuestEdit(locals.db, orgId, guestName, reservation.title, reservation.hall_name, reservation.event_date, {
+				reservationId: params.id, changes: [change],
+			}).catch(() => {});
+			notifyClientEdited(locals.db, orgId, params.id, [change]).catch(() => {});
+		}
 		return { extrasSaved: true };
 	},
 
@@ -197,10 +211,13 @@ export const actions: Actions = {
 		const guestName = `${locals.user.first_name} ${locals.user.last_name}`;
 		// Shown in the booking's history on the staff page.
 		await logReservationActivity(locals.db, { reservationId: params.id, orgId, actorId: userId, actorName: guestName, kind: 'edited', note: 'client' });
+		const changes = reservationChanges(reservation, { title, description, event_date: eventDate, start_time: startTime, end_time: endTime, num_guests: numGuests });
+		if (eventDate !== reservation.event_date) await clearReminder(locals.db, params.id);
 		notifyGuestEdit(locals.db, orgId, guestName, title, hall.name, eventDate, {
 			reservationId: params.id,
-			changes: reservationChanges(reservation, { title, description, event_date: eventDate, start_time: startTime, end_time: endTime, num_guests: numGuests }),
+			changes,
 		}).catch(() => {});
+		notifyClientEdited(locals.db, orgId, params.id, changes).catch(() => {});
 
 		return { updated: true };
 	},
@@ -244,6 +261,7 @@ export const actions: Actions = {
 
 		const guestName = `${locals.user.first_name} ${locals.user.last_name}`;
 		notifyGuestCancel(locals.db, orgId, guestName, reservation.title, reservation.hall_name, reservation.event_date, { reservationId: reservation.id }).catch(() => {});
+		notifyClientCancelled(locals.db, orgId, reservation.id).catch(() => {});
 
 		return { cancelled: true };
 	},
