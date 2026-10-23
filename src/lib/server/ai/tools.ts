@@ -620,6 +620,9 @@ const TOOLS: Tool[] = [
 				// The cover is shown on its own; repeating it as the gallery's first photo
 				// only makes the gallery look like it has one picture more than it has.
 				let urls = [...new Set(a.gallery_photo_urls.map(String))].filter((u) => u !== a.cover_photo_url);
+				if (urls.length < new Set(a.gallery_photo_urls.map(String)).size) {
+					photoProblems.push('the cover photo was also in the gallery list; it is shown once, as the cover, so the gallery has one photo fewer than you listed');
+				}
 				if (maxGallery !== -1 && urls.length > maxGallery) {
 					photoProblems.push(`only the first ${maxGallery} gallery photos were kept (the plan's limit)`);
 					urls = urls.slice(0, maxGallery);
@@ -659,8 +662,11 @@ const TOOLS: Tool[] = [
 				output: {
 					proposal_id: proposalId,
 					fields_changed: Object.keys(after),
+					// The real counts, so the reply says what the card shows.
+					cover_photo: 'cover_image_url' in after,
+					gallery_photos: Array.isArray(after.gallery_images) ? after.gallery_images.length : null,
 					photo_problems: photoProblems,
-					note: 'A preview with each field before and after is now shown to the user. Summarise it briefly and mention anything you could not find.'
+					note: 'A preview with each field before and after is now shown to the user. Summarise it briefly and mention anything you could not find. Give photo counts exactly as cover_photo and gallery_photos say.'
 				}
 			};
 		}

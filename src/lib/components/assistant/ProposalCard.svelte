@@ -155,7 +155,7 @@
     {#if plan.sources?.length}
       <p class="proposal-note sources">
         {t.ai.hallUpdateSources}:
-        {#each plan.sources as url, i (url)}{#if i}, {/if}<a href={url} target="_blank" rel="noopener noreferrer">{url.replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, '')}</a>{/each}
+        {#each plan.sources as url, i (url)}{#if i}{', '}{/if}<a href={url} target="_blank" rel="noopener noreferrer">{url.replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, '')}</a>{/each}
       </p>
     {/if}
     {#if 'address' in plan.after}<p class="proposal-note">{t.ai.hallUpdatePinNote}</p>{/if}
@@ -164,7 +164,7 @@
     {#if p.status === 'pending'}
       <div class="proposal-actions">
         <button type="button" class="btn-action btn-sm" disabled={resolving === p.id} onclick={() => onresolve(p.id, 'apply')}>
-          {resolving === p.id ? t.ai.applying : t.ai.hallUpdateApply}
+          {resolving === p.id ? t.ai.saving : t.ai.hallUpdateApply}
         </button>
         <button type="button" class="btn-outline btn-sm" disabled={resolving === p.id} onclick={() => onresolve(p.id, 'discard')}>
           {t.ai.discard}
@@ -202,7 +202,7 @@
     {#if p.status === 'pending'}
       <div class="proposal-actions">
         <button type="button" class="btn-action btn-sm" disabled={resolving === p.id} onclick={() => onresolve(p.id, 'apply')}>
-          {resolving === p.id ? t.ai.applying : t.ai.changesApply(plan.ops.length)}
+          {resolving === p.id ? t.ai.saving : t.ai.changesApply(plan.ops.length)}
         </button>
         <button type="button" class="btn-outline btn-sm" disabled={resolving === p.id} onclick={() => onresolve(p.id, 'discard')}>
           {t.ai.discard}
@@ -250,14 +250,14 @@
     {#if plan.sources?.length}
       <p class="proposal-note sources">
         {t.ai.hallUpdateSources}:
-        {#each plan.sources as src, i (src)}{#if i}, {/if}{#if /^https?:\/\//.test(src)}<a href={src} target="_blank" rel="noopener noreferrer">{src.replace(/^https?:\/\/(www\.)?/, '').slice(0, 60)}</a>{:else}{src}{/if}{/each}
+        {#each plan.sources as src, i (src)}{#if i}{', '}{/if}{#if /^https?:\/\//.test(src)}<a href={src} target="_blank" rel="noopener noreferrer">{src.replace(/^https?:\/\/(www\.)?/, '').slice(0, 60)}</a>{:else}{src}{/if}{/each}
       </p>
     {/if}
     {#if plan.replaces}<p class="proposal-note warn">{t.ai.floorplanReplaces}</p>{/if}
     {#if p.status === 'pending'}
       <div class="proposal-actions">
         <button type="button" class="btn-action btn-sm" disabled={resolving === p.id} onclick={() => onresolve(p.id, 'apply')}>
-          {resolving === p.id ? t.ai.applying : t.ai.floorplanApply}
+          {resolving === p.id ? t.ai.saving : t.ai.floorplanApply}
         </button>
         <a class="btn-outline btn-sm" href="/app/manage/halls/{plan.hallId}/editor?draft={p.id}">{t.ai.viewInEditor}</a>
         <button type="button" class="btn-outline btn-sm" disabled={resolving === p.id} onclick={() => onresolve(p.id, 'discard')}>
@@ -311,7 +311,7 @@
     {#if p.status === 'pending'}
       <div class="proposal-actions">
         <button type="button" class="btn-action btn-sm" disabled={resolving === p.id} onclick={() => onresolve(p.id, 'apply')}>
-          {resolving === p.id ? t.ai.applying : t.ai.seatingApply}
+          {resolving === p.id ? t.ai.saving : t.ai.seatingApply}
         </button>
         <a class="btn-outline btn-sm" href="/app/reservation/{plan.reservationId}/layout?draft={p.id}">{t.ai.viewInEditor}</a>
         <button type="button" class="btn-outline btn-sm" disabled={resolving === p.id} onclick={() => onresolve(p.id, 'discard')}>
@@ -367,7 +367,7 @@
   .seat-table-head { display: flex; justify-content: space-between; font-size: 12px; font-weight: 650; margin-bottom: 4px; }
   .seat-table ul { list-style: none; margin: 0; padding: 0; font-size: 12px; line-height: 1.6; color: var(--text-base); }
 
-  .proposal-actions { display: flex; gap: 8px; margin-top: 12px; }
+  .proposal-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
   .proposal-done { margin: 12px 0 0; font-size: 13px; font-weight: 600; color: var(--success); }
   .proposal-done.muted { color: var(--text-muted); font-weight: 500; }
   .proposal-done a { margin-left: 8px; color: var(--accent-ink); font-weight: 600; }

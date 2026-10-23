@@ -55,6 +55,11 @@
   const credits = $derived(balanceMc === null ? '' : creditAmount(Math.max(0, balanceMc), getLocale()));
   const errorText = (code: unknown) => errorKey(t.ai.errors, code);
 
+  // The full-screen editors keep their step buttons ("Next: …") in the bottom-right
+  // corner; there the launcher sits above them instead of on top of them.
+  const EDITOR_PAGE = /^\/app\/(manage\/halls\/[^/]+\/(editor|templates\/[^/]+)|reservation\/[^/]+\/layout)\/?$/;
+  const raised = $derived(EDITOR_PAGE.test($page.url.pathname));
+
   // The title is read after each navigation has rendered; it is what the user sees
   // in the tab, and what the panel says it can see.
   $effect(() => {
@@ -109,9 +114,17 @@
     busy = true;
     error = '';
     pendingText = message + files.map((f) => `\n📎 ${f.name}`).join('');
+    const attached = files;
     const attachmentIds = files.map((f) => f.id);
     text = '';
     files = [];
+    // A refused or failed question goes back into the composer, so it need not be typed again.
+    const giveBack = () => {
+      if (!text.trim() && !files.length) {
+        text = message;
+        files = attached;
+      }
+    };
     scrollDown();
     try {
       const res = await fetch('/app/manage/assistant/chat', {
@@ -123,13 +136,17 @@
         })
       });
       const body = await res.json().catch(() => ({}));
-      if (!body.ok) error = errorText(body.error);
+      if (!body.ok) {
+        error = errorText(body.error);
+        giveBack();
+      }
       if (body.threadId) setThread(body.threadId);
       await load();
       const go = navigationTarget(body.actions);
       if (go) await goto(go);
     } catch {
       error = t.ai.errors.generic;
+      giveBack();
     } finally {
       busy = false;
       pendingText = null;
@@ -207,7 +224,7 @@
 </script>
 
 {#if open}
-  <section class="aw-panel" aria-label={t.ai.title}>
+  <section class="aw-panel" class:raised aria-label={t.ai.title}>
     <header class="aw-head">
       <span class="aw-spark" aria-hidden="true">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/></svg>
@@ -283,7 +300,7 @@
   </section>
 {/if}
 
-<button type="button" class="aw-launcher" class:is-open={open} onclick={() => toggle()}
+<button type="button" class="aw-launcher" class:is-open={open} class:raised onclick={() => toggle()}
   aria-expanded={open} aria-label={open ? t.ai.widgetClose : t.ai.widgetOpen} title={open ? t.ai.widgetClose : t.ai.widgetOpen}>
   {#if open}
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="6 9 12 15 18 9"/></svg>
@@ -312,6 +329,8 @@
   }
   .aw-launcher:hover { background: var(--accent-hover); transform: translateY(-2px); }
   .aw-launcher:focus-visible { outline: 2px solid var(--accent-ink); outline-offset: 3px; }
+  /* Above an editor's step buttons (36 px high, 10 px padding) with the usual gap. */
+  .aw-launcher.raised { bottom: 76px; }
 
   .aw-panel {
     position: fixed; right: 20px; bottom: 80px; z-index: 90;
@@ -321,6 +340,7 @@
     box-shadow: 0 18px 50px rgba(0, 0, 0, .35);
     overflow: hidden;
   }
+  .aw-panel.raised { bottom: 136px; height: min(620px, calc(100vh - 166px)); }
 
   .aw-head {
     display: flex; align-items: center; gap: 8px; padding: 11px 12px 11px 14px;
@@ -403,6 +423,8 @@
   @media (max-width: 560px) {
     .aw-panel { left: 8px; right: 8px; width: auto; bottom: 76px; height: calc(100vh - 96px); }
     .aw-launcher { right: 14px; bottom: 14px; }
+    .aw-panel.raised { bottom: 132px; height: calc(100vh - 152px); }
+    .aw-launcher.raised { bottom: 70px; }
   }
   @media (prefers-reduced-motion: reduce) {
     .aw-launcher:hover { transform: none; }

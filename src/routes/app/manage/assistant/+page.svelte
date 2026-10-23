@@ -43,9 +43,17 @@
     busy = true;
     error = '';
     pendingText = message + files.map((f) => `\n📎 ${f.name}`).join('');
+    const attached = files;
     const attachmentIds = files.map((f) => f.id);
     text = '';
     files = [];
+    // A refused or failed question goes back into the composer, so it need not be typed again.
+    const giveBack = () => {
+      if (!text.trim() && !files.length) {
+        text = message;
+        files = attached;
+      }
+    };
     scrollDown();
     try {
       const res = await fetch('/app/manage/assistant/chat', {
@@ -54,7 +62,10 @@
         body: JSON.stringify({ threadId: data.threadId, text: message, attachmentIds })
       });
       const body = await res.json().catch(() => ({}));
-      if (!body.ok) error = errorText(body.error);
+      if (!body.ok) {
+        error = errorText(body.error);
+        giveBack();
+      }
       const thread = body.threadId ?? data.threadId;
       const go = navigationTarget(body.actions);
       if (go) {
@@ -69,6 +80,7 @@
       else await invalidateAll();
     } catch {
       error = t.ai.errors.generic;
+      giveBack();
     } finally {
       busy = false;
       pendingText = null;

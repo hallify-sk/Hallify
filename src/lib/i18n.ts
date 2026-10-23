@@ -2290,7 +2290,7 @@ export const sk = {
 		unavailable: "AI asistent je momentálne nedostupný. Skúste to neskôr.",
 		errors: {
 			insufficient_credits: "Minuli sa AI kredity. Doplnia sa na začiatku ďalšieho obdobia, alebo si ich môžete dokúpiť v nastaveniach.",
-			failed: "Asistentovi sa nepodarilo odpovedať. Kredity za nevydarenú požiadavku sa nestrhli. Skúste to znova.",
+			failed: "Asistentovi sa nepodarilo dokončiť odpoveď. Strhli sa len kredity za časť, ktorá prebehla, za nevydarený krok nie. Skúste to znova.",
 			not_found: "Konverzácia sa nenašla.",
 			disabled: "AI asistent je vo vašej organizácii vypnutý.",
 			platform_off: "AI asistent je momentálne nedostupný.",
@@ -2325,6 +2325,7 @@ export const sk = {
 		},
 		apply: (n: number) => `Importovať (${n})`,
 		applying: "Importuje sa…",
+		saving: "Ukladá sa…",
 		discard: "Zahodiť",
 		discarded: "Zahodené. Nič sa nezmenilo.",
 		appliedResult: (created: number, failed: number) => failed
@@ -2347,7 +2348,7 @@ export const sk = {
 		hallUpdateNow: "Teraz",
 		hallUpdateNew: "Návrh",
 		hallUpdateSources: "Zdroje",
-		hallUpdateNote: "Viditeľnosť, adresu verejnej stránky a fotky meníte v nastaveniach sály.",
+		hallUpdateNote: "Viditeľnosť a adresu verejnej stránky sály meníte v jej nastaveniach.",
 		hallUpdatePinNote: "Ak je nová adresa inde ako súčasná značka na mape, značka sa presunie k nej.",
 		hallUpdateApply: "Uložiť údaje sály",
 		hallUpdateApplied: (n: number) => n === 1 ? "Uložené. Zmenil sa 1 údaj." : n < 5 ? `Uložené. Zmenili sa ${n} údaje.` : `Uložené. Zmenilo sa ${n} údajov.`,
@@ -5097,7 +5098,7 @@ export const en: typeof sk = {
 		unavailable: "The AI assistant is unavailable right now. Please try again later.",
 		errors: {
 			insufficient_credits: "You're out of AI credits. They refill at the start of the next period, or you can buy more in settings.",
-			failed: "The assistant couldn't answer. You weren't charged for the failed request. Please try again.",
+			failed: "The assistant couldn't finish its answer. Only the steps that completed were charged, not the one that failed. Please try again.",
 			not_found: "Conversation not found.",
 			disabled: "The AI assistant is turned off for your organization.",
 			platform_off: "The AI assistant is unavailable right now.",
@@ -5132,6 +5133,7 @@ export const en: typeof sk = {
 		},
 		apply: (n: number) => `Import (${n})`,
 		applying: "Importing…",
+		saving: "Saving…",
 		discard: "Discard",
 		discarded: "Discarded. Nothing was changed.",
 		appliedResult: (created: number, failed: number) => failed
@@ -5154,7 +5156,7 @@ export const en: typeof sk = {
 		hallUpdateNow: "Now",
 		hallUpdateNew: "Proposed",
 		hallUpdateSources: "Sources",
-		hallUpdateNote: "Visibility, the public page address and photos are changed in the hall's settings.",
+		hallUpdateNote: "Visibility and the hall's public page address are changed in its settings.",
 		hallUpdatePinNote: "If the new address is somewhere other than the current map pin, the pin moves to it.",
 		hallUpdateApply: "Save hall details",
 		hallUpdateApplied: (n: number) => `Saved. ${n} field${n === 1 ? '' : 's'} updated.`,
