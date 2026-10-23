@@ -102,7 +102,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
   return {
     currentOrg: org,
     canManage,
-    canSeeAi: await memberCan(locals, 'settings.manage'),
+    canManageSettings: await memberCan(locals, 'settings.manage'),
     setupRequest: await openSetupRequest(locals.db, org.id),
     setupPriceCents: SETUP_SERVICE_PRICE_CENTS,
     totalVenues: venues?.total ?? 0,

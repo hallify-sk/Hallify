@@ -216,7 +216,7 @@
           <span class="meter-bar" aria-hidden="true"><span style="width: {pct(data.ai.balanceMc / 1000, data.ai.allowance)}%"></span></span>
           <span class="meter-hint">
             {t.accountPages.usageAiHint(num(data.ai.allowance))}
-            {#if data.canSeeAi}· <a href="/app/manage/settings/ai">{t.accountPages.usageAiLink}</a>{/if}
+            {#if data.canManageSettings}· <a href="/app/manage/settings/ai">{t.accountPages.usageAiLink}</a>{/if}
           </span>
         </div>
       {/if}
@@ -291,7 +291,11 @@
     {#if form?.setupCancelled}
       <div class="alert-success">{t.setupService.cancelledNotice}</div>
     {/if}
-    <SetupServiceCard priceCents={data.setupPriceCents} pending={data.setupRequest} />
+    <!-- Asking for (or withdrawing) the service is settings.manage; without it the
+         buttons would only end on a 403 page. -->
+    {#if data.canManageSettings || data.setupRequest}
+      <SetupServiceCard priceCents={data.setupPriceCents} pending={data.setupRequest} canAct={data.canManageSettings} />
+    {/if}
 
     <h3 class="addon-name addon-name--spaced">{t.floorplanService.addonTitle}</h3>
     <p class="addon-lead">{t.floorplanService.addonLead}</p>

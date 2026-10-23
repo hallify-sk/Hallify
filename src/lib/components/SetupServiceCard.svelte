@@ -23,9 +23,11 @@
     action?: string;
     /** Where to post a withdrawal; both hosting pages name it `cancelSetup`. */
     cancelAction?: string;
+    /** Whether the viewer may withdraw the request (settings.manage). */
+    canAct?: boolean;
   }
 
-  const { priceCents, pending, action = '?/requestSetup', cancelAction = '?/cancelSetup' }: Props = $props();
+  const { priceCents, pending, action = '?/requestSetup', cancelAction = '?/cancelSetup', canAct = true }: Props = $props();
 
   const locale = $derived(getLocale() === 'en' ? 'en' : 'sk');
 </script>
@@ -43,7 +45,9 @@
       {#if pending.note}
         <p class="su-their-note"><b>{t.setupService.pendingNote}:</b> {pending.note}</p>
       {/if}
-      {#if pending.status === 'requested' || pending.status === 'contacted'}
+      {#if !canAct}
+        <!-- read-only for someone who cannot change it -->
+      {:else if pending.status === 'requested' || pending.status === 'contacted'}
         <form method="POST" action={cancelAction} class="su-cancel" use:enhance={confirmFirst(() => t.setupService.cancelConfirm)}>
           <button type="submit" class="su-cancel-btn">{t.setupService.cancelRequest}</button>
         </form>
