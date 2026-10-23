@@ -12,16 +12,22 @@
   import { t, getLocale } from '$lib/i18n.svelte';
   import { eur } from '$lib/extras';
   import { SETUP_SERVICE_INCLUDES, SETUP_SERVICE_EXCLUDES, SETUP_SERVICE_GUARANTEE } from '$lib/setup-service';
+  import { formatDate, formatMoney } from '$lib/format';
+  import { confirmFirst } from '$lib/forms';
 
   interface Props {
     priceCents: number;
     /** An outstanding request, if there is one — then this reports instead of offering. */
-    pending: { status: string } | null;
+    pending: { status: string; created_at?: string; note?: string | null; price_cents?: number } | null;
     /** The form action to post to; both hosting pages name it `requestSetup`. */
     action?: string;
+    /** Where to post a withdrawal; both hosting pages name it `cancelSetup`. */
+    cancelAction?: string;
+    /** Whether the viewer may withdraw the request (settings.manage). */
+    canAct?: boolean;
   }
 
-  const { priceCents, pending, action = '?/requestSetup' }: Props = $props();
+  const { priceCents, pending, action = '?/requestSetup', cancelAction = '?/cancelSetup', canAct = true }: Props = $props();
 
   const locale = $derived(getLocale() === 'en' ? 'en' : 'sk');
 </script>
@@ -31,9 +37,23 @@
     <span class="icon-tile">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><polyline points="20 6 9 17 4 12"/></svg>
     </span>
-    <div>
+    <div class="su-pending-body">
       <strong>{t.setupService.pendingTitle}</strong>
+      {#if pending.created_at}<span class="su-meta">{t.setupService.pendingRequestedOn(formatDate(pending.created_at, locale))}</span>{/if}
       <p>{t.setupService.pendingBody}</p>
+      <p class="su-meta">{t.setupService.pendingPrice(formatMoney(pending.price_cents ?? priceCents, locale))}</p>
+      {#if pending.note}
+        <p class="su-their-note"><b>{t.setupService.pendingNote}:</b> {pending.note}</p>
+      {/if}
+      {#if !canAct}
+        <!-- read-only for someone who cannot change it -->
+      {:else if pending.status === 'requested' || pending.status === 'contacted'}
+        <form method="POST" action={cancelAction} class="su-cancel" use:enhance={confirmFirst(() => t.setupService.cancelConfirm)}>
+          <button type="submit" class="su-cancel-btn">{t.setupService.cancelRequest}</button>
+        </form>
+      {:else}
+        <p class="su-meta">{t.setupService.pendingInProgress}</p>
+      {/if}
     </div>
   </div>
 {:else}
@@ -111,6 +131,16 @@
   .su-pending { display: flex; align-items: flex-start; gap: 13px; padding: 18px; }
   .su-pending strong { font-size: 13.5px; font-weight: 600; }
   .su-pending p { margin: 4px 0 0; font-size: var(--meta-size); line-height: 1.7; color: var(--text-muted); }
+  .su-pending-body { display: flex; flex-direction: column; min-width: 0; }
+  .su-pending .su-meta { font-size: var(--meta-size); color: var(--text-subtle); }
+  .su-pending span.su-meta { margin-top: 2px; }
+  .su-pending .su-their-note { padding: 8px 11px; border-left: 2px solid var(--border); white-space: pre-line; overflow-wrap: anywhere; }
+  .su-pending .su-their-note b { font-weight: 600; color: var(--text-base); }
+  .su-cancel { margin: 10px 0 0; }
+  .su-cancel-btn {
+    font: inherit; font-size: var(--meta-size); font-weight: 600; color: var(--danger);
+    background: none; border: none; padding: 0; cursor: pointer; text-decoration: underline;
+  }
 
   @media (max-width: 860px) {
     .su-grid { grid-template-columns: 1fr; gap: 20px; }

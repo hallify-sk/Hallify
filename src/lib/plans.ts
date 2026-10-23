@@ -18,7 +18,11 @@ export interface Plan {
   name: string;
   priceMonthly: number | null;  // null = contact for quote
   limits: PlanLimits;
+  /** English summary, used for the Stripe product description. The console builds
+   *  its localised list from `limits` and `support` (see $lib/plan-features). */
   features: string[];
+  /** Support tiers on top of the limits. */
+  support?: Array<'prioritySupport' | 'sla' | 'dedicatedSupport'>;
   stripePriceEnvKey?: string;
 }
 
@@ -44,6 +48,7 @@ export const PLANS: Record<PlanId, Plan> = {
     priceMonthly: 79.99,
     limits: { maxHalls: 10, maxMembers: -1, maxReservationsPerHallMonth: 20, maxGalleryImages: 20, customDomains: true, customBranding: true, webhooks: true, advancedRsvp: true, maxExtrasPerHall: 10, aiCreditsMonthly: 60 },
     features: ['10 halls', 'Unlimited organization members', '20 reservations/hall/month', 'Custom domain', 'Custom branding', 'Webhooks', 'Advanced RSVP editing', '20 gallery images per hall', 'Priority support'],
+    support: ['prioritySupport'],
     stripePriceEnvKey: 'STRIPE_PRICE_PROFESSIONAL',
   },
   enterprise: {
@@ -52,6 +57,7 @@ export const PLANS: Record<PlanId, Plan> = {
     priceMonthly: null,
     limits: { maxHalls: -1, maxMembers: -1, maxReservationsPerHallMonth: -1, maxGalleryImages: -1, customDomains: true, customBranding: true, webhooks: true, advancedRsvp: true, maxExtrasPerHall: -1, aiCreditsMonthly: 60 },
     features: ['Unlimited halls', 'Unlimited organization members', 'Unlimited reservations', 'Unlimited gallery images', 'Custom domain', 'Custom branding', 'Webhooks', 'Advanced RSVP editing', 'Priority support', 'SLA', 'Dedicated support'],
+    support: ['prioritySupport', 'sla', 'dedicatedSupport'],
   },
 };
 

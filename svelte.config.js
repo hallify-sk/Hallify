@@ -26,7 +26,12 @@ const config = {
 				'font-src': ['self', 'data:'],
 				// Measurement beacons.
 				'connect-src': ['self', 'https://www.googletagmanager.com', 'https://www.google-analytics.com', 'https://*.google-analytics.com', 'https://*.analytics.google.com'],
-				'form-action': ['self'],
+				// Stripe Checkout and the billing portal are reached by a 303 from our own
+				// form actions. The billing forms are enhanced (a script navigation, which
+				// form-action does not govern), but without JavaScript the browser follows the
+				// redirect as part of the form submission, and Chrome checks it against this
+				// list. Exactly these two hosts; nothing else may receive a form.
+				'form-action': ['self', 'https://checkout.stripe.com', 'https://billing.stripe.com'],
 				'base-uri': ['self'],
 				'object-src': ['none'],
 				'frame-ancestors': ['none']

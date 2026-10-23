@@ -1,26 +1,54 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { enhance } from '$app/forms';
+  import type { SubmitFunction } from '@sveltejs/kit';
   import { saas } from '$lib/analytics';
-  import { t } from '$lib/i18n.svelte';
+  import { t, getLocale } from '$lib/i18n.svelte';
   import { reveal } from '$lib/reveal';
+  import { formatDate, formatMoney } from '$lib/format';
+  import { confirmFirst } from '$lib/forms';
+  import { dialog } from '$lib/actions/dialog';
+  import { planFeatureList } from '$lib/plan-features';
+  import { planName } from '$lib/billing';
   import SetupServiceCard from '$lib/components/SetupServiceCard.svelte';
-  import type { PageData } from './$types';
-  let { data }: { data: PageData } = $props();
+  import type { ActionData, PageData } from './$types';
+  let { data, form }: { data: PageData; form: ActionData } = $props();
 
-  onMount(() => saas.viewPlans(data.currentOrg?.subscription?.plan ?? 'free'));
+  onMount(() => {
+    saas.viewPlans(data.currentOrg?.subscription?.plan ?? 'free');
+    // Coming back from Stripe with the browser's Back button restores this page from
+    // the back/forward cache with its buttons still busy. Release them.
+    const onShow = (e: PageTransitionEvent) => { if (e.persisted) busy = null; };
+    addEventListener('pageshow', onShow);
+    return () => removeEventListener('pageshow', onShow);
+  });
 
+  const locale = $derived(getLocale());
   const currentPlan = $derived(data.currentOrg?.subscription.plan ?? 'free');
   const currentStatus = $derived(data.currentOrg?.subscription.status ?? 'active');
+  const statusLabel = $derived(t.accountPages.statusLabels[currentStatus as keyof typeof t.accountPages.statusLabels] ?? currentStatus);
+  const hasCustomer = $derived(!!data.currentOrg?.subscription.stripeCustomerId);
 
   const PLAN_ORDER = ['free', 'starter', 'professional', 'enterprise'] as const;
   const POPULAR = 'starter';
 
-  function fmtDate(iso: string) {
-    return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
-  }
-  function money(cents: number) {
-    return '€' + (cents / 100).toFixed(2);
-  }
+  const fmtDate = (iso: string) => formatDate(iso, locale);
+  const money = (cents: number) => formatMoney(cents, locale);
+  const planPrice = (p: { priceMonthly: number | null }) => money(Math.round((p.priceMonthly ?? 0) * 100));
+
+  // Every form that ends at Stripe is enhanced, so the redirect happens as a script
+  // navigation. A plain form POST answered with a 303 to checkout.stripe.com is a
+  // form submission to another origin, which the CSP's form-action blocked in Chrome
+  // and Edge: the page just sat there. Enhanced, a refusal from Stripe also comes
+  // back as a message on this page instead of the error page.
+  let busy = $state<string | null>(null);
+  const viaStripe = (key: string): SubmitFunction => () => {
+    busy = key;
+    return async ({ update }) => {
+      await update(); // an external redirect never returns from here
+      busy = null;
+    };
+  };
 
   // ─── Plan-change confirm dialog ───
   let confirmPlan = $state<string | null>(null);
@@ -33,6 +61,20 @@
   const periodEndStr = $derived(
     data.currentOrg?.subscription.currentPeriodEnd ? fmtDate(data.currentOrg.subscription.currentPeriodEnd) : null
   );
+  const closeDialog = () => { if (!busy) confirmPlan = null; };
+
+  // ─── Usage against the plan's limits ───
+  const limits = $derived(data.plans[currentPlan].limits);
+  const meters = $derived([
+    { key: 'halls', label: t.accountPages.usageHalls, used: data.usage.activeHalls, limit: limits.maxHalls, hint: null },
+    { key: 'members', label: t.accountPages.usageMembers, used: data.usage.members, limit: limits.maxMembers, hint: null },
+    { key: 'reservations', label: t.accountPages.usageReservations, used: data.usage.reservationsMax, limit: limits.maxReservationsPerHallMonth, hint: t.accountPages.usageReservationsHint },
+    { key: 'gallery', label: t.accountPages.usageGallery, used: data.usage.galleryMax, limit: limits.maxGalleryImages, hint: t.accountPages.usagePerVenueHint },
+    { key: 'extras', label: t.accountPages.usageExtras, used: data.usage.extrasMax, limit: limits.maxExtrasPerHall, hint: t.accountPages.usagePerVenueHint },
+  ]);
+  const num = (n: number, digits = 0) =>
+    new Intl.NumberFormat(locale === 'en' ? 'en-GB' : 'sk-SK', { maximumFractionDigits: digits }).format(n);
+  const pct = (used: number, limit: number) => Math.min(100, Math.round((used / Math.max(1, limit)) * 100));
 </script>
 
 <svelte:head><title>{t.accountPages.billingTitle} – Hallify</title></svelte:head>
@@ -45,6 +87,9 @@
     </div>
   </div>
 
+  {#if form?.error && !confirmPlan}
+    <div class="alert-error" role="alert">{form.error}</div>
+  {/if}
   {#if data.success}
     <div class="alert-success">{t.accountPages.subscriptionUpdated}</div>
   {/if}
@@ -67,6 +112,30 @@
     <div class="alert-warning">{t.accountPages.checkoutCancelledNotice}</div>
   {/if}
 
+  <!-- Payment problems come first: they are the one thing on this page that costs
+       the organisation something if nobody acts. -->
+  {#if currentStatus === 'past_due' || data.suspendedPlan}
+    <div class="alert-error pay-alert" role="status">
+      <span>
+        {#if currentStatus === 'past_due'}
+          {t.accountPages.pastDueBanner}
+        {:else if data.stripeStatus === 'incomplete'}
+          {t.accountPages.incompleteBanner(planName(data.suspendedPlan))}
+        {:else}
+          {t.accountPages.suspendedBanner(planName(data.suspendedPlan))}
+        {/if}
+      </span>
+      {#if data.canManage && hasCustomer}
+        <form method="POST" action="?/manage" use:enhance={viaStripe('pay')}>
+          <button type="submit" class="btn-outline btn-sm" disabled={busy !== null}>{t.accountPages.updatePayment}</button>
+        </form>
+      {/if}
+    </div>
+  {/if}
+  {#if data.usage.lockedHalls > 0}
+    <div class="alert-warning">{t.accountPages.lockedHallsNotice(data.usage.lockedHalls)}</div>
+  {/if}
+
   <!-- Current subscription — a hairline section, not a boxed card. -->
   <section class="section section--lead section--flush">
     <div class="section-head section-head--row">
@@ -74,42 +143,81 @@
         <p class="eyebrow">{t.accountPages.currentPlan}</p>
         <div class="current-row">
           <span class="current-name">{data.plans[currentPlan].name}</span>
-          <span class="status-pill status-{currentStatus}">{currentStatus}</span>
+          <span class="status-pill status-{currentStatus}">{statusLabel}</span>
           {#if data.cancelAtPeriodEnd}<span class="status-pill status-cancelled">{t.accountPages.cancelsSoon}</span>{/if}
         </div>
         {#if currentPlan !== 'free' && data.currentOrg?.subscription.currentPeriodEnd}
           <span class="current-renew">
             {data.cancelAtPeriodEnd ? t.accountPages.endsOn : t.accountPages.renewsOn}
-            {new Date(data.currentOrg.subscription.currentPeriodEnd).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+            {fmtDate(data.currentOrg.subscription.currentPeriodEnd)}
           </span>
         {/if}
         {#if data.pendingDowngrade}
           <span class="pending-change">
             {t.accountPages.scheduledToSwitchTo} <b>{data.pendingDowngrade.planName}</b> {t.accountPages.onDate} {fmtDate(data.pendingDowngrade.effective)}
-            <form method="POST" action="?/cancelScheduledChange" class="pending-form">
-              <button type="submit" class="pending-undo">{t.accountPages.keepPlan} {data.plans[currentPlan].name}</button>
-            </form>
+            {#if data.canManage}
+              <form method="POST" action="?/cancelScheduledChange" class="pending-form" use:enhance={viaStripe('revert')}>
+                <button type="submit" class="pending-undo" disabled={busy !== null}>{t.accountPages.keepPlan} {data.plans[currentPlan].name}</button>
+              </form>
+            {/if}
           </span>
+        {/if}
+        {#if !data.canManage}
+          <span class="owner-only">{t.accountPages.ownerOnlyNotice}</span>
         {/if}
       </div>
 
-      {#if data.currentOrg?.subscription.stripeCustomerId}
+      {#if data.canManage && hasCustomer}
         <div class="current-actions">
           {#if data.cancelAtPeriodEnd}
-            <form method="POST" action="?/resume">
-              <button type="submit" class="btn-accent-sm">{t.accountPages.resumeSubscription}</button>
+            <form method="POST" action="?/resume" use:enhance={viaStripe('resume')}>
+              <button type="submit" class="btn-accent-sm" disabled={busy !== null}>{t.accountPages.resumeSubscription}</button>
             </form>
           {:else if currentPlan !== 'free'}
-            <form method="POST" action="?/cancel">
-              <button type="submit" class="btn-outline danger-outline"
-                onclick={(e) => { if (!confirm(t.accountPages.confirmCancelSubscription)) e.preventDefault(); }}>
+            <form method="POST" action="?/cancel"
+              use:enhance={confirmFirst(() => t.accountPages.confirmCancelSubscription, async ({ update }) => { await update(); })}>
+              <button type="submit" class="btn-outline danger-outline" disabled={busy !== null}>
                 {t.accountPages.cancelPlan}
               </button>
             </form>
           {/if}
-          <form method="POST" action="?/manage">
-            <button type="submit" class="btn-outline">{t.accountPages.manageBilling}</button>
+          <form method="POST" action="?/manage" use:enhance={viaStripe('manage')}>
+            <button type="submit" class="btn-outline" disabled={busy !== null}>{t.accountPages.manageBilling}</button>
           </form>
+        </div>
+      {/if}
+    </div>
+  </section>
+
+  <!-- Usage: where the organisation stands against the plan it is on. -->
+  <section class="section" use:reveal>
+    <div class="section-head">
+      <h2>{t.accountPages.usageTitle}</h2>
+      <p>{t.accountPages.usageLead}</p>
+    </div>
+    <div class="usage-grid">
+      {#each meters as m (m.key)}
+        <div class="meter">
+          <span class="meter-label">{m.label}</span>
+          <span class="meter-value">
+            {#if m.limit === -1}{num(m.used)} <span class="meter-unl">· {t.accountPages.usageUnlimited}</span>
+            {:else}{t.accountPages.usageOf(num(m.used), num(m.limit))}{/if}
+          </span>
+          {#if m.limit !== -1}
+            <span class="meter-bar" aria-hidden="true"><span class:full={m.used >= m.limit} style="width: {pct(m.used, m.limit)}%"></span></span>
+          {/if}
+          {#if m.hint}<span class="meter-hint">{m.hint}</span>{/if}
+        </div>
+      {/each}
+      {#if data.ai}
+        <div class="meter">
+          <span class="meter-label">{t.accountPages.usageAi}</span>
+          <span class="meter-value">{num(data.ai.balanceMc / 1000, 2)}</span>
+          <span class="meter-bar" aria-hidden="true"><span style="width: {pct(data.ai.balanceMc / 1000, data.ai.allowance)}%"></span></span>
+          <span class="meter-hint">
+            {t.accountPages.usageAiHint(num(data.ai.allowance))}
+            {#if data.canManageSettings}· <a href="/app/manage/settings/ai">{t.accountPages.usageAiLink}</a>{/if}
+          </span>
         </div>
       {/if}
     </div>
@@ -138,7 +246,7 @@
               <span class="price">{t.accountPages.priceFree}</span>
               <span class="cadence">{t.accountPages.forever}</span>
             {:else}
-              <span class="price">€{plan.priceMonthly}</span>
+              <span class="price">{planPrice(plan)}</span>
               <span class="cadence">{t.accountPages.perMonth}</span>
             {/if}
           </div>
@@ -148,7 +256,7 @@
               <span class="cta-current">{t.accountPages.yourCurrentPlan}</span>
             {:else if planId === 'enterprise'}
               <a href="mailto:sales@hallify.sk" class="btn-ghost-cta">{t.accountPages.contactSales}</a>
-            {:else if planId === 'free'}
+            {:else if planId === 'free' || !data.canManage}
               <span class="cta-spacer"></span>
             {:else}
               <button type="button" class={isPopular ? 'btn-accent-cta' : 'btn-ghost-cta'}
@@ -159,9 +267,9 @@
           </div>
 
           <ul class="features">
-            {#each plan.features as feature}
+            {#each planFeatureList(plan, t.accountPages.planFeatures) as feature}
               <li>
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
                 {feature}
               </li>
             {/each}
@@ -180,13 +288,22 @@
 
     <h3 class="addon-name">{t.setupService.title}</h3>
     <p class="addon-lead">{t.setupService.lead}</p>
-    <SetupServiceCard priceCents={data.setupPriceCents} pending={data.setupRequest} />
+    {#if form?.setupCancelled}
+      <div class="alert-success">{t.setupService.cancelledNotice}</div>
+    {/if}
+    <!-- Asking for (or withdrawing) the service is settings.manage; without it the
+         buttons would only end on a 403 page. -->
+    {#if data.canManageSettings || data.setupRequest}
+      <SetupServiceCard priceCents={data.setupPriceCents} pending={data.setupRequest} canAct={data.canManageSettings} />
+    {/if}
 
     <h3 class="addon-name addon-name--spaced">{t.floorplanService.addonTitle}</h3>
     <p class="addon-lead">{t.floorplanService.addonLead}</p>
     <div class="card--inset addon-row">
       <span class="addon-price">{t.floorplanService.addonPrice}</span>
-      {#if data.unmappedVenues > 0}
+      {#if data.totalVenues === 0}
+        <a class="addon-note" href="/app/manage/halls">{t.floorplanService.addonNoVenues}</a>
+      {:else if data.unmappedVenues > 0}
         <a class="btn-outline btn-sm" href="/app/manage/halls">{t.floorplanService.addonCta}</a>
       {:else}
         <span class="addon-note">{t.floorplanService.addonAllMapped}</span>
@@ -197,16 +314,22 @@
 
 <!-- Plan-change confirm dialog -->
 {#if confirmPlan && target}
-  <div class="modal-backdrop" role="presentation" onclick={() => (confirmPlan = null)}>
-    <div class="card card--raised modal" role="dialog" aria-modal="true" onclick={(e) => e.stopPropagation()}>
-      <h2 class="modal-title">
+  <div class="modal-backdrop" role="presentation" onclick={closeDialog}>
+    <div class="card card--raised modal" role="dialog" aria-modal="true" aria-labelledby="plan-dialog-title"
+      onclick={(e) => e.stopPropagation()}
+      use:dialog={{ onclose: closeDialog }}>
+      <h2 class="modal-title" id="plan-dialog-title">
         {isFirstSub ? t.accountPages.subscribeTo : targetIsUpgrade ? t.accountPages.upgradeTo : t.accountPages.switchTo} {target.name}
       </h2>
+
+      {#if form?.error}
+        <div class="alert-error" role="alert">{form.error}</div>
+      {/if}
 
       {#if isFirstSub}
         <p class="modal-body">
           {t.accountPages.checkoutIntroPre}
-          <b>{target.name}</b> {t.accountPages.planAtPrice} €{target.priceMonthly}{t.accountPages.perMonthSuffix}.
+          <b>{target.name}</b> {t.accountPages.planAtPrice} {planPrice(target)}{t.accountPages.perMonthSuffix}.
         </p>
       {:else if targetIsUpgrade}
         <div class="charge-line">
@@ -215,13 +338,13 @@
         </div>
         <p class="modal-body">
           {t.accountPages.proratedExplain}
-          {t.accountPages.thenWord} <b>{target.name}</b> {t.accountPages.renewsAt} €{target.priceMonthly}{t.accountPages.perMonthSuffix}{periodEndStr ? ` ${t.accountPages.fromDate} ${periodEndStr}` : ''}.
+          {t.accountPages.thenWord} <b>{target.name}</b> {t.accountPages.renewsAt} {planPrice(target)}{t.accountPages.perMonthSuffix}{periodEndStr ? ` ${t.accountPages.fromDate} ${periodEndStr}` : ''}.
         </p>
         {#if preview && !preview.exact}
           <p class="modal-note">{t.accountPages.approximateNote}</p>
         {/if}
       {:else}
-        <div class="charge-line"><span>{t.accountPages.chargedNow}</span><b>€0.00</b></div>
+        <div class="charge-line"><span>{t.accountPages.chargedNow}</span><b>{money(0)}</b></div>
         <p class="modal-body">
           {t.accountPages.youKeep} <b>{data.plans[currentPlan].name}</b> {t.accountPages.untilWord} {periodEndStr ?? t.accountPages.endOfThisPeriod},
           {t.accountPages.thenMoveTo} <b>{target.name}</b>. {t.accountPages.noChargeToday}
@@ -229,10 +352,10 @@
       {/if}
 
       <div class="modal-actions">
-        <button type="button" class="btn-outline" onclick={() => (confirmPlan = null)}>{t.common.cancel}</button>
-        <form method="POST" action="?/upgrade">
+        <button type="button" class="btn-outline" disabled={busy !== null} onclick={closeDialog}>{t.common.cancel}</button>
+        <form method="POST" action="?/upgrade" use:enhance={viaStripe('upgrade')}>
           <input type="hidden" name="plan" value={confirmPlan} />
-          <button type="submit" class="btn-accent-sm">
+          <button type="submit" class="btn-accent-sm" disabled={busy !== null}>
             {#if isFirstSub}{t.accountPages.continueToCheckout}
             {:else if targetIsUpgrade}{t.accountPages.payPrefix} {preview ? money(preview.amountDue) : ''} {t.accountPages.andUpgrade}
             {:else}{t.accountPages.scheduleSwitch}{/if}
@@ -279,6 +402,25 @@
   .status-active   { color: var(--success); background: var(--success-dim); }
   .status-trialing { color: var(--accent-ink); background: var(--accent-dim); }
   .status-past_due, .status-unpaid { color: var(--danger); background: var(--danger-dim); }
+  .status-paused { color: var(--warning); background: var(--warning-dim); }
+  .owner-only { font-size: 12px; color: var(--text-subtle); margin-top: 4px; max-width: 520px; line-height: 1.6; }
+
+  /* Payment problems and suspended halls: a message with its one action beside it. */
+  .pay-alert { display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap; }
+  .pay-alert form { margin: 0; }
+  .pay-alert .btn-outline { background: var(--bg-base); }
+
+  /* Usage meters */
+  .usage-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 12px; }
+  .meter { display: flex; flex-direction: column; gap: 6px; padding: 13px 15px; border: 1px solid var(--border); border-radius: var(--radius-sm); min-width: 0; }
+  .meter-label { font-size: 10px; font-weight: 650; text-transform: uppercase; letter-spacing: .09em; color: var(--text-muted); }
+  .meter-value { font-size: 17px; font-weight: 600; letter-spacing: -.03em; font-variant-numeric: tabular-nums; color: var(--text-base); }
+  .meter-unl { font-size: 12px; font-weight: 500; letter-spacing: 0; color: var(--text-subtle); }
+  .meter-bar { display: block; height: 4px; border-radius: 2px; background: var(--bg-panel2); overflow: hidden; }
+  .meter-bar > span { display: block; height: 100%; background: var(--accent); border-radius: 2px; }
+  .meter-bar > span.full { background: var(--warning); }
+  .meter-hint { font-size: 11px; color: var(--text-subtle); line-height: 1.5; }
+  .meter-hint a { color: var(--accent-ink); }
   .status-cancelled { color: var(--text-muted); background: var(--bg-panel2); }
 
   /* Plans — the landing page's .plan treatment: a rule above each column,
@@ -341,6 +483,8 @@
     cursor: pointer; font-family: inherit; white-space: nowrap; transition: border-color .15s, color .15s, background .15s;
   }
   .btn-outline:hover { border-color: var(--text-subtle); background: var(--bg-hover); }
+  .btn-outline:disabled, .btn-accent-sm:disabled, .pending-undo:disabled { opacity: .6; cursor: progress; transform: none; }
+  .btn-sm { padding: 7px 13px; font-size: 12px; }
   .danger-outline:hover { border-color: var(--danger); color: var(--danger); background: var(--danger-dim); }
 
   .btn-accent-sm {
@@ -353,6 +497,7 @@
 
   .alert-success { padding: 10px 14px; border-radius: var(--radius-sm); font-size: 13px; font-weight: 500; margin-bottom: 16px; color: var(--success); background: var(--success-dim); }
   .alert-warning { padding: 10px 14px; border-radius: var(--radius-sm); font-size: 13px; font-weight: 500; margin-bottom: 16px; color: var(--warning); background: var(--warning-dim); }
+  .alert-error { padding: 10px 14px; border-radius: var(--radius-sm); font-size: 13px; font-weight: 500; margin-bottom: 16px; color: var(--danger); background: var(--danger-dim); }
 
   /* Plan-change dialog — genuinely floating, so it opts back into .card--raised. */
   .modal-backdrop {
@@ -389,4 +534,5 @@
   .addon-row { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 15px 18px; }
   .addon-price { font-size: 13px; font-weight: 600; }
   .addon-note { font-size: var(--meta-size); color: var(--text-subtle); }
+  a.addon-note { color: var(--accent-ink); text-align: right; }
 </style>
