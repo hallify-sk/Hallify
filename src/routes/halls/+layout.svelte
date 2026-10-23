@@ -15,6 +15,7 @@
   templateStyle={data.site.templateStyle}
   template={data.site.template}
   user={data.user}
+  verifyReminder={!!data.user && data.user.account_type === 'client' && !data.user.email_verified_at}
   unread={data.unreadMessages ?? 0}
   path={$page.url.pathname}
 >

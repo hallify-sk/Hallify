@@ -54,6 +54,10 @@
     <div class="row-list">
       <div class="row-item kv"><span>{t.platformExtra.type}</span><b>{isClient ? t.platformExtra.typeClient : t.platformExtra.typeOrganization}</b></div>
       <div class="row-item kv"><span>{t.platformOrgs.platformAdmin}</span><b>{u.is_platform_admin ? t.platformExtra.yes : t.platformExtra.no}</b></div>
+      <div class="row-item kv">
+        <span>{t.identity.emailStatus}</span>
+        <b class:unverified={!u.email_verified_at}>{u.email_verified_at ? t.identity.emailVerifiedYes : t.identity.emailNotVerified}</b>
+      </div>
       <div class="row-item kv"><span>{t.platformExtra.reservationsMade}</span><b>{data.reservationCount}</b></div>
       <div class="row-item kv"><span>{t.platformExtra.joined}</span><b>{fmtDate(u.created_at)}</b></div>
       {#if isClient && data.clientOrg}
@@ -61,7 +65,13 @@
       {/if}
     </div>
 
+    {#if form && 'verified' in form && form.verified}<div class="alert-ok" role="status">{t.identity.markedVerified}</div>{/if}
     <div class="admin-row">
+      {#if !u.email_verified_at}
+        <form method="POST" action="?/markVerified" use:enhance>
+          <button type="submit" class="btn-outline">{t.identity.markVerified}</button>
+        </form>
+      {/if}
       {#if u.is_platform_admin}
         <form method="POST" action="?/revokePlatformAdmin" use:enhance>
           <button type="submit" class="btn-outline">{t.platformExtra.revokePlatformAdmin}</button>
@@ -105,6 +115,9 @@
 </div>
 
 <style>
+  .unverified { color: var(--warning); }
+  .alert-ok { margin: 12px 0 0; padding: 9px 12px; border-radius: var(--radius-sm); font-size: 13px; background: var(--success-dim); color: var(--success); }
+
   .page { padding-block: 24px; max-width: 900px; }
   .back { display: inline-flex; align-items: center; gap: 5px; font-size: 13px; font-weight: 600; color: var(--text-muted); text-decoration: none; margin-bottom: 14px; }
   .back:hover { color: var(--accent-ink); }

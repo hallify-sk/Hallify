@@ -76,7 +76,7 @@
 			{:else if data.hasAccount}
 				<!-- Email already has an account → log in to claim. -->
 				<p class="invite-hint">{t.inviteAccept.alreadyHaveAccount}</p>
-				<a class="invite-btn" href="/login?redirect=/invite/{data.token}">{t.inviteAccept.logInToClaim}</a>
+				<a class="invite-btn" href={data.loginHref}>{t.inviteAccept.logInToClaim}</a>
 			{:else}
 				<!-- New person → name + email prefilled, just choose a password. -->
 				<div class="section-head">

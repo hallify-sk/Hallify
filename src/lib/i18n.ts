@@ -2405,7 +2405,7 @@ export const sk = {
 		operatorBody: "Vytvorte organizáciu a spravujte priestor aj rezervácie na jednom mieste.",
 		profileTitle: "Profil",
 		profileBody: "Meno, e-mail a heslo vášho účtu.",
-		bookingsHint: "Rezervácie, ktoré ste vytvorili na stránke konkrétneho priestoru, nájdete priamo na nej v časti Moje rezervácie.",
+		bookingsHint: "Na stránke každého priestoru na Hallify sa prihlásite týmto istým účtom. Rezervácie zo všetkých priestorov nájdete v časti Moje rezervácie.",
 	},
 	accountPages: {
 		billingTitle: "Fakturácia a plán",
@@ -3228,6 +3228,7 @@ export const sk = {
 		registerHallifyHint: "Vytvoríte si účet Hallify: rovnakým e-mailom a heslom sa prihlásite aj v iných priestoroch na Hallify.",
 		bookingsLead: "Rezervácie zo všetkých priestorov, v ktorých ste sa prihlásili účtom Hallify.",
 		openAtVenue: "Otvoriť na stránke priestoru",
+		openBooking: "Otvoriť rezerváciu",
 		homeBookingsTitle: "Moje rezervácie",
 		homeBookingsBody: (n: number) => n > 0
 			? `Máte ${n} ${sk3(n, "nadchádzajúcu rezerváciu", "nadchádzajúce rezervácie", "nadchádzajúcich rezervácií")}.`
@@ -3254,6 +3255,8 @@ export const sk = {
 		newOwnerCta: "Otvoriť Hallify",
 		markVerified: "Potvrdiť e-mail",
 		markedVerified: "E-mail účtu bol označený ako potvrdený.",
+		emailStatus: "E-mail",
+		emailVerifiedYes: "Potvrdený",
 	},
 	serverErrors: {
 		invalidTemplate: "Neznáma šablóna.",
@@ -5871,7 +5874,7 @@ export const en: typeof sk = {
 		operatorBody: "Create an organization and manage your venue and its bookings in one place.",
 		profileTitle: "Profile",
 		profileBody: "Your name, email and password.",
-		bookingsHint: "Bookings you made on a venue's own site are on that site, under My reservations.",
+		bookingsHint: "This same account signs you in on every venue's site on Hallify. Bookings from every venue are under My reservations.",
 	},
 	accountPages: {
 		billingTitle: "Billing & Plan",
@@ -6691,6 +6694,7 @@ export const en: typeof sk = {
 		registerHallifyHint: "This creates your Hallify account: the same email and password also sign you in at other venues on Hallify.",
 		bookingsLead: "Bookings from every venue where you signed in with your Hallify account.",
 		openAtVenue: "Open on the venue's site",
+		openBooking: "Open the booking",
 		homeBookingsTitle: "My bookings",
 		homeBookingsBody: (n: number) => n > 0
 			? `You have ${n} upcoming ${en2(n, "booking", "bookings")}.`
@@ -6717,6 +6721,8 @@ export const en: typeof sk = {
 		newOwnerCta: "Open Hallify",
 		markVerified: "Confirm email",
 		markedVerified: "The account's email was marked as confirmed.",
+		emailStatus: "Email",
+		emailVerifiedYes: "Confirmed",
 	},
 	serverErrors: {
 		invalidTemplate: "Unknown template.",

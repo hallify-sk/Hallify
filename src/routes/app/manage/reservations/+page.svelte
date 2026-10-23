@@ -332,6 +332,9 @@
 							{:else}
 								<span class="user-name">{res.user_first_name ?? ''} {res.user_last_name ?? ''}</span>
 								<span class="user-email">{res.user_email ?? ''}</span>
+								{#if res.user_email_unverified}
+									<span class="unverified-tag" title={t.identity.emailNotVerifiedHint}>{t.identity.emailNotVerified}</span>
+								{/if}
 							{/if}
 						</div>
 						<div class="td-hall">{res.hall_name}</div>
@@ -364,6 +367,9 @@
 </div>
 
 <style>
+	/* The client has not confirmed their address yet (D11). */
+	.unverified-tag { font-size: 10.5px; font-weight: 600; color: var(--warning); white-space: nowrap; }
+
 	/* Status inks. Each one has to stay legible as TEXT on paper (the pills colour
 	   their label with it), so every value is ink-grade rather than a stock swatch.
 	   amber / green / red ride the shared status tokens; violet and blue are the two

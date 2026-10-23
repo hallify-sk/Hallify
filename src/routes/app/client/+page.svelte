@@ -65,14 +65,14 @@
 			</div>
 			<div class="row-list reservation-list">
 				{#each data.reservations as r}
-					<div class="row-item res-row">
+					<a class="row-item res-row" href={r.href}>
 						<div class="res-main">
 							<span class="res-title">{r.title}</span>
 							<span class="res-hall">{r.hall_name} · {r.org_name}</span>
 						</div>
 						<span class="res-date">{fmtDate(r.event_date)}</span>
 						<span class="badge {STATUS_CLASS[r.status] ?? 'badge-muted'}">{statusLabel(r.status, getLocale())}</span>
-					</div>
+					</a>
 				{/each}
 			</div>
 		</section>
@@ -125,6 +125,8 @@
 
 	.section-head a { font-size: 13px; color: var(--accent-ink); text-decoration: none; font-weight: 600; }
 
+	.res-row { text-decoration: none; color: inherit; }
+	.res-row:hover { background: var(--bg-hover); text-decoration: none; }
 	.res-main { flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 	.res-title { font-size: 14px; font-weight: 600; color: var(--text-base); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 	.res-hall { font-size: 12px; color: var(--text-muted); }

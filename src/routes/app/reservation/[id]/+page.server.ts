@@ -1,4 +1,5 @@
 import { error, redirect, fail } from '@sveltejs/kit';
+import { createLinkedClient, findHallifyAccount } from '$lib/server/identity';
 import { loginUrl } from '$lib/login-redirect';
 import { dbAll, dbFirst, dbRun, fromJson, toJson } from '$lib/db/index';
 import type { ReservationRow, RsvpRow, TableTypeRow, TemplateRow, ReservationStatus, RsvpConfig, HallExtraRow } from '$lib/db/index';
@@ -74,14 +75,15 @@ export const load: PageServerLoad = async ({ locals, params, url }) => {
 		hall_auto_approve: boolean; hall_min_cancel_days: number;
 		hall_pre_reservation_text: string | null;
 		user_first_name: string; user_last_name: string; user_email: string | null;
-		user_account_type: string | null;
+		user_account_type: string | null; user_email_unverified: number;
 	}>(locals.db,
 		`SELECT r.*, h.name AS hall_name, h.max_people AS hall_max_people,
 			h.floorplan_json AS hall_floorplan_json, h.auto_approve AS hall_auto_approve,
 			h.min_cancel_days AS hall_min_cancel_days, h.pre_reservation_text AS hall_pre_reservation_text,
 			COALESCE(u.first_name, 'Former') AS user_first_name,
 			COALESCE(u.last_name, 'member') AS user_last_name,
-			u.email AS user_email, u.account_type AS user_account_type
+			u.email AS user_email, u.account_type AS user_account_type,
+			CASE WHEN u.id IS NOT NULL AND u.email_verified_at IS NULL AND u.deleted_at IS NULL THEN 1 ELSE 0 END AS user_email_unverified
 		FROM reservations r
 		JOIN halls h ON h.id = r.hall_id
 		LEFT JOIN users u ON u.id = r.user_id
@@ -197,9 +199,17 @@ export const actions: Actions = {
 		const inviterName = `${user.first_name} ${user.last_name}`;
 
 		// Already a client of this org → hand the event over right away.
-		const existing = await dbFirst<{ id: string; first_name: string; last_name: string }>(locals.db,
+		let existing = await dbFirst<{ id: string; first_name: string; last_name: string }>(locals.db,
 			`SELECT id, first_name, last_name FROM users WHERE email = ? AND org_id = ? AND account_type = 'client'`,
 			email, orgId);
+		// Has a Hallify account → is this venue's client already (D4): the client row is
+		// created, linked, and the event handed over the same way.
+		if (!existing) {
+			const account = await findHallifyAccount(locals.db, email);
+			if (account) {
+				existing = { id: await createLinkedClient(locals.db, orgId, account), first_name: account.first_name, last_name: account.last_name };
+			}
+		}
 
 		if (existing) {
 			await dbRun(locals.db, 'UPDATE reservations SET user_id = ? WHERE id = ? AND org_id = ?', existing.id, params.id, orgId);

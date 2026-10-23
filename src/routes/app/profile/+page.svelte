@@ -4,6 +4,7 @@
 	import { t, getLocale } from '$lib/i18n.svelte';
 	import { formatDate } from '$lib/format';
 	import { orgRoleLabel } from '$lib/role-label';
+	import { confirmFirst } from '$lib/forms';
 	import type { PageData, ActionData } from './$types';
 
 	interface Props { data: PageData; form: ActionData; }
@@ -43,7 +44,7 @@
 		{#if form?.success && form?.section === 'profile'}
 			<div class="alert-success">{form.emailChanged ? t.profile.emailChangedSaved : t.profile.saved}</div>
 		{/if}
-		{#if form?.error && form?.section !== 'password'}
+		{#if form?.error && form?.section !== 'password' && form?.section !== 'delete'}
 			<div class="alert-error">{form.error}</div>
 		{/if}
 
@@ -61,6 +62,12 @@
 			<div class="field">
 				<label for="email">{t.auth.email}</label>
 				<input id="email" name="email" type="email" bind:value={email} required autocomplete="email" />
+				{#if !data.emailVerified}
+					<p class="hint verify-hint">
+						<span class="unverified">{t.identity.emailNotVerified}</span>
+						<a href="/verify-email?redirect=%2Fapp%2Fprofile">{t.identity.bannerAction}</a>
+					</p>
+				{/if}
 			</div>
 			{#if emailChanged || (form?.section === 'profile' && 'needsPassword' in form && form.needsPassword)}
 				<div class="field">
@@ -128,6 +135,52 @@
 			</div>
 		</div>
 	</section>
+
+	<!-- Delete the account (D7): what will happen, then the password and a confirmation. -->
+	{#if data.deletion}
+		<section class="section danger-zone">
+			<div class="section-head">
+				<h3>{t.identity.deleteTitle}</h3>
+			</div>
+
+			{#if form?.error && form?.section === 'delete'}
+				<div class="alert-error" role="alert">{form.error}</div>
+			{/if}
+
+			{#if data.deletion.refused === 'lastPlatformAdmin'}
+				<p class="hint">{t.identity.deleteLastAdmin}</p>
+			{:else}
+				<p class="delete-lead">{t.identity.deleteLead}</p>
+				<ul class="delete-list">
+					{#each data.deletion.orgs as org (org.orgId)}
+						<li>
+							{#if org.outcome === 'handOver'}{t.identity.deleteHandOver(org.name, org.newOwner?.name ?? '')}
+							{:else if org.outcome === 'close'}{t.identity.deleteClose(org.name)}
+							{:else if org.outcome === 'coOwner'}{t.identity.deleteCoOwner(org.name)}
+							{:else}{t.identity.deleteLeave(org.name)}{/if}
+						</li>
+					{/each}
+					{#if data.deletion.upcoming > 0}<li>{t.identity.deleteUpcoming(data.deletion.upcoming)}</li>{/if}
+					{#if data.deletion.past > 0}<li>{t.identity.deletePast}</li>{/if}
+					<li>{t.identity.deleteNothingElse}</li>
+				</ul>
+
+				<form method="POST" action="?/deleteAccount" use:enhance={confirmFirst(() => t.identity.deleteConfirm)}>
+					<div class="field">
+						<label for="deletePassword">{t.identity.deletePassword}</label>
+						<input id="deletePassword" name="password" type="password" required autocomplete="current-password" />
+					</div>
+					<label class="confirm-check">
+						<input type="checkbox" name="confirm" required />
+						<span>{t.identity.deleteConfirmCheck}</span>
+					</label>
+					<div class="form-actions">
+						<button type="submit" class="btn-danger">{t.identity.deleteButton}</button>
+					</div>
+				</form>
+			{/if}
+		</section>
+	{/if}
 </div>
 
 <style>
@@ -239,6 +292,33 @@
 		text-transform: capitalize;
 		color: var(--accent-ink);
 	}
+
+	.verify-hint { display: flex; gap: 8px; align-items: baseline; margin-top: 6px; }
+	.unverified { color: var(--warning); font-weight: 600; }
+	.verify-hint a { color: var(--accent-ink); font-weight: 600; }
+
+	.delete-lead { font-size: var(--body-size); color: var(--text-muted); margin: 0 0 8px; }
+	.delete-list {
+		margin: 0 0 16px;
+		padding-left: 18px;
+		font-size: 13px;
+		line-height: 1.6;
+		color: var(--text-base);
+		overflow-wrap: anywhere;
+	}
+	.confirm-check { display: flex; gap: 8px; align-items: flex-start; font-size: 13px; color: var(--text-base); cursor: pointer; }
+	.confirm-check input { margin-top: 2px; accent-color: var(--danger); }
+	.btn-danger {
+		padding: 10px 20px;
+		border-radius: var(--radius-sm);
+		font-size: 13px;
+		font-weight: 650;
+		background: var(--danger);
+		color: #fff;
+		border: none;
+		cursor: pointer;
+	}
+	.btn-danger:hover { filter: brightness(0.95); }
 
 	@media (max-width: 700px) {
 		.field-row { grid-template-columns: 1fr; }

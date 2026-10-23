@@ -15,6 +15,7 @@ export type AuditAction =
 	| 'org.ai_credits'
 	| 'user.admin_grant'
 	| 'user.admin_revoke'
+	| 'user.email_verified'
 	| 'announcement.create'
 	| 'announcement.update'
 	| 'announcement.delete'

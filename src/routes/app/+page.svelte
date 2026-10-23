@@ -22,7 +22,7 @@
 
 <!-- An account with no organisation gets a home of its own; members get their events. -->
 {#if data.personal}
-<PersonalHome firstName={data.personal.firstName} invites={data.personal.invites} />
+<PersonalHome firstName={data.personal.firstName} invites={data.personal.invites} upcomingBookings={data.personal.upcomingBookings} />
 {:else}
 <div class="wrap">
 	<div class="section section--lead page-top">

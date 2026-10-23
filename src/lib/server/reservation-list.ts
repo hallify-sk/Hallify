@@ -98,11 +98,14 @@ export interface ListRow {
 	hall_id: string; hall_name: string;
 	customer_name: string | null; customer_contact: string | null;
 	user_first_name: string | null; user_last_name: string | null; user_email: string | null;
+	/** 1 when the client has not confirmed their email address (D11). */
+	user_email_unverified: number;
 }
 
 const COLUMNS = `r.id, r.title, r.event_date, r.start_time, r.end_time, r.status, r.event_type, r.num_guests, r.created_at,
 	r.hall_id, h.name AS hall_name, r.customer_name, r.customer_contact,
-	u.first_name AS user_first_name, u.last_name AS user_last_name, u.email AS user_email`;
+	u.first_name AS user_first_name, u.last_name AS user_last_name, u.email AS user_email,
+	CASE WHEN u.id IS NOT NULL AND u.email_verified_at IS NULL AND u.deleted_at IS NULL THEN 1 ELSE 0 END AS user_email_unverified`;
 
 export async function listReservations(db: D1Database, orgId: string, f: ListFilters, todayISO: string) {
 	const w = buildWhere(orgId, f, todayISO);

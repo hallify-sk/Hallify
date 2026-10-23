@@ -21,12 +21,14 @@
     /** Current pathname, used to mark the active rail item. */
     path?: string;
     inert?: boolean;
+    /** The signed-in client has not confirmed their email yet (D11): a reminder. */
+    verifyReminder?: boolean;
     children: import('svelte').Snippet;
   }
 
   const {
     org, templateStyle, template, user = null, unread = 0, path = '/halls',
-    inert = false, children
+    inert = false, verifyReminder = false, children
   }: Props = $props();
 
   const initials = $derived(
@@ -116,7 +118,16 @@
     </aside>
 
     <div class="b-main-wrap">
-      <main class="b-main">{@render children()}</main>
+      <main class="b-main">
+        {#if verifyReminder && !inert}
+          <!-- Booking works without it; this only reminds them to confirm (D11). -->
+          <div class="b-verify" role="status">
+            <span>{t.identity.bannerText}</span>
+            <a href="/verify-email">{t.identity.bannerAction}</a>
+          </div>
+        {/if}
+        {@render children()}
+      </main>
       <footer class="b-pwr">
         {t.bubble.poweredBy}
         <a href={inert ? undefined : 'https://hallify.sk'} target="_blank" rel="noopener" class="b-pwr-link" tabindex={tab}>
@@ -129,6 +140,13 @@
 </div>
 
 <style>
+  .b-verify {
+    display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px;
+    margin: 0 0 20px; padding: 10px 14px; border-radius: var(--radius-sm);
+    background: var(--warning-dim); color: var(--text-base); font-size: 13px; line-height: 1.5;
+  }
+  .b-verify a { color: var(--accent-ink); font-weight: 650; white-space: nowrap; }
+
   /* Headings follow the template. Body text stays Inter everywhere: the templates
      differ by palette, shape and weight, and only borrow a SYSTEM serif for
      headings — self-hosting eight families would cost megabytes and the CSP

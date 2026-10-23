@@ -412,6 +412,9 @@
 					<div class="detail-value">{data.reservation.user_first_name} {data.reservation.user_last_name}</div>
 					{#if data.reservation.user_email}
 						<div class="detail-sub"><a href="mailto:{data.reservation.user_email}" style="color:var(--accent-ink);text-decoration:none">{data.reservation.user_email}</a></div>
+						{#if data.reservation.user_email_unverified && !data.reservation.customer_name}
+							<div class="detail-sub unverified" title={t.identity.emailNotVerifiedHint}>{t.identity.emailNotVerified}</div>
+						{/if}
 					{/if}
 				</div>
 			</div>
@@ -814,6 +817,9 @@
 {/if}
 
 <style>
+	/* The client has not confirmed their address yet (D11). */
+	.unverified { color: var(--warning); font-weight: 600; }
+
 	.page {
 		padding: 24px 0 48px;
 		overflow-y: auto;
