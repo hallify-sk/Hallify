@@ -108,18 +108,22 @@ export function migrateToMultiFloor(raw: unknown): MultiFloorState {
 	};
 }
 
-/** Total seat (chair) count across every floor/table of a layout. Uses per-side
- *  counts when present, else the legacy flat `chairs` count. Accepts raw stored
- *  JSON (string or parsed) — migrates to the v2 multi-floor shape first. */
+/** Total seat count across every floor of a layout, counted the way the editor
+ *  counts it: a round table seats its `chairs`, a rectangular one the sum of its
+ *  per-side counts (else the legacy flat `chairs`), and every standalone chair is
+ *  a seat too. Accepts raw stored JSON (string or parsed) — migrates to the v2
+ *  multi-floor shape first. */
 export function countSeats(raw: unknown): number {
 	const state = migrateToMultiFloor(raw);
 	let seats = 0;
 	for (const floor of state.floors) {
-		for (const t of floor.tables) {
+		for (const t of floor.tables ?? []) {
+			if (t.shape === 'round') { seats += Number(t.chairs) || 0; continue; }
 			const perSide = (Number(t.chairsTop) || 0) + (Number(t.chairsBottom) || 0) +
 				(Number(t.chairsLeft) || 0) + (Number(t.chairsRight) || 0);
 			seats += perSide || (Number(t.chairs) || 0);
 		}
+		seats += Array.isArray(floor.seats) ? floor.seats.length : 0;
 	}
 	return seats;
 }
