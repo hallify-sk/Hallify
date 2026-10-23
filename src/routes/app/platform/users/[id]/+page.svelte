@@ -1,6 +1,7 @@
 <script lang="ts">
   import { enhance } from '$app/forms';
-  import { t } from '$lib/i18n.svelte';
+  import { t, getLocale } from '$lib/i18n.svelte';
+  import { formatDate } from '$lib/format';
   import type { PageData, ActionData } from './$types';
   let { data, form }: { data: PageData; form: ActionData } = $props();
 
@@ -8,7 +9,7 @@
   const isClient = $derived(u.account_type === 'client');
 
   function fmtDate(d: string) {
-    return new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+    return formatDate(d, getLocale());
   }
 </script>
 

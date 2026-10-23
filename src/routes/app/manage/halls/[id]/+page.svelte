@@ -638,19 +638,13 @@
 
   const upcomingReservations = $derived(
     data.reservations
-      .filter(r => {
-        const d = new Date(r.event_date);
-        const iso = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-        return iso >= todayStr;
-      })
-      .sort((a, b) => new Date(a.event_date).getTime() - new Date(b.event_date).getTime())
+      // event_date is a plain YYYY-MM-DD: compare it as text (new Date() read it as UTC).
+      .filter(r => String(r.event_date).slice(0, 10) >= todayStr)
+      .sort((a, b) => String(a.event_date).localeCompare(String(b.event_date)))
   );
 
   const eventDateStrings = $derived(
-    data.reservations.map(r => {
-      const d = new Date(r.event_date);
-      return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-    })
+    data.reservations.map(r => String(r.event_date).slice(0, 10))
   );
 
   // Bookings the block would collide with: live ones, not yet past, inside the range
@@ -685,14 +679,10 @@
   }
 
   function formatDate(d: Date | string | null): string {
-    if (!d) return '';
-    const date = typeof d === 'string' ? new Date(d + 'T00:00:00') : new Date(d);
-    return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+    return d ? fmtDbDate(typeof d === 'string' ? d.slice(0, 10) : d, getLocale()) : '';
   }
   function shortDate(d: Date | string | null): string {
-    if (!d) return '';
-    const date = typeof d === 'string' ? new Date(d + 'T00:00:00') : new Date(d);
-    return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+    return d ? fmtDbDate(typeof d === 'string' ? d.slice(0, 10) : d, getLocale(), { day: 'numeric', month: 'short' }) : '';
   }
   function daysBetween(from: string, to: string): number {
     if (!from || !to) return 0;

@@ -84,4 +84,10 @@ describe('reservation status helpers', () => {
 		expect(fmtDate('2026-11-21', 'en')).toBe('21 Nov 2026');
 		expect(fmtDate('2026-11-21', 'sk')).toMatch(/^21\. ?(11|nov)/);
 	});
+	it('read a stored timestamp as UTC, not local time', () => {
+		// '2026-10-23 23:30:00' is UTC: east of Greenwich that is already the 24th.
+		const instant = new Date(Date.UTC(2026, 9, 23, 23, 30));
+		const expected = instant.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+		expect(fmtDate('2026-10-23 23:30:00', 'en')).toBe(expected);
+	});
 });

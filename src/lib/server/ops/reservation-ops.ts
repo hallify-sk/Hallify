@@ -4,6 +4,7 @@ import { notifyStatusChange, notifyNewMessage, notifyHallCancellation } from '$l
 import { dispatchWebhooks } from '$lib/notifications';
 import { assertCanBook } from '$lib/availability';
 import { st } from '$lib/i18n-server';
+import { formatDate } from '$lib/format';
 import { logReservationActivity } from '$lib/server/reservation-activity';
 import { findOrCreateReservationThread, MESSAGE_MAX } from '$lib/server/threads';
 import { checkStatusTransition, normalizeTime, todayUtcISO } from '$lib/server/reservation-rules';
@@ -113,7 +114,7 @@ export async function changeReservationStatus(
 	if (reason && reservation.owner_type === 'client') {
 		const thread = await findOrCreateReservationThread(locals.db, {
 			orgId, reservationId, userId: reservation.user_id,
-			subject: threadSubject(reservation.hall_name, reservation.event_date),
+			subject: threadSubject(reservation.hall_name, reservation.event_date, locals.locale),
 		});
 		await dbRun(locals.db, `INSERT INTO messages (id, ticket_id, sender_id, body, message_type) VALUES (?, ?, ?, ?, 'text')`,
 			crypto.randomUUID(), thread.id, actor.id, reason);
@@ -128,8 +129,9 @@ export async function changeReservationStatus(
 	return { ok: true, title: reservation.title, from };
 }
 
-function threadSubject(hallName: string, eventDate: string): string {
-	return `${hallName} – ${new Date(eventDate + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}`;
+/** Thread subject: hall and date, the date in the staff member's language (it was en-GB). */
+function threadSubject(hallName: string, eventDate: string, locale: App.Locals['locale']): string {
+	return `${hallName} – ${formatDate(String(eventDate).slice(0, 10), locale)}`;
 }
 
 /** A message from staff into the booking's own thread (created if it has none), emailed to the client. */
@@ -154,7 +156,7 @@ export async function messageReservationClient(
 	if (!res.user_id) return { ok: false, status: 400, error: e.reservationHasNoClientAccount };
 
 	const thread = await findOrCreateReservationThread(locals.db, {
-		orgId, reservationId, userId: res.user_id, subject: threadSubject(res.hall_name, res.event_date),
+		orgId, reservationId, userId: res.user_id, subject: threadSubject(res.hall_name, res.event_date, locals.locale),
 	});
 	if (!thread.created) {
 		await dbRun(locals.db, "UPDATE tickets SET status = 'open', updated_at = datetime('now') WHERE id = ?", thread.id);

@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { t } from '$lib/i18n.svelte';
+  import { t, getLocale } from '$lib/i18n.svelte';
+  import { formatDate } from '$lib/format';
   import type { PageData } from './$types';
   let { data }: { data: PageData } = $props();
   const s = $derived(data.stats);
@@ -181,7 +182,7 @@
         <div role="row" class="row-item admin-row">
           <span role="cell"><strong>{a.first_name} {a.last_name}</strong></span>
           <span role="cell" class="muted">{a.email}</span>
-          <span role="cell" class="muted num">{new Date(a.created_at).toLocaleDateString()}</span>
+          <span role="cell" class="muted num">{formatDate(a.created_at, getLocale())}</span>
         </div>
       {/each}
     </div>
@@ -205,7 +206,7 @@
           <span role="cell" class="cell-name"><a href="/app/platform/orgs/{org.id}">{org.name}</a></span>
           <span role="cell" class="muted">{org.slug}</span>
           <span role="cell"><span class="badge badge-{org.plan ?? 'free'}">{org.plan ?? 'free'}</span></span>
-          <span role="cell" class="muted">{new Date(org.created_at).toLocaleDateString()}</span>
+          <span role="cell" class="muted">{formatDate(org.created_at, getLocale())}</span>
         </div>
       {/each}
     </div>

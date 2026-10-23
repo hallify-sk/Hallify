@@ -77,10 +77,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 
   const eventDates = reservations
     .filter(r => r.status !== 'cancelled')
-    .map(r => {
-      const d = new Date(r.event_date);
-      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-    });
+    .map(r => String(r.event_date).slice(0, 10));
 
   return {
     personal: null,

@@ -3,6 +3,7 @@
   import { creditAmount } from '$lib/assistant/credits';
   import { enhance } from '$app/forms';
   import { t, getLocale } from '$lib/i18n.svelte';
+  import { formatDateTime } from '$lib/format';
   import type { SubmitFunction } from '@sveltejs/kit';
   import type { ActionData, PageData } from './$types';
 
@@ -24,7 +25,7 @@
   const credits = (mc: number) => creditAmount(mc, getLocale());
   const fmtDate = (d: string | null, withTime = false) =>
     d
-      ? new Date(d.includes('T') ? d : `${d.replace(' ', 'T')}Z`).toLocaleString(dateLocale, {
+      ? formatDateTime(d, getLocale(), {
           day: 'numeric', month: 'short', year: 'numeric', ...(withTime ? { hour: '2-digit', minute: '2-digit' } : {})
         })
       : '—';

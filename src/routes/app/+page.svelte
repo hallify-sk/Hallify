@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
-	import { t } from '$lib/i18n.svelte';
+	import { t, getLocale } from '$lib/i18n.svelte';
+	import { formatDate } from '$lib/format';
 	import SectionHeader from '$lib/components/SectionHeader.svelte';
 	import MiniCalendar from '$lib/components/MiniCalendar.svelte';
 	import KpiCard from '$lib/components/KpiCard.svelte';
@@ -12,7 +13,7 @@
 	const { data }: Props = $props();
 
 	function shortDate(d: Date | string) {
-		return new Date(d).toLocaleDateString('sk-SK', { day: 'numeric', month: 'short', year: 'numeric' });
+		return formatDate(typeof d === 'string' ? d.slice(0, 10) : d, getLocale());
 	}
 </script>
 

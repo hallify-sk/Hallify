@@ -1,5 +1,6 @@
 <script lang="ts">
-	import { t } from '$lib/i18n.svelte';
+	import { t, getLocale } from '$lib/i18n.svelte';
+	import { formatDate as fmtLocaleDate } from '$lib/format';
 
 	interface Props {
 		startDate?: string;
@@ -124,8 +125,7 @@
 
 	function formatDate(iso: string): string {
 		if (!iso) return '';
-		const d = new Date(iso + 'T00:00:00');
-		return d.toLocaleDateString('sk-SK', { day: 'numeric', month: 'short', year: 'numeric' });
+		return fmtLocaleDate(iso, getLocale());
 	}
 </script>
 

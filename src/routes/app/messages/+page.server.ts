@@ -5,6 +5,7 @@ import { dbAll, dbFirst, dbRun } from '$lib/db/index';
 import { dispatchWebhooks } from '$lib/notifications';
 import { notifyGuestMessage } from '$lib/email';
 import { st } from '$lib/i18n-server';
+import { formatDate } from '$lib/format';
 import { channelName, channelNameProblem, CHANNEL_DESC_MAX } from '$lib/channels';
 import { channelUnreadCountSql, ticketUnreadSql, markChannelRead, markTicketRead } from '$lib/unread';
 import { findOrCreateReservationThread, MESSAGE_MAX } from '$lib/server/threads';
@@ -407,7 +408,7 @@ export const actions: Actions = {
     );
     if (!res) return fail(404, { chatError: d.serverErrors.notFound });
 
-    const subject = `${res.hall_name} – ${new Date(res.event_date + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}`;
+    const subject = `${res.hall_name} – ${formatDate(String(res.event_date).slice(0, 10), locals.locale)}`;
 
     // One thread per booking: a second "new" message joins the existing thread.
     const thread = await findOrCreateReservationThread(locals.db, { orgId: org.id, reservationId, userId: user.id, subject });

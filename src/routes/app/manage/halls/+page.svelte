@@ -2,6 +2,7 @@
   import { enhance } from '$app/forms';
   import StatusBadge from '$lib/components/StatusBadge.svelte';
   import { t, getLocale } from '$lib/i18n.svelte';
+  import { formatDate } from '$lib/format';
   import type { PageData, ActionData, SubmitFunction } from './$types';
 
   interface Props { data: PageData; form: ActionData; }
@@ -25,9 +26,8 @@
   const hallColor = (c: string | null | undefined) =>
     typeof c === 'string' && /^#[0-9a-fA-F]{6}$/.test(c) ? c : BRAND_ACCENT;
 
-  const dateLocale = $derived(getLocale() === 'en' ? 'en-GB' : 'sk-SK');
-  const fmtDate = (d: Date | string, locale: string) =>
-    new Date(d).toLocaleDateString(locale, { day: 'numeric', month: 'short', year: 'numeric' });
+  // created_at / archived_at are UTC without a zone: formatDate reads them as UTC.
+  const fmtDate = (d: Date | string) => formatDate(d, getLocale());
 
   // Archived halls are kept for their history but are not part of the working set:
   // they sit in their own section below and do not count toward the plan.
@@ -132,7 +132,7 @@
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
                 {h.max_people}
               </span>
-              <span class="halls-created">{t.common.created} {fmtDate(h.created_at, dateLocale)}</span>
+              <span class="halls-created">{t.common.created} {fmtDate(h.created_at)}</span>
             </div>
 
             <h3><a href="/app/manage/halls/{h.id}">{h.name}</a></h3>
@@ -185,7 +185,7 @@
               <a href="/app/manage/halls/{h.id}" class="archived-row">
                 <span class="archived-name">{h.name}</span>
                 <span class="archived-meta">
-                  {t.hallAdmin.archivedOn} {fmtDate(h.archived_at!, dateLocale)} · {h.reservation_count} {t.hallAdmin.allTimeBookings.toLowerCase()}
+                  {t.hallAdmin.archivedOn} {fmtDate(h.archived_at!)} · {h.reservation_count} {t.hallAdmin.allTimeBookings.toLowerCase()}
                 </span>
               </a>
             </li>

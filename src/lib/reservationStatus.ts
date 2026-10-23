@@ -3,7 +3,7 @@
 // Pass the viewer's locale: the labels and dates were English on Slovak pages.
 
 import { sk, en } from './i18n';
-import { localeTag, type Locale } from './format';
+import { formatDate, type Locale } from './format';
 
 export const STATUS_LABEL: Record<string, string> = {
 	pending: 'Pending',
@@ -32,12 +32,10 @@ export function statusClass(s: string): string {
 	return STATUS_CLASS[s] ?? 'st-muted';
 }
 
-/** event_date is stored as YYYY-MM-DD — render it in the local timezone. */
+/** event_date is stored as YYYY-MM-DD (rendered as that calendar day); stored
+ *  timestamps are UTC without a zone and go through parseDbTime via formatDate. */
 export function fmtDate(d: string | Date, locale: Locale | string = 'en'): string {
-	const dt = typeof d === 'string'
-		? new Date(/^\d{4}-\d{2}-\d{2}$/.test(d) ? d + 'T00:00:00' : d)
-		: new Date(d);
-	return dt.toLocaleDateString(localeTag(locale), { day: 'numeric', month: 'short', year: 'numeric' });
+	return formatDate(d, locale);
 }
 
 /** Parse "YYYY-MM-DD" + optional "HH:MM" to epoch ms, interpreting the naive value as

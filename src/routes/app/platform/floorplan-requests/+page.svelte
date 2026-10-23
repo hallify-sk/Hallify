@@ -1,6 +1,7 @@
 <script lang="ts">
   import { enhance } from '$app/forms';
-  import { t } from '$lib/i18n.svelte';
+  import { t, getLocale } from '$lib/i18n.svelte';
+  import { formatDate, parseDbTime } from '$lib/format';
   import { eur } from '$lib/extras';
   import type { PageData, ActionData } from './$types';
 
@@ -17,7 +18,7 @@
     cancelled: t.floorplanService.statusCancelled
   });
 
-  const fmt = (d: string | null) => (d ? new Date(d).toLocaleDateString() : '—');
+  const fmt = (d: string | null) => (d ? formatDate(d, getLocale()) : '—');
 
   let openSetupId = $state<string | null>(null);
   const toggleSetup = (id: string) => (openSetupId = openSetupId === id ? null : id);
@@ -32,7 +33,7 @@
 
   /** Days since the request came in — the number that decides what to work on. */
   function waiting(created: string): number {
-    return Math.max(0, Math.floor((Date.now() - new Date(created).getTime()) / 86_400_000));
+    return Math.max(0, Math.floor((Date.now() - (parseDbTime(created)?.getTime() ?? Date.now())) / 86_400_000));
   }
 </script>
 

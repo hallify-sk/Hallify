@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { PageData } from './$types';
-  import { t } from '$lib/i18n.svelte';
+  import { t, getLocale } from '$lib/i18n.svelte';
+  import { formatDate } from '$lib/format';
   let { data }: { data: PageData } = $props();
 
   let openId = $state<string | null>(null);
@@ -9,7 +10,7 @@
   const REASON: Record<string, string> = $derived({
     owner_closed: t.platformMisc.reasonOwnerClosed, auto_empty: t.platformMisc.reasonAutoEmptied, user_deleted: t.platformMisc.reasonUserDeleted,
   });
-  function fmt(d: string | null) { return d ? new Date(d).toLocaleDateString() : '—'; }
+  function fmt(d: string | null) { return d ? formatDate(d, getLocale()) : '—'; }
 </script>
 
 <div class="wrap page">

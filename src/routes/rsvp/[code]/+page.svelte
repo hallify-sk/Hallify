@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
-	import { t } from '$lib/i18n.svelte';
+	import { t, getLocale } from '$lib/i18n.svelte';
+	import { formatDate as fmtLocaleDate } from '$lib/format';
 	import { reveal } from '$lib/reveal';
 	import type { PageData, ActionData } from './$types';
 	import type { RsvpConfig } from '$lib/db/index';
@@ -30,7 +31,7 @@
 	}
 
 	function formatDate(d: Date | string) {
-		return new Date(d).toLocaleDateString('sk-SK', {
+		return fmtLocaleDate(typeof d === 'string' ? d.slice(0, 10) : d, getLocale(), {
 			weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
 		});
 	}

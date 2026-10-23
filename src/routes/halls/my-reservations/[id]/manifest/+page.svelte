@@ -5,6 +5,7 @@
 	import { manifestFloors } from '$lib/floorplan-manifest';
 	import { seatingManifestCsv, downloadCsv, fileSlug } from '$lib/csvExport';
 	import { t, getLocale } from '$lib/i18n.svelte';
+	import { formatDate } from '$lib/format';
 	import type { PageData } from './$types';
 
 	interface Props { data: PageData; }
@@ -30,7 +31,7 @@
 	}
 
 	function fmtDate(d: string) {
-		return new Date(d).toLocaleDateString(getLocale() === 'en' ? 'en-GB' : 'sk-SK', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+		return formatDate(d, getLocale(), { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
 	}
 
 	// Per-floor breakdown: tables (by their number) with their seated guests and the
