@@ -2,6 +2,7 @@ import type { Actions, PageServerLoad } from './$types';
 import { fail, redirect } from '@sveltejs/kit';
 import { dbFirst, dbRun } from '$lib/db/index';
 import type { UserRow } from '$lib/db/index';
+import { createPasswordReset } from '$lib/server/account';
 import { sendPasswordResetEmail } from '$lib/email';
 import { st } from '$lib/i18n-server';
 import { rateLimit, rateLimitKey, tooManyAttemptsMessage, RATE_LIMITS } from '$lib/rateLimit';
@@ -49,13 +50,8 @@ export const actions: Actions = {
     );
 
     if (user) {
-      const token = crypto.randomUUID().replace(/-/g, '').slice(0, 32);
-      const expiresAt = new Date(Date.now() + 3600_000).toISOString(); // 1 hour
-      await dbRun(
-        locals.db,
-        'INSERT INTO password_resets (id, user_id, token, expires_at) VALUES (?, ?, ?, ?)',
-        crypto.randomUUID(), user.id, token, expiresAt
-      );
+      // Only the token's hash is stored; the link in the email is the one copy.
+      const token = await createPasswordReset(locals.db, user.id);
       // Stays on this bubble — the reset route below is bubble-scoped too.
       await sendPasswordResetEmail(locals.db, email, `${url.origin}/reset-password/${token}`);
     }
