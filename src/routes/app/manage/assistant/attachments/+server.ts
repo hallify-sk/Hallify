@@ -2,12 +2,15 @@ import { json } from '@sveltejs/kit';
 import { dbRun } from '$lib/db/index';
 import { requireOrgPermission } from '$lib/server/access';
 import { sniffDocument, pdfPageCount, storeDocument } from '$lib/server/ai/documents';
+import { xlsxToCsv } from '$lib/server/ai/xlsx';
 import type { RequestHandler } from './$types';
 
 const MAX_TEXT_BYTES = 512 * 1024;
 const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
 const MAX_PDF_BYTES = 20 * 1024 * 1024;
+const MAX_SHEET_BYTES = 5 * 1024 * 1024;
 const TEXT = /\.(csv|tsv|txt)$/i;
+const SHEET = /\.xlsx$/i;
 const DOC = /\.(pdf|jpe?g|png|webp)$/i;
 
 /**
@@ -44,6 +47,24 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 		await dbRun(locals.db,
 			'INSERT INTO ai_attachments (id, org_id, user_id, name, content, size) VALUES (?, ?, ?, ?, ?, ?)',
 			id, org.id, locals.user!.id, file.name.slice(0, 200), decode(await file.arrayBuffer()), file.size);
+		return json({ ok: true, id, name: file.name });
+	}
+
+	// An Excel workbook: its first sheet, as CSV, goes the same way as a CSV file.
+	if (SHEET.test(file.name)) {
+		if (file.size > MAX_SHEET_BYTES) return json({ ok: false, error: 'upload_too_large' }, { status: 400 });
+		let csv: string;
+		try {
+			csv = await xlsxToCsv(await file.arrayBuffer());
+		} catch {
+			return json({ ok: false, error: 'upload_xlsx' }, { status: 400 });
+		}
+		if (!csv.trim()) return json({ ok: false, error: 'upload_xlsx' }, { status: 400 });
+		if (csv.length > MAX_TEXT_BYTES) return json({ ok: false, error: 'upload_too_large' }, { status: 400 });
+		const id = crypto.randomUUID();
+		await dbRun(locals.db,
+			'INSERT INTO ai_attachments (id, org_id, user_id, name, content, size) VALUES (?, ?, ?, ?, ?, ?)',
+			id, org.id, locals.user!.id, file.name.slice(0, 200), csv, file.size);
 		return json({ ok: true, id, name: file.name });
 	}
 

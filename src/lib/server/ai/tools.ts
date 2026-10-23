@@ -225,7 +225,7 @@ const TOOLS: Tool[] = [
 	},
 	{
 		name: 'read_attachment',
-		description: 'Look at a file the user attached. A CSV gives its columns, row count and first rows (and the whole text if small); a text file gives its text. Use this before proposing an import or seating.',
+		description: 'Look at a file the user attached. A CSV or Excel sheet gives its columns, row count and first rows (and the whole text if small); a text file gives its text. Use this before proposing an import or seating.',
 		permission: 'ai.use',
 		parameters: obj({ attachment_id: str('The attachment id given in the user message') }),
 		async run(ctx, a) {
@@ -236,7 +236,7 @@ const TOOLS: Tool[] = [
 			}
 			const fullText = file.content.length <= FULL_TEXT_CHARS ? file.content : null;
 			// Plain text (a pasted guest list, a note) is not a table; don't pretend it is.
-			if (!/\.(csv|tsv)$/i.test(file.name)) {
+			if (!/\.(csv|tsv|xlsx)$/i.test(file.name)) {
 				return { output: { name: file.name, text: fullText ?? file.content.slice(0, FULL_TEXT_CHARS), truncated: !fullText } };
 			}
 			const { delimiter, rows } = parseCsv(file.content);
