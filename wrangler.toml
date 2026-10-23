@@ -39,6 +39,9 @@ HALLIFY_DOMAIN = "hallify.sk"
 APP_URL = "https://hallify.sk"
 EMAIL_FROM = "noreply@hallify.sk"
 EMAIL_FROM_NAME = "Hallify"
+# Operators must confirm their email before the console opens (D11). Off unless set:
+# turn it on only once production email is delivering.
+# REQUIRE_EMAIL_VERIFICATION = "1"
 
 [[d1_databases]]
 binding = "DB"
