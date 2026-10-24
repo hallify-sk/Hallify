@@ -3,7 +3,7 @@ import { fail } from '@sveltejs/kit';
 import { dbFirst, dbRun, toJson } from '$lib/db/index';
 import { st } from '$lib/i18n-server';
 import { requireOrgPermission } from '$lib/server/access';
-import { normaliseServerUrl } from '$lib/analytics-servers';
+import { hasCustomLoader, normaliseServerUrl } from '$lib/analytics-servers';
 
 /** Analytics has a tab of its own. It is neither a delivery integration nor a
  *  destructive action, so it sat oddly at the bottom of Advanced and was easy to
@@ -40,10 +40,12 @@ export const actions: Actions = {
     const rawServer = String(data.get('gtmServerUrl') ?? '').trim();
     const serverUrl = normaliseServerUrl(rawServer);
     if (rawServer && !serverUrl) return fail(400, { error: st(locals.locale).serverErrors.invalidServerUrl });
-    // A server container is only used together with a container id. Saving one alone
-    // used to drop it silently and still say "Saved".
-    if (serverUrl && !raw) return fail(400, { error: st(locals.locale).settingsPages.gtmServerNeedsId });
-    if (!raw) {
+    // A server container's origin is only used together with a container id (saving
+    // one alone used to drop it silently and still say "Saved"). A custom loader's
+    // URL names its container itself, so it can stand alone.
+    const loader = serverUrl ? hasCustomLoader(serverUrl) : false;
+    if (serverUrl && !raw && !loader) return fail(400, { error: st(locals.locale).settingsPages.gtmServerNeedsId });
+    if (!raw && !loader) {
       await dbRun(locals.db, `DELETE FROM org_settings WHERE org_id = ? AND key = 'gtm'`, orgId);
     } else {
       await dbRun(locals.db,

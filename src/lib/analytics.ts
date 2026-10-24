@@ -18,7 +18,7 @@
  *     banner there names both, and one choice covers both.
  *
  *  3. SERVER-SIDE GTM. Either container may have a server container (sGTM): gtm.js
- *     is then loaded from that first-party origin, and its origin is pushed to the
+ *     (or the server's custom loader) is then loaded from that first-party origin, and its origin is pushed to the
  *     dataLayer (sgtm_platform_url / sgtm_venue_url) for the GA4 tag's
  *     server_container_url. The page's CSP allows exactly those origins.
  *
@@ -27,7 +27,7 @@
  */
 
 export { consentUi, openConsentSettings } from './analytics.svelte';
-import { GOOGLE_TAG_ORIGIN, type AnalyticsContainer } from './analytics-servers';
+import { GOOGLE_TAG_ORIGIN, loaderSrc, type AnalyticsContainer } from './analytics-servers';
 export type { AnalyticsContainer } from './analytics-servers';
 
 export const CONSENT_COOKIE = 'hallify-consent';
@@ -121,18 +121,19 @@ type ContainerInput = ContainerRef | ContainerRef[] | null | undefined;
 
 function asContainers(input: ContainerInput): AnalyticsContainer[] {
   const list = Array.isArray(input) ? input : input ? [input] : [];
-  return list.map((c) => (typeof c === 'string' ? { id: c, origin: GOOGLE_TAG_ORIGIN, owner: 'platform' as const } : c)).filter((c) => !!c.id);
+  return list.map((c) => (typeof c === 'string' ? { id: c, origin: GOOGLE_TAG_ORIGIN, owner: 'platform' as const } : c)).filter((c) => !!(c.id || c.loader));
 }
 
 function injectGtm(c: AnalyticsContainer): void {
   const loaded = (window.__hallifyGtmIds ??= []);
-  if (loaded.includes(c.id)) return;
+  const src = loaderSrc(c);
+  if (loaded.includes(src)) return;
   if (!loaded.length) dl().push({ 'gtm.start': Date.now(), event: 'gtm.js' });
-  loaded.push(c.id);
-  window.__hallifyGtmLoaded = c.id;
+  loaded.push(src);
+  window.__hallifyGtmLoaded = c.id || src;
   const s = document.createElement('script');
   s.async = true;
-  s.src = `${c.origin}/gtm.js?id=${encodeURIComponent(c.id)}`;
+  s.src = src;
   document.head.appendChild(s);
 }
 

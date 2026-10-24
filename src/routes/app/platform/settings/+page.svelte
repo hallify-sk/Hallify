@@ -61,7 +61,7 @@
       <div class="field">
         <label class="field-label" for="pf-sgtm">{t.platformSettings.serverUrlLabel}</label>
         <input id="pf-sgtm" name="serverUrl" type="url" bind:value={serverUrl}
-          placeholder="https://data.hallify.sk" spellcheck="false" autocomplete="off" maxlength="200" />
+          placeholder="https://data.hallify.sk" spellcheck="false" autocomplete="off" maxlength="500" />
         <p class="field-hint">{t.platformSettings.serverUrlHint}</p>
       </div>
 

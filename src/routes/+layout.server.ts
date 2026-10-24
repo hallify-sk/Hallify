@@ -4,7 +4,7 @@ import { env } from '$env/dynamic/private';
 import { unreadMessageCount } from '$lib/unread';
 import { unreadAnnouncementCount } from '$lib/announcements';
 import { loadPlatformAnalytics } from '$lib/server/platform-settings';
-import { container, cspOrigins, type AnalyticsContainer } from '$lib/analytics-servers';
+import { container, cspOrigins, loaderSrc, type AnalyticsContainer } from '$lib/analytics-servers';
 import { aiVisibilityFor } from '$lib/server/ai/availability';
 import { orgPermissionList } from '$lib/server/nav-access';
 import { unreadNotificationCount } from '$lib/server/notification-centre';
@@ -24,7 +24,7 @@ async function resolveContainers(locals: App.Locals): Promise<AnalyticsContainer
   const out: AnalyticsContainer[] = [];
   const platform = await loadPlatformAnalytics(locals.db);
   const platformId = platform.containerId || (/^GTM-[A-Z0-9]+$/i.test(env.GTM_CONTAINER_ID ?? '') ? env.GTM_CONTAINER_ID! : '');
-  if (platformId && (!locals.domainOrg || platform.includeBubbles)) {
+  if ((platformId || platform.serverUrl) && (!locals.domainOrg || platform.includeBubbles)) {
     const c = container(platformId, platform.serverUrl, 'platform');
     if (c) out.push(c);
   }
@@ -38,7 +38,7 @@ async function resolveContainers(locals: App.Locals): Promise<AnalyticsContainer
       const parsed = row?.value ? (typeof row.value === 'string' ? JSON.parse(row.value) : row.value) : null;
       const c = parsed ? container(String(parsed.containerId ?? ''), parsed.serverUrl, 'venue') : null;
       // The same container entered twice would load once anyway; skip the duplicate.
-      if (c && !out.some((o) => o.id === c.id)) out.push(c);
+      if (c && !out.some((o) => loaderSrc(o) === loaderSrc(c))) out.push(c);
     } catch { /* a malformed row means no venue container */ }
   }
   return out;
