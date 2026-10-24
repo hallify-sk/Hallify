@@ -31,18 +31,18 @@
 <svelte:head><title>{pageTitle(t.platformSettings.title)}</title></svelte:head>
 
 <div class="wrap page">
-  <section class="section section--lead">
-    <div class="section-head">
+  <header class="page-header">
+    <div>
       <p class="eyebrow">{t.platformOrgs.platformAdmin}</p>
-      <h1>{t.platformSettings.title}</h1>
-      <p>{t.platformSettings.lead}</p>
+      <h1 class="page-title">{t.platformSettings.title}</h1>
+      <p class="page-lead">{t.platformSettings.lead}</p>
     </div>
+  </header>
 
-    {#if form?.saved}<div class="alert-success">{t.settingsPages.changesSaved}</div>{/if}
-    {#if form?.error}<div class="alert-error">{form.error}</div>{/if}
-  </section>
+  {#if form?.saved}<div class="alert-success" role="status">{t.settingsPages.changesSaved}</div>{/if}
+  {#if form?.error}<div class="alert-error" role="alert">{form.error}</div>{/if}
 
-  <section class="section">
+  <section class="section section--lead">
     <div class="section-head">
       <h2>{t.platformSettings.analyticsTitle}</h2>
       <p>{t.platformSettings.analyticsLead}</p>
@@ -154,6 +154,9 @@
 </div>
 
 <style>
+  /* A form reads as a column, not a line across a 1300px page. */
+  form { max-width: 760px; }
+  .field-label { font-size: 12.5px; font-weight: 600; color: var(--text-base); }
   .field-hint { font-size: var(--meta-size); color: var(--text-muted); margin: 6px 0 0; }
   .fixed-model { margin: 6px 0 0; font-size: 13px; line-height: 1.6; }
   .fixed-model span { font-size: var(--meta-size); color: var(--text-muted); }
@@ -169,7 +172,7 @@
   .toggle-row .ui-switch { margin-top: 1px; }
   .toggle-copy { display: flex; flex-direction: column; gap: 3px; cursor: pointer; }
   .toggle-copy strong { font-size: 13px; font-weight: 600; }
-  .toggle-copy span { font-size: var(--meta-size); color: var(--text-muted); line-height: 1.6; }
+  .toggle-copy span { font-size: var(--meta-size); font-weight: 400; color: var(--text-muted); line-height: 1.6; }
 
   .legal-note {
     margin: 18px 0 0;

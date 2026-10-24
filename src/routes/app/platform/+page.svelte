@@ -1,8 +1,11 @@
 <script lang="ts">
+  import { pageTitle } from '$lib/page-title';
   import { planName } from '$lib/plans';
   import { t, getLocale } from '$lib/i18n.svelte';
-  import { formatDate } from '$lib/format';
+  import { formatDate, formatNumber } from '$lib/format';
   import { statusLabel } from '$lib/reservationStatus';
+  import { planRank, planTone } from '$lib/platform-ui';
+  import StatusBadge from '$lib/components/StatusBadge.svelte';
   import type { PageData } from './$types';
   let { data }: { data: PageData } = $props();
   const s = $derived(data.stats);
@@ -17,37 +20,73 @@
   const emailRate = $derived(rate(h.emailSent, h.emailFailed));
   const webhookRate = $derived(rate(h.webhooksDelivered, h.webhooksFailed));
   const missingCritical = $derived(data.config.filter((c) => c.critical && !c.set));
+  const pct = (r: number) => `${formatNumber(r, getLocale(), r % 1 === 0 ? 0 : 1)} %`;
+  /** Below 90% is an outage in progress, not a blip. */
+  const rateTone = (r: number, failed: number) => (failed === 0 ? 'ok' : r < 90 ? 'bad' : 'warn');
+
+  const plans = $derived([...data.plans].sort((a, b) => planRank(a.plan) - planRank(b.plan)));
+  const pipeline = $derived([...data.reservationStatus].sort((a, b) => b.count - a.count));
+
+  const attention = $derived([
+    { label: t.floorplanService.queueTitle, n: data.queues.floorplan, href: '/app/platform/floorplan-requests', sub: t.platformExtra.openItemsSub(data.queues.floorplan) },
+    { label: t.setupService.queueTitle, n: data.queues.setup, href: '/app/platform/floorplan-requests', sub: t.platformExtra.openItemsSub(data.queues.setup) },
+    { label: t.platformExtra.suspendedOrgsLabel, n: s.suspendedOrgs, href: '/app/platform/orgs?status=suspended', sub: t.platformOrgs.view },
+    { label: t.platformExtra.failedEmails24h, n: h.emailFailed, href: '/app/platform/email', sub: t.platformOrgs.view },
+  ]);
 </script>
 
-<div class="wrap page">
-  <section class="section section--lead">
-    <div class="section-head">
-      <p class="eyebrow">{t.platformOrgs.platformAdmin}</p>
-      <h1>{t.platformExtra.overviewTitle}</h1>
-      <p><a href="/app/platform/audit">{t.platformExtra.auditLink}</a></p>
-    </div>
+<svelte:head><title>{pageTitle(t.platformExtra.overviewTitle)}</title></svelte:head>
 
+<div class="wrap page">
+  <header class="page-header">
+    <div>
+      <p class="eyebrow">{t.platformOrgs.platformAdmin}</p>
+      <h1 class="page-title">{t.platformExtra.overviewTitle}</h1>
+    </div>
+    <div class="page-actions">
+      <a class="btn-outline btn-sm" href="/app/platform/audit">{t.platformExtra.auditLink}</a>
+    </div>
+  </header>
+
+  <section class="section section--lead">
     <div class="stat-strip">
-      <div class="stat">
+      <a class="stat" href="/app/platform/orgs">
         <span class="kpi-label">{t.platformOrgs.organizations}</span>
         <span class="kpi-value">{s.totalOrgs}</span>
-        <span class="kpi-sub">{s.suspendedOrgs} {t.platformExtra.suspendedOrgs} / {s.closedOrgs} {t.platformExtra.closedOrgs}</span>
-      </div>
-      <div class="stat">
+        <span class="kpi-sub">{t.platformExtra.suspendedCount(s.suspendedOrgs)} · {t.platformExtra.closedCount(s.closedOrgs)}</span>
+      </a>
+      <a class="stat" href="/app/platform/users">
         <span class="kpi-label">{t.platformExtra.users}</span>
         <span class="kpi-value">{s.totalUsers}</span>
-        <span class="kpi-sub">{s.platformAdmins} {t.platformExtra.platformAdmins}</span>
-      </div>
+        <span class="kpi-sub">{t.platformExtra.adminsCount(s.platformAdmins)}</span>
+      </a>
       <div class="stat">
         <span class="kpi-label">{t.platformExtra.paidSubscriptions}</span>
         <span class="kpi-value">{s.activeSubscriptions}</span>
-        <span class="kpi-sub">{t.platformExtra.manualPlans(s.manualPlans)} · {s.partners} {t.platformExtra.partners}</span>
+        <span class="kpi-sub">{t.platformExtra.manualPlans(s.manualPlans)} · {t.platformExtra.partnersCount(s.partners)}</span>
       </div>
       <div class="stat">
         <span class="kpi-label">{t.platformExtra.totalReservations}</span>
         <span class="kpi-value">{s.totalReservations}</span>
         <span class="kpi-sub">+{s.reservations30d} / {t.platformExtra.last30d}</span>
       </div>
+    </div>
+  </section>
+
+  <!-- What is waiting on the platform team: every number links to its queue. -->
+  <section class="section">
+    <div class="section-head">
+      <p class="eyebrow">{t.platformExtra.needsAttention}</p>
+      <h2>{t.platformExtra.needsAttentionSub}</h2>
+    </div>
+    <div class="attention">
+      {#each attention as a}
+        <a class="att" class:is-hot={a.n > 0} href={a.href}>
+          <span class="kpi-label">{a.label}</span>
+          <span class="att-value">{a.n}</span>
+          <span class="kpi-sub">{a.sub} →</span>
+        </a>
+      {/each}
     </div>
   </section>
 
@@ -64,7 +103,7 @@
         {#if emailRate === null}
           <span class="health-value is-idle">{t.platformExtra.noneIn24h}</span>
         {:else}
-          <span class="health-value" class:bad={h.emailFailed > 0}>{emailRate}%</span>
+          <span class="health-value" data-tone={rateTone(emailRate, h.emailFailed)}>{pct(emailRate)}</span>
           <span class="kpi-sub">{h.emailFailed > 0 ? t.platformExtra.failedCount(h.emailFailed) : t.platformExtra.allDelivered}</span>
         {/if}
       </div>
@@ -74,25 +113,25 @@
         {#if webhookRate === null}
           <span class="health-value is-idle">{t.platformExtra.noneIn24h}</span>
         {:else}
-          <span class="health-value" class:bad={h.webhooksFailed > 0}>{webhookRate}%</span>
-          <span class="kpi-sub">{h.webhooksFailed > 0 ? t.platformExtra.failedCount(h.webhooksFailed) : t.platformExtra.allDelivered}</span>
+          <span class="health-value" data-tone={rateTone(webhookRate, h.webhooksFailed)}>{pct(webhookRate)}</span>
+          <span class="kpi-sub">{h.webhooksFailed > 0 ? t.platformExtra.failedCount(h.webhooksFailed) : t.platformExtra.allDelivered}{#if h.webhooksPending > 0}{' '}· {t.platformExtra.pendingCount(h.webhooksPending)}{/if}</span>
         {/if}
       </div>
 
       <div class="health-card">
         <span class="kpi-label">{t.platformExtra.slaTarget}</span>
-        <span class="health-value">{data.slaTarget}</span>
+        <span class="health-value is-plain">{data.slaTarget}</span>
         <span class="kpi-sub">{t.platformExtra.slaMeasuredExternally}</span>
       </div>
 
       <div class="health-card">
         <span class="kpi-label">{t.platformExtra.schema}</span>
-        <span class="health-value">{data.migrations.applied}</span>
-        <span class="kpi-sub">{data.migrations.latest ?? '-'}</span>
+        <span class="health-value is-plain">{data.migrations.applied}</span>
+        <span class="kpi-sub mono">{data.migrations.latest ?? '—'}</span>
       </div>
     </div>
     {#if data.emailHealth.down}
-      <p class="alert-warning config-warning" role="alert">{t.platformExtra.emailOutage} {data.emailHealth.lastError ?? 'BREVO_API_KEY'}</p>
+      <p class="alert-error config-warning" role="alert">{t.platformExtra.emailOutage} {data.emailHealth.lastError ?? 'BREVO_API_KEY'}</p>
     {/if}
   </section>
 
@@ -104,14 +143,20 @@
     </div>
     <div class="config-grid">
       {#each data.config as c}
-        <div class="config-item" class:critical-missing={c.critical && !c.set}>
-          <span class="config-key">{c.key}</span>
-          <span class="config-state" class:is-set={c.set}>{c.set ? t.platformExtra.configSet : t.platformExtra.configMissing}</span>
+        <div class="config-item">
+          <span class="config-key mono">{c.key}</span>
+          {#if c.set}
+            <StatusBadge status="set" label={t.platformExtra.configSet} />
+          {:else if c.critical}
+            <span class="pf-tag" data-tone="danger">{t.platformExtra.configMissing}</span>
+          {:else}
+            <StatusBadge status="unset" label={t.platformExtra.configMissing} />
+          {/if}
         </div>
       {/each}
     </div>
     {#if missingCritical.length > 0}
-      <p class="alert-warning config-warning">{missingCritical.map((c) => c.key).join(', ')}</p>
+      <p class="alert-warning config-warning">{t.platformExtra.missingCritical} {missingCritical.map((c) => c.key).join(', ')}</p>
     {/if}
   </section>
 
@@ -121,9 +166,9 @@
       <p class="eyebrow">{t.platformExtra.growth}</p>
       <h2>{t.platformExtra.growthSub}</h2>
     </div>
-    <div class="row-list" role="table">
-      <div role="row" class="row-item growth-row row-head">
-        <span role="columnheader"></span>
+    <div class="row-list growth" role="table" aria-label={t.platformExtra.growth}>
+      <div role="row" class="row-item row-head growth-row">
+        <span role="columnheader"><span class="sr-only">{t.platformExtra.growth}</span></span>
         <span role="columnheader" class="num">{t.platformExtra.last7d}</span>
         <span role="columnheader" class="num">{t.platformExtra.last30d}</span>
       </div>
@@ -151,9 +196,9 @@
       <div>
         <div class="section-head"><p class="eyebrow">{t.platformExtra.planDistribution}</p></div>
         <div class="row-list">
-          {#each data.plans as p}
+          {#each plans as p}
             <div class="row-item mini-row">
-              <span class="badge badge-{p.plan}">{planName(p.plan)}</span>
+              <span class="pf-tag" data-tone={planTone(p.plan)}>{planName(p.plan)}</span>
               <span class="num">{p.count}</span>
             </div>
           {/each}
@@ -162,9 +207,9 @@
       <div>
         <div class="section-head"><p class="eyebrow">{t.platformExtra.reservationPipeline}</p></div>
         <div class="row-list">
-          {#each data.reservationStatus as r}
+          {#each pipeline as r}
             <div class="row-item mini-row">
-              <span class="muted">{statusLabel(r.status, getLocale())}</span>
+              <span>{statusLabel(r.status, getLocale())}</span>
               <span class="num">{r.count}</span>
             </div>
           {/each}
@@ -179,98 +224,95 @@
       <p class="eyebrow">{t.platformExtra.platformAdmins}</p>
       <h2>{t.platformExtra.platformAdminsSub}</h2>
     </div>
-    <div class="row-list" role="table">
-      {#each data.admins as a}
-        <div role="row" class="row-item admin-row">
-          <span role="cell"><strong>{a.first_name} {a.last_name}</strong></span>
-          <span role="cell" class="muted">{a.email}</span>
-          <span role="cell" class="muted num">{formatDate(a.created_at, getLocale())}</span>
-        </div>
+    <div class="row-list pf-table" role="table" aria-label={t.platformExtra.platformAdmins}>
+      {#each data.admins as a (a.id)}
+        <a role="row" href="/app/platform/users/{a.id}" class="row-item row-item--bleed admin-row">
+          <span role="cell" class="cell-title ellipsis">{a.first_name} {a.last_name}</span>
+          <span role="cell" class="muted ellipsis">{a.email}</span>
+          <span role="cell" class="muted num nowrap">{formatDate(a.created_at, getLocale())}</span>
+        </a>
       {/each}
     </div>
   </section>
 
   <section class="section">
-    <div class="section-head">
-      <p class="eyebrow">{t.platformOrgs.organizations}</p>
-      <h2>{t.platformExtra.recentOrganizations}</h2>
+    <div class="section-head section-head--row">
+      <div>
+        <p class="eyebrow">{t.platformOrgs.organizations}</p>
+        <h2>{t.platformExtra.recentOrganizations}</h2>
+      </div>
+      <a class="lf-clear" href="/app/platform/orgs">{t.platformOrgs.allOrganizations} →</a>
     </div>
 
-    <div class="row-list org-rows" role="table">
-      <div role="row" class="row-item row-head">
+    <div class="row-list pf-table" role="table" aria-label={t.platformExtra.recentOrganizations}>
+      <div role="row" class="row-item row-head org-row">
         <span role="columnheader">{t.platformOrgs.colName}</span>
-        <span role="columnheader">{t.platformOrgs.colSlug}</span>
         <span role="columnheader">{t.platformOrgs.colPlan}</span>
-        <span role="columnheader">{t.platformOrgs.colCreated}</span>
+        <span role="columnheader" class="num">{t.platformOrgs.colCreated}</span>
       </div>
-      {#each data.recentOrgs as org}
-        <div role="row" class="row-item">
-          <span role="cell" class="cell-name"><a href="/app/platform/orgs/{org.id}">{org.name}</a></span>
-          <span role="cell" class="muted">{org.slug}</span>
-          <span role="cell"><span class="badge badge-{org.plan ?? 'free'}">{planName(org.plan)}</span></span>
-          <span role="cell" class="muted">{formatDate(org.created_at, getLocale())}</span>
-        </div>
+      {#each data.recentOrgs as org (org.id)}
+        <a role="row" href="/app/platform/orgs/{org.id}" class="row-item row-item--bleed org-row">
+          <span role="cell" class="cell-main">
+            <span class="cell-title">{org.name}</span>
+            <span class="cell-sub">{org.slug}</span>
+          </span>
+          <span role="cell"><span class="pf-tag" data-tone={planTone(org.plan)}>{planName(org.plan)}</span></span>
+          <span role="cell" class="muted num nowrap">{formatDate(org.created_at, getLocale())}</span>
+        </a>
       {/each}
     </div>
   </section>
 </div>
 
 <style>
-  .page { padding-block: 24px; }
-  h1 { font-size: var(--display-size); font-weight: 550; letter-spacing: -.055em; line-height: 1.08; margin: 0; }
-
   /* ── Stat strip: numbers on the page, no boxes ── */
-  .stat-strip { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0; }
-  .stat { padding: 0 20px; border-left: 1px solid var(--border-subtle); }
-  .stat:first-child { padding-left: 0; border-left: none; }
-  .kpi-label { display: block; font-size: 10px; font-weight: 650; text-transform: uppercase; letter-spacing: .13em; color: var(--text-muted); margin-bottom: 8px; }
-  .kpi-value { font-size: 28px; font-weight: 650; letter-spacing: -.045em; line-height: 1; color: var(--text-base); }
-  .kpi-sub { display: block; font-size: 10px; color: var(--text-muted); margin-top: 7px; line-height: 1.5; }
+  .stat-strip, .attention { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .stat, .att { padding: 0 20px; border-left: 1px solid var(--border-subtle); color: inherit; text-decoration: none; min-width: 0; }
+  .stat:first-child, .att:first-child { padding-left: 0; border-left: none; }
+  a.stat:hover .kpi-value, .att:hover .att-value { color: var(--accent-ink); }
+  .kpi-label { display: block; font-size: var(--meta-size); font-weight: 650; text-transform: uppercase; letter-spacing: .1em; color: var(--text-muted); margin-bottom: 8px; }
+  .kpi-value { font-size: 28px; font-weight: 650; letter-spacing: -.045em; line-height: 1; color: var(--text-base); font-variant-numeric: tabular-nums; }
+  .kpi-sub { display: block; font-size: 11px; color: var(--text-muted); margin-top: 7px; line-height: 1.5; }
+
+  .att-value { display: block; font-size: 24px; font-weight: 650; letter-spacing: -.04em; line-height: 1; color: var(--text-subtle); font-variant-numeric: tabular-nums; }
+  .att.is-hot .att-value { color: var(--warning); }
+  .att:hover { text-decoration: none; }
 
   /* Health */
-  .health-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0; }
-  .health-card { padding: 0 20px; border-left: 1px solid var(--border-subtle); }
+  .health-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .health-card { padding: 0 20px; border-left: 1px solid var(--border-subtle); min-width: 0; }
   .health-card:first-child { padding-left: 0; border-left: none; }
-  .health-value { display: block; font-size: 24px; font-weight: 650; letter-spacing: -.04em; line-height: 1; color: var(--success); }
-  .health-value.bad { color: var(--warning); }
+  .health-value { display: block; font-size: 24px; font-weight: 650; letter-spacing: -.04em; line-height: 1; color: var(--success); font-variant-numeric: tabular-nums; }
+  .health-value[data-tone='warn'] { color: var(--warning); }
+  .health-value[data-tone='bad'] { color: var(--danger); }
+  .health-value.is-plain { color: var(--text-base); }
   .health-value.is-idle { color: var(--text-subtle); font-size: 15px; font-weight: 600; }
+  .health-card .mono { overflow-wrap: anywhere; }
 
   /* Configuration */
-  .config-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 0 18px; }
-  .config-item { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--border-subtle); }
-  .config-key { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; color: var(--text-muted); }
-  .config-state { font-size: 10px; font-weight: 650; text-transform: uppercase; letter-spacing: .08em; color: var(--text-subtle); }
-  .config-state.is-set { color: var(--success); }
-  .config-item.critical-missing .config-state { color: var(--danger); }
-  .config-warning { margin-top: 14px; }
+  .config-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 0 24px; }
+  .config-item { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 9px 0; border-bottom: 1px solid var(--border-subtle); min-width: 0; }
+  .config-key { color: var(--text-muted); overflow-wrap: anywhere; }
+  .config-warning { margin: 14px 0 0; }
 
   /* Small tables */
-  .growth-row { display: grid; grid-template-columns: minmax(0,2fr) minmax(0,1fr) minmax(0,1fr); gap: 14px; align-items: center; font-size: 13px; }
-  .admin-row { display: grid; grid-template-columns: minmax(0,1.2fr) minmax(0,1.6fr) minmax(0,.8fr); gap: 14px; align-items: center; font-size: 13px; }
-  .mini-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 13px; }
-  .num { font-variant-numeric: tabular-nums; text-align: right; }
+  .growth-row { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr); gap: 14px; align-items: center; }
+  .admin-row { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1.6fr) 110px; gap: 14px; align-items: center; color: inherit; text-decoration: none; }
+  .org-row { display: grid; grid-template-columns: minmax(0, 2fr) 140px 110px; gap: 14px; align-items: center; color: inherit; text-decoration: none; }
+  .mini-row { justify-content: space-between; }
   .split { display: grid; grid-template-columns: 1fr 1fr; gap: 36px; }
-  @media (max-width: 760px) {
+
+  @media (max-width: 860px) {
+    .stat-strip, .attention, .health-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); row-gap: 22px; }
+    .stat:nth-child(odd), .att:nth-child(odd), .health-card:nth-child(odd) { padding-left: 0; border-left: none; }
     .split { grid-template-columns: 1fr; gap: 24px; }
-    .health-card { padding-left: 0; border-left: none; }
   }
-  @media (max-width: 760px) {
-    .stat-strip { grid-template-columns: repeat(2, 1fr); row-gap: 20px; }
-    .stat:nth-child(odd) { padding-left: 0; border-left: none; }
-  }
-
-  /* ── Hairline rows ── */
-  .org-rows .row-item { display: grid; grid-template-columns: minmax(0,2fr) minmax(0,1.4fr) minmax(0,.8fr) minmax(0,1fr); gap: 14px; align-items: center; font-size: 13px; }
-  .row-head { font-size: 10px; font-weight: 650; color: var(--text-muted); text-transform: uppercase; letter-spacing: .13em; border-bottom-color: var(--border); padding-bottom: 9px; }
-  .cell-name a { color: var(--accent-ink); text-decoration: none; font-weight: 600; }
-  .muted { color: var(--text-muted); }
-  .badge { display: inline-block; padding: 2px 9px; border-radius: 3px; font-size: .7rem; font-weight: 650; text-transform: uppercase; letter-spacing: .03em; }
-  .badge-free { background: var(--bg-panel2); color: var(--text-muted); }
-  .badge-starter { background: var(--accent-dim); color: var(--accent-ink); }
-  .badge-professional { background: var(--warning-dim); color: var(--warning); }
-  .badge-enterprise { background: var(--accent-action-dim); color: var(--accent-ink); }
-
-  @media (max-width: 680px) {
-    .org-rows .row-item { grid-template-columns: 1fr 1fr; }
+  @container (max-width: 520px) {
+    .admin-row { grid-template-columns: minmax(0, 1fr) auto; }
+    .admin-row > :nth-child(2) { grid-row: 2; }
+    .admin-row > :nth-child(3) { grid-column: 2; grid-row: 1 / span 2; }
+    .org-row.row-head { display: none; }
+    .org-row { grid-template-columns: minmax(0, 1fr) auto; }
+    .org-row > :nth-child(3) { grid-column: 1 / -1; text-align: left; font-size: 11.5px; }
   }
 </style>

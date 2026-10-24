@@ -1,17 +1,20 @@
 <script lang="ts">
+  import { pageTitle } from '$lib/page-title';
+  import { page } from '$app/stores';
   import { enhance } from '$app/forms';
   import { planName } from '$lib/plans';
   import { t, getLocale } from '$lib/i18n.svelte';
   import { confirmFirst } from '$lib/forms';
   import { formatDate } from '$lib/format';
+  import { PLAN_ORDER, planTone } from '$lib/platform-ui';
   import type { PageData } from './$types';
   let { data }: { data: PageData } = $props();
 
-  const SEARCH_THRESHOLD = 8;
   let search = $state('');
   let planFilter = $state('all');
-  let statusFilter = $state<'all' | 'active' | 'suspended'>('all');
-  const PLANS = ['free', 'starter', 'professional', 'enterprise'];
+  // ?status=suspended (linked from the overview) opens the list pre-filtered.
+  const initialStatus = $page.url.searchParams.get('status');
+  let statusFilter = $state<'all' | 'active' | 'suspended'>(initialStatus === 'suspended' || initialStatus === 'active' ? initialStatus : 'all');
   const filtered = $derived.by(() => {
     const q = search.trim().toLowerCase();
     return data.orgs.filter(o =>
@@ -20,144 +23,123 @@
       (statusFilter === 'all' || (statusFilter === 'suspended') === !!o.suspended_at)
     );
   });
+  const filtering = $derived(!!search.trim() || planFilter !== 'all' || statusFilter !== 'all');
+  function clearFilters() { search = ''; planFilter = 'all'; statusFilter = 'all'; }
 </script>
 
+<svelte:head><title>{pageTitle(t.platformOrgs.organizations, t.platformOrgs.platformAdmin)}</title></svelte:head>
+
 <div class="wrap page">
-  <section class="section section--lead">
-    <div class="section-head section-head--row">
-      <div class="head-text">
-        <p class="eyebrow">{t.platformOrgs.platformAdmin}</p>
-        <h1>{t.platformOrgs.organizations}</h1>
-      </div>
-      <div class="head-aside">
-        <span class="count">{filtered.length === data.orgs.length ? data.orgs.length : `${filtered.length} / ${data.orgs.length}`} {t.platformOrgs.total}</span>
-        <select class="filter-select" bind:value={planFilter} aria-label={t.platformOrgs.colPlan}>
-          <option value="all">{t.platformOrgs.filterAllPlans}</option>
-          {#each PLANS as p}<option value={p}>{p}</option>{/each}
-        </select>
-        <select class="filter-select" bind:value={statusFilter} aria-label={t.platformOrgs.colStatus}>
-          <option value="all">{t.platformOrgs.filterAllStatuses}</option>
-          <option value="active">{t.platformOrgs.active}</option>
-          <option value="suspended">{t.platformOrgs.suspended}</option>
-        </select>
-        {#if data.orgs.length > SEARCH_THRESHOLD}
-          <div class="search-wrap">
-            <svg class="search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-            <input class="search-input" type="text" placeholder={t.platformOrgs.searchPlaceholder} aria-label={t.platformOrgs.searchPlaceholder} bind:value={search} autocomplete="off" spellcheck="false" />
-            {#if search}
-              <button class="search-clear" type="button" onclick={() => search = ''} aria-label={t.platformOrgs.clearSearch}>
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-              </button>
-            {/if}
-          </div>
-        {/if}
+  <header class="page-header">
+    <div>
+      <p class="eyebrow">{t.platformOrgs.platformAdmin}</p>
+      <div class="page-header-left">
+        <h1 class="page-title">{t.platformOrgs.organizations}</h1>
+        <span class="total-badge">{data.orgs.length}</span>
       </div>
     </div>
+  </header>
 
-    <div class="row-list org-rows" role="table">
-      <div role="row" class="row-item row-head">
-        <span role="columnheader">{t.platformOrgs.colName}</span><span role="columnheader">{t.platformOrgs.colSlug}</span><span role="columnheader">{t.platformOrgs.colPlan}</span><span role="columnheader">{t.platformOrgs.colMembers}</span>
-        <span role="columnheader">{t.platformOrgs.colCreated}</span><span role="columnheader">{t.platformOrgs.colStatus}</span><span role="columnheader"></span>
-      </div>
-
-      {#each filtered as org}
-        <div role="row" class="row-item" class:suspended={!!org.suspended_at}>
-          <span role="cell" class="cell-name"><a class="org-link" href="/app/platform/orgs/{org.id}"><strong>{org.name}</strong></a></span>
-          <span role="cell" class="muted">{org.slug}</span>
-          <span role="cell"><span class="badge badge-{org.plan ?? 'free'}">{planName(org.plan)}</span></span>
-          <span role="cell" class="muted">{org.member_count}</span>
-          <span role="cell" class="muted">{formatDate(org.created_at, getLocale())}</span>
-          <span role="cell">
-            {#if org.suspended_at}
-              <span class="badge badge-suspended">{t.platformOrgs.suspended}</span>
-            {:else}
-              <span class="badge badge-active">{t.platformOrgs.active}</span>
-            {/if}
-          </span>
-          <span role="cell" class="actions">
-            <a href="/app/platform/orgs/{org.id}" class="btn-outline btn-sm">{t.platformOrgs.manage}</a>
-            {#if org.suspended_at}
-              <form method="POST" action="?/unsuspend" style="display:inline" use:enhance>
-                <input type="hidden" name="id" value={org.id} />
-                <button type="submit" class="btn-outline btn-sm">{t.platformOrgs.unsuspend}</button>
-              </form>
-            {:else}
-              <form method="POST" action="/app/org/switch" style="display:inline">
-                <input type="hidden" name="org_id" value={org.id} />
-                <input type="hidden" name="return_to" value="/app/manage" />
-                <button type="submit" class="btn-viewas btn-sm" title={t.platformOrgs.viewAsTooltip}>
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-                  {t.platformOrgs.viewAs}
-                </button>
-              </form>
-              <form method="POST" action="?/suspend" style="display:inline" use:enhance={confirmFirst(() => t.platformOrgs.confirmSuspend)}>
-                <input type="hidden" name="id" value={org.id} />
-                <button type="submit" class="btn-danger btn-sm">{t.platformOrgs.suspend}</button>
-              </form>
-            {/if}
-          </span>
-        </div>
-      {/each}
+  <section class="section section--lead">
+    <div class="list-filters" role="search">
+      <label class="sr-only" for="o-q">{t.platformOrgs.searchPlaceholder}</label>
+      <input id="o-q" class="lf-search" type="search" placeholder={t.platformOrgs.searchPlaceholder} bind:value={search} autocomplete="off" spellcheck="false" />
+      <label class="sr-only" for="o-plan">{t.platformOrgs.colPlan}</label>
+      <select id="o-plan" bind:value={planFilter}>
+        <option value="all">{t.platformOrgs.filterAllPlans}</option>
+        {#each PLAN_ORDER as p}<option value={p}>{planName(p)}</option>{/each}
+      </select>
+      <label class="sr-only" for="o-status">{t.platformOrgs.colStatus}</label>
+      <select id="o-status" bind:value={statusFilter}>
+        <option value="all">{t.platformOrgs.filterAllStatuses}</option>
+        <option value="active">{t.platformOrgs.active}</option>
+        <option value="suspended">{t.platformOrgs.suspended}</option>
+      </select>
+      {#if filtering}<button type="button" class="lf-clear" onclick={clearFilters}>{t.platformOrgs.clearFilters}</button>{/if}
+      <span class="lf-count" aria-live="polite">{filtering ? t.platformOrgs.shownOf(filtered.length, data.orgs.length) : `${data.orgs.length} ${t.platformOrgs.total}`}</span>
     </div>
 
     {#if filtered.length === 0}
-      <div class="card--inset empty-state">
-        <div class="icon-tile">
-          <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <div class="card--inset state-block">
+        <span class="icon-tile" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        </span>
+        <h2>{data.orgs.length === 0 ? t.platformMisc.noOrgsYet : search.trim() ? `${t.platformOrgs.noMatchPrefix} „${search.trim()}“.` : t.platformOrgs.noMatchFilters}</h2>
+        {#if filtering}<button type="button" class="btn-outline btn-sm" onclick={clearFilters}>{t.platformOrgs.clearFilters}</button>{/if}
+      </div>
+    {:else}
+      <div class="pf-table row-list" role="table" aria-label={t.platformOrgs.organizations}>
+        <div role="row" class="row-item row-head org-row">
+          <span role="columnheader">{t.platformOrgs.colName}</span>
+          <span role="columnheader">{t.platformOrgs.colPlan}</span>
+          <span role="columnheader" class="num">{t.platformOrgs.colMembers}</span>
+          <span role="columnheader">{t.platformOrgs.colCreated}</span>
+          <span role="columnheader">{t.platformOrgs.colStatus}</span>
+          <span role="columnheader"><span class="sr-only">{t.platformOrgs.manage}</span></span>
         </div>
-        <p class="empty">{search ? `${t.platformOrgs.noMatchPrefix} “${search}”.` : t.platformOrgs.noMatchFilters}</p>
+
+        {#each filtered as org (org.id)}
+          <div role="row" class="row-item org-row" class:is-dim={!!org.suspended_at}>
+            <span role="cell" class="cell-main c-name">
+              <a class="cell-title" href="/app/platform/orgs/{org.id}">{org.name}</a>
+              <span class="cell-sub">{org.slug}</span>
+            </span>
+            <span role="cell" class="c-plan"><span class="pf-tag" data-tone={planTone(org.plan)}>{planName(org.plan)}</span></span>
+            <span role="cell" class="num c-members"><span class="m-label">{t.platformOrgs.colMembers}:{' '}</span>{org.member_count}</span>
+            <span role="cell" class="muted nowrap c-created">{formatDate(org.created_at, getLocale())}</span>
+            <span role="cell" class="c-status">
+              {#if org.suspended_at}
+                <span class="pf-tag" data-tone="danger">{t.platformOrgs.suspended}</span>
+              {:else}
+                <span class="pf-tag" data-tone="success">{t.platformOrgs.active}</span>
+              {/if}
+            </span>
+            <span role="cell" class="row-actions c-actions">
+              {#if org.suspended_at}
+                <form method="POST" action="?/unsuspend" use:enhance>
+                  <input type="hidden" name="id" value={org.id} />
+                  <button type="submit" class="btn-outline btn-sm">{t.platformOrgs.unsuspend}</button>
+                </form>
+              {:else}
+                <form method="POST" action="/app/org/switch">
+                  <input type="hidden" name="org_id" value={org.id} />
+                  <input type="hidden" name="return_to" value="/app/manage" />
+                  <button type="submit" class="btn-outline btn-sm view-as" title={t.platformOrgs.viewAsTooltip}>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                    {t.platformOrgs.viewAs}
+                  </button>
+                </form>
+                <form method="POST" action="?/suspend" use:enhance={confirmFirst(() => `${t.platformOrgs.confirmSuspend} (${org.name})`)}>
+                  <input type="hidden" name="id" value={org.id} />
+                  <button type="submit" class="btn-danger btn-sm">{t.platformOrgs.suspend}</button>
+                </form>
+              {/if}
+            </span>
+          </div>
+        {/each}
       </div>
     {/if}
   </section>
 </div>
 
 <style>
-  .page { padding-block: 24px; }
-  h1 { font-size: var(--display-size); font-weight: 550; letter-spacing: -.055em; line-height: 1.08; margin: 0; }
-  .head-text .eyebrow { display: block; margin-bottom: 12px; }
-  .head-aside { display: flex; align-items: center; gap: 1rem; flex: 1; justify-content: flex-end; }
-  .count { font-size: .875rem; color: var(--text-muted); white-space: nowrap; }
-  .head-aside { flex-wrap: wrap; }
-  .filter-select { height: 34px; box-sizing: border-box; padding: 0 10px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg-panel2); color: var(--text-base); font: inherit; font-size: 13px; }
-
-  .search-wrap { position: relative; display: flex; align-items: center; min-width: 240px; max-width: 360px; flex: 1; }
-  .search-icon { position: absolute; left: 11px; color: var(--text-subtle); pointer-events: none; }
-  .search-input { width: 100%; padding: 8px 32px 8px 32px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg-panel2); color: var(--text-base); font-size: 13px; font-family: inherit; outline: none; transition: border-color .15s, box-shadow .15s; }
-  .search-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-dim); }
-  .search-clear { position: absolute; right: 9px; width: 17px; height: 17px; border-radius: 50%; background: var(--text-subtle); border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; color: var(--bg-panel); }
-  .search-clear:hover { background: var(--text-muted); }
-
-  /* ── Hairline rows ── */
-  .org-rows .row-item { display: grid; grid-template-columns: minmax(0,1.6fr) minmax(0,1.1fr) minmax(0,.8fr) minmax(0,.7fr) minmax(0,.9fr) minmax(0,.9fr) 340px; gap: 12px; align-items: center; font-size: 13px; }
-  .row-head { font-size: 10px; font-weight: 650; color: var(--text-muted); text-transform: uppercase; letter-spacing: .13em; border-bottom-color: var(--border); padding-bottom: 9px; }
-  .org-rows .row-item.suspended { opacity: .5; }
-  .muted { color: var(--text-muted); }
-  .org-link { color: var(--text-base); text-decoration: none; }
-  .org-link:hover { color: var(--accent-ink); }
-  .actions { display: flex; gap: 6px; align-items: center; justify-content: flex-end; flex-wrap: wrap; }
-  .actions .btn-outline { text-decoration: none; }
-
-  .empty-state { display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center; margin-top: 14px; }
-  .empty { font-size: 13px; color: var(--text-subtle); margin: 0; }
-
-  .badge { display: inline-block; padding: 2px 9px; border-radius: 3px; font-size: .7rem; font-weight: 650; text-transform: uppercase; letter-spacing: .03em; }
-  .badge-free { background: var(--bg-panel2); color: var(--text-muted); }
-  .badge-starter { background: var(--accent-dim); color: var(--accent-ink); }
-  .badge-professional { background: var(--warning-dim); color: var(--warning); }
-  .badge-enterprise { background: var(--accent-action-dim); color: var(--accent-ink); }
-  .badge-active { background: var(--success-dim); color: var(--success); }
-  .badge-suspended { background: var(--danger-dim); color: var(--danger); }
-  .btn-viewas { display: inline-flex; align-items: center; gap: 5px; padding: 5px 11px; border-radius: var(--radius-sm); font-size: 12px; font-weight: 600; background: var(--accent); color: var(--accent-contrast); border: none; cursor: pointer; font-family: inherit; transition: transform .2s, background .2s; }
-  .btn-viewas:hover { background: var(--accent-hover); transform: translateY(-2px); }
-  .btn-viewas:active { transform: translateY(0); }
-
-  @media (max-width: 980px) {
-    .org-rows .row-item { grid-template-columns: 1fr 1fr; row-gap: 8px; align-items: start; }
-    .row-head { display: none; }
-    .actions { grid-column: 1 / -1; justify-content: flex-start; }
+  .org-row {
+    display: grid;
+    grid-template-columns: minmax(180px, 2fr) 120px 80px 110px 110px 230px;
+    gap: 14px; align-items: center;
   }
+  .view-as { display: inline-flex; align-items: center; gap: 5px; }
 
-  @media (prefers-reduced-motion: reduce) {
-    .btn-viewas:hover { transform: none; }
+  @container (max-width: 760px) {
+    .org-row.row-head { display: none; }
+    .org-row { grid-template-columns: minmax(0, 1fr) auto; row-gap: 6px; }
+    .c-name { grid-column: 1; grid-row: 1; }
+    .c-status { grid-column: 2; grid-row: 1; justify-self: end; }
+    .c-plan, .c-members, .c-created { grid-row: 2; }
+    .c-plan { grid-column: 1; display: flex; gap: 10px; align-items: center; }
+    .c-members { grid-column: 2; }
+    .c-created { display: none; }
+    .c-actions { grid-column: 1 / -1; justify-content: flex-start; }
+    .org-row .m-label { display: inline; }
   }
 </style>

@@ -24,6 +24,7 @@
     { id: 'error', label: t.platformMisc.levelMajor, hint: t.platformMisc.levelMajorHint },
   ]);
   const levelLabel = (id: string) => LEVELS.find((l) => l.id === id)?.label ?? id;
+  const LEVEL_TONE: Record<string, 'accent' | 'success' | 'warning' | 'danger'> = { info: 'accent', success: 'success', warning: 'warning', error: 'danger' };
 
   function toggleOrg(id: string) {
     selectedOrgs = selectedOrgs.includes(id) ? selectedOrgs.filter((o) => o !== id) : [...selectedOrgs, id];
@@ -54,8 +55,8 @@
 {#snippet preview(lvl: string, ttl: string, txt: string)}
   <div class="pv ann-row row-{lvl}">
     <div class="row-main">
-      <div class="row-head">
-        <span class="row-level level-{lvl}">{levelLabel(lvl)}</span>
+      <div class="ann-head">
+        <span class="pf-tag" data-tone={LEVEL_TONE[lvl]}>{levelLabel(lvl)}</span>
         <strong>{ttl}</strong>
       </div>
       <p class="row-body">{txt}</p>
@@ -65,20 +66,23 @@
 {/snippet}
 
 <div class="wrap page">
-  <section class="section section--lead">
-    <div class="section-head">
+  <header class="page-header">
+    <div>
       <p class="eyebrow">{t.platformOrgs.platformAdmin}</p>
-      <h1>{t.platformMisc.announcementsTitle}</h1>
-      <p>{t.platformMisc.announcementsSub}</p>
+      <h1 class="page-title">{t.platformMisc.announcementsTitle}</h1>
+      <p class="page-lead">{t.platformMisc.announcementsSub}</p>
     </div>
+  </header>
+
+  <section class="section section--lead">
 
     {#if createdMessage}
-      <div class={createdMessage.ok ? 'alert-success' : 'alert-err'} role="status">{createdMessage.text}</div>
+      <div class={createdMessage.ok ? 'alert-success' : 'alert-error'} role="status">{createdMessage.text}</div>
     {/if}
     {#if form && 'updated' in form && form.updated}
       <div class="alert-success" role="status">{t.platformMisc.announcementUpdated}</div>
     {/if}
-    {#if form && 'error' in form && form.error && !('editId' in form && form.editId)}<div class="alert-err" role="alert">{form.error}</div>{/if}
+    {#if form && 'error' in form && form.error && !('editId' in form && form.editId)}<div class="alert-error" role="alert">{form.error}</div>{/if}
 
     <form method="POST" action="?/create" class="compose" use:enhance={() => async ({ result, update }) => {
       await update({ reset: false });
@@ -101,7 +105,7 @@
 
       <div class="field">
         <label class="lbl" for="title">{t.platformMisc.titleLabel}</label>
-        <input id="title" name="title" bind:value={title} maxlength="120" placeholder={t.platformMisc.titlePlaceholder} />
+        <input id="title" type="text" name="title" bind:value={title} maxlength="120" placeholder={t.platformMisc.titlePlaceholder} />
       </div>
 
       <div class="field">
@@ -125,7 +129,7 @@
           <span class="muted small">{t.platformMisc.allOrgsNote}</span>
         {:else}
           <div class="org-search">
-            <input type="search" class="search-input" bind:value={orgQuery} placeholder={t.platformMisc.searchOrgs} aria-label={t.platformMisc.searchOrgs} />
+            <input type="search" class="org-query" bind:value={orgQuery} placeholder={t.platformMisc.searchOrgs} aria-label={t.platformMisc.searchOrgs} />
             <span class="muted small">{t.platformMisc.selectedCount(selectedOrgs.length)}</span>
           </div>
           <!-- Selected orgs stay in the form even when the filter hides their chip. -->
@@ -165,16 +169,15 @@
 
   <section class="section">
     <div class="section-head">
-      <p class="eyebrow">{t.platformMisc.announcementsTitle}</p>
-      <h2>{t.platformMisc.recent}</h2>
+      <h2>{t.platformMisc.recent} <span class="total-badge">{data.announcements.length}</span></h2>
     </div>
 
     {#if data.announcements.length === 0}
-      <div class="card--inset empty-state">
-        <div class="icon-tile">
-          <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 11l18-8v18l-18-8z"/><path d="M7 13v5a2 2 0 0 0 4 0v-3"/></svg>
-        </div>
-        <p class="muted">{t.platformMisc.nothingPublished}</p>
+      <div class="card--inset state-block">
+        <span class="icon-tile" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 11l18-8v18l-18-8z"/><path d="M7 13v5a2 2 0 0 0 4 0v-3"/></svg>
+        </span>
+        <h3>{t.platformMisc.nothingPublished}</h3>
       </div>
     {:else}
       <div class="row-list">
@@ -187,17 +190,17 @@
               }}>
                 <input type="hidden" name="id" value={a.id} />
                 {#if form && 'editId' in form && form.editId === a.id && form.error}
-                  <div class="alert-err" role="alert">{form.error}</div>
+                  <div class="alert-error" role="alert">{form.error}</div>
                 {/if}
                 <div class="field">
                   <label class="lbl" for="lvl-{a.id}">{t.platformMisc.level}</label>
-                  <select id="lvl-{a.id}" name="level" class="select-input" value={a.level}>
+                  <select id="lvl-{a.id}" name="level" value={a.level}>
                     {#each LEVELS as l}<option value={l.id}>{l.label}</option>{/each}
                   </select>
                 </div>
                 <div class="field">
                   <label class="lbl" for="ttl-{a.id}">{t.platformMisc.titleLabel}</label>
-                  <input id="ttl-{a.id}" class="text-input" name="title" value={a.title} maxlength="120" required />
+                  <input id="ttl-{a.id}" type="text" name="title" value={a.title} maxlength="120" required />
                 </div>
                 <div class="field">
                   <label class="lbl" for="bdy-{a.id}">{t.platformMisc.messageLabel}</label>
@@ -214,8 +217,8 @@
               </form>
             {:else}
               <div class="row-main">
-                <div class="row-head">
-                  <span class="row-level level-{a.level}">{levelLabel(a.level)}</span>
+                <div class="ann-head">
+                  <span class="pf-tag" data-tone={LEVEL_TONE[a.level]}>{levelLabel(a.level)}</span>
                   <strong>{a.title}</strong>
                 </div>
                 <p class="row-body">{a.body}</p>
@@ -233,11 +236,13 @@
                   {/if}
                 </div>
               </div>
-              <button type="button" class="edit" onclick={() => (editId = a.id)}>{t.platformMisc.editAnnouncement}</button>
-              <form method="POST" action="?/delete" use:enhance={confirmFirst(() => t.platformMisc.confirmDeleteAnnouncement)}>
-                <input type="hidden" name="id" value={a.id} />
-                <button type="submit" class="del" title={t.platformMisc.deleteTitle} aria-label={t.platformMisc.deleteTitle}>✕</button>
-              </form>
+              <div class="row-actions">
+                <button type="button" class="btn-outline btn-sm" onclick={() => (editId = a.id)}>{t.platformMisc.editAnnouncement}</button>
+                <form method="POST" action="?/delete" use:enhance={confirmFirst(() => t.platformMisc.confirmDeleteAnnouncement)}>
+                  <input type="hidden" name="id" value={a.id} />
+                  <button type="submit" class="btn-danger btn-sm">{t.platformMisc.deleteTitle}</button>
+                </form>
+              </div>
             {/if}
           </div>
         {/each}
@@ -247,80 +252,54 @@
 </div>
 
 <style>
-  .page { padding-block: 24px; }
-  h1 { font-size: var(--display-size); font-weight: 550; letter-spacing: -.055em; line-height: 1.08; margin: 0; }
-
   /* ── Compose form: fields on the page, no panel ── */
-  .compose { display: flex; flex-direction: column; gap: 16px; }
-  .field { display: flex; flex-direction: column; gap: 7px; }
-  .lbl { font-size: 10px; font-weight: 650; text-transform: uppercase; letter-spacing: .13em; color: var(--text-muted); }
-  #title, #body, textarea {
-    width: 100%; box-sizing: border-box; padding: 9px 13px; border: 1px solid var(--border); border-radius: var(--radius-sm);
-    background: var(--bg-panel2); color: var(--text-base); font: inherit; font-size: 13px;
-    transition: border-color .15s, box-shadow .15s;
-  }
-  textarea { resize: vertical; line-height: 1.5; }
-  input:focus, textarea:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-dim); }
+  .compose { display: flex; flex-direction: column; gap: 16px; max-width: 860px; }
+  .field { display: flex; flex-direction: column; gap: 7px; margin: 0; }
+  .lbl { font-size: var(--meta-size); font-weight: 600; text-transform: uppercase; letter-spacing: .08em; color: var(--text-muted); }
+  textarea { line-height: 1.5; }
 
   .levels { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; }
   .level-opt { display: flex; flex-direction: column; gap: 2px; padding: 10px 13px; border: 1px solid var(--border); border-radius: var(--radius); cursor: pointer; transition: background .15s, border-color .15s; }
-  .level-opt input { display: none; }
+  .level-opt input { position: absolute; opacity: 0; pointer-events: none; }
+  .level-opt:has(input:focus-visible) { outline: 2px solid var(--accent-ink); outline-offset: 2px; }
   .level-opt.on { border-color: var(--accent); background: var(--accent-dim); }
   .level-opt.level-warning.on { border-color: var(--warning); background: var(--warning-dim); }
   .level-opt.level-error.on { border-color: var(--danger); background: var(--danger-dim); }
   .level-opt.level-success.on { border-color: var(--success); background: var(--success-dim); }
   .level-name { font-size: 13px; font-weight: 600; color: var(--text-base); }
-  .level-hint { font-size: 11px; color: var(--text-muted); }
+  .level-hint { font-size: 11px; font-weight: 400; color: var(--text-muted); }
 
-  .aud { display: flex; gap: 18px; }
-  .aud-opt { font-size: 13px; display: flex; align-items: center; gap: 6px; cursor: pointer; }
-  .orgs { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 6px; }
-  .org-chip { font-size: 12px; font-weight: 600; padding: 6px 13px; border: 1px solid var(--border); border-radius: 3px; cursor: pointer; color: var(--text-muted); transition: background .15s, border-color .15s, color .15s; }
-  .org-chip input { display: none; }
+  .aud { display: flex; gap: 8px 18px; flex-wrap: wrap; }
+  .aud-opt { font-size: 13px; display: flex; align-items: center; gap: 6px; cursor: pointer; margin: 0; }
+  .orgs { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 6px; max-height: 260px; overflow-y: auto; }
+  .org-chip { font-size: 12px; font-weight: 600; padding: 6px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); cursor: pointer; color: var(--text-muted); transition: background .15s, border-color .15s, color .15s; }
+  .org-chip input { position: absolute; opacity: 0; pointer-events: none; }
+  .org-chip:has(input:focus-visible) { outline: 2px solid var(--accent-ink); outline-offset: 2px; }
   .org-chip.on { border-color: var(--accent); background: var(--accent-dim); color: var(--accent-ink); }
+  .chip-slug { font-weight: 400; color: var(--text-muted); margin-left: 4px; }
+  .org-search { display: flex; align-items: center; gap: 12px; margin-top: 6px; flex-wrap: wrap; }
+  .org-query { flex: 1 1 220px; width: auto; max-width: 360px; min-width: 0; }
+  .date-input { max-width: 200px; }
 
-  .email-opt { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-muted); }
+  .email-opt { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 500; color: var(--text-base); margin: 0; }
   .actions { display: flex; justify-content: flex-end; }
 
   /* ── Published announcements: hairline rows with a level marker ── */
-  .ann-row { align-items: flex-start; gap: 12px; padding-left: 12px; border-left: 2px solid transparent; }
+  .ann-row { align-items: flex-start; gap: 12px; border-left: 2px solid transparent; flex-wrap: wrap; }
   .row-info { border-left-color: var(--accent); }
   .row-success { border-left-color: var(--success); }
   .row-warning { border-left-color: var(--warning); }
   .row-error { border-left-color: var(--danger); }
-  .row-main { flex: 1; min-width: 0; }
-  .row-head { display: flex; align-items: center; gap: 8px; }
-  .row-level { font-size: 10px; font-weight: 650; text-transform: uppercase; letter-spacing: .03em; padding: 1px 8px; border-radius: 3px; }
-  .row-level.level-info { background: var(--accent-dim); color: var(--accent-ink); }
-  .row-level.level-success { background: var(--success-dim); color: var(--success); }
-  .row-level.level-warning { background: var(--warning-dim); color: var(--warning); }
-  .row-level.level-error { background: var(--danger-dim); color: var(--danger); }
-  .row-body { font-size: 12.5px; color: var(--text-muted); line-height: 1.6; margin: 5px 0; white-space: pre-wrap; }
-  .row-meta { font-size: 11px; color: var(--text-subtle); }
-  .del { background: none; border: none; color: var(--text-subtle); cursor: pointer; font-size: 14px; padding: 2px 6px; border-radius: var(--radius-sm); transition: background .15s, color .15s; }
-  .del:hover { color: var(--danger); background: var(--danger-dim); }
-  .edit { background: none; border: none; color: var(--text-muted); cursor: pointer; font: inherit; font-size: 12px; padding: 2px 6px; border-radius: var(--radius-sm); }
-  .edit:hover { color: var(--accent-ink); background: var(--bg-hover); }
+  .row-main { flex: 1 1 320px; min-width: 0; }
+  .ann-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .ann-head strong { font-size: 13.5px; overflow-wrap: anywhere; }
+  .row-body { font-size: 12.5px; color: var(--text-muted); line-height: 1.6; margin: 6px 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .row-meta { font-size: 11.5px; color: var(--text-muted); }
   .ann-row.is-expired .row-main { opacity: .6; }
   .edit-form { flex: 1; min-width: 0; }
   .edit-actions { display: flex; gap: 8px; }
   .pv { padding: 12px 14px; border: 1px dashed var(--border); border-radius: var(--radius-sm); display: flex; }
   .small { font-size: 11.5px; }
   .warn { color: var(--danger); }
-  .chip-slug { font-weight: 400; color: var(--text-subtle); margin-left: 4px; }
-  .org-search { display: flex; align-items: center; gap: 12px; margin-top: 6px; flex-wrap: wrap; }
-  .date-input, .search-input, .select-input, .text-input {
-    height: 36px; box-sizing: border-box; padding: 0 11px; border: 1px solid var(--border); border-radius: var(--radius-sm);
-    background: var(--bg-panel2); color: var(--text-base); font: inherit; font-size: 13px;
-  }
-  .date-input { max-width: 200px; }
-  .search-input { flex: 1; min-width: 200px; max-width: 360px; }
-  .select-input { max-width: 220px; }
-  .text-input { width: 100%; }
-
-  .empty-state { display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center; }
-  .empty-state .muted { margin: 0; }
-  .muted { color: var(--text-muted); font-size: 13px; }
-  .alert-success { padding: 10px 14px; border-radius: var(--radius-sm); font-size: 13px; margin-bottom: 16px; color: var(--success); background: var(--success-dim); border: 1px solid color-mix(in srgb, var(--success) 25%, transparent); }
-  .alert-err { padding: 10px 14px; border-radius: var(--radius-sm); font-size: 13px; margin-bottom: 16px; color: var(--danger); background: var(--danger-dim); border: 1px solid color-mix(in srgb, var(--danger) 25%, transparent); }
+  .muted { color: var(--text-muted); }
 </style>

@@ -126,6 +126,12 @@ export const load: PageServerLoad = async ({ locals }) => {
     LIMIT 10
   `);
 
+  // Work queues that wait on the platform team, so the overview says what needs doing.
+  const fpOpen = await dbFirst<{ n: string }>(locals.db,
+    `SELECT COUNT(*) AS n FROM floorplan_requests WHERE status IN ('requested','contacted','scheduled')`).catch(() => null);
+  const setupOpen = await dbFirst<{ n: string }>(locals.db,
+    `SELECT COUNT(*) AS n FROM setup_requests WHERE status IN ('requested','contacted','in_progress')`).catch(() => null);
+
   const num = (v: string | undefined) => Number(v ?? 0);
 
   return {
@@ -160,5 +166,6 @@ export const load: PageServerLoad = async ({ locals }) => {
     config,
     slaTarget: SLA.uptimeTargetEn,
     recentOrgs,
+    queues: { floorplan: num(fpOpen?.n), setup: num(setupOpen?.n) },
   };
 };
