@@ -34,6 +34,8 @@ export const NOTIFICATION_KINDS = {
 	'member.joined': 'members',
 	/** Saving a hall plan left templates or events with tables in walls (D2). */
 	'layout.problems': 'halls',
+	/** Hallify moved the venue's mapping request on: contacted, scheduled, delivered (M25). */
+	'mapping.updated': 'halls',
 	/** A new post in an announcement channel: for the whole organisation. */
 	'announcement.posted': null
 } as const satisfies Record<string, NotificationArea | null>;
@@ -143,6 +145,17 @@ export function notificationText(
 				title: c.layoutProblems,
 				detail: c.layoutProblemsDetail(p.hall ?? '', Number(p.templates ?? 0), Number(p.events ?? 0))
 			};
+		case 'mapping.updated': {
+			const f = t.floorplanService;
+			const status =
+				p.status === 'requested' ? f.statusRequested
+				: p.status === 'contacted' ? f.statusContacted
+				: p.status === 'scheduled' ? f.statusScheduled
+				: p.status === 'delivered' ? f.statusDelivered
+				: p.status === 'cancelled' ? f.statusCancelled
+				: '';
+			return { title: c.mappingUpdated, detail: join(p.hall, status) };
+		}
 		case 'announcement.posted':
 			return { title: c.announcementPosted(p.channel ?? ''), detail: p.excerpt ?? '' };
 		default:

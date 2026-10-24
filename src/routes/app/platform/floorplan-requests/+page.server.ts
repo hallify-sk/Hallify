@@ -3,6 +3,10 @@ import { dbAll, dbFirst, dbRun } from '$lib/db/index';
 import { requirePlatformAdmin } from '$lib/guards';
 import { st } from '$lib/i18n-server';
 import { SETUP_OPEN_STATUSES, SETUP_SERVICE_STATUSES, type SetupStatus } from '$lib/setup-service';
+import {
+  MAPPING_STATUSES, MAX_DELIVERY_FILE, MAX_REPLY_NOTE, announceMappingStatus, canDeliver, deliveryFileKey,
+  isMappingStatus, sniffDeliveryType, type MappingStatus
+} from '$lib/server/floorplan-mapping';
 import type { PageServerLoad, Actions } from './$types';
 
 /**
@@ -16,8 +20,8 @@ import type { PageServerLoad, Actions } from './$types';
  * operator's own organisation, which is why it is not a ticket.
  */
 
-const STATUSES = ['requested', 'contacted', 'scheduled', 'delivered', 'cancelled'] as const;
-type Status = (typeof STATUSES)[number];
+const STATUSES = MAPPING_STATUSES;
+type Status = MappingStatus;
 
 /** Still needing work from us. Drives the "open" count and the default sort. */
 const OPEN: Status[] = ['requested', 'contacted', 'scheduled'];
@@ -47,6 +51,8 @@ export const load: PageServerLoad = async ({ locals }) => {
     id: string;
     status: Status;
     note: string | null;
+    reply_note: string | null;
+    delivery_file_name: string | null;
     created_at: string;
     updated_at: string;
     hall_id: string;
@@ -65,7 +71,7 @@ export const load: PageServerLoad = async ({ locals }) => {
     locals.db,
     // Open requests first and oldest first within each group: the queue should
     // read as a worklist, not as a reverse-chronological log.
-    `SELECT fr.id, fr.status, fr.note, fr.created_at, fr.updated_at,
+    `SELECT fr.id, fr.status, fr.note, fr.reply_note, fr.delivery_file_name, fr.created_at, fr.updated_at,
             h.id AS hall_id, h.name AS hall_name, h.address AS hall_address,
             h.max_people,
             CASE WHEN h.floorplan_json IS NOT NULL THEN 1 ELSE 0 END AS has_floorplan,
@@ -120,25 +126,66 @@ export const load: PageServerLoad = async ({ locals }) => {
 };
 
 export const actions: Actions = {
-  setStatus: async ({ request, locals }) => {
+  /**
+   * Move a request on. The venue is told every time (M25): an email with the
+   * optional message, and a notification. Delivering needs something to deliver:
+   * the plan drawn in the hall's editor, or a file attached here.
+   */
+  setStatus: async ({ request, locals, platform, url }) => {
     requirePlatformAdmin(locals);
+    const e = st(locals.locale).serverErrors;
     const data = await request.formData();
     const id = String(data.get('id') ?? '');
     const status = String(data.get('status') ?? '');
+    const reply = String(data.get('reply') ?? '').trim().slice(0, MAX_REPLY_NOTE) || null;
+    const file = data.get('file');
 
-    if (!STATUSES.includes(status as Status)) {
-      return fail(400, { error: st(locals.locale).serverErrors.invalidStatus });
+    if (!isMappingStatus(status)) return fail(400, { error: e.invalidStatus });
+
+    const row = await dbFirst<{ status: string; has_floorplan: number; delivery_file_key: string | null }>(locals.db,
+      `SELECT fr.status, CASE WHEN h.floorplan_json IS NOT NULL THEN 1 ELSE 0 END AS has_floorplan, fr.delivery_file_key
+         FROM floorplan_requests fr JOIN halls h ON h.id = fr.hall_id WHERE fr.id = ? LIMIT 1`, id);
+    if (!row) return fail(404, { error: e.notFound });
+
+    // The file the plan is handed over in, kept in private storage.
+    let upload: { key: string; name: string; type: string } | null = null;
+    if (file instanceof File && file.size > 0) {
+      if (file.size > MAX_DELIVERY_FILE) return fail(400, { error: e.mappingFileInvalid, id });
+      const bytes = await file.arrayBuffer();
+      const type = sniffDeliveryType(new Uint8Array(bytes, 0, Math.min(bytes.byteLength, 16)));
+      if (!type) return fail(400, { error: e.mappingFileInvalid, id });
+      const r2 = platform?.env?.R2;
+      if (!r2) return fail(503, { error: e.mappingFileUnavailable, id });
+      const name = file.name.trim().slice(0, 120) || 'podorys';
+      const key = deliveryFileKey(id, name);
+      try {
+        await r2.put(key, bytes, { httpMetadata: { contentType: type } });
+      } catch {
+        return fail(502, { error: e.mappingFileUnavailable, id });
+      }
+      upload = { key, name, type };
     }
 
-    const row = await dbFirst<{ ok: number }>(locals.db,
-      'SELECT 1 AS ok FROM floorplan_requests WHERE id = ? LIMIT 1', id);
-    if (!row) return fail(404, { error: st(locals.locale).serverErrors.notFound });
+    if (status === 'delivered' && !canDeliver(!!row.has_floorplan, !!(upload || row.delivery_file_key))) {
+      return fail(400, { error: e.mappingNothingToDeliver, id });
+    }
+    // Nothing changes and nothing new to say: no email for a repeated click.
+    if (status === row.status && !reply && !upload) return { saved: true };
 
     await dbRun(locals.db,
-      `UPDATE floorplan_requests SET status = ?, updated_at = datetime('now') WHERE id = ?`,
-      status, id);
+      `UPDATE floorplan_requests
+          SET status = ?, reply_note = ?,
+              delivery_file_key = COALESCE(?, delivery_file_key),
+              delivery_file_name = COALESCE(?, delivery_file_name),
+              delivery_file_type = COALESCE(?, delivery_file_type),
+              updated_at = datetime('now')
+        WHERE id = ?`,
+      status, reply, upload?.key ?? null, upload?.name ?? null, upload?.type ?? null, id);
+    // A replaced file goes; nobody can download it any more.
+    if (upload && row.delivery_file_key) await platform?.env?.R2?.delete(row.delivery_file_key).catch(() => {});
 
-    return { saved: true };
+    const notified = await announceMappingStatus(locals.db, id, url.origin, locals.user?.id ?? null);
+    return { saved: true, notified };
   },
 
   setSetupStatus: async ({ request, locals }) => {

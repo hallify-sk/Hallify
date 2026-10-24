@@ -111,16 +111,33 @@
                   <p class="note">{r.note}</p>
                 {/if}
 
+                {#if r.reply_note}
+                  <h2 class="detail-heading">{t.hallAdmin.mappingReplyLabel}</h2>
+                  <p class="note">{r.reply_note}</p>
+                {/if}
+
                 <h2 class="detail-heading">{t.floorplanService.moveTo}</h2>
-                <form method="POST" action="?/setStatus" class="status-form" use:enhance>
+                <!-- Every change is emailed to the venue with the message (M25); a
+                     delivery needs the plan drawn in the editor or a file here. -->
+                <form method="POST" action="?/setStatus" class="move-form" enctype="multipart/form-data" use:enhance>
                   <input type="hidden" name="id" value={r.id} />
-                  {#each data.statuses as s}
-                    <button
-                      type="submit" name="status" value={s}
-                      class="btn-outline btn-sm" class:is-current={r.status === s}
-                      disabled={r.status === s}
-                    >{STATUS_LABEL[s] ?? s}</button>
-                  {/each}
+                  <label class="field-label" for="reply-{r.id}">{t.floorplanService.replyLabel}</label>
+                  <textarea id="reply-{r.id}" name="reply" rows="2" maxlength="2000" class="field-input" placeholder={t.floorplanService.replyPlaceholder}></textarea>
+                  <label class="field-label" for="file-{r.id}">{t.floorplanService.deliveryFileLabel}</label>
+                  <input id="file-{r.id}" type="file" name="file" accept="application/pdf,image/jpeg,image/png,image/webp" />
+                  <p class="quote-note">
+                    {t.floorplanService.deliveryFileHint}
+                    {#if r.delivery_file_name}<br />{t.floorplanService.deliveryFileCurrent(r.delivery_file_name)}{/if}
+                  </p>
+                  <div class="status-form">
+                    {#each data.statuses as s}
+                      <button
+                        type="submit" name="status" value={s}
+                        class="btn-outline btn-sm" class:is-current={r.status === s}
+                        aria-current={r.status === s ? 'true' : undefined}
+                      >{STATUS_LABEL[s] ?? s}</button>
+                    {/each}
+                  </div>
                 </form>
 
                 <p class="quote-note">{t.floorplanService.quoteReminder}</p>
@@ -246,6 +263,9 @@
   .note { font-size: var(--body-size); line-height: 1.7; color: var(--text-muted); white-space: pre-line; margin: 0; max-width: 640px; }
 
   .status-form { display: flex; flex-wrap: wrap; gap: 6px; }
+  .move-form { display: grid; gap: 6px; max-width: 640px; }
+  .move-form textarea { resize: vertical; }
+  .move-form .quote-note { margin: 2px 0 8px; }
   .status-form .is-current { border-color: var(--accent); color: var(--accent-ink); }
 
   /* There is no price here on purpose: the add-on is quoted after a consultation,

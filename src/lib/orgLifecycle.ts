@@ -148,8 +148,13 @@ export async function archiveAndDeleteOrg(db: D1Database, orgId: string, opts: C
 	// Its pictures are public for as long as they are stored: collect them while the
 	// rows that point at them exist, delete them once nothing does (B152).
 	const uploads = await orgUploadUrls(db, orgId).catch(() => [] as string[]);
+	// And the floor plans Hallify delivered to it (private, but theirs alone).
+	const mappingFiles = (await dbAll<{ k: string }>(db,
+		'SELECT delivery_file_key AS k FROM floorplan_requests WHERE org_id = ? AND delivery_file_key IS NOT NULL', orgId)
+		.catch(() => [])).map((r) => r.k);
 	await deleteOrgCascade(db, orgId);
 	await deleteUnusedHallImages(db, opts.r2, uploads);
+	if (opts.r2 && mappingFiles.length) await Promise.resolve(opts.r2.delete(mappingFiles)).catch(() => {});
 	return result;
 }
 

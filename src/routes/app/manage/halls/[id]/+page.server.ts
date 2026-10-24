@@ -182,11 +182,12 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 	// The mapping add-on. Only the latest request matters to the page: an open one is
 	// shown with its status (and can be withdrawn), a delivered one says so, and with
 	// none the option is offered.
-	let floorplanRequest: { id: string; status: string; note: string | null; created_at: string; updated_at: string } | null = null;
+	type MappingRequest = { id: string; status: string; note: string | null; reply_note: string | null; delivery_file_name: string | null; created_at: string; updated_at: string };
+	let floorplanRequest: MappingRequest | null = null;
 	try {
-		floorplanRequest = await dbFirst<{ id: string; status: string; note: string | null; created_at: string; updated_at: string }>(
+		floorplanRequest = await dbFirst<MappingRequest>(
 			locals.db,
-			`SELECT id, status, note, created_at, updated_at FROM floorplan_requests
+			`SELECT id, status, note, reply_note, delivery_file_name, created_at, updated_at FROM floorplan_requests
 			  WHERE hall_id = ? AND status != 'cancelled'
 			  ORDER BY created_at DESC LIMIT 1`,
 			hall.id);

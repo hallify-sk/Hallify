@@ -753,7 +753,26 @@
 
 <!-- The mapping request as the owner sees it: where it stands, and a way to withdraw
      it while we have not delivered yet (M25). -->
-{#snippet mappingStatus(req: { id: string; status: string; note: string | null; created_at: string; updated_at: string })}
+{#snippet mappingReply(req: { reply_note: string | null })}
+  {#if req.reply_note}
+    <p class="fp-request-meta">{t.hallAdmin.mappingReplyLabel}</p>
+    <p class="fp-request-note">{req.reply_note}</p>
+  {/if}
+{/snippet}
+
+{#snippet mappingDelivered(req: { id: string; reply_note: string | null; delivery_file_name: string | null; updated_at: string })}
+  <div class="fp-request" role="group" aria-label={t.hallAdmin.mappingStatusTitle}>
+    <p class="fp-text fp-text--done">✓ {t.hallAdmin.mappingDeliveredOn(fmtDbDate(req.updated_at, getLocale()))}</p>
+    {#if req.delivery_file_name}
+      <a class="btn-outline btn-sm" href="/app/manage/halls/{data.hall.id}/mapping-file?request={req.id}" download>{t.hallAdmin.mappingDownload(req.delivery_file_name)}</a>
+    {:else if data.hall.floorplan_json}
+      <p class="fp-text">{t.hallAdmin.mappingPlanInEditor}</p>
+    {/if}
+    {@render mappingReply(req)}
+  </div>
+{/snippet}
+
+{#snippet mappingStatus(req: { id: string; status: string; note: string | null; reply_note: string | null; created_at: string; updated_at: string })}
   <div class="fp-request" role="group" aria-label={t.hallAdmin.mappingStatusTitle}>
     <div class="fp-request-head">
       <strong>{t.hallAdmin.mappingStatusTitle}</strong>
@@ -765,6 +784,7 @@
       {#if req.updated_at && req.updated_at !== req.created_at}{' '}· {t.floorplanService.lastUpdate} {fmtDbDate(req.updated_at, getLocale())}{/if}
     </p>
     {#if req.note}<p class="fp-request-note">{req.note}</p>{/if}
+    {@render mappingReply(req)}
     {#if form?.fpError}<div class="inline-err" role="alert">{form.fpError}</div>{/if}
     {#if data.canOrderAddons && canEditHall}
       <form method="POST" action="?/cancelFloorplanRequest" use:enhance={confirmFirst(() => t.hallAdmin.mappingCancelConfirm)}>
@@ -1818,6 +1838,8 @@
           {/if}
           {#if mappingOpen && data.floorplanRequest}
             {@render mappingStatus(data.floorplanRequest)}
+          {:else if data.floorplanRequest?.status === 'delivered'}
+            {@render mappingDelivered(data.floorplanRequest)}
           {/if}
           {#if canFloorplans}
           <footer class="fp-step-foot">
@@ -1835,7 +1857,7 @@
             {@render mappingStatus(data.floorplanRequest)}
           {:else}
             {#if data.floorplanRequest?.status === 'delivered'}
-              <p class="fp-text fp-text--done">✓ {t.hallAdmin.mappingDeliveredOn(fmtDbDate(data.floorplanRequest.updated_at, getLocale()))}</p>
+              {@render mappingDelivered(data.floorplanRequest)}
             {/if}
             {#if data.canOrderAddons && canEditHall}
             <details class="fp-mapping">
@@ -2943,6 +2965,7 @@
     white-space: pre-line; overflow-wrap: anywhere; border-left: 2px solid var(--border); padding-left: 8px;
   }
   .fp-request form { margin: 0; }
+  .fp-request > a.btn-outline { align-self: flex-start; width: fit-content; }
 
   /* The plan, at its own proportions inside a fixed-height frame. */
   .fp-preview {
