@@ -8,11 +8,14 @@ import {
   DEFAULT_ANALYTICS,
   GTM_PATTERN,
   loadPlatformAnalytics,
+  loadPlatformMcp,
   writePlatformSetting
 } from '$lib/server/platform-settings';
 import { DEFAULT_AI, MODEL_PRICES, AI_MODEL, AI_REASONING_EFFORT, loadAiPlatform, costUsdMicro, toMilliCredits } from '$lib/server/ai/pricing';
 import { aiConfigured } from '$lib/server/ai/openai';
 import { logPlatformAction } from '$lib/server/platform-audit';
+import { publicMcpUrl } from '$lib/server/mcp/http';
+import { countLiveConnections } from '$lib/server/mcp/connections';
 import type { PageServerLoad, Actions } from './$types';
 
 /**
@@ -23,7 +26,7 @@ import type { PageServerLoad, Actions } from './$types';
  * venue sites. It is the home for the settings that have nowhere else to live;
  * until now the only way to change any of them was a redeploy.
  */
-export const load: PageServerLoad = async ({ locals }) => {
+export const load: PageServerLoad = async ({ locals, url }) => {
   // Its own guard. The platform layout gates navigation only, and the action
   // below is reachable by direct POST without it ever running.
   requirePlatformAdmin(locals);
@@ -46,7 +49,15 @@ export const load: PageServerLoad = async ({ locals }) => {
   const typicalTurnMc = (model: string) =>
     toMilliCredits(costUsdMicro(model, { input_tokens: 6000, cached_tokens: 0, output_tokens: 600 }), ai);
 
+  // The MCP server's own switch (separate from the in-app assistant's).
+  const mcp = {
+    ...(await loadPlatformMcp(locals.db)),
+    url: publicMcpUrl(url, env.HALLIFY_DOMAIN ?? 'hallify.app', env.APP_URL),
+    active: await countLiveConnections(locals.db)
+  };
+
   return {
+    mcp,
     ai,
     aiConfigured: aiConfigured(),
     model: { id: AI_MODEL, effort: AI_REASONING_EFFORT, ...MODEL_PRICES[AI_MODEL], turnCredits: typicalTurnMc(AI_MODEL) / 1000 },
@@ -86,6 +97,14 @@ export const actions: Actions = {
     await logPlatformAction(locals, 'settings.update', { type: 'settings', id: 'analytics' },
       { containerId: raw, includeBubbles, serverUrl: serverUrl ?? '' });
 
+    return { saved: true };
+  },
+
+  saveMcp: async ({ request, locals }) => {
+    requirePlatformAdmin(locals);
+    const enabled = (await request.formData()).get('enabled') === 'on';
+    await writePlatformSetting(locals.db, 'mcp', { enabled }, locals.user?.id ?? null);
+    await logPlatformAction(locals, 'settings.update', { type: 'settings', id: 'mcp' }, { enabled });
     return { saved: true };
   },
 

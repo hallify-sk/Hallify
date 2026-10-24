@@ -136,6 +136,19 @@
 		</div>
 	</section>
 
+	<!-- Connected AI apps (MCP): managed on their own page. -->
+	{#if data.mcpConnections !== null}
+		<section class="section">
+			<div class="section-head section-head--row">
+				<div>
+					<h3>{t.mcp.connectionsTitle}{#if data.mcpConnections}{' '}<span class="count">{data.mcpConnections}</span>{/if}</h3>
+					<p>{t.mcp.profileCardLead}</p>
+				</div>
+				<a class="btn-outline btn-sm" href="/app/profile/connections">{t.mcp.manage}</a>
+			</div>
+		</section>
+	{/if}
+
 	<!-- Delete the account (D7): what will happen, then the password and a confirmation. -->
 	{#if data.deletion}
 		<section class="section danger-zone">
@@ -185,6 +198,7 @@
 
 <style>
 	.profile-wrap { --page-max: 900px; }
+	.count { font-size: 12px; font-weight: 600; color: var(--text-muted); }
 
 	.profile-header {
 		display: flex;

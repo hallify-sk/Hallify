@@ -12,6 +12,7 @@ import { deliverWebhook, type WebhookPayload } from '$lib/notifications';
 import { isSafeWebhookUrl } from '$lib/safe-url';
 import { CLOSED_COOKIE } from '$lib/org-closure-email';
 import type { TeamNotifyEvent } from '$lib/email';
+import { listOrgConnections, listOrgMcpActivity, revokeOrgConnection } from '$lib/server/mcp/connections';
 
 // Webhooks are a paid feature (Starter and up).
 function planHasWebhooks(plan: string): boolean {
@@ -93,6 +94,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
       impersonated: !!org.impersonated,
       upcomingClients: 0,
       hasSubscription: false,
+      mcp: null,
     };
   }
 
@@ -179,6 +181,16 @@ export const load: PageServerLoad = async ({ locals, url }) => {
     hasSubscription = !!sub?.stripe_subscription_id && sub.status !== 'cancelled';
   }
 
+  // Members' own AI agents (MCP): which of them can reach this organisation, and what
+  // they changed. The owner's view; cutting one off is the owner's call.
+  const mcp = isOwner
+    ? {
+        available: PLANS[org.subscription.plan as keyof typeof PLANS]?.limits.mcp ?? false,
+        connections: await listOrgConnections(locals.db, org.id),
+        activity: await listOrgMcpActivity(locals.db, org.id),
+      }
+    : null;
+
   return {
     canManage: true,
     notifications, recipients, staff,
@@ -188,6 +200,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
     impersonated: !!org.impersonated,
     upcomingClients,
     hasSubscription,
+    mcp,
   };
 };
 
@@ -348,6 +361,18 @@ export const actions: Actions = {
     const data = await request.formData();
     const id = String(data.get('id') ?? '');
     await dbRun(locals.db, 'DELETE FROM org_webhooks WHERE id = ? AND org_id = ?', id, org.id);
+  },
+
+  /** The owner takes a member's AI agent's access to THIS organisation away. Their
+   *  connection keeps working for their other organisations. */
+  revokeMcp: async ({ request, locals }) => {
+    const org = await requireOrgPermission(locals, 'settings.manage');
+    if (org.role !== 'owner' || org.impersonated) return fail(403, { mcpError: st(locals.locale).serverErrors.accessDenied });
+    const id = String((await request.formData()).get('id') ?? '');
+    if (!(await revokeOrgConnection(locals.db, org.id, id, locals.user!.id))) {
+      return fail(404, { mcpError: st(locals.locale).mcp.notFound });
+    }
+    return { mcpRevoked: true };
   },
 
   // ── Danger zone (moved here from the Members page) ────────────────────

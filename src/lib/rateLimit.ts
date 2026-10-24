@@ -48,6 +48,12 @@ export const RATE_LIMITS = {
   resetToken:       { limit: 15, windowSeconds: 15 * 60 },
   /** Image uploads per user. */
   upload:           { limit: 60, windowSeconds: 60 * 60 },
+  /** MCP calls per connection (one grant, across its rotating tokens). */
+  mcp:              { limit: 60, windowSeconds: 60 },
+  /** MCP client registrations from one IP (RFC 7591 is open by design). */
+  mcpRegister:      { limit: 20, windowSeconds: 60 * 60 },
+  /** Token-endpoint requests per client (code exchange and refresh). */
+  mcpToken:         { limit: 30, windowSeconds: 60 },
 } as const satisfies Record<string, RateLimitRule>;
 
 /** Consume one unit against `key`. Call once per attempt, before doing the work.

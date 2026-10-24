@@ -12,6 +12,8 @@ import { sendEmail } from '$lib/email';
 import { closureEmail, groupByClient } from '$lib/org-closure-email';
 import { deleteCustomHostname, isCFEnabled } from '$lib/cloudflare-saas';
 import { deleteUnusedHallImages, orgUploadUrls, type R2Deleter } from '$lib/server/hall-images';
+import { revokeMcpForClosingOrg } from '$lib/server/mcp/connections';
+import { revokeUserGrants } from '$lib/server/mcp/oauth';
 import type { D1Database } from '@cloudflare/workers-types';
 import { dispatchPlatformEvent } from '$lib/server/platform-webhooks';
 
@@ -165,6 +167,10 @@ export async function archiveAndDeleteOrg(db: D1Database, orgId: string, opts: C
 
 /** Permanently delete one organization and everything scoped to it (no archive). */
 export async function deleteOrgCascade(db: D1Database, orgId: string): Promise<void> {
+	// Connected AI agents: revoked for members left with no organisation, and the
+	// organisation's MCP records removed — while the memberships still say who is who.
+	await revokeMcpForClosingOrg(db, orgId);
+
 	// ── Grandchildren (depend on halls / tickets / channels / webhooks / reservations) ──
 	await dbRun(db, 'DELETE FROM webhook_deliveries WHERE webhook_id IN (SELECT id FROM org_webhooks WHERE org_id = ?)', orgId);
 	await dbRun(db, 'DELETE FROM channel_messages WHERE channel_id IN (SELECT id FROM channels WHERE org_id = ?)', orgId);
@@ -271,6 +277,7 @@ export async function destroyOrgIfEmpty(db: D1Database, orgId: string, reason: C
  *  left with no members. Keeps the "no org without a user" invariant. */
 export async function deleteUserAndCleanup(db: D1Database, userId: string): Promise<void> {
 	const orgIds = (await dbAll<{ org_id: string }>(db, 'SELECT org_id FROM organization_members WHERE user_id = ?', userId)).map(r => r.org_id);
+	await revokeUserGrants(db, userId, 'account_deleted');
 	await dbRun(db, 'DELETE FROM organization_members WHERE user_id = ?', userId);
 	// The user's own tickets (and their messages) would otherwise be orphaned.
 	await dbRun(db, 'DELETE FROM messages WHERE ticket_id IN (SELECT id FROM tickets WHERE user_id = ?)', userId);

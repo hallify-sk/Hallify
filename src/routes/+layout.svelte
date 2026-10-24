@@ -133,7 +133,7 @@
 	// The organisation's default theme (Settings → Customize), or null when it set none.
 	const orgTheme = $derived<string | null>(branding?.theme ?? null);
 
-	const AUTH_PATHS = ['/app/login', '/app/register', '/app/forgot-password', '/app/reset-password', '/app/invite', '/login', '/forgot-password', '/reset-password', '/verify-email'];
+	const AUTH_PATHS = ['/app/login', '/app/register', '/app/forgot-password', '/app/reset-password', '/app/invite', '/login', '/forgot-password', '/reset-password', '/verify-email', '/oauth/authorize'];
 	const isAuthPage = $derived(AUTH_PATHS.some(p => $page.url.pathname.startsWith(p)));
 	const isLandingPage = $derived(['/', '/pre-prevadzkovatelov', '/priestory'].includes($page.url.pathname) || $page.url.pathname.startsWith('/priestory/') || (!!$page.error && !data.onBubble && !$page.url.pathname.startsWith('/app'))); // venue pages, and public error pages (in the marketing shell)
 	const isPublicHallsPage = $derived($page.url.pathname.startsWith('/halls'));

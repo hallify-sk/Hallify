@@ -5,6 +5,7 @@
   import { confirmFirst } from '$lib/forms';
   import { timeAgo, formatDateTime } from '$lib/format';
   import RecipientPicker from './RecipientPicker.svelte';
+  import McpMembers from './McpMembers.svelte';
   import type { PageData, ActionData } from './$types';
 
   interface Props { data: PageData; form: ActionData; }
@@ -376,6 +377,10 @@
     </div>
   {/if}
 </section>
+{/if}
+
+{#if data.mcp}
+  <McpMembers mcp={data.mcp} {form} readOnly={data.impersonated} />
 {/if}
 
 <!-- ══ Danger zone ════════════════════════════════════════════════ -->

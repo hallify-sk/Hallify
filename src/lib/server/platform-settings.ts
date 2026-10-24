@@ -12,7 +12,7 @@ import { normaliseServerUrl } from '$lib/analytics-servers';
 
 type Db = App.Locals['db'];
 
-export const PLATFORM_KEYS = ['analytics', 'ai'] as const;
+export const PLATFORM_KEYS = ['analytics', 'ai', 'mcp'] as const;
 export type PlatformKey = (typeof PLATFORM_KEYS)[number];
 
 export interface PlatformAnalytics {
@@ -72,4 +72,15 @@ export async function loadPlatformAnalytics(db: Db): Promise<PlatformAnalytics> 
     includeBubbles: stored?.includeBubbles !== false,
     serverUrl: normaliseServerUrl(stored?.serverUrl) ?? ''
   };
+}
+
+/** The MCP server (/mcp) and its OAuth endpoints. On unless an admin turns it off;
+ *  off refuses every agent and every new connection, and keeps the connections. */
+export interface PlatformMcp {
+  enabled: boolean;
+}
+
+export async function loadPlatformMcp(db: Db): Promise<PlatformMcp> {
+  const stored = await readPlatformSetting<Partial<PlatformMcp>>(db, 'mcp');
+  return { enabled: stored?.enabled !== false };
 }
