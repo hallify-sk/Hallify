@@ -133,10 +133,43 @@ export const load: PageServerLoad = async ({ params, locals, url }) => {
 		thread: { ticketId: ticket?.id ?? null, messages },
 		// Price and how to pay the venue (D6); nothing to pay on a cancelled booking.
 		payment: reservation.status === 'cancelled' ? null : await loadPaymentView(locals.db, orgId, reservation.id),
+		// The summary card: what the client needs to find the hall and reach the venue.
+		// Picked field by field — the hall row is the venue's, not all of it is the client's.
+		hallInfo: hall ? {
+			name: hall.name,
+			// Linked only when the hall has a public page to land on.
+			slug: hall.is_public && !hall.plan_locked && hall.slug ? hall.slug : null,
+			coverImageUrl: hall.cover_image_url,
+			address: hall.address,
+			latitude: hall.latitude ?? null,
+			longitude: hall.longitude ?? null,
+			contactPhone: hall.contact_phone,
+			contactEmail: hall.contact_email,
+			contactWebsite: hall.contact_website,
+			asksFeedback: !!hall.allow_feedback,
+			minCancelDays: hall.min_cancel_days ?? 0,
+		} : null,
+		// The booking's history for the progress steps: when it was accepted, paid,
+		// cancelled. Kind, status and time only — never who on the staff did it or a note.
+		activity: await clientActivity(locals.db, reservation.id, userId),
+		todayISO: todayUtcISO(),
 		// The rating card on a completed event (D5); null when there is none to show.
 		feedback: await feedbackForPage(locals.db, reservation, hall?.allow_feedback ?? 0),
 	};
 };
+
+/** The history entries a client may see: what happened and when, and whether it was
+ *  them. The staff member's name and any note stay on the staff page. */
+async function clientActivity(db: App.Locals['db'], reservationId: string, userId: string) {
+	try {
+		return await dbAll<{ kind: string; status: string | null; created_at: string; by_me: number }>(db,
+			`SELECT kind, status, created_at, CASE WHEN actor_id = ? THEN 1 ELSE 0 END AS by_me
+			   FROM reservation_activity WHERE reservation_id = ? ORDER BY created_at, rowid LIMIT 100`,
+			userId, reservationId);
+	} catch {
+		return []; // before migration 0018
+	}
+}
 
 type FeedbackReservation = Pick<ReservationRow, 'id' | 'status' | 'event_date'> & { feedback_requested_at?: string | null };
 

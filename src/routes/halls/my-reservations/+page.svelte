@@ -5,6 +5,8 @@
   import { statusLabel, statusClass, fmtDate } from '$lib/reservationStatus';
   import { reveal } from '$lib/reveal';
   import { t, getLocale } from '$lib/i18n.svelte';
+  import { statusGuide, daysUntil, type StatusGuide } from '$lib/reservation-guide';
+  import { isEventPast, hasEventStarted } from '$lib/reservationStatus';
 
   interface Props { data: PageData; }
   const { data }: Props = $props();
@@ -28,14 +30,53 @@
     cancelled: data.reservations.filter(r => r.status === 'cancelled').length,
   });
 
+  // What needs attention first: coming events soonest first, then past ones
+  // (latest first), then cancelled ones. By date alone, a cancelled booking two
+  // years out sat above next month's wedding.
+  const rank = (r: { status: string; event_date: string }) => r.status === 'cancelled' ? 2 : isPast(r.event_date) ? 1 : 0;
+  const ordered = $derived([...data.reservations].sort((a, b) =>
+    rank(a) - rank(b) || (rank(a) === 0 ? a.event_date.localeCompare(b.event_date) : b.event_date.localeCompare(a.event_date))));
+
   const filtered = $derived(
-    data.reservations.filter(r => {
+    ordered.filter(r => {
       if (filter === 'upcoming') return r.status !== 'cancelled' && !isPast(r.event_date);
       if (filter === 'past') return r.status !== 'cancelled' && isPast(r.event_date);
       if (filter === 'cancelled') return r.status === 'cancelled';
       return true;
     })
   );
+
+  type Row = (typeof data.reservations)[number];
+  /** Where each booking stands, by the same rules as its own page. */
+  function guideFor(r: Row): StatusGuide {
+    return statusGuide({
+      status: r.status, cancelledBy: r.cancelled_by, statusReason: r.has_reason ? 'x' : null,
+      hasStarted: hasEventStarted(r.event_date, r.start_time), isPast: isEventPast(r.event_date, r.end_time),
+      paymentState: r.payment_open ? 'unpaid' : null, hasAmountDue: !!r.payment_open,
+    });
+  }
+  function hintFor(g: StatusGuide): string {
+    const d = t.myRes.detail;
+    switch (g.key) {
+      case 'pending': return d.listPending;
+      case 'waiting_payment': return d.listWaitingPayment;
+      case 'approved': return g.paymentDue ? d.listPayDue : d.listApproved;
+      case 'planned': return g.paymentDue ? d.listPayDue : d.listPlanned;
+      case 'in_progress': return d.listInProgress;
+      case 'finished': return d.listFinished;
+      case 'declined': return d.listDeclined;
+      case 'cancelled_venue': return d.listCancelledVenue;
+      case 'cancelled_client': return d.listCancelledClient;
+      case 'expired': return d.listExpired;
+      default: return d.listCancelled;
+    }
+  }
+  function countdown(date: string): string | null {
+    const n = daysUntil(date, data.todayISO);
+    const d = t.myRes.detail;
+    if (n < 0) return null;
+    return n === 0 ? d.today : n === 1 ? d.tomorrow : d.inDays(n);
+  }
 
   const TABS: { id: Filter; label: () => string }[] = [
     { id: 'all', label: () => t.myRes.tabAll },
@@ -100,8 +141,10 @@
     {:else}
       <div class="row-list">
         {#each filtered as r}
+          {@const g = guideFor(r)}
+          {@const soon = r.status !== 'cancelled' ? countdown(r.event_date) : null}
           <a class="row-item res-row" href="/halls/my-reservations/{r.id}">
-            <span class="accent" class:dim={r.status === 'cancelled'}></span>
+            <span class="accent tone-{g.tone}"></span>
             <div class="res-body">
               <div class="res-top">
                 <div class="res-titles">
@@ -109,14 +152,17 @@
                   <div class="res-sub">{r.hall_name}</div>
                 </div>
                 <div class="res-badges">
+                  {#if g.actor === 'client'}<span class="badge st-you">{t.myRes.detail.actionNeeded}</span>{/if}
                   <span class="badge {statusClass(r.status)}">{statusLabel(r.status, getLocale())}</span>
                   {#if r.status !== 'cancelled' && isPast(r.event_date)}<span class="badge st-past">{t.event.past}</span>{/if}
                 </div>
               </div>
+              <!-- Where it stands, in words; a plain "Cancelled" would only repeat the badge. -->
+              {#if g.key !== 'cancelled'}<div class="res-hint" class:you={g.actor === 'client'}>{hintFor(g)}</div>{/if}
               <div class="res-meta">
                 <span class="meta-item">
                   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
-                  {fmtDate(r.event_date, getLocale())}
+                  {fmtDate(r.event_date, getLocale())}{#if soon}<span class="soon">· {soon}</span>{/if}
                 </span>
                 {#if r.start_time}
                   <span class="meta-item">
@@ -176,8 +222,17 @@
 
   /* ── Reservation rows ── */
   .res-row { align-items: stretch; gap: 0; }
+  /* The rail takes the colour of where the booking stands (as on its own page). */
   .accent { width: 3px; border-radius: 2px; background: var(--accent); flex-shrink: 0; }
-  .accent.dim { background: var(--text-subtle); }
+  .accent.tone-warning { background: var(--warning); }
+  .accent.tone-success { background: var(--success); }
+  .accent.tone-danger { background: var(--danger); }
+  .accent.tone-muted { background: var(--text-subtle); }
+  .res-hint { font-size: 13px; color: var(--text-muted); line-height: 1.4; }
+  .res-hint.you { color: var(--text-base); font-weight: 600; }
+  .soon { margin-left: 5px; color: var(--accent-ink); font-weight: 600; }
+  /* "Your move": the strongest ink, readable in either theme and on any brand. */
+  .st-you { background: var(--text-base); color: var(--bg-panel); }
   .res-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px; padding: 0 16px; }
   .res-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
   .res-titles { min-width: 0; }
@@ -196,7 +251,7 @@
   .st-muted   { background: var(--bg-hover); color: var(--text-muted); }
   .st-danger  { background: var(--danger-dim); color: var(--danger); }
   .st-past    { background: var(--bg-hover); color: var(--text-muted); border: 1px solid var(--border); }
-  .res-badges { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+  .res-badges { display: flex; align-items: center; gap: 6px; flex-shrink: 0; flex-wrap: wrap; justify-content: flex-end; }
 
   /* ── Empty states ── */
   .empty {
@@ -213,5 +268,8 @@
 
   @media (max-width: 520px) {
     .tab { padding: 8px 9px; }
+    /* Two badges leave a phone little room: the name wraps rather than "Svadba …". */
+    .res-title { white-space: normal; overflow-wrap: anywhere; }
+    .res-badges { max-width: 50%; }
   }
 </style>
