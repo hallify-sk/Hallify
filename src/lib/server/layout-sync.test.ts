@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { d1, migratedSqlite } from './test-d1';
-import { prepareLayoutSave, refreshLayoutProblems, syncHallLayouts } from './layout-sync';
+import { prepareLayoutSave, refreshLayoutProblems, syncHallLayouts, writeHallFloorplanOver } from './layout-sync';
+import { dbRun } from '$lib/db/index';
 import { parseProblems } from '$lib/floorplan-sync';
 
 /** A date `days` from today, as YYYY-MM-DD (UTC, as SQLite's date('now')). */
@@ -74,6 +75,27 @@ describe('syncHallLayouts', () => {
 		expect(s.event('past').layout_problems).toBeNull();
 		expect(s.event('cancelled').layout_problems).toBeNull();
 		expect(s.template('empty').layout_json).toBe('{}');
+	});
+
+	// The regression: halls_touch_updated_at (0020) makes D1 report 2 changes for a
+	// one-hall UPDATE, and the editor's save read that as a conflict and never synced.
+	it("follows the editor's guarded save, although D1 counts the trigger's row too", async () => {
+		const s = setup();
+		s.sqlite.exec(`UPDATE halls SET updated_at = '2026-01-01 00:00:00' WHERE id = 'h1'`);
+		expect((await dbRun(s.db, `UPDATE halls SET name = 'Sála' WHERE id = 'h1'`)).meta.changes).toBe(2);
+		s.tpl('tpl', layout());
+		s.ev('soon', inDays(10));
+		const next = JSON.stringify(hallPlan([pillar(3, 3.8)]));
+
+		expect(await writeHallFloorplanOver(s.db, 'h1', 'o1', next, s.before)).toBe(true);
+		const report = await syncHallLayouts(s.db, 'h1', s.before, next);
+		expect(report.templates.map((t) => t.id)).toEqual(['tpl']);
+		expect(report.events.map((e) => e.id)).toEqual(['soon']);
+		expect(JSON.parse(s.template('tpl').layout_json!).floors[0].walls).toHaveLength(1);
+		expect(JSON.parse(s.event('soon').layout_json!).floors[0].walls).toHaveLength(1);
+
+		// A second save made from the old plan is refused and leaves the new one in place.
+		expect(await writeHallFloorplanOver(s.db, 'h1', 'o1', s.before, s.before)).toBe(false);
 	});
 
 	it('clears the flag when the hall plan changes back', async () => {

@@ -10,6 +10,17 @@ import { join } from 'node:path';
 import type { D1Database } from '@cloudflare/workers-types';
 
 type Row = Record<string, unknown>;
+
+/**
+ * Rows changed so far on this connection, triggers included. D1's meta.changes counts
+ * what a statement's triggers changed as well (an UPDATE of one hall reports 2 once
+ * halls_touch_updated_at, 0020, stamps it), so run() reports this difference rather
+ * than plain SQLite's statement-only count: a check for "exactly 1" fails here as it
+ * does on D1, instead of passing in tests and failing in production.
+ */
+function totalChanges(db: DatabaseSync): number {
+	return Number((db.prepare('SELECT total_changes() AS n').get() as { n: number }).n);
+}
 export async function testD1(): Promise<{ db: D1Database; exec: (sql: string) => void }> {
 	const { DatabaseSync } = await import('node:sqlite');
 	const raw = new DatabaseSync(':memory:');
@@ -33,8 +44,9 @@ export async function testD1(): Promise<{ db: D1Database; exec: (sql: string) =>
 				return ((raw.prepare(sql).get(...(params as never[])) as T | undefined) ?? null) as T | null;
 			},
 			async run() {
+				const before = totalChanges(raw);
 				const r = raw.prepare(sql).run(...(params as never[]));
-				return { success: true, results: [], meta: { changes: Number(r.changes), last_row_id: Number(r.lastInsertRowid) } };
+				return { success: true, results: [], meta: { changes: totalChanges(raw) - before, last_row_id: Number(r.lastInsertRowid) } };
 			},
 		};
 		return stmt;
@@ -68,8 +80,9 @@ export function d1(sqlite: DatabaseSync): App.Locals['db'] {
 		all: async () => ({ results: sqlite.prepare(sql).all(...(values as never[])) }),
 		first: async () => sqlite.prepare(sql).get(...(values as never[])) ?? null,
 		run: async () => {
-			const r = sqlite.prepare(sql).run(...(values as never[]));
-			return { success: true, meta: { changes: Number(r.changes) } };
+			const before = totalChanges(sqlite);
+			sqlite.prepare(sql).run(...(values as never[]));
+			return { success: true, meta: { changes: totalChanges(sqlite) - before } };
 		}
 	});
 	return {
