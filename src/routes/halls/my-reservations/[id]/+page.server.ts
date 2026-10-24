@@ -163,7 +163,7 @@ export const actions: Actions = {
 		if (!reservation) return fail(404, { error: st(locals.locale).serverErrors.reservationNotFoundDot, scope: 'extras' });
 		if (hasEventStarted(reservation.event_date, reservation.start_time)) return fail(400, { error: st(locals.locale).serverErrors.eventNoLongerEditable, scope: 'extras' });
 		if (!new Set(['pending', 'waiting_payment']).has(reservation.status)) {
-			return fail(400, { error: st(locals.locale).serverErrors.extrasNoLongerChangeable, scope: 'extras' });
+			return fail(400, { error: st(locals.locale).serverErrors.extrasNoLongerChangeable, scope: 'extras', decided: true });
 		}
 		const data = await request.formData();
 		const requested = data.getAll('extras').map(String);
@@ -211,7 +211,9 @@ export const actions: Actions = {
 		const reservation = await loadReservation(locals.db, params.id, userId, orgId);
 		if (!reservation) return fail(404, { scope: 'update', error: st(locals.locale).serverErrors.reservationNotFoundDot });
 		if (hasEventStarted(reservation.event_date, reservation.start_time)) return fail(400, { scope: 'update', error: st(locals.locale).serverErrors.eventNoLongerEditable });
-		if (!EDITABLE.has(reservation.status)) return fail(400, { scope: 'update', error: st(locals.locale).serverErrors.reservationNoLongerEditable });
+		// The page offered the edit, so the venue decided on it since: say so, and the
+		// page reloads to show the booking as it is now.
+		if (!EDITABLE.has(reservation.status)) return fail(409, { scope: 'update', decided: true, error: st(locals.locale).serverErrors.reservationDecidedMeanwhile });
 
 		const hall = await dbFirst<HallRow>(locals.db, 'SELECT * FROM halls WHERE id = ?', reservation.hall_id);
 		if (!hall) return fail(404, { scope: 'update', error: st(locals.locale).serverErrors.hallNotFoundDot });
@@ -286,7 +288,7 @@ export const actions: Actions = {
 		const reservation = await loadReservation(locals.db, params.id, userId, orgId);
 		if (!reservation) return fail(404, { scope: 'cancel', error: st(locals.locale).serverErrors.reservationNotFoundDot });
 		if (hasEventStarted(reservation.event_date, reservation.start_time)) return fail(400, { scope: 'cancel', error: st(locals.locale).serverErrors.reservationNoLongerCancellable });
-		if (!CANCELLABLE.has(reservation.status)) return fail(400, { scope: 'cancel', error: st(locals.locale).serverErrors.reservationNoLongerCancellable });
+		if (!CANCELLABLE.has(reservation.status)) return fail(400, { scope: 'cancel', decided: true, error: st(locals.locale).serverErrors.reservationNoLongerCancellable });
 
 		// The venue's minimum cancellation notice. This is the ONLY cancel path a client
 		// can reach, so without this the setting had no effect on the people it exists

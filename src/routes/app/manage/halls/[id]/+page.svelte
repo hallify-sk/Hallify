@@ -983,7 +983,7 @@
 
         <input type="hidden" name="profileVersion" value={profileBase} />
         {#if profileForce}<input type="hidden" name="force" value="1" />{/if}
-        {#if form?.profileError && (!form?.profileConflict || profileConflict)}
+        {#if form?.profileError && (profileConflict || !(form as { profileConflict?: boolean }).profileConflict)}
           <div class="alert alert-error" style="margin:16px 18px 0 0">
             {form.profileError}
             {#if profileConflict}
