@@ -11,6 +11,7 @@ import { escapeHtml, renderLayout } from '$lib/server/email-layout';
 import { emailCopy } from '$lib/server/email-copy';
 import { logReservationActivity } from '$lib/server/reservation-activity';
 import type { DeletionDeps } from '$lib/server/account-deletion';
+import type { R2Deleter } from '$lib/server/hall-images';
 import type { D1Database } from '@cloudflare/workers-types';
 
 /** The email to the person who became owner when the previous one deleted their account. */
@@ -28,7 +29,7 @@ export function newOwnerEmail(locale: string | null | undefined, orgName: string
 	return { subject, html };
 }
 
-export function liveDeletionDeps(db: D1Database, opts: { origin: string; closedBy: { id: string; email: string } }): DeletionDeps {
+export function liveDeletionDeps(db: D1Database, opts: { origin: string; closedBy: { id: string; email: string }; r2?: R2Deleter | null }): DeletionDeps {
 	const origin = opts.origin.replace(/\/$/, '');
 	return {
 		endSubscription: (id) => cancelSubscription(id),
@@ -38,7 +39,8 @@ export function liveDeletionDeps(db: D1Database, opts: { origin: string; closedB
 				closedBy: opts.closedBy.id,
 				closedByEmail: opts.closedBy.email,
 				reason: 'user_deleted',
-				strictBilling: true
+				strictBilling: true,
+				r2: opts.r2
 			});
 		},
 		async notifyNewOwner(o) {

@@ -366,7 +366,7 @@ export const actions: Actions = {
   // Owner-only: permanently close the organization. Cancels the Stripe subscription,
   // emails clients with upcoming bookings, archives a legal/accounting record (kept
   // indefinitely) then deletes all live data. Requires typing the org name.
-  closeOrg: async ({ request, locals, cookies }) => {
+  closeOrg: async ({ request, locals, cookies, platform }) => {
     await requireOrgPermission(locals, 'settings.manage');
     const org = locals.currentOrg!;
     if (org.impersonated) return fail(403, { dangerError: st(locals.locale).serverErrors.impersonationBlockThisOrg });
@@ -386,6 +386,7 @@ export const actions: Actions = {
         reason: 'owner_closed',
         // Never delete an organisation that Stripe would go on charging.
         strictBilling: true,
+        r2: platform?.env?.R2,
       });
     } catch (e) {
       if (e instanceof BillingCancelError) return fail(502, { dangerError: st(locals.locale).settingsPages.closeBillingFailed });

@@ -149,7 +149,7 @@ export const actions: Actions = {
 	},
 
 	/** Self-service deletion (D7): the password and an explicit confirmation. */
-	deleteAccount: async ({ request, locals, cookies, url }) => {
+	deleteAccount: async ({ request, locals, cookies, url, platform }) => {
 		if (!locals.user) return fail(401);
 		const T = st(locals.locale);
 		const data = await request.formData();
@@ -162,7 +162,7 @@ export const actions: Actions = {
 		const result = await deleteAccount(
 			locals.db,
 			locals.user.id,
-			liveDeletionDeps(locals.db, { origin: url.origin, closedBy: { id: locals.user.id, email: locals.user.email } })
+			liveDeletionDeps(locals.db, { origin: url.origin, closedBy: { id: locals.user.id, email: locals.user.email }, r2: platform?.env?.R2 })
 		);
 		if (!result.ok) {
 			if (result.reason === 'lastPlatformAdmin') return fail(400, { error: T.identity.deleteLastAdmin, section: 'delete' });

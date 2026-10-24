@@ -11,6 +11,7 @@ import { listInvoices, cancelSubscription } from '$lib/stripe';
 import { sendEmail } from '$lib/email';
 import { closureEmail, groupByClient } from '$lib/org-closure-email';
 import { deleteCustomHostname, isCFEnabled } from '$lib/cloudflare-saas';
+import { deleteUnusedHallImages, orgUploadUrls, type R2Deleter } from '$lib/server/hall-images';
 import type { D1Database } from '@cloudflare/workers-types';
 
 export interface CloseOpts {
@@ -21,6 +22,9 @@ export interface CloseOpts {
 	 *  The owner closing by hand can retry; automatic clean-ups go ahead and record
 	 *  the failure in the archive instead. */
 	strictBilling?: boolean;
+	/** Storage, to delete the organisation's uploaded pictures with it (B152). Without
+	 *  it they stay in storage and stay public. */
+	r2?: R2Deleter | null;
 }
 
 export interface CloseResult {
@@ -141,7 +145,11 @@ export async function archiveAndDeleteOrg(db: D1Database, orgId: string, opts: C
 		opts.closedBy ?? null, opts.closedByEmail ?? null, opts.reason ?? 'owner_closed', snapshot
 	);
 
+	// Its pictures are public for as long as they are stored: collect them while the
+	// rows that point at them exist, delete them once nothing does (B152).
+	const uploads = await orgUploadUrls(db, orgId).catch(() => [] as string[]);
 	await deleteOrgCascade(db, orgId);
+	await deleteUnusedHallImages(db, opts.r2, uploads);
 	return result;
 }
 

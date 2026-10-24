@@ -1,4 +1,5 @@
 import { dbAll, dbFirst, fromJsonArr } from '$lib/db/index';
+import { imageVariantKeys } from '$lib/image-variants';
 
 /**
  * Hall photos in our own storage (R2, served at /uploads/halls/…).
@@ -44,6 +45,7 @@ async function stillReferenced(db: Db, url: string): Promise<boolean> {
 	// Message attachments and organisation branding use the same upload endpoint.
 	for (const sql of [
 		'SELECT 1 AS ok FROM messages WHERE attachment_url = ? LIMIT 1',
+		'SELECT 1 AS ok FROM channel_messages WHERE attachment_url = ? LIMIT 1',
 		'SELECT 1 AS ok FROM organizations WHERE logo_url = ? LIMIT 1',
 		'SELECT 1 AS ok FROM org_settings WHERE instr(value, ?) > 0 LIMIT 1'
 	]) {
@@ -69,13 +71,52 @@ export async function deleteUnusedHallImages(db: Db, r2: R2Deleter | null | unde
 		if (!key) continue;
 		try {
 			if (await stillReferenced(db, url)) continue;
-			await r2.delete(key);
+			// With the smaller copies made at upload (I2); deleting one that was never
+			// made is a no-op.
+			await r2.delete([key, ...imageVariantKeys(key)]);
 			deleted++;
 		} catch {
 			/* left in storage; harmless beyond the bytes */
 		}
 	}
 	return deleted;
+}
+
+/** Our own upload URLs anywhere in a piece of text (a site-builder setting is JSON). */
+export function ownUploadUrlsIn(text: string | null | undefined): string[] {
+	if (!text) return [];
+	return [...new Set((text.match(/\/uploads\/halls\/[\w-]+\/[\w.-]+/g) ?? []).filter(isOwnHallImage))];
+}
+
+/**
+ * Every uploaded picture an organisation shows or holds: its halls' photos, its
+ * logo, the pictures of its site (org_settings) and the images sent in its
+ * conversations and team chat. Whoever deletes the organisation collects them before the rows go
+ * and passes them to deleteUnusedHallImages after, so a closed venue's pictures stop
+ * being public (B152).
+ */
+export async function orgUploadUrls(db: Db, orgId: string): Promise<string[]> {
+	const urls = await orgHallImageUrls(db, orgId);
+	const logo = await dbFirst<{ logo_url: string | null }>(db, 'SELECT logo_url FROM organizations WHERE id = ?', orgId);
+	urls.push(...ownUploadUrlsIn(logo?.logo_url));
+	const sources: [string, string[]][] = [
+		['SELECT value AS text FROM org_settings WHERE org_id = ?', [orgId]],
+		// The organisation's tickets, and those of its venue-site clients (posted with
+		// no org_id), which the closure deletes with it.
+		[`SELECT m.attachment_url AS text FROM messages m JOIN tickets t ON t.id = m.ticket_id
+		   WHERE m.attachment_url IS NOT NULL
+		     AND (t.org_id = ? OR t.user_id IN (SELECT id FROM users WHERE org_id = ? AND account_type = 'client'))`, [orgId, orgId]],
+		[`SELECT cm.attachment_url AS text FROM channel_messages cm JOIN channels c ON c.id = cm.channel_id
+		   WHERE cm.attachment_url IS NOT NULL AND c.org_id = ?`, [orgId]]
+	];
+	for (const [sql, args] of sources) {
+		try {
+			for (const row of await dbAll<{ text: string | null }>(db, sql, ...args)) urls.push(...ownUploadUrlsIn(row.text));
+		} catch {
+			// A table this database does not have holds no pictures.
+		}
+	}
+	return [...new Set(urls)];
 }
 
 /**
