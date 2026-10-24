@@ -1,6 +1,7 @@
 import { json } from '@sveltejs/kit';
 import { dbRun } from '$lib/db/index';
 import { requireOrgPermission } from '$lib/server/access';
+import { requireAssistant } from '$lib/server/ai/availability';
 import { sniffDocument, pdfPageCount, storeDocument } from '$lib/server/ai/documents';
 import { xlsxToCsv } from '$lib/server/ai/xlsx';
 import type { RequestHandler } from './$types';
@@ -35,6 +36,8 @@ function decode(bytes: ArrayBuffer): string {
  *  storage and are shown to the model when a turn needs them. */
 export const POST: RequestHandler = async ({ request, locals, platform }) => {
 	const org = await requireOrgPermission(locals, 'ai.use');
+	// Off on the platform or for the organisation: no assistant to talk to.
+	await requireAssistant(locals);
 	if (org.impersonated) return json({ ok: false, error: 'impersonated' }, { status: 403 });
 
 	const form = await request.formData().catch(() => null);

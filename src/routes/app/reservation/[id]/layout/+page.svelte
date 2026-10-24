@@ -237,7 +237,9 @@
 				</form>
 			{/if}
 
-			<button type="button" class="btn-outline btn-sm" onclick={() => window.dispatchEvent(new CustomEvent('hallify:assistant:open'))}>{t.editor.seatWithAi}</button>
+			{#if data.assistant}
+				<button type="button" class="btn-outline btn-sm" onclick={() => window.dispatchEvent(new CustomEvent('hallify:assistant:open'))}>{t.editor.seatWithAi}</button>
+			{/if}
 			<span class="save-status save-{saver.state}">
 				{#if saver.state === 'saving'}{t.myRes.saving}
 				{:else if saver.state === 'dirty'}{t.myRes.unsavedChanges}

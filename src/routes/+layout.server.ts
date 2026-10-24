@@ -5,7 +5,7 @@ import { unreadMessageCount } from '$lib/unread';
 import { unreadAnnouncementCount } from '$lib/announcements';
 import { loadPlatformAnalytics } from '$lib/server/platform-settings';
 import { container, cspOrigins, type AnalyticsContainer } from '$lib/analytics-servers';
-import { assistantVisible } from '$lib/server/ai/credits';
+import { aiVisibilityFor } from '$lib/server/ai/availability';
 import { orgPermissionList } from '$lib/server/nav-access';
 import { unreadNotificationCount } from '$lib/server/notification-centre';
 import { notificationAreas } from '$lib/notification-centre';
@@ -53,7 +53,12 @@ export const load: LayoutServerLoad = async ({ locals, url, cookies }) => {
   let allOrgs: { id: string; name: string; slug: string }[] = [];
 
   // The console sidebar shows each link by the permission its page requires.
-  const navPermissions = await orgPermissionList(locals);
+  const permissionList = await orgPermissionList(locals);
+  // The AI switches, read once for the request (see $lib/ai-visibility). While the
+  // assistant is off for this member, `ai.use` leaves the sidebar's list, so the
+  // link to it (and a dashboard opened by nothing else) goes with it.
+  const ai = await aiVisibilityFor(locals, permissionList);
+  const navPermissions = ai.page ? permissionList : permissionList.filter((p) => p !== 'ai.use');
 
   if (locals.user) {
     const orgId = locals.currentOrg?.id ?? null;
@@ -155,6 +160,9 @@ export const load: LayoutServerLoad = async ({ locals, url, cookies }) => {
     navPermissions,
     venueSiteUrl,
     // The floating AI assistant (bottom right of every console page).
-    assistant: await assistantVisible(locals),
+    assistant: ai.widget,
+    // Whether the platform offers the assistant at all, and what of it this member sees.
+    aiAvailable: ai.available,
+    aiVisibility: ai,
   };
 };

@@ -5,6 +5,7 @@ import { fail } from '@sveltejs/kit';
 import { requireOrgConsole, requireOrgPermission } from '$lib/server/access';
 import { canManageSettings } from '$lib/server/settings-access';
 import { st } from '$lib/i18n-server';
+import { aiPlatformEnabled } from '$lib/server/ai/availability';
 import { SETUP_SERVICE_PRICE_CENTS } from '$lib/setup-service';
 import { openSetupRequest, createSetupRequest, cancelSetupRequest } from '$lib/server/setup-requests';
 
@@ -61,6 +62,8 @@ export const load: PageServerLoad = async ({ locals }) => {
 	// An outstanding request, so the card reports its state instead of offering
 	// the service to somebody who has already asked for it.
 	const setupRequest = await openSetupRequest(locals.db, orgId);
+	// The assistant's article goes while the platform has the assistant off.
+	const kb = { ai: await aiPlatformEnabled(locals) };
 
 	return {
 		// The setup checklist, the wizard and the paid setup offer are for whoever can
@@ -74,7 +77,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 		// Both languages, so switching language on the page needs no reload, with the
 		// plain text the search box matches against.
 		articles: Object.fromEntries((['sk', 'en'] as KbLocale[]).map((l) => [l,
-			articlesFor(l).map(({ slug, title, category, summary, body }) => ({ slug, title, category, summary, text: searchable(body) }))
+			articlesFor(l, kb).map(({ slug, title, category, summary, body }) => ({ slug, title, category, summary, text: searchable(body) }))
 		])) as Record<KbLocale, Array<{ slug: string; title: string; category: string; summary: string; text: string }>>,
 	};
 };

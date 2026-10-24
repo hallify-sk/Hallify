@@ -156,7 +156,9 @@
 		<span class="topbar-title">{t.halls.floorplan}</span>
 		<div class="topbar-actions">
 			<span class="save-state save-{saver.state}">{saver.state === 'dirty' ? t.editor.unsaved : saver.state === 'saving' ? t.editor.saving : saver.state === 'saved' ? t.editor.saved : ''}</span>
-			<button type="button" class="btn-outline btn-sm" onclick={() => window.dispatchEvent(new CustomEvent('hallify:assistant:open'))}>{t.editor.draftWithAi}</button>
+			{#if data.assistant}
+				<button type="button" class="btn-outline btn-sm" onclick={() => window.dispatchEvent(new CustomEvent('hallify:assistant:open'))}>{t.editor.draftWithAi}</button>
+			{/if}
 			{#if draft}
 				<button type="button" class="btn-outline btn-sm" onclick={discardDraft} disabled={discarding}>{t.ai.draftDiscard}</button>
 			{/if}

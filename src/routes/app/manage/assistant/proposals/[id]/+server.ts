@@ -1,5 +1,6 @@
 import { json } from '@sveltejs/kit';
 import { requireOrgPermission } from '$lib/server/access';
+import { requireAssistant } from '$lib/server/ai/availability';
 import { applyProposal, discardProposal } from '$lib/server/ai/proposals';
 import type { RequestHandler } from './$types';
 
@@ -7,6 +8,8 @@ import type { RequestHandler } from './$types';
  *  permission of what is being applied as well; proposals.ts checks that. */
 export const POST: RequestHandler = async ({ request, params, locals }) => {
 	const org = await requireOrgPermission(locals, 'ai.use');
+	// Off on the platform or for the organisation: no assistant to talk to.
+	await requireAssistant(locals);
 	if (org.impersonated) return json({ ok: false, error: 'impersonated' }, { status: 403 });
 	const body = (await request.json().catch(() => null)) as { action?: unknown; skip?: unknown } | null;
 

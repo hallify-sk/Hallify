@@ -1,11 +1,14 @@
 import { json } from '@sveltejs/kit';
 import { requireOrgPermission } from '$lib/server/access';
+import { requireAssistant } from '$lib/server/ai/availability';
 import { runTurn } from '$lib/server/ai/agent';
 import type { RequestHandler } from './$types';
 
 /** One assistant turn. JSON in, JSON out; the page reloads the thread afterwards. */
 export const POST: RequestHandler = async ({ request, locals, platform }) => {
 	const org = await requireOrgPermission(locals, 'ai.use');
+	// Off on the platform or for the organisation: no assistant to talk to.
+	await requireAssistant(locals);
 	// A platform admin "viewing as" an organisation must not spend its credits.
 	if (org.impersonated) return json({ ok: false, error: 'impersonated' }, { status: 403 });
 

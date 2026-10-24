@@ -239,7 +239,7 @@
           <span class="meter-bar" aria-hidden="true"><span style="width: {pct(data.ai.balanceMc / 1000, data.ai.allowance)}%"></span></span>
           <span class="meter-hint">
             {t.accountPages.usageAiHint(num(data.ai.allowance))}
-            {#if data.canManageSettings}· <a href="/app/manage/settings/ai">{t.accountPages.usageAiLink}</a>{/if}
+            {#if data.aiVisibility?.settings}· <a href="/app/manage/settings/ai">{t.accountPages.usageAiLink}</a>{/if}
           </span>
         </div>
       {/if}
@@ -302,7 +302,7 @@
           </div>
 
           <ul class="features">
-            {#each planFeatureList(plan, t.accountPages.planFeatures) as feature}
+            {#each planFeatureList(plan, t.accountPages.planFeatures, { ai: !!data.aiAvailable }) as feature}
               <li>
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
                 {feature}

@@ -147,7 +147,9 @@
     </div>
   </section>
 
-  <!-- AI credits: grants and corrections without editing the database. -->
+  <!-- AI credits: grants and corrections without editing the database. Gone while
+       the platform has the assistant off. -->
+  {#if data.aiAvailable}
   <section class="section">
     <div class="section-head">
       <p class="eyebrow">{data.org.name}</p>
@@ -170,6 +172,7 @@
       {#if form && 'creditsApplied' in form && form.creditsApplied != null}<p class="hint" role="status">{t.platformOrgs.creditsDone(form.creditsApplied)}</p>{/if}
     </form>
   </section>
+  {/if}
 
   <!-- What platform admins did to this organisation. -->
   <section class="section">

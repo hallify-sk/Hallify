@@ -14,7 +14,8 @@
 		{ href: '/app/manage/settings/domains',   label: t.settingsPages.domains },
 		{ href: '/app/manage/settings/payments',  label: t.payment.settingsTab },
 		{ href: '/app/manage/settings/analytics', label: t.settingsPages.analyticsTitle },
-		{ href: '/app/manage/settings/ai',        label: t.ai.settingsTab },
+		// Only while the platform offers the assistant (see $lib/ai-visibility).
+		...(data?.aiVisibility?.settings ? [{ href: '/app/manage/settings/ai', label: t.ai.settingsTab }] : []),
 		{ href: '/app/manage/settings/advanced',  label: t.settingsPages.tabAdvanced },
 	]);
 	const tabs = $derived(data?.canManageSettings === false

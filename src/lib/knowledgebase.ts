@@ -494,15 +494,26 @@ function localize(src: ArticleSource, locale: KbLocale): Article {
 	return { slug: src.slug, categoryId: src.category, category: CATEGORIES[src.category][locale], ...l };
 }
 
+/** Articles about the AI assistant: left out while the platform has it off. */
+export const AI_ARTICLES: ReadonlySet<string> = new Set(['ai-assistant']);
+
+export interface ArticleOptions {
+	/** Whether the platform offers the AI assistant (default true). */
+	ai?: boolean;
+}
+
+const offered = (slug: string, opts: ArticleOptions) => opts.ai !== false || !AI_ARTICLES.has(slug);
+
 /** Every article in one language, in reading order. */
-export function articlesFor(locale: KbLocale): Article[] {
-	return SOURCES.map((s) => localize(s, locale));
+export function articlesFor(locale: KbLocale, opts: ArticleOptions = {}): Article[] {
+	return SOURCES.filter((s) => offered(s.slug, opts)).map((s) => localize(s, locale));
 }
 
 /** Kept for callers that only need slugs and the Slovak text. */
 export const ARTICLES: Article[] = articlesFor('sk');
 
-export function getArticle(slug: string, locale: KbLocale = 'sk'): Article | undefined {
+export function getArticle(slug: string, locale: KbLocale = 'sk', opts: ArticleOptions = {}): Article | undefined {
+	if (!offered(slug, opts)) return undefined;
 	const src = SOURCES.find((a) => a.slug === slug);
 	return src ? localize(src, locale) : undefined;
 }
