@@ -28,10 +28,10 @@
   const pipeline = $derived([...data.reservationStatus].sort((a, b) => b.count - a.count));
 
   const attention = $derived([
-    { label: t.floorplanService.queueTitle, n: data.queues.floorplan, href: '/app/platform/floorplan-requests' },
-    { label: t.setupService.queueTitle, n: data.queues.setup, href: '/app/platform/floorplan-requests' },
-    { label: t.platformExtra.suspendedOrgsLabel, n: s.suspendedOrgs, href: '/app/platform/orgs?status=suspended' },
-    { label: t.platformExtra.failedEmails24h, n: h.emailFailed, href: '/app/platform/email' },
+    { label: t.floorplanService.queueTitle, n: data.queues.floorplan, href: '/app/platform/floorplan-requests', sub: t.platformExtra.openItemsSub(data.queues.floorplan) },
+    { label: t.setupService.queueTitle, n: data.queues.setup, href: '/app/platform/floorplan-requests', sub: t.platformExtra.openItemsSub(data.queues.setup) },
+    { label: t.platformExtra.suspendedOrgsLabel, n: s.suspendedOrgs, href: '/app/platform/orgs?status=suspended', sub: t.platformOrgs.view },
+    { label: t.platformExtra.failedEmails24h, n: h.emailFailed, href: '/app/platform/email', sub: t.platformOrgs.view },
   ]);
 </script>
 
@@ -84,7 +84,7 @@
         <a class="att" class:is-hot={a.n > 0} href={a.href}>
           <span class="kpi-label">{a.label}</span>
           <span class="att-value">{a.n}</span>
-          <span class="kpi-sub">{t.platformExtra.openItemsSub(a.n)} →</span>
+          <span class="kpi-sub">{a.sub} →</span>
         </a>
       {/each}
     </div>

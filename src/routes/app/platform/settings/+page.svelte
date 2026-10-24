@@ -172,7 +172,7 @@
   .toggle-row .ui-switch { margin-top: 1px; }
   .toggle-copy { display: flex; flex-direction: column; gap: 3px; cursor: pointer; }
   .toggle-copy strong { font-size: 13px; font-weight: 600; }
-  .toggle-copy span { font-size: var(--meta-size); color: var(--text-muted); line-height: 1.6; }
+  .toggle-copy span { font-size: var(--meta-size); font-weight: 400; color: var(--text-muted); line-height: 1.6; }
 
   .legal-note {
     margin: 18px 0 0;

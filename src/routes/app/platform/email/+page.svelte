@@ -70,7 +70,7 @@
 	<!-- Config -->
 	<section class="section section--lead">
 		<div class="section-head"><h2>{t.platformMisc.provider}</h2></div>
-		<div class="row-list">
+		<div class="row-list provider">
 			<div class="row-item kv"><span class="k">{t.platformMisc.service}</span><span class="v">{data.config.provider} (HTTP API)</span></div>
 			<div class="row-item kv"><span class="k">{t.platformMisc.sender}</span><span class="v">{data.config.fromName} &lt;{data.config.fromEmail}&gt;</span></div>
 			<div class="row-item kv">
@@ -193,6 +193,7 @@
 </div>
 
 <style>
+	.provider { max-width: 760px; }
 	.stat-ok { color: var(--success); }
 	.stat-bad { color: var(--danger); }
 	.stat-sep { color: var(--text-subtle); margin: 0 6px; font-weight: 400; }

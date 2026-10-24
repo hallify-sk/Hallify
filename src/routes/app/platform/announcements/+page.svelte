@@ -267,7 +267,7 @@
   .level-opt.level-error.on { border-color: var(--danger); background: var(--danger-dim); }
   .level-opt.level-success.on { border-color: var(--success); background: var(--success-dim); }
   .level-name { font-size: 13px; font-weight: 600; color: var(--text-base); }
-  .level-hint { font-size: 11px; color: var(--text-muted); }
+  .level-hint { font-size: 11px; font-weight: 400; color: var(--text-muted); }
 
   .aud { display: flex; gap: 8px 18px; flex-wrap: wrap; }
   .aud-opt { font-size: 13px; display: flex; align-items: center; gap: 6px; cursor: pointer; margin: 0; }
@@ -281,7 +281,7 @@
   .org-query { flex: 1 1 220px; width: auto; max-width: 360px; min-width: 0; }
   .date-input { max-width: 200px; }
 
-  .email-opt { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-base); margin: 0; }
+  .email-opt { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 500; color: var(--text-base); margin: 0; }
   .actions { display: flex; justify-content: flex-end; }
 
   /* ── Published announcements: hairline rows with a level marker ── */
