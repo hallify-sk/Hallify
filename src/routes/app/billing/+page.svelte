@@ -259,6 +259,18 @@
               <a href="mailto:sales@hallify.sk" class="btn-ghost-cta">{t.accountPages.contactSales}</a>
             {:else if planId === 'free' || !data.canManage}
               <span class="cta-spacer"></span>
+            {:else if data.settleFirst}
+              <!-- A suspended subscription still exists: a new Checkout would bill
+                   twice, so it is settled in the portal instead (B89). -->
+              {#if planId === data.suspendedPlan && hasCustomer}
+                <form method="POST" action="?/manage" use:enhance={viaStripe('pay')}>
+                  <button type="submit" class={isPopular ? 'btn-accent-cta' : 'btn-ghost-cta'} disabled={busy !== null}>
+                    {t.accountPages.updatePayment}
+                  </button>
+                </form>
+              {:else}
+                <span class="cta-note">{t.accountPages.settleFirstNote}</span>
+              {/if}
             {:else}
               <button type="button" class={isPopular ? 'btn-accent-cta' : 'btn-ghost-cta'}
                 onclick={() => (confirmPlan = planId)}>
@@ -493,6 +505,7 @@
   .btn-ghost-cta:hover { border-color: var(--accent); color: var(--accent-ink); background: var(--bg-hover); }
   .cta-current { display: block; text-align: center; padding: 11px 14px; font-size: 12px; font-weight: 600; color: var(--text-subtle); }
   .cta-spacer { display: block; height: 38px; }
+  .cta-note { display: block; text-align: center; padding: 11px 6px; font-size: 12px; line-height: 1.4; color: var(--text-subtle); }
 
   .features { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 8px; }
   .features li { display: flex; align-items: flex-start; gap: 9px; font-size: 11px; color: var(--text-muted); line-height: 2; }

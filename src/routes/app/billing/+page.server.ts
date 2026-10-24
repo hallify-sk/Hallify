@@ -4,6 +4,7 @@ import type { PageServerLoad, Actions } from './$types';
 import { createCheckoutSession, createPortalSession, cancelSubscription, resumeSubscription, getSubscription, changeSubscriptionPlan, cancelScheduledChange, getPendingPlanChange, previewPlanChange, createTestCheckoutSession } from '$lib/stripe';
 import { dbFirst } from '$lib/db/index';
 import { PLANS, comparePlanPrice } from '$lib/plans';
+import { upgradeRoute } from '$lib/billing';
 import { st } from '$lib/i18n-server';
 import type { PlanId } from '$lib/plans';
 import type { D1Database } from '@cloudflare/workers-types';
@@ -79,6 +80,15 @@ export const load: PageServerLoad = async ({ locals, url }) => {
     ? (subRow.stripe_plan as PlanId)
     : null;
 
+  // A live subscription that is not paid up: choosing a plan would open a second
+  // Checkout next to it (double billing), so the page offers settling it instead.
+  const settleFirst = upgradeRoute({
+    plan: currentPlan,
+    status: org.subscription.status,
+    stripeSubscriptionId: subRow?.stripe_subscription_id,
+    stripeStatus: subRow?.stripe_status
+  }) === 'settle';
+
   // AI credits are part of what a plan includes; best-effort (needs migration 0012).
   let ai: { balanceMc: number; allowance: number } | null = null;
   try {
@@ -111,6 +121,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
     ai,
     stripeStatus: subRow?.stripe_status ?? null,
     suspendedPlan,
+    settleFirst,
     cancelAtPeriodEnd,
     pendingDowngrade,
     previews,
@@ -154,10 +165,27 @@ export const actions: Actions = {
     if (plan !== 'starter' && plan !== 'professional') return fail(400, { error: st(locals.locale).serverErrors.invalidPlan });
 
     const currentPlan = org.subscription.plan as PlanId;
-    const subId = await getSubId(locals.db, org.id);
+    const subRow = await getSubRow(locals.db, org.id);
+    const subId = subRow?.stripe_subscription_id ?? null;
+    const route = upgradeRoute({
+      plan: currentPlan,
+      status: org.subscription.status,
+      stripeSubscriptionId: subId,
+      stripeStatus: subRow?.stripe_status
+    });
+
+    // A suspended subscription is settled where it lives, in the billing portal: a
+    // Checkout here would create a second subscription and bill twice (B89).
+    if (route === 'settle') {
+      const customerId = org.subscription.stripeCustomerId;
+      if (!customerId) return fail(409, { error: st(locals.locale).accountPages.settleFirstError });
+      const res = await viaStripe(locals, 'billing portal', () => createPortalSession(customerId));
+      if (!res.ok) return fail(502, { error: res.error });
+      redirect(303, res.value);
+    }
 
     // First paid subscription → Checkout (creates the subscription).
-    if (currentPlan === 'free' || !subId) {
+    if (route === 'checkout' || !subId) {
       const res = await viaStripe(locals, 'checkout', () => createCheckoutSession({
         orgId:            org.id,
         plan,

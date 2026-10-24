@@ -46,6 +46,32 @@ export function isEntitled(status: string | null | undefined): boolean {
 	return status === 'active' || status === 'trialing' || status === 'past_due';
 }
 
+/**
+ * What choosing a paid plan on the billing page does.
+ *
+ *  - 'checkout': no live subscription (Free, never subscribed, or the last one ended)
+ *    → Stripe Checkout creates one.
+ *  - 'change': a paid-up subscription → change THAT one in place.
+ *  - 'settle': a subscription that still exists but is not paid up (unpaid,
+ *    incomplete, paused). The organisation is on Free meanwhile, but a Checkout here
+ *    would start a SECOND subscription next to it and bill twice; the owner settles
+ *    the existing one in the billing portal instead.
+ */
+export function upgradeRoute(sub: {
+	plan: string;
+	status: string | null | undefined;
+	stripeSubscriptionId: string | null | undefined;
+	stripeStatus: string | null | undefined;
+}): 'checkout' | 'change' | 'settle' {
+	const live =
+		!!sub.stripeSubscriptionId &&
+		!(TERMINAL_STRIPE_STATUSES as readonly string[]).includes(sub.stripeStatus ?? '') &&
+		sub.status !== 'cancelled';
+	if (live && !isEntitled(sub.status)) return 'settle';
+	if (sub.plan === 'free' || !sub.stripeSubscriptionId || !live) return 'checkout';
+	return 'change';
+}
+
 const PAID: PlanId[] = ['starter', 'professional', 'enterprise'];
 
 /** A plan id we can trust from Stripe metadata (never 'free', never an unknown word). */

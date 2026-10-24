@@ -2648,6 +2648,8 @@ export const sk = {
 		incompleteBanner: (plan: string) => `Platba za plán ${plan} ešte nebola dokončená. Plán sa aktivuje po jej potvrdení.`,
 		consolePaymentBanner: "S platbou za predplatné Hallify je problém. Pozrite sa naň, aby ste neprišli o platené funkcie.",
 		updatePayment: "Uhradiť alebo zmeniť kartu",
+		settleFirstNote: "Najprv uhraďte pozastavené predplatné",
+		settleFirstError: "Predplatné čaká na úhradu. Uhraďte ho v správe platieb; nové predplatné by sa účtovalo popri ňom.",
 		lockedHallsNotice: (n: number) => n === 1
 			? "1 priestor je pozastavený, lebo ho váš plán nezahŕňa. Nič sa nevymazalo; vráti sa, keď to plán dovolí."
 			: `${n} ${n < 5 ? "priestory sú pozastavené" : "priestorov je pozastavených"}, lebo ich váš plán nezahŕňa. Nič sa nevymazalo; vrátia sa, keď to plán dovolí.`,
@@ -6376,6 +6378,8 @@ export const en: typeof sk = {
 		incompleteBanner: (plan: string) => `The payment for ${plan} has not been completed yet. The plan starts as soon as it is confirmed.`,
 		consolePaymentBanner: "There is a problem with your Hallify subscription payment. Please look at it so you keep your paid features.",
 		updatePayment: "Pay or change card",
+		settleFirstNote: "Settle the suspended subscription first",
+		settleFirstError: "Your subscription is waiting for payment. Settle it in billing management; a new subscription would be charged alongside it.",
 		lockedHallsNotice: (n: number) => n === 1
 			? "1 venue is suspended because your plan doesn't include it. Nothing was deleted; it comes back when your plan allows it."
 			: `${n} venues are suspended because your plan doesn't include them. Nothing was deleted; they come back when your plan allows it.`,
