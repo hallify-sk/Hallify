@@ -20,10 +20,16 @@ export type AuditAction =
 	| 'announcement.update'
 	| 'announcement.delete'
 	| 'settings.update'
-	| 'email.templates';
+	| 'email.templates'
+	| 'webhook.create'
+	| 'webhook.update'
+	| 'webhook.enable'
+	| 'webhook.disable'
+	| 'webhook.roll_secret'
+	| 'webhook.delete';
 
 export interface AuditTarget {
-	type: 'org' | 'user' | 'announcement' | 'settings' | 'email';
+	type: 'org' | 'user' | 'announcement' | 'settings' | 'email' | 'webhook';
 	id?: string | null;
 	label?: string | null;
 }

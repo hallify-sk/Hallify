@@ -18,6 +18,7 @@
 
 import { dbAll, dbFirst, dbRun } from '$lib/db/index';
 import type { D1Database } from '@cloudflare/workers-types';
+import { dispatchPlatformEvent } from '$lib/server/platform-webhooks';
 
 export type OrgOutcome =
 	/** Owner with nobody else to take over: the organisation is closed. */
@@ -330,6 +331,8 @@ export async function deleteAccount(db: D1Database, userId: string, deps: Deleti
 		if ((await deleteOrAnonymise(db, id, at)) === 'anonymised') anonymised++;
 	}
 	if ((await deleteOrAnonymise(db, userId, at)) === 'anonymised') anonymised++;
+	// The id only: the person asked to be removed, so their address is not sent on.
+	dispatchPlatformEvent(db, 'user.deleted', { user_id: userId, orgs_closed: closed.length, orgs_handed_over: handedOver.length });
 
 	return { ok: true, cancelled: upcoming.length, anonymised, closed, handedOver };
 }

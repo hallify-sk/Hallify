@@ -10,6 +10,7 @@ import type { PageServerLoad, Actions } from './$types';
 import { requirePlatformAdmin } from '$lib/guards';
 import { slugify } from '$lib/slug';
 import { logPlatformAction, listAudit } from '$lib/server/platform-audit';
+import { classifyPlanChange, dispatchPlatformEvent } from '$lib/server/platform-webhooks';
 import { adjustAiCredits, aiBalanceCredits, parseCreditAdjustment } from '$lib/server/platform-credits';
 import { aiPlatformEnabled } from '$lib/server/ai/availability';
 
@@ -63,6 +64,7 @@ export const actions: Actions = {
     const data = await request.formData();
     const plan = String(data.get('plan') ?? '') as PlanId;
     if (!VALID_PLANS.includes(plan)) return fail(400, { error: st(locals.locale).serverErrors.invalidPlan });
+    const before = await dbFirst<{ plan: string; status: string }>(locals.db, 'SELECT plan, status FROM subscriptions WHERE org_id = ?', params.id);
     await dbRun(locals.db, `
       INSERT INTO subscriptions (id, org_id, plan, status, updated_at)
       VALUES (?, ?, ?, 'active', datetime('now'))
@@ -70,6 +72,13 @@ export const actions: Actions = {
         SET plan = excluded.plan, status = 'active', updated_at = datetime('now')`,
       crypto.randomUUID(), params.id, plan);
     await enforcePlanLimits(locals.db, params.id, plan);
+    const change = classifyPlanChange(before, { plan, status: 'active' });
+    if (change) {
+      dispatchPlatformEvent(locals.db, 'org.plan_changed', {
+        org_id: params.id, change, old_plan: before?.plan ?? null, new_plan: plan,
+        old_status: before?.status ?? null, new_status: 'active', source: 'platform_admin', stripe_subscription_id: null,
+      });
+    }
     const org = await dbFirst<{ name: string }>(locals.db, 'SELECT name FROM organizations WHERE id = ?', params.id);
     await logPlatformAction(locals, 'org.plan', { type: 'org', id: params.id, label: org?.name }, { plan });
     return { planChanged: plan };

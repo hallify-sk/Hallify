@@ -26,6 +26,7 @@ import { hallSlug, hallSlugTaken, isReservedHallSlug, uniqueHallSlug } from '$li
 import { deleteUnusedHallImages, hallImageUrls, isOwnHallImage } from '$lib/server/hall-images';
 import { completeOpeningHours, invalidOpeningDay } from '$lib/opening-hours';
 import { dispatchWebhooks } from '$lib/notifications';
+import { dispatchPlatformEvent } from '$lib/server/platform-webhooks';
 import {
 	addHallBlock, removeHallBlock, addTableType, updateTableType, removeTableType,
 	addHallExtra, updateHallExtra, removeHallExtra, updateBookingSettings, type TableTypeInput, type ExtraInput
@@ -817,10 +818,14 @@ export const actions: Actions = {
 			  WHERE hall_id = ? AND status IN ${OPEN_MAPPING} LIMIT 1`, hall.id);
 		if (existing) return { floorplanRequested: true };
 
+		const requestId = crypto.randomUUID();
 		await dbRun(locals.db,
 			`INSERT INTO floorplan_requests (id, org_id, hall_id, requested_by, note)
 			 VALUES (?, ?, ?, ?, ?)`,
-			crypto.randomUUID(), org.id, hall.id, user.id, note || null);
+			requestId, org.id, hall.id, user.id, note || null);
+		dispatchPlatformEvent(locals.db, 'floorplan_request.created', {
+			request_id: requestId, org_id: org.id, hall_id: hall.id, requested_by: user.id, has_note: !!note,
+		});
 
 		// Reaches us, not the organisation's own inbox. A failure here must not lose
 		// the request — it is already recorded and visible in the platform queue.

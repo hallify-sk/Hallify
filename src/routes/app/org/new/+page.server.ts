@@ -6,6 +6,7 @@ import { seedBuiltInRoles } from '$lib/server/people';
 import { st } from '$lib/i18n-server';
 import { loginUrl } from '$lib/login-redirect';
 import { acceptedDpa, recordDpaAcceptance } from '$lib/site/legal-acceptance';
+import { dispatchPlatformEvent } from '$lib/server/platform-webhooks';
 
 /** Who may reach the org form.
  *
@@ -120,6 +121,7 @@ export const actions: Actions = {
       'free',
       'active'
     );
+    dispatchPlatformEvent(locals.db, 'org.created', { org_id: orgId, name, slug, plan: 'free', created_by: userId });
 
     // Switch session to new org
     const sessionId = cookies.get('session_id');

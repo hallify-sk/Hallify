@@ -7,6 +7,7 @@ import { rateLimit, rateLimitKey, tooManyAttemptsMessage, RATE_LIMITS } from '$l
 import { isValidEmail, normaliseEmail } from '$lib/server/account';
 import { acceptedTerms, recordLegalAcceptance } from '$lib/site/legal-acceptance';
 import { sendVerificationEmail } from '$lib/server/email-verification';
+import { dispatchPlatformEvent } from '$lib/server/platform-webhooks';
 import type { Actions, PageServerLoad } from './$types';
 
 /** Where a venue-seeker lands once the account exists — Hallify is a discovery
@@ -111,6 +112,7 @@ export const actions: Actions = {
 			userId, email, hash, firstName, lastName, role
 		);
 		await recordLegalAcceptance(locals.db, { userId, context: 'register' });
+		dispatchPlatformEvent(locals.db, 'user.registered', { user_id: userId, email, source: 'register', org_id: null, locale: locals.locale });
 		// Confirming the address (D11) unlocks the console when REQUIRE_EMAIL_VERIFICATION
 		// is on, and joins old venue accounts with the same address (D4).
 		await sendVerificationEmail(locals.db, { userId, email, origin: url.origin, locale: locals.locale });

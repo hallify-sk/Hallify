@@ -7,6 +7,7 @@ import { OPERATOR } from '$lib/legal';
 import { SETUP_SERVICE_PRICE_CENTS } from '$lib/setup-service';
 import { st } from '$lib/i18n-server';
 import { formatMoney } from '$lib/format';
+import { dispatchPlatformEvent } from '$lib/server/platform-webhooks';
 import type { OrgContext } from '../../app.d';
 
 type Db = App.Locals['db'];
@@ -49,6 +50,9 @@ export async function createSetupRequest(locals: App.Locals, org: OrgContext, ra
 	await dbRun(locals.db,
 		`INSERT INTO setup_requests (id, org_id, requested_by, note, price_cents) VALUES (?, ?, ?, ?, ?)`,
 		crypto.randomUUID(), org.id, user.id, note || null, SETUP_SERVICE_PRICE_CENTS);
+	dispatchPlatformEvent(locals.db, 'setup_service.requested', {
+		org_id: org.id, requested_by: user.id, price_cents: SETUP_SERVICE_PRICE_CENTS, has_note: !!note,
+	});
 
 	try {
 		await sendEmail(

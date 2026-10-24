@@ -17,6 +17,7 @@
 		{ id: 'announcement.', label: () => t.platformMisc.announcementsTitle },
 		{ id: 'email.', label: () => t.platformMisc.emailTitle },
 		{ id: 'settings.', label: () => t.platformSettings.title },
+		{ id: 'webhook.', label: () => t.platformWebhooks.title },
 	];
 
 	type Row = PageData['rows'][number];

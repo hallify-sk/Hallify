@@ -14,6 +14,7 @@ import type { PlanId } from '$lib/plans';
 import { grantPurchase } from '$lib/server/ai/credits';
 import { creditsForCents } from '$lib/ai-credits';
 import { notifyBillingChange } from '$lib/server/billing-emails';
+import { classifyPlanChange, dispatchPlatformEvent } from '$lib/server/platform-webhooks';
 
 type Db = App.Locals['db'];
 
@@ -131,6 +132,16 @@ export async function applySubscription(db: Db, sub: Stripe.Subscription, at: nu
 	const halls = await enforcePlanLimits(db, orgId, plan);
 	const after = { plan, status, stripePlan };
 
+	// Platform webhook. Compared with what was stored, so the same state applied twice
+	// (webhook and redirect page, or a replayed event) is announced once.
+	const change = classifyPlanChange(existing ? { plan: existing.plan, status: existing.status } : null, { plan, status });
+	if (change) {
+		dispatchPlatformEvent(db, 'org.plan_changed', {
+			org_id: orgId, change, old_plan: existing?.plan ?? null, new_plan: plan,
+			old_status: existing?.status ?? null, new_status: status, source: 'stripe', stripe_subscription_id: sub.id,
+		});
+	}
+
 	try {
 		await notifyBillingChange(db, { orgId, before: existing, after, halls });
 	} catch (err) {
@@ -156,7 +167,46 @@ export async function applyCreditPurchase(db: Db, session: Stripe.Checkout.Sessi
 	// checkout opened before a rate change still buys what was paid for.
 	const credits = creditsForCents(session.amount_total ?? 0);
 	if (!Number.isInteger(credits) || credits <= 0) return 'ignored';
-	return (await grantPurchase(db, orgId, credits, session.id, session.metadata.userId ?? null)) ? 'credited' : 'already';
+	const granted = await grantPurchase(db, orgId, credits, session.id, session.metadata.userId ?? null);
+	if (granted) {
+		// Once per session, like the credit itself.
+		const money = { amount_cents: session.amount_total ?? null, currency: session.currency ?? null };
+		dispatchPlatformEvent(db, 'ai_credits.purchased', {
+			org_id: orgId, credits, ...money, purchased_by: session.metadata.userId ?? null, stripe_checkout_session_id: session.id,
+		});
+		dispatchPlatformEvent(db, 'payment.succeeded', { org_id: orgId, kind: 'ai_credits', ...money, plan: null, stripe_object_id: session.id });
+	}
+	return granted ? 'credited' : 'already';
+}
+
+/** The organisation a Stripe customer pays for, if we know it. */
+async function orgForCustomer(db: Db, customer: string | { id: string } | null | undefined): Promise<{ org_id: string; plan: string } | null> {
+	const id = typeof customer === 'string' ? customer : customer?.id;
+	if (!id) return null;
+	return dbFirst<{ org_id: string; plan: string }>(db, 'SELECT org_id, plan FROM subscriptions WHERE stripe_customer_id = ?', id).catch(() => null);
+}
+
+/** Subscription invoices, paid or not: only announced as platform webhooks (the
+ *  subscription's own events change the plan). Needs `invoice.paid` and
+ *  `invoice.payment_failed` enabled on the Stripe webhook endpoint. */
+export async function announceInvoice(db: Db, invoice: Stripe.Invoice, paid: boolean): Promise<void> {
+	const org = await orgForCustomer(db, invoice.customer as string | { id: string } | null);
+	if (!org) return;
+	if (paid) {
+		// A €0 invoice (a trial, a fully credited proration) is not a payment.
+		if (!invoice.amount_paid) return;
+		dispatchPlatformEvent(db, 'payment.succeeded', {
+			org_id: org.org_id, kind: 'subscription', amount_cents: invoice.amount_paid, currency: invoice.currency,
+			plan: org.plan, stripe_object_id: invoice.id ?? null,
+		});
+	} else {
+		dispatchPlatformEvent(db, 'payment.failed', {
+			org_id: org.org_id, kind: 'subscription', amount_cents: invoice.amount_due, currency: invoice.currency,
+			attempt_count: invoice.attempt_count ?? null,
+			next_attempt_at: invoice.next_payment_attempt ? new Date(invoice.next_payment_attempt * 1000).toISOString() : null,
+			stripe_object_id: invoice.id ?? null,
+		});
+	}
 }
 
 /** Dependencies the event handler needs from outside (Stripe API), injectable for tests. */
@@ -195,5 +245,22 @@ export async function handleStripeEvent(db: Db, event: Stripe.Event, deps: SyncD
 			}
 			return;
 		}
+
+		// A credit pack paid by a delayed method that then did not arrive.
+		case 'checkout.session.async_payment_failed': {
+			const session = event.data.object as Stripe.Checkout.Session;
+			const orgId = session.metadata?.orgId;
+			if (session.mode !== 'payment' || session.metadata?.kind !== 'ai_credits' || !orgId) return;
+			dispatchPlatformEvent(db, 'payment.failed', {
+				org_id: orgId, kind: 'ai_credits', amount_cents: session.amount_total ?? null, currency: session.currency ?? null,
+				attempt_count: null, next_attempt_at: null, stripe_object_id: session.id,
+			});
+			return;
+		}
+
+		case 'invoice.paid':
+		case 'invoice.payment_failed':
+			await announceInvoice(db, event.data.object as Stripe.Invoice, event.type === 'invoice.paid');
+			return;
 	}
 }

@@ -17,6 +17,7 @@ import { noteMonthUsage, recordTurnedAway } from '$lib/server/cap-notices';
 import { keepAlive } from '$lib/server/background';
 import { refreshLayoutProblems } from '$lib/server/layout-sync';
 import { dispatchWebhooks } from '$lib/notifications';
+import { dispatchPlatformEvent } from '$lib/server/platform-webhooks';
 import {
 	CUSTOM_EVENT_TYPE_MAX,
 	cleanCustomEventType,
@@ -196,6 +197,11 @@ export async function createReservation(
 	dispatchWebhooks(locals.db, input.orgId, 'reservation.new', {
 		reservation_id: newId, title, hall_id: hallId, event_date: eventDate, event_type: eventType,
 	}).catch(() => {});
+	// The platform's count signal: ids and status only, nothing about the guest.
+	dispatchPlatformEvent(locals.db, 'reservation.created', {
+		org_id: input.orgId, hall_id: hallId, reservation_id: newId, status: initialStatus,
+		source: input.silent ? 'import' : staff ? 'staff' : 'client',
+	});
 
 	return { ok: true, id: newId, status: initialStatus, hallName: hall.name };
 }
