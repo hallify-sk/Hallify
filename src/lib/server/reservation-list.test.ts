@@ -46,6 +46,18 @@ describe('reservations list', () => {
 		expect((await run('hall=h1&when=all')).total).toBe(2);
 		expect((await run('from=2026-11-15&to=2026-12-31')).rows.map((x) => x.id)).toEqual(['b']);
 	});
+	it('the upcoming tab has no date bounds of its own: today onward, no end', async () => {
+		const f = parseListFilters(new URLSearchParams('when=upcoming'));
+		expect(f).toMatchObject({ from: '', to: '' });
+		expect((await run('when=upcoming&from=&to=')).rows.map((x) => x.id)).toEqual(['a', 'b']);
+		// An end date narrows it; a start before today does not reach into the past.
+		expect((await run('when=upcoming&to=2026-11-30')).rows.map((x) => x.id)).toEqual(['a']);
+		expect((await run('when=upcoming&from=2026-01-01')).rows.map((x) => x.id)).toEqual(['a', 'b']);
+	});
+	it('reads a reversed date range the right way round', async () => {
+		expect(parseListFilters(new URLSearchParams('from=2026-12-31&to=2026-11-15'))).toMatchObject({ from: '2026-11-15', to: '2026-12-31' });
+		expect((await run('from=2026-12-31&to=2026-11-15')).rows.map((x) => x.id)).toEqual(['b']);
+	});
 	it('drops malformed parameters', () => {
 		const f = parseListFilters(new URLSearchParams('status=hacked&from=yesterday&sort=x&page=-3'));
 		expect(f).toMatchObject({ status: '', from: '', when: 'upcoming', sort: 'date_asc', page: 1 });
