@@ -89,16 +89,36 @@ export function normalizeText(text: string): string {
   return text.toLocaleLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 }
 
+const queryWords = (query: string) => query.toLocaleLowerCase().split(/[\s,]+/).filter(Boolean);
+
+/** How a venue matches a typed query, or null when it does not. */
+export interface QueryMatch {
+  /** Every word found as typed, diacritics included ("Šaľa" in "Šaľa", not in "Sála"). */
+  exact: boolean;
+  /** Every word found in the address, i.e. the town or street, not only the name. */
+  inAddress: boolean;
+}
+
 /**
  * Whether a venue's name or address mentions every word of the query, in any order:
  * "Reduta Bratislava" finds Reduta on Meden\u00e1 in Bratislava even though the words are
- * not next to each other in the text.
+ * not next to each other in the text. Diacritics are ignored for the match itself
+ * ("kosice" finds Košice); `exact` says whether it also matched as typed.
  */
+export function queryMatch(venue: Pick<PublicVenue, 'name' | 'address'>, query: string): QueryMatch | null {
+  const words = queryWords(query);
+  if (!words.length) return { exact: true, inAddress: true };
+  const folded = words.map(normalizeText);
+  const text = `${venue.name} ${venue.address ?? ''}`;
+  const foldedText = normalizeText(text);
+  if (!folded.every(word => foldedText.includes(word))) return null;
+  const lower = text.toLocaleLowerCase();
+  const address = normalizeText(venue.address ?? '');
+  return { exact: words.every(word => lower.includes(word)), inAddress: folded.every(word => address.includes(word)) };
+}
+
 export function matchesQuery(venue: Pick<PublicVenue, 'name' | 'address'>, query: string): boolean {
-  const words = normalizeText(query).split(/[\s,]+/).filter(Boolean);
-  if (!words.length) return true;
-  const text = normalizeText(`${venue.name} ${venue.address ?? ''}`);
-  return words.every(word => text.includes(word));
+  return queryMatch(venue, query) !== null;
 }
 
 /**
@@ -111,6 +131,12 @@ export function matchesQuery(venue: Pick<PublicVenue, 'name' | 'address'>, query
  * "kosice" to a Czech village, and a venue in \u0160a\u013ea without a map position was
  * dropped by the radius however well its address matched. When the centre is the
  * visitor's own position, the area is a real constraint and both must hold.
+ *
+ * A typed query prefers what was typed: when any venue matches it exactly
+ * (diacritics included), venues that match only once diacritics are ignored are
+ * left out, so the town "Šaľa" no longer brings in every hall called "Sála".
+ * Matches are then ranked: town/address first, then name, then venues that are only
+ * in the area, so a town search leads with the venues in that town.
  */
 export function filterVenues(venues: PublicVenue[], filters: { query: string; guests: number; floorplan: boolean; booking: boolean; center?: MapCenter | null; radius?: number; bands?: number[]; centerIsQuery?: boolean }): PublicVenue[] {
   // An unstated band must not pass a band filter: it is unknown, not cheap.
@@ -119,14 +145,46 @@ export function filterVenues(venues: PublicVenue[], filters: { query: string; gu
   const typed = !!filters.query.trim();
   const inArea = (venue: PublicVenue) => !!center && venue.latitude !== null && venue.longitude !== null &&
     distanceKm(center, { latitude: venue.latitude, longitude: venue.longitude }) <= filters.radius!;
+  // The band filter is left out of the exact-match decision, so turning it on never
+  // swaps which spelling of the query the list honours.
+  const candidates = venues.filter(venue => venue.max_people >= filters.guests && (!filters.floorplan || !!venue.has_floorplan) &&
+    (!filters.booking || !!venue.allow_reservations));
+  const inBand = (venue: PublicVenue) => !bands || (venue.price_band !== null && bands.has(venue.price_band));
+  const matches = new Map(candidates.map(venue => [venue.id, queryMatch(venue, filters.query)]));
+  const preferExact = typed && [...matches.values()].some(m => m?.exact);
+  const textMatch = (venue: PublicVenue) => {
+    const m = matches.get(venue.id);
+    return !!m && (!preferExact || m.exact) ? m : null;
+  };
   const place = (venue: PublicVenue) => {
-    const text = matchesQuery(venue, filters.query);
+    const text = !!textMatch(venue);
     if (!center) return text;
     return filters.centerIsQuery && typed ? text || inArea(venue) : text && inArea(venue);
   };
-  return venues.filter(venue => venue.max_people >= filters.guests && (!filters.floorplan || !!venue.has_floorplan) &&
-    (!filters.booking || !!venue.allow_reservations) && place(venue) &&
-    (!bands || (venue.price_band !== null && bands.has(venue.price_band))));
+  const result = candidates.filter(venue => inBand(venue) && place(venue));
+  if (!typed) return result;
+  const rank = (venue: PublicVenue) => {
+    const m = textMatch(venue);
+    return m ? (m.inAddress ? 0 : 1) : 2;
+  };
+  // Array.prototype.sort is stable, so the given order holds within a rank.
+  return result.sort((a, b) => rank(a) - rank(b));
+}
+
+/**
+ * The head of a `filterVenues` result that shares its best match: the venues in the
+ * searched town when there are any. Featured partners are drawn from these, so a
+ * partner that only shares a word with the query in its name does not jump ahead
+ * of the venues in the town that was searched for. Everything without a query.
+ */
+export function bestMatches(ranked: PublicVenue[], query: string): PublicVenue[] {
+  if (!query.trim() || !ranked.length) return ranked;
+  const kind = (venue: PublicVenue) => {
+    const m = queryMatch(venue, query);
+    return m ? (m.inAddress ? 0 : 1) : 2;
+  };
+  const best = kind(ranked[0]);
+  return ranked.filter(venue => kind(venue) === best);
 }
 
 /** The orders the directory offers. 'recommended' keeps featured partners first. */

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_CENTER, demoVenues, destination, distanceKm, filterVenues, featuredVenues, parseVenueSort, sortVenues } from './discovery';
+import { DEFAULT_CENTER, bestMatches, demoVenues, destination, distanceKm, filterVenues, featuredVenues, parseVenueSort, sortVenues } from './discovery';
 
 describe('venue explorer', () => {
   it('places every sample within 50 km and retains a clear demo flag', () => {
@@ -100,5 +100,25 @@ describe('venue explorer', () => {
     expect(filterVenues(venues, { ...base, query: 'Pezinok', center: { latitude: 48.29, longitude: 17.27 } }).map(v => v.id)).toEqual(['reduta']);
     // Around the visitor's own position the area is a real limit.
     expect(filterVenues(venues, { ...base, centerIsQuery: false, query: 'kosice', center: { latitude: 48.14, longitude: 17.1 } })).toEqual([]);
+  });
+
+  // Round-1 regression: ignoring diacritics made the town "Šaľa" match every hall
+  // called "Sála".
+  it('prefers what was typed and ranks town matches above name matches', () => {
+    const venue = (id: string, name: string, address: string | null) =>
+      ({ ...demoVenues()[0], id, name, address, latitude: null, longitude: null, demo: false });
+    const venues = [
+      venue('hall', 'Veľká sála', 'Hlavná 5, Nitra'),
+      venue('town', 'Kaštieľ', 'Hlavná 1, Šaľa'),
+      venue('other', 'Mlyn', 'Dolná 2, Senec'),
+    ];
+    const base = { guests: 0, floorplan: false, booking: false };
+    expect(filterVenues(venues, { ...base, query: 'Šaľa' }).map(v => v.id)).toEqual(['town']);
+    expect(filterVenues(venues, { ...base, query: 'sála' }).map(v => v.id)).toEqual(['hall']);
+    // Typed without diacritics: both spellings are possible, the town leads.
+    expect(filterVenues(venues, { ...base, query: 'sala' }).map(v => v.id)).toEqual(['town', 'hall']);
+    // Featured partners come from the town matches only.
+    expect(bestMatches(filterVenues(venues, { ...base, query: 'sala' }), 'sala').map(v => v.id)).toEqual(['town']);
+    expect(bestMatches(venues, '')).toHaveLength(3);
   });
 });

@@ -5,7 +5,7 @@
   import { getLocale, t } from '$lib/i18n.svelte';
   import { goto, replaceState } from '$app/navigation';
   import { dev } from '$app/environment';
-  import { DEFAULT_CENTER, demoVenues, distanceKm, filterVenues, featuredVenues } from './discovery';
+  import { DEFAULT_CENTER, bestMatches, demoVenues, distanceKm, filterVenues, featuredVenues } from './discovery';
   import { userLocation, locateIfGranted } from './user-location.svelte';
   import { createSearchCenter } from './search-center.svelte';
   import VenuePreview from './VenuePreview.svelte';
@@ -37,7 +37,7 @@
   // A venue that never stated a price cannot satisfy a band filter, so say how many
   // the filter is holding back rather than letting them vanish without explanation.
   const unstatedHidden = $derived(bands.length ? matching.filter(venue => venue.price_band === null).length : 0);
-  const featured = $derived(featuredVenues(visible, rankCenter));
+  const featured = $derived(featuredVenues(bestMatches(visible, query), rankCenter));
   const others = $derived(visible.filter(venue => !featured.some(item => item.id === venue.id)));
   // The landing page shows a first selection, not every venue; the directory has the rest.
   const LANDING_LIMIT = 12;

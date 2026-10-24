@@ -6,7 +6,7 @@
   import { page } from '$app/state';
   import { getLocale, t } from '$lib/i18n.svelte';
   import { hasCoordinates } from '$lib/venue-location';
-  import { DEFAULT_CENTER, demoVenues, distanceKm, filterVenues, featuredVenues, parseVenueSort, sortVenues, type VenueSort } from './discovery';
+  import { DEFAULT_CENTER, bestMatches, demoVenues, distanceKm, filterVenues, featuredVenues, parseVenueSort, sortVenues, type VenueSort } from './discovery';
   import { formatDate } from '$lib/format';
   import { userLocation, locateUser, locateIfGranted } from './user-location.svelte';
   import { createSearchCenter } from './search-center.svelte';
@@ -71,7 +71,8 @@
   const unstatedHidden = $derived(bands.length ? matching.filter(v => v.price_band === null).length : 0);
   let searchSubmitted = $state(false);
   const searching = $derived(searchSubmitted || !!query.trim() || guests > 0 || floorplan || booking || !!amenity || radius !== 50 || bands.length > 0 || !!date);
-  const featured = $derived(sort === 'recommended' ? featuredVenues(visible, rankCenter) : []);
+  // Partners lead only among the best matches (a town search: venues in that town).
+  const featured = $derived(sort === 'recommended' ? featuredVenues(bestMatches(visible, query), rankCenter) : []);
   const others = $derived(visible.filter(venue => !featured.some(item => item.id === venue.id)));
   // The list in display order. Featured partners lead only the recommended order.
   const ordered = $derived(sort === 'recommended' ? [...featured, ...others] : sortVenues(visible, sort, rankCenter));
