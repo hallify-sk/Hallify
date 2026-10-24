@@ -1,7 +1,7 @@
 import { fail, isHttpError, redirect } from '@sveltejs/kit';
 import { dbFirst, dbRun, fromJson, toJson } from '$lib/db/index';
 import { requireOrgPermission } from '$lib/server/access';
-import { uniqueHallSlug } from '$lib/server/onboarding-hall';
+import { uniqueHallSlug } from '$lib/server/hall-naming';
 import type { OrgContext } from '../../../app.d';
 import { st } from '$lib/i18n-server';
 import { PLANS, getPlan } from '$lib/plans';
@@ -145,7 +145,7 @@ export const actions: Actions = {
       org.id,
       name,
       Number.isFinite(capacity) && capacity > 0 ? Math.min(capacity, 100_000) : 50,
-      await uniqueHallSlug(locals.db, name)
+      await uniqueHallSlug(locals.db, org.id, name, null, locals.locale === 'en' ? 'hall' : 'sala')
     );
 
     const state = await loadState(locals.db, org.id);

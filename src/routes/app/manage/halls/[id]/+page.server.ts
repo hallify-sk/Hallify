@@ -524,15 +524,15 @@ export const actions: Actions = {
 		let slug: string;
 		if (typedSlug) {
 			if (isReservedHallSlug(typedSlug)) return fail(400, { profileError: e.slugReserved });
-			if (await hallSlugTaken(locals.db, typedSlug, params.id)) {
-				const free = await uniqueHallSlug(locals.db, typedSlug, params.id, fallback);
+			if (await hallSlugTaken(locals.db, org.id, typedSlug, params.id)) {
+				const free = await uniqueHallSlug(locals.db, org.id, typedSlug, params.id, fallback);
 				return fail(400, { profileError: e.slugTakenTry(free), slugSuggestion: free });
 			}
 			slug = typedSlug;
 		} else if (!slugPosted && current.slug) {
 			slug = current.slug;
 		} else {
-			slug = await uniqueHallSlug(locals.db, name, params.id, fallback);
+			slug = await uniqueHallSlug(locals.db, org.id, name, params.id, fallback);
 		}
 
 		// A listed hall needs an address to place it; its URL always exists now. A

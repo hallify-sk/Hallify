@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { d1, migratedSqlite } from './test-d1';
-import { hallSlug, isReservedHallSlug, nextUntitledHallName, uniqueHallSlug } from './hall-naming';
+import { hallSlug, hallSlugTaken, isReservedHallSlug, nextUntitledHallName, uniqueHallSlug } from './hall-naming';
 
 function seeded() {
 	// The schema this branch started from: other branches' migrations (0015–0021)
@@ -22,16 +22,27 @@ describe('hall slugs', () => {
 		expect(isReservedHallSlug('velka-sala')).toBe(false);
 	});
 
-	it('numbers a taken slug and skips reserved ones', async () => {
+	it('numbers a slug taken in the same organisation and skips reserved ones', async () => {
 		const sqlite = seeded();
 		const db = d1(sqlite);
-		expect(await uniqueHallSlug(db, 'Veľká sála')).toBe('velka-sala');
-		sqlite.exec("INSERT INTO halls(id,org_id,name,slug) VALUES ('h1','o2','x','velka-sala'), ('h2','o1','y','velka-sala-2')");
-		expect(await uniqueHallSlug(db, 'Veľká sála')).toBe('velka-sala-3');
+		expect(await uniqueHallSlug(db, 'o1', 'Veľká sála')).toBe('velka-sala');
+		sqlite.exec("INSERT INTO halls(id,org_id,name,slug) VALUES ('h1','o1','x','velka-sala'), ('h2','o1','y','velka-sala-2')");
+		expect(await uniqueHallSlug(db, 'o1', 'Veľká sála')).toBe('velka-sala-3');
 		// A hall keeps its own slug.
-		expect(await uniqueHallSlug(db, 'Veľká sála', 'h1')).toBe('velka-sala');
-		expect(await uniqueHallSlug(db, 'Messages')).toBe('messages-sala');
-		expect(await uniqueHallSlug(db, '???')).toBe('sala');
+		expect(await uniqueHallSlug(db, 'o1', 'Veľká sála', 'h1')).toBe('velka-sala');
+		expect(await uniqueHallSlug(db, 'o1', 'Messages')).toBe('messages-sala');
+		expect(await uniqueHallSlug(db, 'o1', '???')).toBe('sala');
+		expect(await uniqueHallSlug(db, 'o1', '???', null, 'hall')).toBe('hall');
+	});
+
+	it('lets another organisation use the same slug (B140)', async () => {
+		const sqlite = seeded();
+		const db = d1(sqlite);
+		sqlite.exec("INSERT INTO halls(id,org_id,name,slug) VALUES ('h1','o2','x','velka-sala')");
+		expect(await hallSlugTaken(db, 'o1', 'velka-sala')).toBe(false);
+		expect(await hallSlugTaken(db, 'o2', 'velka-sala')).toBe(true);
+		expect(await hallSlugTaken(db, 'o2', 'velka-sala', 'h1')).toBe(false);
+		expect(await uniqueHallSlug(db, 'o1', 'Veľká sála')).toBe('velka-sala');
 	});
 
 	it('numbers default hall names within the organisation', async () => {
@@ -94,5 +105,20 @@ describe('migration 0022', () => {
 		expect(hours.mon.open).toBe(false);
 		expect(hours.sun).toEqual({ open: true, from: '09:00', to: '22:00' });
 		expect(rows[1].opening_hours).toBe('{}');
+	});
+});
+
+describe('migration 0036', () => {
+	const sql = readFileSync(new URL('../../../migrations/0036_hall_slug_per_org.sql', import.meta.url), 'utf8');
+
+	it('makes slugs unique per organisation and keeps existing halls', () => {
+		const sqlite = seeded();
+		sqlite.exec("INSERT INTO halls(id,org_id,name,slug) VALUES ('h1','o1','x','velka-sala'), ('h2','o2','y',NULL), ('h3','o2','z',NULL)");
+		expect(() => sqlite.exec("UPDATE halls SET slug = 'velka-sala' WHERE id = 'h2'")).toThrow();
+		sqlite.exec(sql);
+		sqlite.exec(sql); // idempotent
+		sqlite.exec("UPDATE halls SET slug = 'velka-sala' WHERE id = 'h2'");
+		expect(() => sqlite.exec("UPDATE halls SET slug = 'velka-sala' WHERE id = 'h3'")).toThrow();
+		expect(sqlite.prepare('SELECT COUNT(*) AS n FROM halls').get()).toEqual({ n: 3 });
 	});
 });

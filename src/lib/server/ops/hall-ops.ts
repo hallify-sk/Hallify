@@ -211,7 +211,7 @@ export async function createHall(db: Db, orgId: string, plan: PlanId, name: stri
 	}
 	const id = crypto.randomUUID();
 	const finalName = name.trim().slice(0, 120) || st(locale).halls.untitledHall;
-	const slug = await uniqueHallSlug(db, finalName, null, locale === 'en' ? 'hall' : 'sala');
+	const slug = await uniqueHallSlug(db, orgId, finalName, null, locale === 'en' ? 'hall' : 'sala');
 	const insert = (s: string) => dbRun(db,
 		`INSERT INTO halls (id, org_id, name, slug, max_people, color, allow_reservations, is_public) VALUES (?, ?, ?, ?, ?, ?, 0, 0)`,
 		id, orgId, finalName, s,
