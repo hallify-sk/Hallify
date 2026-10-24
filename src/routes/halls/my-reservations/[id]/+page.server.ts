@@ -2,6 +2,7 @@ import { error, fail, redirect } from '@sveltejs/kit';
 import { loginUrl } from '$lib/login-redirect';
 import { dbAll, dbFirst, dbRun, fromJsonArr } from '$lib/db/index';
 import type { HallRow, HallBlockRow, ReservationRow } from '$lib/db/index';
+import { clientReservationColumns, type ClientReservationRow } from '$lib/reservation-client';
 import { parseExtraIds, parseExtrasSnapshot, withBookedPrices } from '$lib/extras';
 import { extrasChange, saveExtrasSnapshot } from '$lib/server/reservation-extras';
 import { clearReminder } from '$lib/server/reminders';
@@ -38,10 +39,12 @@ function subjectFor(hallName: string, eventDate: string, locale: App.Locals['loc
 	return `${hallName} – ${formatDate(eventDate, locale)}`;
 }
 
+/** The booking as its client may see it: never `r.*`, which carried a phone
+ *  booking's staff-only customer details and internal note to the browser (B60). */
 async function loadReservation(db: App.Locals['db'], id: string, userId: string, orgId: string) {
-	return dbFirst<ReservationRow & { hall_name: string; hall_slug: string | null; hall_min_cancel_days: number }>(
+	return dbFirst<ClientReservationRow & { hall_name: string; hall_slug: string | null; hall_min_cancel_days: number }>(
 		db,
-		`SELECT r.*, h.name AS hall_name, h.slug AS hall_slug, h.min_cancel_days AS hall_min_cancel_days
+		`SELECT ${clientReservationColumns('r')}, h.name AS hall_name, h.slug AS hall_slug, h.min_cancel_days AS hall_min_cancel_days
 		FROM reservations r
 		JOIN halls h ON h.id = r.hall_id
 		WHERE r.id = ? AND r.user_id = ? AND r.org_id = ?`,
