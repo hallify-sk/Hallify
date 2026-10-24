@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { imageSrcset } from '$lib/image-variants';
   import { pageTitle } from '$lib/page-title';
   import { DOW_KEYS } from '$lib/availability';
   import { getLocale, t } from '$lib/i18n.svelte';
@@ -78,7 +79,7 @@
       </div>
       <div class="venue-page-cover">
         {#if hall.cover_image_url && !coverFailed}
-          <img src={hall.cover_image_url} alt={hall.name} width="720" height="460" onerror={() => (coverFailed = true)}>
+          <img src={hall.cover_image_url} srcset={imageSrcset(hall.cover_image_url)} sizes="(max-width: 900px) 100vw, 720px" alt={hall.name} width="720" height="460" onerror={() => (coverFailed = true)}>
         {:else}
           <div class="venue-page-no-photo" style:--hall-color={hall.color}><img src="/Hallify.svg" alt="" width="48" height="48"></div>
         {/if}
@@ -98,7 +99,7 @@
               {#each hall.gallery_images as src, i (src)}
                 {#if !failedThumbs.includes(src)}
                   <button type="button" onclick={() => (activeIndex = i)} aria-label={`${t.appHalls.gallery} ${i + 1}/${hall.gallery_images.length}`}>
-                    <img {src} alt="" loading="lazy" width="320" height="240" onerror={() => (failedThumbs = [...failedThumbs, src])}>
+                    <img {src} srcset={imageSrcset(src)} sizes="(max-width: 900px) 50vw, 320px" alt="" loading="lazy" width="320" height="240" onerror={() => (failedThumbs = [...failedThumbs, src])}>
                   </button>
                 {/if}
               {/each}

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { imageSrcset } from '$lib/image-variants';
 	import { pageTitle } from '$lib/page-title';
 	import { enhance } from '$app/forms';
 	import { goto, beforeNavigate } from '$app/navigation';
@@ -274,7 +275,7 @@
 								>
 									{#if h.cover_image_url}
 										<div class="hall-cover-img" style="background:{h.color}18">
-											<img src={h.cover_image_url} alt={h.name} />
+											<img src={h.cover_image_url} srcset={imageSrcset(h.cover_image_url)} sizes="(max-width: 600px) 100vw, 400px" alt={h.name} />
 											<div class="hall-cover-strip" style="background:{h.color}"></div>
 										</div>
 									{:else}

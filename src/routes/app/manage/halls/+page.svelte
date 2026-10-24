@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { imageSrcset } from '$lib/image-variants';
   import { pageTitle } from '$lib/page-title';
   import { enhance } from '$app/forms';
   import StatusBadge from '$lib/components/StatusBadge.svelte';
@@ -120,7 +121,7 @@
           <article class="media-card hall-card">
             <a href="/app/manage/halls/{h.id}" class="media-photo" aria-label={h.name}>
               {#if h.cover_image_url}
-                <img src={h.cover_image_url} alt="" loading="lazy" />
+                <img src={h.cover_image_url} srcset={imageSrcset(h.cover_image_url)} sizes="(max-width: 600px) 100vw, 400px" alt="" loading="lazy" />
               {:else}
                 <span class="photo-blank" style:--hall={hallColor(h.color)}>
                   <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">

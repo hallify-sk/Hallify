@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { imageSrcset } from '$lib/image-variants';
   import { venueTitle } from '$lib/page-title';
   import { onMount } from 'svelte';
   import { booking } from '$lib/analytics';
@@ -100,7 +101,7 @@
   <!-- ─── Hero ──────────────────────────────────────────────────────────────── -->
   <div class="hero" style="--hc:{hall.color}">
     {#if hall.cover_image_url}
-      <img class="hero-img" src={hall.cover_image_url} alt={hall.name} />
+      <img class="hero-img" src={hall.cover_image_url} srcset={imageSrcset(hall.cover_image_url)} sizes="100vw" alt={hall.name} />
       <div class="hero-overlay"></div>
     {:else}
       <div class="hero-placeholder" style="background:color-mix(in srgb, var(--hc) 15%, var(--bg-base))"></div>
@@ -219,7 +220,7 @@
         <div class="gallery-grid">
           {#each galleryImages as url, i (url)}
             <button type="button" class="gallery-item" onclick={() => (activeIndex = i)} aria-label={hall.name}>
-              <img src={url} alt="" />
+              <img src={url} srcset={imageSrcset(url)} sizes="(max-width: 420px) 100vw, (max-width: 600px) 50vw, 300px" alt="" loading="lazy" />
             </button>
           {/each}
         </div>

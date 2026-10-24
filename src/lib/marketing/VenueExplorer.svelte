@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { imageSrcset } from '$lib/image-variants';
   import Icon from './Icon.svelte';
   import { onMount, tick, untrack } from 'svelte';
   import { dev } from '$app/environment';
@@ -141,7 +142,7 @@
 {#each collection as venue (venue.id)}
         <article class="explorer-result" class:is-selected={selectedId === venue.id} class:featured-result={highlight} data-venue-id={venue.id}>
           <button class="explorer-result-select" onclick={() => select(venue.id)} aria-pressed={selectedId === venue.id}>
-            {#if venue.cover_image_url && !failedCovers[venue.id]}<img src={venue.cover_image_url} alt="" width="112" height="100" loading="lazy" onerror={() => (failedCovers[venue.id] = true)}>{:else}<div class="explorer-no-photo"><img src="/Hallify.svg" alt="" width="30" height="30"></div>{/if}
+            {#if venue.cover_image_url && !failedCovers[venue.id]}<img src={venue.cover_image_url} srcset={imageSrcset(venue.cover_image_url)} sizes="112px" alt="" width="112" height="100" loading="lazy" onerror={() => (failedCovers[venue.id] = true)}>{:else}<div class="explorer-no-photo"><img src="/Hallify.svg" alt="" width="30" height="30"></div>{/if}
             <span class="explorer-result-copy">{#if venue.demo || venue.address}<small>{venue.demo ? (en ? 'Demo venue' : 'Ukážkový priestor') : venue.address}</small>{/if}<strong>{venue.name}</strong><span>{venue.max_people} {en ? 'guests' : 'hostí'}{#if distanceLabel(venue)}{' '}· {distanceLabel(venue)}{/if}</span><span class="result-features">{venue.is_partner ? (en ? "Hallify partner / " : "Partner Hallify / ") : ""}{venue.has_floorplan ? (en ? 'Floorplan' : 'Pôdorys') : (en ? 'Venue profile' : 'Profil priestoru')}{venue.allow_reservations ? (en ? ' / Booking' : ' / Rezervácie') : ''}</span></span>
           </button>
           <div class="explorer-result-footer"><span class="explorer-price">{@render priceTag(venue)}</span><span class="explorer-result-actions">{#if bookingHref(venue)}<a href={bookingHref(venue)} aria-label={`${t.appHalls.bookOnVenueSite}: ${venue.name}`}>{t.appHalls.bookOnVenueSite}</a>{/if}{#if venue.demo}<button onclick={() => open(venue)}>{en ? 'Details' : 'Detail'} <Icon /></button>{:else}<a href={venueHref(venue)} aria-label={`${en ? 'Details' : 'Detail'}: ${venue.name}`}>{en ? 'Details' : 'Detail'} <Icon /></a>{/if}</span></div>

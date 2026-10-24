@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { imageSrcset } from '$lib/image-variants';
   import Icon from './Icon.svelte';
   import { onMount, untrack } from 'svelte';
   import { reveal } from './reveal';
@@ -84,7 +85,7 @@
 
 {#snippet venueCards(collection: PublicVenue[], highlight: boolean)}
 <div class="venue-results">{#each collection as venue (venue.id)}<article class="venue-card" class:venue-active={active?.id === venue.id} class:venue-featured={highlight}>
-      <a class="venue-photo" href={venueHref(venue)} onclick={(event) => { if (venue.demo) { event.preventDefault(); preview.open(venue); } }}>{#if venue.cover_image_url && !failedCovers[venue.id]}<img src={venue.cover_image_url} alt={venue.name} loading="lazy" width="440" height="280" onerror={() => (failedCovers[venue.id] = true)}>{:else}<div class="no-photo"><img src="/Hallify.svg" alt="" width="45" height="45"><span>{en ? 'Explore venue details' : 'Spoznajte priestor'}</span></div>{/if}</a>
+      <a class="venue-photo" href={venueHref(venue)} onclick={(event) => { if (venue.demo) { event.preventDefault(); preview.open(venue); } }}>{#if venue.cover_image_url && !failedCovers[venue.id]}<img src={venue.cover_image_url} srcset={imageSrcset(venue.cover_image_url)} sizes="(max-width: 600px) 100vw, 440px" alt={venue.name} loading="lazy" width="440" height="280" onerror={() => (failedCovers[venue.id] = true)}>{:else}<div class="no-photo"><img src="/Hallify.svg" alt="" width="45" height="45"><span>{en ? 'Explore venue details' : 'Spoznajte priestor'}</span></div>{/if}</a>
       <div class="venue-topline">{#if venue.demo || venue.address}<span class="venue-place">{venue.demo ? (en ? "Demo venue" : "Ukážkový priestor") : venue.address}</span>{/if}{#if venue.is_partner}<span class="partner-label">{en ? "Hallify partner" : "Partner Hallify"}</span>{:else if venue.has_floorplan}<span class="partner-label">{en ? 'Floorplan available' : 'S pôdorysom'}</span>{/if}</div>
       <h3><a href={venueHref(venue)} onclick={(event) => { if (venue.demo) { event.preventDefault(); preview.open(venue); } }}>{venue.name}</a></h3><p class="venue-meta">{en ? 'Up to' : 'Do'} {venue.max_people} {en ? 'guests' : 'hostí'}{#if distanceLabel(venue)}{' '}· {distanceLabel(venue)}{/if}</p>
       <div class="venue-bottom"><span class="venue-price">{@render priceTag(venue)}</span><a href={venueHref(venue)} onclick={(event) => { if (venue.demo) { event.preventDefault(); preview.open(venue); } }} aria-label={`${en ? 'View' : 'Zobraziť'} ${venue.name}`}><Icon /></a></div>

@@ -14,6 +14,7 @@
   import type { SectionType } from '$lib/site-sections';
   import { displayWebsite } from '$lib/site/display-url';
   import { amenityLabel } from '$lib/site/amenities';
+  import { imageSrcset } from '$lib/image-variants';
 
   export interface SiteHall {
     id: string;
@@ -102,7 +103,7 @@
     <section class="section section--lead sx-featured">
       <a class="sx-featured-media" href={href(featured)} aria-hidden={inert ? 'true' : undefined}>
         {#if featured.cover_image_url}
-          <img src={featured.cover_image_url} alt={featured.name} loading="eager" />
+          <img src={featured.cover_image_url} srcset={imageSrcset(featured.cover_image_url)} sizes="100vw" alt={featured.name} loading="eager" />
         {:else}
           <span class="sx-noimg" aria-hidden="true"></span>
         {/if}
@@ -141,7 +142,7 @@
           {#each filtered as h (h.id)}
             <a class="row-item sx-row" href={href(h)} tabindex={inert ? -1 : undefined}>
               <span class="sx-row-media">
-                {#if h.cover_image_url}<img src={h.cover_image_url} alt="" loading="lazy" />{/if}
+                {#if h.cover_image_url}<img src={h.cover_image_url} srcset={imageSrcset(h.cover_image_url)} sizes="160px" alt="" loading="lazy" />{/if}
               </span>
               <span class="sx-row-copy">
                 <strong>{h.name}</strong>
@@ -162,7 +163,7 @@
         {#each halls as h (h.id)}
           <a class="media-card" href={href(h)} tabindex={inert ? -1 : undefined}>
             <span class="media-photo">
-              {#if h.cover_image_url}<img src={h.cover_image_url} alt="" loading="lazy" />{/if}
+              {#if h.cover_image_url}<img src={h.cover_image_url} srcset={imageSrcset(h.cover_image_url)} sizes="(max-width: 600px) 100vw, 400px" alt="" loading="lazy" />{/if}
             </span>
             <h3>{h.name}</h3>
             <p class="media-meta">{h.max_people} {labels.guests}</p>

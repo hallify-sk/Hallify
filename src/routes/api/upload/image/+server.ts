@@ -1,11 +1,14 @@
 import { json, error } from '@sveltejs/kit';
 import { rateLimit, rateLimitKey, RATE_LIMITS } from '$lib/rateLimit';
 import { sniffImageType } from '$lib/server/image-sniff';
+import { IMAGE_VARIANT_WIDTHS, imageVariantField, imageVariantKey } from '$lib/image-variants';
 import { st } from '$lib/i18n-server';
 import type { RequestHandler } from './$types';
 
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
 const MAX_SIZE = 8 * 1024 * 1024; // 8 MB
+/** A small copy is a few hundred KB at most; anything bigger is not one. */
+const MAX_VARIANT_SIZE = 2 * 1024 * 1024;
 
 export const POST: RequestHandler = async (event) => {
 	if (!event.locals.user) error(401, 'Unauthorized');
@@ -47,6 +50,21 @@ export const POST: RequestHandler = async (event) => {
 	} catch (e) {
 		const msg = e instanceof Error ? e.message : String(e);
 		error(502, `Storage error: ${msg}`);
+	}
+
+	// The smaller copies the browser made (I2). Each is checked like the photo and
+	// stored best-effort: without one, /uploads serves the photo itself in its place.
+	for (const w of actual === 'image/gif' ? [] : IMAGE_VARIANT_WIDTHS) {
+		const variant = formData.get(imageVariantField(w));
+		if (!(variant instanceof File) || variant.size === 0 || variant.size > MAX_VARIANT_SIZE) continue;
+		const variantBytes = await variant.arrayBuffer();
+		const variantType = sniffImageType(new Uint8Array(variantBytes, 0, Math.min(variantBytes.byteLength, 16)));
+		if (variantType !== 'image/webp' && variantType !== 'image/jpeg') continue;
+		try {
+			await r2.put(imageVariantKey(key, w), variantBytes, { httpMetadata: { contentType: variantType } });
+		} catch {
+			/* the photo itself stands in for it */
+		}
 	}
 
 	// Same-origin URL served by /uploads/[...key] — works on localhost, prod, and

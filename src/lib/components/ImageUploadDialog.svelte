@@ -13,7 +13,8 @@
   import { tick } from 'svelte';
   import { dialog } from '$lib/actions/dialog';
   import { t } from '$lib/i18n.svelte';
-  import { downscaleImage } from '$lib/image-resize';
+  import { downscaleImage, makeImageVariants } from '$lib/image-resize';
+  import { imageVariantField } from '$lib/image-variants';
 
   let {
     open = $bindable(false),
@@ -75,6 +76,8 @@
     const file = await downscaleImage(original);
     const body = new FormData();
     body.append('file', file);
+    // And smaller copies still, for the cards and thumbnails that show it small.
+    for (const v of await makeImageVariants(file)) body.append(imageVariantField(v.width), v.blob, `w${v.width}`);
     const response = await fetch('/api/upload/image', { method: 'POST', body });
     if (!response.ok) {
       let message = t.imageDialog.uploadFailed;

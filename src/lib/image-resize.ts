@@ -3,6 +3,8 @@
 // pixels: a venue page weighed 3 MB on a phone (I2). The longest side is capped and
 // the picture re-encoded; anything that would not get smaller is sent as it was.
 
+import { IMAGE_VARIANT_WIDTHS, variantSize, type ImageVariantWidth } from '$lib/image-variants';
+
 /** Longest side of a stored photo, in pixels: sharp on a large screen, far from 12 MP. */
 export const MAX_IMAGE_SIDE = 2000;
 /** Encoder quality for JPEG and WebP. */
@@ -65,4 +67,43 @@ export async function downscaleImage(file: File): Promise<File> {
 	} finally {
 		bitmap?.close();
 	}
+}
+
+/** Encoder quality for the small copies: shown small, so a little softer is invisible. */
+const VARIANT_QUALITY = 0.8;
+
+/**
+ * Smaller copies of a photo for pages that show it small ($lib/image-variants), as
+ * WebP where the browser can encode it and JPEG where it cannot. Only widths the
+ * picture is wider than; none for a GIF (it may be animated) or an old browser.
+ * Never throws: without copies the pages simply use the photo itself.
+ */
+export async function makeImageVariants(file: File): Promise<{ width: ImageVariantWidth; blob: Blob }[]> {
+	if (!outputType(file.type) || typeof createImageBitmap !== 'function' || typeof document === 'undefined') return [];
+	let bitmap: ImageBitmap | null = null;
+	const out: { width: ImageVariantWidth; blob: Blob }[] = [];
+	try {
+		bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' });
+		for (const target of IMAGE_VARIANT_WIDTHS) {
+			const size = variantSize(bitmap.width, bitmap.height, target);
+			if (!size) continue;
+			const canvas = document.createElement('canvas');
+			canvas.width = size.width;
+			canvas.height = size.height;
+			const ctx = canvas.getContext('2d');
+			if (!ctx) break;
+			ctx.imageSmoothingQuality = 'high';
+			ctx.drawImage(bitmap, 0, 0, size.width, size.height);
+			const encode = (type: string) => new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, type, VARIANT_QUALITY));
+			let blob = await encode('image/webp');
+			// A browser that cannot encode WebP hands back PNG, which is larger than a JPEG.
+			if (!blob || blob.type !== 'image/webp') blob = await encode('image/jpeg');
+			if (blob && (blob.type === 'image/webp' || blob.type === 'image/jpeg')) out.push({ width: target, blob });
+		}
+	} catch {
+		/* whatever was made so far is still useful */
+	} finally {
+		bitmap?.close();
+	}
+	return out;
 }
