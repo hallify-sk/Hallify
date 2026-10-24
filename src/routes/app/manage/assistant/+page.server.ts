@@ -6,10 +6,13 @@ import { loadAiPlatform } from '$lib/server/ai/pricing';
 import { aiConfigured } from '$lib/server/ai/openai';
 import { loadThreadMessages, questionCostMc } from '$lib/server/ai/agent';
 import { memberCan } from '$lib/server/ai/tools';
+import { aiPlatformEnabled, requireAssistantPage } from '$lib/server/ai/availability';
 import type { Actions, PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ locals, url }) => {
 	const org = await requireOrgPermission(locals, 'ai.use');
+	// Off on the platform or for the organisation: there is no assistant page.
+	await requireAssistantPage(locals);
 	const userId = locals.user!.id;
 	const account = await getAccount(locals.db, org);
 	const platform = await loadAiPlatform(locals.db);
@@ -45,12 +48,14 @@ export const actions: Actions = {
 	enable: async ({ locals }) => {
 		const org = await requireOrgPermission(locals, 'settings.manage');
 		if (org.impersonated) return fail(403, { error: 'impersonated' });
+		if (!(await aiPlatformEnabled(locals))) return fail(404, { error: 'not_found' });
 		await setEnabled(locals.db, org.id, true, locals.user!.id);
 		return { enabled: true };
 	},
 
 	deleteThread: async ({ request, locals }) => {
 		const org = await requireOrgPermission(locals, 'ai.use');
+		await requireAssistantPage(locals);
 		const id = String((await request.formData()).get('id') ?? '');
 		const t = await dbFirst<{ id: string }>(locals.db,
 			'SELECT id FROM ai_threads WHERE id = ? AND org_id = ? AND user_id = ?', id, org.id, locals.user!.id);

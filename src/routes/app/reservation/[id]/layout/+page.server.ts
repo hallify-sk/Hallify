@@ -13,6 +13,7 @@ import { seatingDraft, recordSavedDraft } from '$lib/server/ai/proposals';
 import { tableInventoryError } from '$lib/server/table-inventory';
 import { prepareLayoutSave } from '$lib/server/layout-sync';
 import { applyHallGeometry, followsHallPlan, hasLayout, layoutProblems, parseProblems, problemsColumn } from '$lib/floorplan-sync';
+import { aiVisibilityFor } from '$lib/server/ai/availability';
 
 export const load: PageServerLoad = async ({ locals, params, url }) => {
 	if (!locals.user) redirect(303, loginUrl(url));
@@ -73,7 +74,8 @@ export const load: PageServerLoad = async ({ locals, params, url }) => {
 	}
 
 	// ?draft=<proposal>: an AI assistant's seating plan, shown here unsaved.
-	const draftId = url.searchParams.get('draft');
+	// Not while the assistant is off (platform or organisation).
+	const draftId = (await aiVisibilityFor(locals)).page ? url.searchParams.get('draft') : null;
 	const draft = draftId && locals.currentOrg ? await seatingDraft(locals, locals.currentOrg, draftId, params.id) : null;
 
 	return {

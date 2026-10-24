@@ -1,6 +1,7 @@
 import { json } from '@sveltejs/kit';
 import { dbFirst } from '$lib/db/index';
 import { requireOrgPermission } from '$lib/server/access';
+import { requireAssistant } from '$lib/server/ai/availability';
 import { getAccount, MIN_TURN_MC } from '$lib/server/ai/credits';
 import { loadThreadMessages, questionCostMc } from '$lib/server/ai/agent';
 import { memberCan } from '$lib/server/ai/tools';
@@ -9,6 +10,8 @@ import type { RequestHandler } from './$types';
 /** A conversation for the floating widget, which has no page load of its own. */
 export const GET: RequestHandler = async ({ url, locals }) => {
 	const org = await requireOrgPermission(locals, 'ai.use');
+	// Off on the platform or for the organisation: no assistant to talk to.
+	await requireAssistant(locals);
 	const account = await getAccount(locals.db, org);
 	const id = url.searchParams.get('t');
 	const thread = id

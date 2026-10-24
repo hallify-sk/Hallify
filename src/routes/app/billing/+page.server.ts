@@ -14,6 +14,7 @@ import { SETUP_SERVICE_PRICE_CENTS } from '$lib/setup-service';
 import { openSetupRequest, createSetupRequest, cancelSetupRequest } from '$lib/server/setup-requests';
 import { planUsage } from '$lib/server/plan-usage';
 import { getAccount, allowanceCredits } from '$lib/server/ai/credits';
+import { aiVisibilityFor } from '$lib/server/ai/availability';
 
 async function getSubRow(db: D1Database, orgId: string) {
   return dbFirst<{ stripe_subscription_id: string | null; stripe_plan: string | null; stripe_status: string | null }>(db,
@@ -90,8 +91,9 @@ export const load: PageServerLoad = async ({ locals, url }) => {
   }) === 'settle';
 
   // AI credits are part of what a plan includes; best-effort (needs migration 0012).
+  // Shown only while the assistant is on, on the platform and for this organisation.
   let ai: { balanceMc: number; allowance: number } | null = null;
-  try {
+  if ((await aiVisibilityFor(locals)).credits) try {
     const acc = await getAccount(locals.db, org);
     ai = { balanceMc: Math.max(0, acc.balance_mc), allowance: allowanceCredits(org, acc.allowance_override) };
   } catch { /* no assistant tables */ }

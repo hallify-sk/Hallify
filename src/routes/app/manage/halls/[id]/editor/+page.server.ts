@@ -7,6 +7,7 @@ import { requireOrgPermission } from '$lib/server/access';
 import { floorplanDraft, recordSavedDraft } from '$lib/server/ai/proposals';
 import { layoutVersion } from '$lib/floorplan-layout';
 import { syncHallLayouts, writeHallFloorplanOver } from '$lib/server/layout-sync';
+import { aiVisibilityFor } from '$lib/server/ai/availability';
 
 export const load: PageServerLoad = async ({ params, locals, url }) => {
 	await requireOrgPermission(locals, 'floorplans.manage');
@@ -22,7 +23,8 @@ export const load: PageServerLoad = async ({ params, locals, url }) => {
 
 	// ?draft=<proposal>: show an AI assistant's proposed plan here, unsaved, so it can be
 	// looked at and adjusted before anything is written.
-	const draftId = url.searchParams.get('draft');
+	// Not while the assistant is off (platform or organisation).
+	const draftId = (await aiVisibilityFor(locals)).page ? url.searchParams.get('draft') : null;
 	const draft = draftId ? await floorplanDraft(locals.db, orgId, locals.user!.id, draftId, hall.id) : null;
 
 	return {

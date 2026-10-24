@@ -1,8 +1,5 @@
 import { dbFirst, dbRun, dbAll, wroteRow } from '$lib/db/index';
 import { getPlan } from '$lib/plans';
-import { aiConfigured } from './openai';
-import { loadAiPlatform } from './pricing';
-import { memberCan } from './tools';
 import type { OrgContext } from '../../../app.d';
 
 /**
@@ -271,24 +268,4 @@ export async function spentThisPeriod(db: Db, acc: AiAccount): Promise<number> {
 		"SELECT -SUM(amount_mc) AS mc FROM ai_ledger WHERE org_id = ? AND kind = 'charge' AND created_at >= ?",
 		acc.org_id, start);
 	return row?.mc ?? 0;
-}
-
-/**
- * Whether the floating assistant should appear for this request. Runs on every
- * page load, so it is cheap first: configuration and the org's switch (one indexed
- * read, no refill) before the member's permission. Never throws — a database
- * without migration 0012 simply has no assistant.
- */
-export async function assistantVisible(locals: App.Locals): Promise<boolean> {
-	const org = locals.currentOrg;
-	if (!locals.user || !org || locals.domainOrg || org.impersonated || locals.user.account_type === 'client') return false;
-	try {
-		if (!aiConfigured()) return false;
-		if (!(await loadAiPlatform(locals.db)).enabled) return false;
-		const acc = await dbFirst<{ enabled: number }>(locals.db, 'SELECT enabled FROM ai_accounts WHERE org_id = ?', org.id);
-		if (!acc?.enabled) return false;
-		return await memberCan(locals, 'ai.use');
-	} catch {
-		return false;
-	}
 }

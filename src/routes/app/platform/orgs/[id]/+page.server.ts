@@ -11,6 +11,7 @@ import { requirePlatformAdmin } from '$lib/guards';
 import { slugify } from '$lib/slug';
 import { logPlatformAction, listAudit } from '$lib/server/platform-audit';
 import { adjustAiCredits, aiBalanceCredits, parseCreditAdjustment } from '$lib/server/platform-credits';
+import { aiPlatformEnabled } from '$lib/server/ai/availability';
 
 /** The longest subdomain label DNS allows. */
 const MAX_SLUG = 63;
@@ -118,6 +119,8 @@ export const actions: Actions = {
     const credits = parseCreditAdjustment(data.get('credits'));
     const reason = String(data.get('reason') ?? '').trim().slice(0, 160);
     const t = st(locals.locale).platformOrgs;
+    // The assistant is off on the platform: no credits to adjust.
+    if (!(await aiPlatformEnabled(locals))) return fail(404, { creditsError: t.creditsFailed });
     if (credits == null) return fail(400, { creditsError: t.creditsInvalid });
     if (!reason) return fail(400, { creditsError: t.creditsReasonRequired });
     const org = await dbFirst<{ name: string }>(locals.db, 'SELECT name FROM organizations WHERE id = ?', params.id);

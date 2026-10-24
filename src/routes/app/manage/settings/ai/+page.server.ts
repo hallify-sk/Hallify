@@ -6,10 +6,13 @@ import { memberCan } from '$lib/server/ai/tools';
 import { AI_CREDIT_PACKS, createAiTopupSession, getCheckoutSession } from '$lib/stripe';
 import { applyCreditPurchase } from '$lib/server/stripe-sync';
 import { st } from '$lib/i18n-server';
+import { requireAiSettings } from '$lib/server/ai/availability';
 import type { Actions, PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ locals, url }) => {
 	const org = await requireOrgPermission(locals, 'settings.manage');
+	// The platform has the assistant off: there is nothing here to set.
+	await requireAiSettings(locals);
 
 	// Back from Checkout: Stripe put the session id in the URL. Confirm it with Stripe
 	// and credit a paid pack right away (once per session; the webhook may be later).
@@ -54,6 +57,7 @@ export const actions: Actions = {
 	toggle: async ({ request, locals }) => {
 		const org = await requireOrgPermission(locals, 'settings.manage');
 		if (org.impersonated) return fail(403, { error: 'impersonated' });
+		await requireAiSettings(locals);
 		const on = (await request.formData()).get('enabled') === 'on';
 		await setEnabled(locals.db, org.id, on, locals.user!.id);
 		return { saved: true };
@@ -62,6 +66,8 @@ export const actions: Actions = {
 	buy: async ({ request, locals }) => {
 		const org = await requireOrgPermission(locals, 'billing.manage');
 		if (org.impersonated) return fail(403, { error: 'impersonated' });
+		// No credits are sold while the platform has the assistant off.
+		await requireAiSettings(locals);
 		const credits = Number((await request.formData()).get('credits'));
 		if (!(AI_CREDIT_PACKS as readonly number[]).includes(credits)) return fail(400, { error: 'bad_pack' });
 		let checkoutUrl: string;

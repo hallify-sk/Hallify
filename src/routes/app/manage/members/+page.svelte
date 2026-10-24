@@ -6,6 +6,7 @@
   import { getLocale, t } from '$lib/i18n.svelte';
   import { roleDisplayName } from '$lib/role-label';
   import { ELEVATED, PERMISSION_GROUPS, type Permission } from '$lib/permissions';
+  import { permissionHidden } from '$lib/ai-visibility';
   import type { PageData, ActionData } from './$types';
   let { data, form }: { data: PageData; form: ActionData } = $props();
 
@@ -191,7 +192,7 @@
               <p class="hint">{t.peopleArea.effectiveNone}</p>
             {/if}
             <div class="eff-list">
-              {#each p.effective as perm (perm)}
+              {#each p.effective.filter((perm) => !permissionHidden(perm, !!data.aiAvailable)) as perm (perm)}
                 <span class="eff-chip" class:eff-chip--allow={p.allow.includes(perm)}>
                   {t.peopleArea.perm[perm]}
                 </span>
@@ -248,6 +249,10 @@
                   <p class="perm-group-name">{groupLabel(group.key)}</p>
                   {#each group.permissions as perm (perm)}
                     {@const state = overrideState(p, perm)}
+                    {#if permissionHidden(perm, !!data.aiAvailable)}
+                      <!-- The assistant is off on the platform: not offered, but kept as stored. -->
+                      <input type="hidden" name="p:{perm}" value={state} />
+                    {:else}
                     {@const editable = grantable.has(perm)}
                     <div class="perm-row" class:locked={!editable}>
                       <div class="perm-label">
@@ -281,6 +286,7 @@
                         </label>
                       </div>
                     </div>
+                    {/if}
                   {/each}
                 </div>
               {/each}

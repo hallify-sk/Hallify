@@ -5,6 +5,7 @@
 	import { t } from '$lib/i18n.svelte';
 	import { roleDisplayName, roleNamesClash } from '$lib/role-label';
 	import { ELEVATED, PERMISSION_GROUPS, PERMISSIONS, sameRoleName, type Permission } from '$lib/permissions';
+	import { permissionHidden } from '$lib/ai-visibility';
 	import type { PageData, ActionData } from './$types';
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
@@ -246,6 +247,10 @@
 									<legend class="perm-group-title">{groupLabel(group.key)}</legend>
 									<div class="perm-list">
 										{#each group.permissions as p (p)}
+											{#if permissionHidden(p, !!data.aiAvailable)}
+												<!-- The assistant is off on the platform: not offered, but kept as stored. -->
+												{#if role.permissions.includes(p)}<input type="hidden" name="perm" value={p} />{/if}
+											{:else}
 											{@const held = grantable.has(p)}
 											{@const locked = !held || !role.canManage}
 											{@const elevated = ELEVATED.includes(p)}
@@ -276,6 +281,7 @@
 													{/if}
 												</span>
 											</label>
+											{/if}
 										{/each}
 									</div>
 								</fieldset>
