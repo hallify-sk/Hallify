@@ -20,9 +20,13 @@ export function d1(sqlite: DatabaseSync): App.Locals['db'] {
 		bind: (...args: unknown[]) => stmt(sql, args),
 		first: async () => (sqlite.prepare(sql).get(...(values as never[])) as unknown) ?? null,
 		all: async () => ({ results: sqlite.prepare(sql).all(...(values as never[])) }),
+		// Like D1, changes counts the rows triggers changed too (an UPDATE of one hall
+		// reports 2 once halls_touch_updated_at stamps it), not only the statement's own.
 		run: async () => {
-			const r = sqlite.prepare(sql).run(...(values as never[]));
-			return { meta: { changes: Number(r.changes) } };
+			const total = () => Number((sqlite.prepare('SELECT total_changes() AS n').get() as { n: number }).n);
+			const before = total();
+			sqlite.prepare(sql).run(...(values as never[]));
+			return { meta: { changes: total() - before } };
 		}
 	});
 	return { prepare: (sql: string) => stmt(sql) } as unknown as App.Locals['db'];

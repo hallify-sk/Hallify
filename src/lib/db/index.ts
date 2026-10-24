@@ -27,6 +27,17 @@ export async function dbRun(
   return db.prepare(sql).bind(...params).run();
 }
 
+/**
+ * Whether a write reached a row. D1's meta.changes counts the rows a trigger
+ * changed as well: an UPDATE of one hall reports 2, because halls_touch_updated_at
+ * (0020) stamps the hall again. A guarded single-row write ("… AND floorplan_json
+ * IS ?") is therefore tested for "any row", never for exactly one — a check for 1
+ * read every successful hall save as a conflict.
+ */
+export function wroteRow(result: Pick<D1Result, 'meta'>): boolean {
+  return (result.meta?.changes ?? 0) > 0;
+}
+
 // ─── JSON helpers ─────────────────────────────────────────────────────────────
 
 export function toJson(value: unknown): string | null {

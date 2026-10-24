@@ -1,4 +1,4 @@
-import { dbFirst, dbRun, fromJson, toJson } from '$lib/db/index';
+import { dbFirst, dbRun, fromJson, toJson, wroteRow } from '$lib/db/index';
 import { createReservation } from '$lib/server/reservations';
 import { getPlan } from '$lib/plans';
 import { memberCan, loadSeating, layoutHash } from './tools';
@@ -7,7 +7,7 @@ import type { Guest } from '$lib/floorplan-types';
 import { loadHallProfile, currentValue, validateHallPatch, applyHallPatch, type HallField } from '$lib/server/hall-profile';
 import type { OrgContext } from '../../../app.d';
 import { applyChanges, type CheckedOp } from './operations';
-import { refreshLayoutProblems, syncHallLayouts } from '$lib/server/layout-sync';
+import { refreshLayoutProblems, syncHallLayouts, writeHallFloorplanOver } from '$lib/server/layout-sync';
 
 /**
  * Applying what the assistant proposed.
@@ -80,7 +80,7 @@ export async function applyProposal(
 	// Claimed before any work, so a double click cannot import the file twice.
 	const claim = await dbRun(locals.db,
 		"UPDATE ai_proposals SET status = 'applied', resolved_at = datetime('now') WHERE id = ? AND status = 'pending'", id);
-	if (claim.meta.changes !== 1) return { ok: false, status: 409, error: 'already_resolved' };
+	if (!wroteRow(claim)) return { ok: false, status: 409, error: 'already_resolved' };
 
 	if (p.kind === 'reservation_import') {
 		if (!(await memberCan(locals, 'reservations.manage'))) {
@@ -126,7 +126,7 @@ export async function applyProposal(
 		const write = await dbRun(locals.db,
 			'UPDATE reservations SET layout_json = ? WHERE id = ? AND org_id = ? AND layout_json IS ?',
 			JSON.stringify(built.layout), built.reservationId, org.id, built.baseJson);
-		if (write.meta.changes !== 1) return stale();
+		if (!wroteRow(write)) return stale();
 		await refreshLayoutProblems(locals.db, 'event', built.reservationId);
 		await dbRun(locals.db, 'UPDATE ai_proposals SET result = ? WHERE id = ?', toJson({ seated: built.seated }), id);
 		return { ok: true, seated: built.seated, reservationId: built.reservationId };
@@ -170,10 +170,7 @@ export async function applyProposal(
 		floor.zones = plan.zones;
 		floor.bounds = plan.bounds;
 		delete floor.boundsParts;   // the proposal's outline is one rectangle
-		const write = await dbRun(locals.db,
-			'UPDATE halls SET floorplan_json = ? WHERE id = ? AND org_id = ? AND floorplan_json IS ?',
-			JSON.stringify(state), hall.id, org.id, hall.floorplan_json);
-		if (write.meta.changes !== 1) return stale();
+		if (!(await writeHallFloorplanOver(locals.db, hall.id, org.id, JSON.stringify(state), hall.floorplan_json))) return stale();
 		// The new room goes under the hall's templates and upcoming events too.
 		await syncHallLayouts(locals.db, hall.id, hall.floorplan_json, JSON.stringify(state), { orgId: org.id, actorId: locals.user?.id ?? null });
 		await dbRun(locals.db, 'UPDATE ai_proposals SET result = ? WHERE id = ?', toJson({ saved: true }), id);
@@ -333,7 +330,7 @@ export async function markProposalApplied(db: App.Locals['db'], id: string, resu
 	const r = await dbRun(db,
 		"UPDATE ai_proposals SET status = 'applied', resolved_at = datetime('now'), result = ? WHERE id = ? AND status = 'pending'",
 		toJson(result), id);
-	return r.meta.changes === 1;
+	return wroteRow(r);
 }
 
 export async function discardProposal(locals: App.Locals, org: OrgContext, id: string): Promise<boolean> {
@@ -341,5 +338,5 @@ export async function discardProposal(locals: App.Locals, org: OrgContext, id: s
 		`UPDATE ai_proposals SET status = 'discarded', resolved_at = datetime('now')
 		  WHERE id = ? AND org_id = ? AND user_id = ? AND status = 'pending'`,
 		id, org.id, locals.user!.id);
-	return res.meta.changes === 1;
+	return wroteRow(res);
 }

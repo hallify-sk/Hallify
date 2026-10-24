@@ -8,7 +8,7 @@
  * fixed and saved.
  */
 import type { D1Database } from '@cloudflare/workers-types';
-import { dbAll, dbFirst, dbRun } from '$lib/db/index';
+import { dbAll, dbFirst, dbRun, wroteRow } from '$lib/db/index';
 import {
 	applyHallGeometry, followsHallPlan, hasLayout, layoutProblems, parseProblems, problemsColumn, roomKey,
 	UPCOMING_STATUSES, type HallSyncReport, type LayoutProblem
@@ -24,6 +24,20 @@ interface EventSyncRow {
 const IN_STATUSES = UPCOMING_STATUSES.map(() => '?').join(', ');
 /** D1 caps a batch; stay well under it. */
 const BATCH = 50;
+
+/**
+ * Store a hall's new floor plan only over the plan it was made from: false when
+ * someone (another tab, a colleague, the assistant) saved over that plan since, and
+ * nothing is written. Every guarded writer of halls.floorplan_json goes through here.
+ */
+export async function writeHallFloorplanOver(
+	db: D1Database, hallId: string, orgId: string, nextJson: string, expectedJson: string | null
+): Promise<boolean> {
+	const write = await dbRun(db,
+		'UPDATE halls SET floorplan_json = ? WHERE id = ? AND org_id = ? AND floorplan_json IS ?',
+		nextJson, hallId, orgId, expectedJson);
+	return wroteRow(write);
+}
 
 /**
  * Lay the hall's new plan under every template of the hall and every upcoming

@@ -6,7 +6,7 @@ import type { Actions, PageServerLoad } from './$types';
 import { requireOrgPermission } from '$lib/server/access';
 import { floorplanDraft, recordSavedDraft } from '$lib/server/ai/proposals';
 import { layoutVersion } from '$lib/floorplan-layout';
-import { syncHallLayouts } from '$lib/server/layout-sync';
+import { syncHallLayouts, writeHallFloorplanOver } from '$lib/server/layout-sync';
 
 export const load: PageServerLoad = async ({ params, locals, url }) => {
 	await requireOrgPermission(locals, 'floorplans.manage');
@@ -49,10 +49,9 @@ export const actions: Actions = {
 			const draft = await floorplanDraft(locals.db, orgId, locals.user!.id, proposalId, params.id);
 			if (!draft || draft.stale) return fail(409, { error: st(locals.locale).ai.draftStale });
 			if (!floorplanJson) floorplanJson = JSON.stringify(draft.state);
-			const write = await dbRun(locals.db,
-				'UPDATE halls SET floorplan_json = ? WHERE id = ? AND org_id = ? AND floorplan_json IS ?',
-				floorplanJson, params.id, orgId, draft.baseJson);
-			if (write.meta.changes !== 1) return fail(409, { error: st(locals.locale).ai.draftStale });
+			if (!(await writeHallFloorplanOver(locals.db, params.id, orgId, floorplanJson, draft.baseJson))) {
+				return fail(409, { error: st(locals.locale).ai.draftStale });
+			}
 			await recordSavedDraft(locals.db, orgId, proposalId, floorplanJson);
 			const sync = await syncHallLayouts(locals.db, params.id, draft.baseJson, floorplanJson, { orgId, actorId: locals.user?.id ?? null });
 			return { success: true, draftSaved: true, sync };
@@ -72,10 +71,7 @@ export const actions: Actions = {
 		if (baseVersion && !force) {
 			const conflict = () => fail(409, { conflict: true, error: st(locals.locale).serverErrors.floorplanChangedElsewhere });
 			if ((await layoutVersion(current.floorplan_json)) !== baseVersion) return conflict();
-			const write = await dbRun(locals.db,
-				'UPDATE halls SET floorplan_json = ? WHERE id = ? AND org_id = ? AND floorplan_json IS ?',
-				floorplanJson, params.id, orgId, current.floorplan_json);
-			if (write.meta.changes !== 1) return conflict();
+			if (!(await writeHallFloorplanOver(locals.db, params.id, orgId, floorplanJson, current.floorplan_json))) return conflict();
 		} else {
 			await dbRun(locals.db, 'UPDATE halls SET floorplan_json=? WHERE id=? AND org_id=?', floorplanJson, params.id, orgId);
 		}

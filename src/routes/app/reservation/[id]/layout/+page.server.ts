@@ -1,6 +1,6 @@
 import { error, redirect, fail } from '@sveltejs/kit';
 import { loginUrl } from '$lib/login-redirect';
-import { dbFirst, dbAll, dbRun, fromJson } from '$lib/db/index';
+import { dbFirst, dbAll, dbRun, fromJson, wroteRow } from '$lib/db/index';
 import type { ReservationRow, TableTypeRow } from '$lib/db/index';
 import { buildSeatableLayout } from '$lib/reservationLayout';
 import { parseEventTypes } from '$lib/eventTypes';
@@ -127,7 +127,7 @@ export const actions: Actions = {
 			const write = await dbRun(locals.db,
 				'UPDATE reservations SET layout_json = ?, layout_problems = ? WHERE id = ? AND org_id = ? AND layout_json IS ?',
 				save.json, save.column, params.id, orgId, draft.built.baseJson);
-			if (write.meta.changes !== 1) return fail(409, { error: st(locals.locale).ai.draftStale });
+			if (!wroteRow(write)) return fail(409, { error: st(locals.locale).ai.draftStale });
 			await recordSavedDraft(locals.db, orgId, proposalId, save.json);
 			return { ...saved, draftSaved: true };
 		}
