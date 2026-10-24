@@ -17,6 +17,7 @@
   import { EVENT_TYPE_KEYS, parseEventTypes } from '$lib/eventTypes';
   import type { PageData, ActionData } from './$types';
   import { onMount, tick, untrack } from 'svelte';
+  import { externalContact, hasExternalContact, parseBookingMode, type BookingMode } from '$lib/listings';
   import { beforeNavigate, invalidateAll } from '$app/navigation';
   import { registerAssistantPage } from '$lib/assistant/page-hooks';
   import { slugify } from '$lib/slug';
@@ -79,6 +80,10 @@
   });
   let settingsFormEl: HTMLFormElement | null = null;
   let settingsDirty = $state(false);
+  // How visitors book: Hallify's form, or the venue's own website / phone / e-mail
+  // (the profile's contacts). Chosen in the settings form, saved with it.
+  let bookingMode = $state<BookingMode>(untrack(() => parseBookingMode(data.hall.booking_mode)));
+  const savedContact = $derived(externalContact(data.hall));
   let savingAll     = $state(false);
 
 
@@ -914,10 +919,14 @@
         <p class="eyebrow">{t.nav.halls}</p>
         <h1 class="hall-name">{previewName || data.hall.name}</h1>
         <div class="identity-chips">
+          {#if data.hall.booking_mode === 'external'}
+            <span class="chip chip-success"><span class="chip-dot"></span>{t.listings.chipExternal}</span>
+          {:else}
           <span class="chip" class:chip-success={data.hall.allow_reservations} class:chip-closed={!data.hall.allow_reservations}>
             <span class="chip-dot"></span>
             {data.hall.allow_reservations ? t.hallAdmin.acceptingBookings : t.hallAdmin.closedToBookings}
           </span>
+          {/if}
           {#if profileIsPublic}
             <span class="chip chip-success">
               <span class="chip-dot"></span>{t.hallAdmin.published}
@@ -1711,7 +1720,38 @@
         </div>
         {#if form?.infoError}<div class="inline-err" role="alert">{form.infoError}</div>{/if}
 
-        <div class="settings-cols">
+        <!-- How visitors book. "Directly with you" swaps the booking form on the venue
+             site and in the Hallify directory for the profile's website, phone and
+             e-mail; the rules below wait until bookings come back to Hallify. -->
+        <fieldset class="mode-set">
+          <legend class="toggle-title">{t.listings.bookingModeTitle}</legend>
+          <div class="mode-opts">
+            <label class="mode-opt" class:on={bookingMode === 'hallify'}>
+              <input type="radio" name="bookingMode" value="hallify" bind:group={bookingMode} disabled={archived} />
+              <span><strong>{t.listings.bookingModeHallify}</strong><small>{t.listings.bookingModeHallifyHint}</small></span>
+            </label>
+            <label class="mode-opt" class:on={bookingMode === 'external'}>
+              <input type="radio" name="bookingMode" value="external" bind:group={bookingMode} disabled={archived} />
+              <span><strong>{t.listings.bookingModeExternal}</strong><small>{t.listings.bookingModeExternalHint}</small></span>
+            </label>
+          </div>
+          {#if bookingMode === 'external'}
+            <div class="mode-contacts" class:warn={!hasExternalContact(savedContact)}>
+              {#if hasExternalContact(savedContact)}
+                <span>{t.listings.bookingModeContacts}</span>
+                {#if savedContact.website}<code>{savedContact.website}</code>{/if}
+                {#if savedContact.phone}<code>{savedContact.phone}</code>{/if}
+                {#if savedContact.email}<code>{savedContact.email}</code>{/if}
+              {:else}
+                <span>{t.listings.needsContact}</span>
+              {/if}
+              <button type="button" class="link-btn" onclick={() => openTab('profile')}>{t.listings.bookingModeEditContacts}</button>
+              <span class="mode-note">{t.listings.bookingModeRulesOff}</span>
+            </div>
+          {/if}
+        </fieldset>
+
+        <div class="settings-cols" class:mode-dim={bookingMode === 'external'}>
           <div class="settings-toggles">
             <label class="toggle-item">
               <div class="toggle-text">
@@ -1719,7 +1759,7 @@
                 <span class="toggle-hint">{t.halls.allowReservationsHint}</span>
               </div>
               <div class="toggle-switch">
-                <input type="checkbox" name="allowReservations" checked={!!data.hall.allow_reservations} disabled={archived} />
+                <input type="checkbox" name="allowReservations" checked={!!data.hall.allow_reservations} disabled={archived || bookingMode === 'external'} />
                 <span class="toggle-slider"></span>
               </div>
             </label>
@@ -2939,6 +2979,29 @@
     display: grid; grid-template-columns: 1fr 1fr; gap: 0 24px;
   }
   .settings-toggles { padding-right: 24px; border-right: 1px solid var(--border-subtle); }
+  .settings-cols.mode-dim { opacity: .55; }
+
+  /* ── How visitors book ── */
+  .mode-set { border: 0; padding: 0; margin: 0 0 16px; min-width: 0; }
+  .mode-set legend { padding: 0; margin-bottom: 8px; }
+  .mode-opts { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .mode-opt {
+    display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; cursor: pointer;
+    border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg-panel);
+  }
+  .mode-opt.on { border-color: var(--accent); background: var(--accent-dim); }
+  .mode-opt input { margin-top: 2px; accent-color: var(--accent); }
+  .mode-opt strong { display: block; font-size: 12.5px; font-weight: 600; color: var(--text-base); }
+  .mode-opt small { display: block; font-size: 11px; color: var(--text-muted); line-height: 1.4; margin-top: 2px; }
+  .mode-contacts {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin-top: 10px;
+    padding: 10px 12px; border-radius: var(--radius-sm); background: var(--bg-hover); font-size: 12px; color: var(--text-muted);
+  }
+  .mode-contacts.warn { background: color-mix(in srgb, var(--warning) 12%, transparent); color: var(--text-base); }
+  .mode-contacts code { font-size: 11.5px; padding: 1px 6px; border-radius: var(--radius-sm); background: var(--bg-panel); color: var(--text-base); overflow-wrap: anywhere; }
+  .mode-contacts .link-btn { border: 0; background: none; padding: 0; font: inherit; font-weight: 600; color: var(--accent-ink); cursor: pointer; text-decoration: underline; }
+  .mode-note { flex-basis: 100%; font-size: 11px; }
+  @media (max-width: 640px) { .mode-opts { grid-template-columns: 1fr; } }
   .settings-fields  { display: flex; flex-direction: column; gap: 12px; }
 
   /* ── List empty state — a quiet inset block, not a bordered strip. ── */

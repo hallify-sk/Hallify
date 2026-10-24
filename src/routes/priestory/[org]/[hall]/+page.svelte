@@ -12,6 +12,9 @@
   import { priceBandLabel, priceGlyphs } from '$lib/marketing/types';
   import { absoluteUrl, metaDescription, venueJsonLd } from '$lib/marketing/venue-seo';
   import { hasCoordinates } from '$lib/venue-location';
+  import { onMount } from 'svelte';
+  import { trackListingClick, trackListingView } from '$lib/listing-tracker';
+  import { mailHref, telHref } from '$lib/listings';
   import type { PageData } from './$types';
 
   let { data }: { data: PageData } = $props();
@@ -39,6 +42,8 @@
   const dayNames = $derived([t.appHalls.daySunday, t.appHalls.dayMonday, t.appHalls.dayTuesday, t.appHalls.dayWednesday, t.appHalls.dayThursday, t.appHalls.dayFriday, t.appHalls.daySaturday]);
   const hours = $derived(hall.opening_hours ?? {});
   const hasHours = $derived(WEEK.some(day => hours[DOW_KEYS[day]] ?? hours[String(day)]));
+
+  onMount(() => trackListingView(data.listingRef));
 
   let activeIndex = $state<number | null>(null);
   let coverFailed = $state(false);
@@ -139,6 +144,14 @@
           {#if data.bookHref}
             <p>{t.appHalls.bookOnVenueSiteHint}</p>
             <a class="primary" href={data.bookHref}>{t.appHalls.bookOnVenueSite} <Icon /></a>
+          {:else if data.direct}
+            <!-- Booked directly with the venue: its own ways in, counted per click. -->
+            <h2>{t.listings.bookDirectTitle}</h2>
+            <p>{t.listings.bookDirectHint}</p>
+            {#if data.direct.website}<a class="primary" href={data.direct.website} target="_blank" rel="noopener nofollow" onclick={() => trackListingClick(data.listingRef, 'website')}>{t.listings.visitWebsite} <Icon /></a>{/if}
+            {#if data.direct.phone}<a class="venue-page-direct" href={telHref(data.direct.phone)} onclick={() => trackListingClick(data.listingRef, 'phone')}>{t.listings.call}: {data.direct.phone}</a>{/if}
+            {#if data.direct.email}<a class="venue-page-direct" href={mailHref(data.direct.email)} onclick={() => trackListingClick(data.listingRef, 'email')}><Icon name="mail" size={15} /> {data.direct.email}</a>{/if}
+            {#if data.org.listingOnly}<p class="venue-page-note">{t.listings.notOnHallify}</p>{/if}
           {:else}
             <h2>{t.appHalls.notBookableTitle}</h2>
             <p>{t.appHalls.notBookableHint}</p>
@@ -154,9 +167,9 @@
           <section>
             <h2>{t.appHalls.contact}</h2>
             <ul class="venue-page-contact">
-              {#if hall.contact_phone}<li><a href={`tel:${hall.contact_phone.replace(/[^\d+]/g, '')}`}>{hall.contact_phone}</a></li>{/if}
-              {#if hall.contact_email}<li><a href={`mailto:${hall.contact_email}`}><Icon name="mail" size={15} /> {hall.contact_email}</a></li>{/if}
-              {#if website}<li><a href={website} target="_blank" rel="noopener noreferrer nofollow">{hall.contact_website}</a></li>{/if}
+              {#if hall.contact_phone}<li><a href={telHref(hall.contact_phone)} onclick={() => trackListingClick(data.listingRef, 'phone')}>{hall.contact_phone}</a></li>{/if}
+              {#if hall.contact_email}<li><a href={mailHref(hall.contact_email)} onclick={() => trackListingClick(data.listingRef, 'email')}><Icon name="mail" size={15} /> {hall.contact_email}</a></li>{/if}
+              {#if website}<li><a href={website} target="_blank" rel="noopener nofollow" onclick={() => trackListingClick(data.listingRef, 'website')}>{hall.contact_website}</a></li>{/if}
             </ul>
           </section>
         {/if}
@@ -204,6 +217,9 @@
   .venue-page-book h2 { font-size: 17px; letter-spacing: -.04em; margin: 0; }
   .venue-page-book p { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.7; }
   .venue-page-book .primary { justify-content: space-between; }
+  .venue-page-direct { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 600; color: var(--ink); overflow-wrap: anywhere; }
+  .venue-page-direct:hover { color: var(--accent-ink); }
+  .venue-page-book .venue-page-note { font-size: 12px; }
   .venue-page-site { display: inline-flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 650; color: var(--accent-ink); }
   .venue-page-contact { list-style: none; padding: 0; margin: 0; display: grid; gap: 9px; font-size: 13px; }
   .venue-page-contact a { display: inline-flex; align-items: center; gap: 7px; color: var(--ink); overflow-wrap: anywhere; }

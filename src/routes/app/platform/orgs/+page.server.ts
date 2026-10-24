@@ -7,9 +7,9 @@ import { requirePlatformAdmin } from '$lib/guards';
 export const load: PageServerLoad = async ({ locals }) => {
   const orgs = await dbAll<{
     id: string; name: string; slug: string; plan: string; status: string;
-    member_count: string; created_at: string; suspended_at: string | null;
+    member_count: string; created_at: string; suspended_at: string | null; listing_only: number;
   }>(locals.db, `
-    SELECT o.id, o.name, o.slug, o.suspended_at,
+    SELECT o.id, o.name, o.slug, o.suspended_at, o.listing_only,
            s.plan, s.status,
            (SELECT COUNT(*) FROM organization_members m WHERE m.org_id = o.id) AS member_count,
            o.created_at

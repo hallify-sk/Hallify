@@ -15,6 +15,8 @@
   import { venueTitle } from '$lib/page-title';
   import { onMount, tick } from 'svelte';
   import { booking } from '$lib/analytics';
+  import { trackListingClick, trackListingView } from '$lib/listing-tracker';
+  import { externalContact, mailHref, takesHallifyBookings, telHref } from '$lib/listings';
   import type { PageData } from './$types';
   import { migrateToMultiFloor } from '$lib/floorplan-types';
   import { roomOutlinePath, roomParts } from '$lib/floorplan-geometry';
@@ -32,7 +34,10 @@
   interface Props { data: PageData; }
   const { data }: Props = $props();
 
-  onMount(() => booking.viewHall(data.hall.slug ?? data.hall.id, data.hall.name));
+  onMount(() => {
+    booking.viewHall(data.hall.slug ?? data.hall.id, data.hall.name);
+    trackListingView(data.listingRef);
+  });
 
   const hall = data.hall;
   const user = data.user;
@@ -43,6 +48,11 @@
   const openingHours = resolveOpeningHours(hall.opening_hours);
   // Only an http(s) website is linked: a javascript: one would run in this origin.
   const websiteHref = safeHref(hall.contact_website);
+  // Booked through Hallify's form, or directly with the venue (its website, phone and
+  // e-mail take the booking card's place).
+  const bookable = takesHallifyBookings(hall);
+  const external = hall.booking_mode === 'external';
+  const direct = externalContact(hall);
   const galleryImages = (hall.gallery_images as string[]) ?? [];
   // The cover leads the gallery; a cover that is also in the gallery is shown once.
   const photos = [...new Set([hall.cover_image_url, ...galleryImages].filter((u): u is string => !!u))];
@@ -90,7 +100,7 @@
     hall.floorplan_json ? { id: 'floorplan', label: t.hallProfile.floorplan } : null,
     hall.pricing_info ? { id: 'pricing', label: t.hallProfile.pricing } : null,
     openingHours ? { id: 'hours', label: t.hallProfile.openingHours } : null,
-    hall.allow_reservations ? { id: 'terms', label: t.hallProfile.termsTab } : null,
+    bookable ? { id: 'terms', label: t.hallProfile.termsTab } : null,
   ] as ({ id: TabId; label: string } | null)[]).filter((x): x is { id: TabId; label: string } => !!x));
   let activeTab = $state<TabId | null>(null);
   const currentTab = $derived(tabs.find((x) => x.id === activeTab)?.id ?? tabs[0]?.id ?? null);
@@ -168,7 +178,7 @@
   onindex={(i) => (activeIndex = i)}
 />
 
-<div class="hp site-wide" class:hp--bar={!!hall.allow_reservations}>
+<div class="hp site-wide" class:hp--bar={bookable}>
 
   {#if booked}
     <div class="hp-success" role="status">
@@ -232,11 +242,11 @@
           <dt>{t.hallProfile.statUpTo}</dt>
           <dd>{hall.max_people} <span class="hp-unit">{t.hallProfile.statGuests}</span></dd>
         </div>
-        <div class="hp-stat" class:is-open={hall.allow_reservations} class:is-closed={!hall.allow_reservations}>
+        <div class="hp-stat" class:is-open={bookable || external} class:is-closed={!bookable && !external}>
           <dt>{t.hallProfile.reservations}</dt>
-          <dd><span class="hp-dot"></span>{hall.allow_reservations ? t.status.open : t.status.closed}</dd>
+          <dd><span class="hp-dot"></span>{bookable ? t.status.open : external ? t.listings.statusDirect : t.status.closed}</dd>
         </div>
-        {#if hall.allow_reservations}
+        {#if bookable}
           <div class="hp-stat">
             <dt>{t.hallProfile.statConfirmation}</dt>
             <dd>{hall.auto_approve ? t.hallProfile.confirmInstant : t.hallProfile.confirmByVenue}</dd>
@@ -384,17 +394,17 @@
               {#if hasContact}
                 <ul class="hp-contact-list">
                   {#if hall.contact_phone}
-                    <li><a href="tel:{hall.contact_phone}">
+                    <li><a href={telHref(hall.contact_phone)} onclick={() => trackListingClick(data.listingRef, 'phone')}>
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 13 19.79 19.79 0 0 1 1.61 4.4 2 2 0 0 1 3.6 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 9.91a16 16 0 0 0 6.16 6.16l.91-.91a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
                       {hall.contact_phone}</a></li>
                   {/if}
                   {#if hall.contact_email}
-                    <li><a href="mailto:{hall.contact_email}">
+                    <li><a href={mailHref(hall.contact_email)} onclick={() => trackListingClick(data.listingRef, 'email')}>
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
                       {hall.contact_email}</a></li>
                   {/if}
                   {#if websiteHref}
-                    <li><a href={websiteHref} target="_blank" rel="noopener noreferrer">
+                    <li><a href={websiteHref} target="_blank" rel="noopener nofollow" onclick={() => trackListingClick(data.listingRef, 'website')}>
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
                       {t.hallProfile.website}</a></li>
                   {/if}
@@ -409,7 +419,7 @@
     <!-- ─── Booking card ────────────────────────────────────────────────────── -->
     <aside class="hp-aside" id="book" bind:this={cardEl}>
       <div class="hp-card">
-        {#if hall.allow_reservations}
+        {#if bookable}
           <div class="hp-card-head">
             <div>
               <span class="eyebrow">{t.hallProfile.reservations}</span>
@@ -449,6 +459,27 @@
 
           <a href={bookHref} class="hp-cta">{user ? t.hallProfile.continueBooking : t.hallProfile.signInToContinue}</a>
           <p class="hp-fine">{t.hallProfile.cardNotBinding}</p>
+        {:else if external}
+          <!-- Booked directly with the venue: its own ways in, where the form would be. -->
+          <div class="hp-card-head">
+            <div>
+              <span class="eyebrow">{t.hallProfile.reservations}</span>
+              <h2>{t.listings.bookDirectTitle}</h2>
+            </div>
+            <span class="hp-pill">{t.hallProfile.upToGuests(hall.max_people)}</span>
+          </div>
+          <p class="hp-fine hp-direct-hint">{t.listings.bookDirectHint}</p>
+          <div class="hp-direct">
+            {#if direct.website}
+              <a class="hp-cta" href={direct.website} target="_blank" rel="noopener nofollow" onclick={() => trackListingClick(data.listingRef, 'website')}>{t.listings.visitWebsite}</a>
+            {/if}
+            {#if direct.phone}
+              <a class="hp-direct-link" href={telHref(direct.phone)} onclick={() => trackListingClick(data.listingRef, 'phone')}>{direct.phone}</a>
+            {/if}
+            {#if direct.email}
+              <a class="hp-direct-link" href={mailHref(direct.email)} onclick={() => trackListingClick(data.listingRef, 'email')}>{direct.email}</a>
+            {/if}
+          </div>
         {:else}
           <div class="hp-card-head">
             <div>
@@ -461,18 +492,18 @@
 
         <!-- An open hall's contacts are in the Location block; the card stays short
              enough to fit the screen. A closed hall's card has room for them. -->
-        {#if !hall.allow_reservations && (hall.contact_phone || hall.contact_email)}
+        {#if !bookable && !external && (hall.contact_phone || hall.contact_email)}
           <div class="hp-card-foot">
             <span>{t.hallProfile.cardQuestions}</span>
-            {#if hall.contact_phone}<a href="tel:{hall.contact_phone}">{hall.contact_phone}</a>{/if}
-            {#if hall.contact_email}<a href="mailto:{hall.contact_email}">{hall.contact_email}</a>{/if}
+            {#if hall.contact_phone}<a href={telHref(hall.contact_phone)} onclick={() => trackListingClick(data.listingRef, 'phone')}>{hall.contact_phone}</a>{/if}
+            {#if hall.contact_email}<a href={mailHref(hall.contact_email)} onclick={() => trackListingClick(data.listingRef, 'email')}>{hall.contact_email}</a>{/if}
           </div>
         {/if}
       </div>
     </aside>
   </div>
 
-  {#if hall.allow_reservations}
+  {#if bookable}
     <!-- Phones: the card is below the content, so this bar leads to it. -->
     <div class="hp-bar" class:hidden={cardInView}>
       <div class="hp-bar-copy">
@@ -649,6 +680,14 @@
   .hp-card-foot { display: flex; flex-wrap: wrap; gap: 4px 12px; padding-top: 12px; border-top: 1px solid var(--border-subtle); font-size: 12px; color: var(--text-muted); }
   .hp-card-foot span { width: 100%; }
   .hp-card-foot a { color: var(--accent-ink); font-weight: 600; overflow-wrap: anywhere; }
+  .hp-direct-hint { margin: 0; text-align: left; }
+  .hp-direct { display: grid; gap: 8px; }
+  .hp-direct-link {
+    display: block; text-align: center; padding: 10px 14px; border-radius: var(--radius-sm);
+    border: 1px solid var(--border); color: var(--text-base); font-size: 13.5px; font-weight: 600;
+    text-decoration: none; overflow-wrap: anywhere;
+  }
+  .hp-direct-link:hover { border-color: var(--accent); color: var(--accent-ink); text-decoration: none; }
 
   /* ── Phone bar: only below the two-column width ── */
   .hp-bar { display: none; }

@@ -1,4 +1,5 @@
 import type { PublicVenue } from './types';
+import { takesHallifyBookings } from '$lib/listings';
 
 export interface MapCenter { latitude: number; longitude: number }
 /** Banská Bystrica, near the middle of Slovakia: where demo venues sit and the map opens
@@ -148,7 +149,7 @@ export function filterVenues(venues: PublicVenue[], filters: { query: string; gu
   // The band filter is left out of the exact-match decision, so turning it on never
   // swaps which spelling of the query the list honours.
   const candidates = venues.filter(venue => venue.max_people >= filters.guests && (!filters.floorplan || !!venue.has_floorplan) &&
-    (!filters.booking || !!venue.allow_reservations));
+    (!filters.booking || takesHallifyBookings(venue)));
   const inBand = (venue: PublicVenue) => !bands || (venue.price_band !== null && bands.has(venue.price_band));
   const matches = new Map(candidates.map(venue => [venue.id, queryMatch(venue, filters.query)]));
   // Only a query typed with diacritics says which spelling was meant: "Kosice" must

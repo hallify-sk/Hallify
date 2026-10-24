@@ -26,7 +26,10 @@ export type AuditAction =
 	| 'webhook.enable'
 	| 'webhook.disable'
 	| 'webhook.roll_secret'
-	| 'webhook.delete';
+	| 'webhook.delete'
+	| 'listing.create'
+	| 'listing.update'
+	| 'listing.delete';
 
 export interface AuditTarget {
 	type: 'org' | 'user' | 'announcement' | 'settings' | 'email' | 'webhook';

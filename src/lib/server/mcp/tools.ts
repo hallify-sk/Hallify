@@ -381,13 +381,15 @@ const PLATFORM_TOOLS: McpTool[] = [
 			const db = caller.db;
 			const one = async (sql: string) => Number((await dbFirst<{ n: number }>(db, sql))?.n ?? 0);
 			const [orgsByPlan, usersByType] = await Promise.all([
-				dbAll(db, `SELECT COALESCE(s.plan, 'free') AS plan, COUNT(*) AS organisations FROM organizations o LEFT JOIN subscriptions s ON s.org_id = o.id GROUP BY 1 ORDER BY 2 DESC`),
+				// Directory-only venues (listing_only) are not on Hallify and count separately.
+				dbAll(db, `SELECT COALESCE(s.plan, 'free') AS plan, COUNT(*) AS organisations FROM organizations o LEFT JOIN subscriptions s ON s.org_id = o.id WHERE o.listing_only = 0 GROUP BY 1 ORDER BY 2 DESC`),
 				dbAll(db, `SELECT account_type, COUNT(*) AS accounts FROM users WHERE deleted_at IS NULL GROUP BY 1 ORDER BY 2 DESC`)
 			]);
 			return {
 				ok: true,
 				data: {
-					organisations: { total: await one('SELECT COUNT(*) AS n FROM organizations'), suspended: await one('SELECT COUNT(*) AS n FROM organizations WHERE suspended_at IS NOT NULL'), by_plan: orgsByPlan },
+					organisations: { total: await one('SELECT COUNT(*) AS n FROM organizations WHERE listing_only = 0'), suspended: await one('SELECT COUNT(*) AS n FROM organizations WHERE suspended_at IS NOT NULL AND listing_only = 0'), by_plan: orgsByPlan },
+					directory_only_venues: await one('SELECT COUNT(*) AS n FROM organizations WHERE listing_only = 1'),
 					accounts: { by_type: usersByType, platform_admins: await one('SELECT COUNT(*) AS n FROM users WHERE is_platform_admin = 1 AND deleted_at IS NULL') },
 					halls: { active: await one('SELECT COUNT(*) AS n FROM halls WHERE archived_at IS NULL'), archived: await one('SELECT COUNT(*) AS n FROM halls WHERE archived_at IS NOT NULL') },
 					reservations: {

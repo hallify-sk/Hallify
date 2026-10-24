@@ -1,4 +1,5 @@
 import type { Coordinates } from '$lib/venue-location';
+import type { BookingMode, ExternalContact, ListingRef, ListingType } from '$lib/listings';
 
 export interface PublicVenue extends Coordinates {
   id: string;
@@ -20,6 +21,13 @@ export interface PublicVenue extends Coordinates {
   org_slug?: string | null;
   /** Origin of the venue's own site (custom domain or org subdomain), where it is booked. */
   site_url?: string | null;
+  /** The organisation's id (GA4's venue_id). */
+  org_id?: string | null;
+  /** 'external': booked directly with the venue, never through Hallify. */
+  booking_mode?: BookingMode;
+  listing_type?: ListingType;
+  /** The venue's own website / phone / e-mail; only for an external hall. */
+  contact?: ExternalContact | null;
 }
 
 /**
@@ -46,8 +54,19 @@ export function venueHref(venue: PublicVenue): string {
  * no bookings, or its site has no address that would route.
  */
 export function bookingHref(venue: PublicVenue): string | null {
-  if (venue.demo || !venue.allow_reservations || !venue.site_url || !venue.slug) return null;
+  if (venue.demo || !venue.allow_reservations || venue.booking_mode === 'external' || !venue.site_url || !venue.slug) return null;
   return `${venue.site_url}/halls/${encodeURIComponent(venue.slug)}/book`;
+}
+
+/** What the listing counters and GA4 are told about a card; null for a demo venue. */
+export function venueListingRef(venue: PublicVenue): ListingRef | null {
+  if (venue.demo) return null;
+  return {
+    hall_id: venue.id,
+    slug: venue.slug,
+    venue_id: venue.org_id ?? null,
+    listing_type: venue.listing_type ?? (venue.is_partner ? 'partner' : 'basic'),
+  };
 }
 
 export type PriceBand = 1 | 2 | 3;

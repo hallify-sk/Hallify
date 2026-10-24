@@ -12,6 +12,7 @@ import {
 } from '$lib/availability';
 import { st } from '$lib/i18n-server';
 import type { RequestHandler } from './$types';
+import { takesHallifyBookings } from '$lib/listings';
 
 // Soft-lock a hall+day while a user is mid-booking. POST acquires/renews;
 // POST with { action: 'release' } drops the caller's hold (sendBeacon-friendly).
@@ -34,9 +35,9 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 
 	// Scope: org users may hold halls in their current org; clients may hold
 	// public, bookable halls.
-	const hall = await dbFirst<BookableHall & { is_public: number }>(
+	const hall = await dbFirst<BookableHall & { is_public: number; booking_mode: string }>(
 		locals.db,
-		'SELECT id, org_id, is_public, allow_reservations, max_people, min_days_advance, plan_locked FROM halls WHERE id = ?',
+		'SELECT id, org_id, is_public, allow_reservations, booking_mode, max_people, min_days_advance, plan_locked FROM halls WHERE id = ?',
 		hallId
 	);
 	if (!hall) return json({ ok: false, reason: 'not-found' }, { status: 404 });
@@ -50,7 +51,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	// writing reservation_holds rows stamped with the victim's org_id). Every other
 	// client-facing query is scoped by locals.domainOrg; this one was the exception.
 	const isPublicBookableOnOwnBubble =
-		!!hall.is_public && !!hall.allow_reservations &&
+		!!hall.is_public && takesHallifyBookings(hall) &&
 		!!locals.domainOrg && hall.org_id === locals.domainOrg.id;
 
 	if (!isOrgUser && !isPublicBookableOnOwnBubble) return json({ ok: false, reason: 'forbidden' }, { status: 403 });

@@ -2,6 +2,7 @@ import { redirect } from '@sveltejs/kit';
 import { env } from '$env/dynamic/private';
 import { findListedHall, venueSiteOrigin } from '$lib/server/discovery';
 import { venuePagePath } from '$lib/marketing/types';
+import { takesHallifyBookings } from '$lib/listings';
 import type { RequestHandler } from './$types';
 
 /**
@@ -13,7 +14,7 @@ import type { RequestHandler } from './$types';
 export const GET: RequestHandler = async ({ params, locals, url }) => {
   const hall = await findListedHall(locals.db, params.slug);
   if (!hall) redirect(302, '/priestory');
-  const site = venueSiteOrigin({ slug: hall.org_slug, custom_domain: hall.custom_domain, plan: hall.plan }, url, env.HALLIFY_DOMAIN ?? 'hallify.app');
-  if (!site || !hall.allow_reservations) redirect(302, venuePagePath(hall.org_slug, hall.slug));
+  const site = venueSiteOrigin({ slug: hall.org_slug, custom_domain: hall.custom_domain, plan: hall.plan, listing_only: hall.listing_only }, url, env.HALLIFY_DOMAIN ?? 'hallify.app');
+  if (!site || !takesHallifyBookings(hall)) redirect(302, venuePagePath(hall.org_slug, hall.slug));
   redirect(303, `${site}/halls/${encodeURIComponent(hall.slug)}/book`);
 };

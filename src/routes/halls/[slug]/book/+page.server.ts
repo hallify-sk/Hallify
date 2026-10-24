@@ -13,18 +13,22 @@ import { loadBookableExtras } from '$lib/site/bookable-extras';
 import { saveExtrasSnapshot } from '$lib/server/reservation-extras';
 import { noteMonthUsage, recordTurnedAway } from '$lib/server/cap-notices';
 import { keepAlive } from '$lib/server/background';
+import { parseBookingMode, takesHallifyBookings } from '$lib/listings';
 
 const RANGE_DAYS = 540;
 
 export const load: PageServerLoad = async ({ params, locals, url }) => {
-	if (!locals.user) {
-		redirect(303, loginUrl(url, '/login'));
-	}
 	const orgId = locals.domainOrg!.id;
 
 	const hall = await dbFirst<HallRow>(locals.db,
 		`SELECT * FROM halls WHERE slug = ? AND is_public = 1 AND org_id = ?`, params.slug, orgId);
 	if (!hall) error(404, st(locals.locale).serverErrors.hallNotFound);
+	// A hall booked directly with the venue has no form here: its page says how to
+	// reach them (a shared or bookmarked /book link lands there, not on an error).
+	if (parseBookingMode(hall.booking_mode) === 'external') redirect(303, `/halls/${encodeURIComponent(params.slug)}`);
+	if (!locals.user) {
+		redirect(303, loginUrl(url, '/login'));
+	}
 	if (!hall.allow_reservations) error(403, st(locals.locale).serverErrors.hallNotAcceptingBookings);
 
 	const fromISO = isoLocal(new Date());
@@ -56,6 +60,8 @@ export const actions: Actions = {
 		const hall = await dbFirst<HallRow>(locals.db,
 			`SELECT * FROM halls WHERE slug = ? AND is_public = 1 AND org_id = ?`, params.slug, orgId);
 		if (!hall) return fail(404, { error: st(locals.locale).serverErrors.hallNotFoundDot });
+		// Booked directly with the venue: never through this form, whatever is posted.
+		if (!takesHallifyBookings(hall)) return fail(403, { error: st(locals.locale).serverErrors.hallNotAcceptingBookings });
 
 		const data = await request.formData();
 		const title = String(data.get('title') ?? '').trim();

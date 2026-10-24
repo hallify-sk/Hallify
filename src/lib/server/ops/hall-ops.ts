@@ -4,6 +4,7 @@ import { canAddExtra, canAddHall } from '$lib/limits';
 import { st } from '$lib/i18n-server';
 import { uniqueHallSlug } from '$lib/server/hall-naming';
 import type { OpResult } from './reservation-ops';
+import { externalContact, hasExternalContact, parseBookingMode, type BookingMode } from '$lib/listings';
 
 /**
  * Setting a hall up — blocked dates, bookable extras, table types, booking rules and
@@ -155,6 +156,8 @@ export async function removeTableType(db: Db, orgId: string, hallId: string, typ
 // ─── Booking rules ──────────────────────────────────────────────────────────
 
 export interface BookingSettings {
+	/** Hallify's booking form, or the venue's own website / phone / e-mail. */
+	booking_mode?: BookingMode;
 	allow_reservations?: boolean;
 	auto_approve?: boolean;
 	custom_layouts?: boolean;
@@ -170,14 +173,26 @@ export const BOOKING_FLAGS = ['allow_reservations', 'auto_approve', 'custom_layo
 /** Change only the booking rules given; the rest of the hall is untouched. An
  *  archived hall stays closed whatever is asked — restoring it is the way back. */
 export async function updateBookingSettings(db: Db, orgId: string, hallId: string, s: BookingSettings, locale: Locale): Promise<OpResult<{ changed: string[] }>> {
-	const hall = await dbFirst<{ archived_at: string | null; plan_locked: number }>(db,
-		'SELECT archived_at, plan_locked FROM halls WHERE id = ? AND org_id = ?', hallId, orgId);
+	const hall = await dbFirst<{ archived_at: string | null; plan_locked: number; booking_mode: string | null;
+		contact_website: string | null; contact_phone: string | null; contact_email: string | null }>(db,
+		'SELECT archived_at, plan_locked, booking_mode, contact_website, contact_phone, contact_email FROM halls WHERE id = ? AND org_id = ?', hallId, orgId);
 	if (!hall) return { ok: false, status: 404, error: st(locale).serverErrors.hallNotFound };
 	const sets: string[] = [];
 	const params: unknown[] = [];
+	const mode = s.booking_mode ?? parseBookingMode(hall.booking_mode);
+	if (s.booking_mode) {
+		// Sending visitors to the venue needs somewhere to send them.
+		if (mode === 'external' && !hasExternalContact(externalContact(hall))) {
+			return { ok: false, status: 400, error: st(locale).listings.needsContact };
+		}
+		sets.push('booking_mode = ?');
+		params.push(mode);
+	}
 	for (const f of BOOKING_FLAGS) {
 		if (typeof s[f] !== 'boolean') continue;
-		const on = s[f] && !(f === 'allow_reservations' && hall.archived_at);
+		// An external hall never opens Hallify bookings (the database holds it to that
+		// too, migration 0041); switching back to Hallify is how they reopen.
+		const on = s[f] && !(f === 'allow_reservations' && (hall.archived_at || mode === 'external'));
 		sets.push(`${f} = ?`);
 		params.push(on ? 1 : 0);
 	}

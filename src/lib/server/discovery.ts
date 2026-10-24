@@ -28,6 +28,20 @@ export const LISTED_HALL_SQL_WITHOUT_COORDINATES = `h.is_public = 1 AND h.plan_l
   AND TRIM(COALESCE(h.address, '')) != ''`;
 
 /**
+ * Whether the hall's organisation is a Hallify partner: anyone on a paid plan, plus
+ * anyone the platform has flagged by hand. Deriving it from the subscription means
+ * partner status follows payment without an admin having to remember; keeping the
+ * flag means a partnership that is not a straightforward paid plan can still be
+ * granted. 'trialing' counts -- they are on a paid tier -- while past_due/cancelled/
+ * paused do not. A directory-only venue (listing_only, not on Hallify) never is, even
+ * if someone ticked the flag. Expects `o` and its subscription `s` (LEFT JOINed).
+ */
+export const PARTNER_SQL =
+  `CASE WHEN o.listing_only = 0 AND (o.is_hallify_partner = 1
+        OR (s.plan IS NOT NULL AND s.plan != 'free' AND s.status IN ('active','trialing')))
+   THEN 1 ELSE 0 END`;
+
+/**
  * The organisation's custom domain, when it has one that actually routes: verified
  * (Cloudflare reported it active), the only state hooks.server.ts serves. Mirrors
  * orgPublicBaseUrl in $lib/orgUrl, as a column so a whole listing needs one query.
@@ -41,6 +55,8 @@ export interface ListedHallRef {
   slug: string;
   org_slug: string;
   allow_reservations: number;
+  booking_mode: string;
+  listing_only: number;
   plan: string | null;
   custom_domain: string | null;
 }
@@ -53,7 +69,7 @@ export interface ListedHallRef {
  */
 export async function findListedHall(db: App.Locals['db'], idOrSlug: string): Promise<ListedHallRef | null> {
   const rows = await dbAll<ListedHallRef>(db,
-    `SELECT h.slug, o.slug AS org_slug, h.allow_reservations, s.plan AS plan, ${CUSTOM_DOMAIN_SQL} AS custom_domain
+    `SELECT h.slug, o.slug AS org_slug, h.allow_reservations, h.booking_mode, o.listing_only, s.plan AS plan, ${CUSTOM_DOMAIN_SQL} AS custom_domain
        FROM halls h JOIN organizations o ON o.id = h.org_id
        LEFT JOIN subscriptions s ON s.org_id = o.id
       WHERE (h.id = ? OR h.slug = ?) AND ${LISTED_HALL_SQL}
@@ -77,13 +93,17 @@ function isLocalHost(hostname: string): boolean {
  *
  * In development (HALLIFY_DOMAIN=localhost) the subdomain is built on the request's
  * own scheme and port, so `<slug>.localhost:5173` works the way hooks expect. Returns null when
- * there is no address that would route (a reserved label and no custom domain).
+ * there is no address that would route (a reserved label and no custom domain), and
+ * for a directory-only venue, which has no site.
  */
 export function venueSiteOrigin(
-  org: { slug: string | null; custom_domain?: string | null; plan?: string | null },
+  org: { slug: string | null; custom_domain?: string | null; plan?: string | null; listing_only?: number | boolean | null },
   requestUrl: URL,
   appDomain: string,
 ): string | null {
+  // A directory-only venue is not on Hallify: it has no site of its own (hooks send
+  // its subdomain to the apex), and its directory page is the only page it has.
+  if (org.listing_only) return null;
   if (org.custom_domain && getPlan((org.plan ?? 'free') as PlanId).limits.customDomains) {
     return `https://${org.custom_domain}`;
   }
@@ -147,11 +167,12 @@ export function isBookableOn(facts: AvailabilityFacts, date: string): boolean {
   return !facts.taken;
 }
 
-/** Ids of listed halls that take bookings and are free on `date`. */
+/** Ids of listed halls that take bookings through Hallify and are free on `date`.
+ *  An external hall has no calendar here, so it is never "free" on a date. */
 export async function availableHallIds(db: App.Locals['db'], date: string): Promise<string[]> {
   const listed = `FROM halls h JOIN organizations o ON o.id = h.org_id
     LEFT JOIN subscriptions s ON s.org_id = o.id
-    WHERE ${LISTED_HALL_SQL} AND h.allow_reservations = 1`;
+    WHERE ${LISTED_HALL_SQL} AND h.allow_reservations = 1 AND h.booking_mode = 'hallify'`;
   const [halls, taken, months, blocks] = await Promise.all([
     dbAll<{ id: string; min_days_advance: number | null; opening_hours: string | null; plan: string | null }>(db,
       `SELECT h.id, h.min_days_advance, h.opening_hours, s.plan AS plan ${listed}`),

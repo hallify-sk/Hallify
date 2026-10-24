@@ -102,6 +102,8 @@ export interface OrganizationRow {
   logo_url: string | null;
   suspended_at: string | null;
   created_at: string;
+  /** 1 = a directory-only venue that is not on Hallify (migration 0041). */
+  listing_only?: number;
 }
 
 export interface OrgMemberRow {
@@ -189,6 +191,8 @@ export interface HallRow {
   plan_locked: number;
   /** Set when the hall is archived (migration 0011); NULL while it is in use. */
   archived_at: string | null;
+  /** 'hallify' books through the form; 'external' sends visitors to the venue (0041). */
+  booking_mode?: 'hallify' | 'external';
 }
 
 export interface TableTypeRow {

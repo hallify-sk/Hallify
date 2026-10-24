@@ -246,9 +246,12 @@ const appHandle: Handle = async ({ event, resolve }) => {
       // Free bubble: <slug>.hallify.sk — single-level, non-reserved label.
       const sub = host.slice(0, -(appDomain.length + 1));
       if (sub && !sub.includes('.') && !isReservedSubdomain(sub)) {
-        const r = await dbFirst<{ id: string; name: string; slug: string; logo_url: string | null; suspended_at: string | null }>(db, 'SELECT id, name, slug, logo_url, suspended_at FROM organizations WHERE slug = ? LIMIT 1', sub);
+        const r = await dbFirst<{ id: string; name: string; slug: string; logo_url: string | null; suspended_at: string | null; listing_only: number | null }>(db, 'SELECT id, name, slug, logo_url, suspended_at, listing_only FROM organizations WHERE slug = ? LIMIT 1', sub);
         if (r?.suspended_at) suspendedVenue = r.name;
-        else if (r) domainOrg = { id: r.id, name: r.name, slug: r.slug, logoUrl: r.logo_url };
+        // A directory-only venue (not on Hallify) has no site: nobody to sign clients
+        // up or answer bookings. Its directory page is all it has, so the subdomain
+        // goes to the apex like an unclaimed one.
+        else if (r && !r.listing_only) domainOrg = { id: r.id, name: r.name, slug: r.slug, logoUrl: r.logo_url };
         else unmatchedSubdomain = true;
       }
     } else if (

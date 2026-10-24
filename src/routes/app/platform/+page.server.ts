@@ -36,8 +36,10 @@ export const load: PageServerLoad = async ({ locals }) => {
     orgs_30d: string; users_30d: string; reservations_30d: string;
   }>(locals.db, `
     SELECT
-      (SELECT COUNT(*) FROM organizations WHERE suspended_at IS NULL) AS total_orgs,
-      (SELECT COUNT(*) FROM organizations WHERE suspended_at IS NOT NULL) AS suspended_orgs,
+      -- Directory-only venues (listing_only) are not on Hallify: not customers, so
+      -- they count nowhere here.
+      (SELECT COUNT(*) FROM organizations WHERE suspended_at IS NULL AND listing_only = 0) AS total_orgs,
+      (SELECT COUNT(*) FROM organizations WHERE suspended_at IS NOT NULL AND listing_only = 0) AS suspended_orgs,
       (SELECT COUNT(*) FROM closed_organizations) AS closed_orgs,
       (SELECT COUNT(*) FROM users) AS total_users,
       (SELECT COUNT(*) FROM users WHERE is_platform_admin = 1) AS platform_admins,
@@ -49,12 +51,12 @@ export const load: PageServerLoad = async ({ locals }) => {
       (SELECT COUNT(*) FROM subscriptions WHERE status IN ('active','trialing') AND plan != 'free'
          AND stripe_subscription_id IS NULL) AS manual_plans,
       -- Partners are the organisations marked as Hallify partners, nothing else.
-      (SELECT COUNT(*) FROM organizations WHERE suspended_at IS NULL AND is_hallify_partner = 1) AS partners,
+      (SELECT COUNT(*) FROM organizations WHERE suspended_at IS NULL AND is_hallify_partner = 1 AND listing_only = 0) AS partners,
       (SELECT COUNT(*) FROM reservations) AS total_reservations,
-      (SELECT COUNT(*) FROM organizations WHERE created_at >= datetime('now','-7 days')) AS orgs_7d,
+      (SELECT COUNT(*) FROM organizations WHERE created_at >= datetime('now','-7 days') AND listing_only = 0) AS orgs_7d,
       (SELECT COUNT(*) FROM users WHERE created_at >= datetime('now','-7 days')) AS users_7d,
       (SELECT COUNT(*) FROM reservations WHERE created_at >= datetime('now','-7 days')) AS reservations_7d,
-      (SELECT COUNT(*) FROM organizations WHERE created_at >= datetime('now','-30 days')) AS orgs_30d,
+      (SELECT COUNT(*) FROM organizations WHERE created_at >= datetime('now','-30 days') AND listing_only = 0) AS orgs_30d,
       (SELECT COUNT(*) FROM users WHERE created_at >= datetime('now','-30 days')) AS users_30d,
       (SELECT COUNT(*) FROM reservations WHERE created_at >= datetime('now','-30 days')) AS reservations_30d
   `);
@@ -79,7 +81,7 @@ export const load: PageServerLoad = async ({ locals }) => {
   const plans = await dbAll<{ plan: string; count: string }>(locals.db, `
     SELECT COALESCE(s.plan, 'free') AS plan, COUNT(*) AS count
     FROM organizations o LEFT JOIN subscriptions s ON s.org_id = o.id
-    WHERE o.suspended_at IS NULL
+    WHERE o.suspended_at IS NULL AND o.listing_only = 0
     GROUP BY COALESCE(s.plan, 'free')
   `);
 
@@ -122,6 +124,7 @@ export const load: PageServerLoad = async ({ locals }) => {
     SELECT o.id, o.name, o.slug, s.plan, s.status, o.created_at
     FROM organizations o
     LEFT JOIN subscriptions s ON s.org_id = o.id
+    WHERE o.listing_only = 0
     ORDER BY o.created_at DESC
     LIMIT 10
   `);

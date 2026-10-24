@@ -54,6 +54,9 @@ export const RATE_LIMITS = {
   mcpRegister:      { limit: 20, windowSeconds: 60 * 60 },
   /** Token-endpoint requests per client (code exchange and refresh). */
   mcpToken:         { limit: 30, windowSeconds: 60 },
+  /** Directory listing counters (POST /api/listing-events) from one address. A
+      person browsing sends a handful a minute; this only stops a script pumping them. */
+  listingEvents:    { limit: 120, windowSeconds: 10 * 60 },
 } as const satisfies Record<string, RateLimitRule>;
 
 /** Consume one unit against `key`. Call once per attempt, before doing the work.

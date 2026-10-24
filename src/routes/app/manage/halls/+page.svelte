@@ -113,6 +113,7 @@
         <h2>{t.halls.hallOverview}</h2>
         <p class="footer-note">
           {t.hallAdmin.hallsConfigured(activeHalls.length)}{#if limitNote}{` · ${limitNote}`}{/if}
+          · <a href="/app/manage/halls/visibility">{t.listings.consoleLink} →</a>
         </p>
       </div>
 
@@ -150,7 +151,9 @@
                 {:else if !h.is_public}
                   <StatusBadge status="unset" label={t.hallAdmin.notListed} />
                 {/if}
-                {#if !h.allow_reservations}
+                {#if h.booking_mode === 'external'}
+                  <StatusBadge status="unset" label={t.listings.chipExternal} />
+                {:else if !h.allow_reservations}
                   <StatusBadge status="closed" label={t.hallAdmin.bookingsClosed} />
                 {/if}
               </div>

@@ -29,6 +29,7 @@
 export { consentUi, openConsentSettings } from './analytics.svelte';
 import { GOOGLE_TAG_ORIGIN, loaderSrc, type AnalyticsContainer } from './analytics-servers';
 export type { AnalyticsContainer } from './analytics-servers';
+import type { ClickType, ListingRef } from './listings';
 
 export const CONSENT_COOKIE = 'hallify-consent';
 /** Bumped 1 -> 2 when consent became granular. A version change re-asks everyone,
@@ -212,6 +213,18 @@ export const booking = {
     }),
   /** Rejected by a rule — the single most useful drop-off signal. */
   bookingRejected: (slug: string, reason: string) => track('booking_rejected', { item_id: slug, reason }),
+};
+
+/** DIRECTORY LISTINGS — a hall's card shown in the directory, and a click on the
+ *  venue's own website, phone or e-mail (directory card, directory venue page, or
+ *  the hall page on the venue's own site). These go to GA4 with consent, like every
+ *  event here; $lib/listing-tracker also counts them first-party, cookie-free, for
+ *  the per-venue figures Hallify reports. listing_type: partner | basic | external. */
+export const listing = {
+  impression: (ref: ListingRef) =>
+    track('listing_impression', { item_id: ref.slug ?? ref.hall_id, venue_id: ref.venue_id, listing_type: ref.listing_type }),
+  click: (ref: ListingRef, clickType: ClickType) =>
+    track('listing_click', { item_id: ref.slug ?? ref.hall_id, venue_id: ref.venue_id, listing_type: ref.listing_type, click_type: clickType }),
 };
 
 /** SAAS FUNNEL — Hallify's own e-commerce, apex only. */

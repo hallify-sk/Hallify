@@ -33,6 +33,7 @@ import {
 } from '$lib/server/ops/hall-ops';
 import { syncHallLayouts } from '$lib/server/layout-sync';
 import { followsHallPlan, parseProblems, UPCOMING_STATUSES } from '$lib/floorplan-sync';
+import { externalContact, hasExternalContact, parseBookingMode } from '$lib/listings';
 
 /** The note sent to every client when a hall's bookings are cancelled together. */
 const MAX_CANCEL_NOTE = 2000;
@@ -254,6 +255,7 @@ export const actions: Actions = {
 		// pin too and wrote them unvalidated, so saving a setting could clear a listed
 		// hall's address (B72). The profile has its own action.
 		const res = await updateBookingSettings(locals.db, org.id, params.id, {
+			booking_mode: data.has('bookingMode') ? parseBookingMode(data.get('bookingMode')) : undefined,
 			allow_reservations: data.get('allowReservations') === 'on',
 			custom_layouts: data.get('customLayouts') === 'on',
 			force_layouts: data.get('forceLayouts') === 'on',
@@ -498,9 +500,9 @@ export const actions: Actions = {
 		const e = st(locals.locale).serverErrors;
 		const current = await dbFirst<ProfileColumns & {
 			slug: string | null; cover_image_url: string | null; gallery_images: string | null;
-			plan_locked: number; archived_at: string | null;
+			plan_locked: number; archived_at: string | null; booking_mode: string | null;
 		}>(locals.db,
-			`SELECT ${PROFILE_COLUMNS.join(', ')}, plan_locked, archived_at FROM halls WHERE id = ? AND org_id = ?`,
+			`SELECT ${PROFILE_COLUMNS.join(', ')}, plan_locked, archived_at, booking_mode FROM halls WHERE id = ? AND org_id = ?`,
 			params.id, org.id);
 		if (!current) error(404, 'Not found');
 		const data = await request.formData();
@@ -598,6 +600,12 @@ export const actions: Actions = {
 		const websiteRaw = String(data.get('contactWebsite') ?? '').trim();
 		const contactWebsite = websiteRaw ? hallWebsite(websiteRaw) : null;
 		if (websiteRaw && !contactWebsite) return fail(400, { profileError: e.invalidWebsite });
+		// A hall booked directly with the venue shows these instead of a booking form;
+		// clearing all three would leave visitors no way to reach it.
+		if (parseBookingMode(current.booking_mode) === 'external'
+			&& !hasExternalContact(externalContact({ contact_website: contactWebsite, contact_phone: contactPhone, contact_email: contactEmail }))) {
+			return fail(400, { profileError: st(locals.locale).listings.needsContact });
+		}
 
 		// All seven days are stored, with the defaults the editor shows for a day
 		// nobody touched, so the public pages show what the console shows (B74).

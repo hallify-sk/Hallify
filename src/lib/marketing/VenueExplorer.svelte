@@ -11,7 +11,10 @@
   import { formatDate } from '$lib/format';
   import { userLocation, locateUser, locateIfGranted } from './user-location.svelte';
   import { createSearchCenter } from './search-center.svelte';
-  import { venueHref, bookingHref, PRICE_BANDS, parsePriceBands, priceBandLabel, priceGlyphs, type PriceBand, type PublicVenue } from './types';
+  import { listingImpression } from '$lib/listing-tracker';
+  import { takesHallifyBookings } from '$lib/listings';
+  import VenueDirectLink from './VenueDirectLink.svelte';
+  import { venueHref, bookingHref, venueListingRef, PRICE_BANDS, parsePriceBands, priceBandLabel, priceGlyphs, type PriceBand, type PublicVenue } from './types';
   import VenueMap from './VenueMap.svelte';
   import VenuePreview from './VenuePreview.svelte';
   import SelectedVenue from './SelectedVenue.svelte';
@@ -140,12 +143,12 @@
 
 {#snippet resultCards(collection: PublicVenue[], highlight: boolean)}
 {#each collection as venue (venue.id)}
-        <article class="explorer-result" class:is-selected={selectedId === venue.id} class:featured-result={highlight} data-venue-id={venue.id}>
+        <article class="explorer-result" class:is-selected={selectedId === venue.id} class:featured-result={highlight} data-venue-id={venue.id} use:listingImpression={venueListingRef(venue)}>
           <button class="explorer-result-select" onclick={() => select(venue.id)} aria-pressed={selectedId === venue.id}>
             {#if venue.cover_image_url && !failedCovers[venue.id]}<img src={venue.cover_image_url} srcset={imageSrcset(venue.cover_image_url)} sizes="112px" alt="" width="112" height="100" loading="lazy" onerror={() => (failedCovers[venue.id] = true)}>{:else}<div class="explorer-no-photo"><img src="/Hallify.svg" alt="" width="30" height="30"></div>{/if}
-            <span class="explorer-result-copy">{#if venue.demo || venue.address}<small>{venue.demo ? (en ? 'Demo venue' : 'Ukážkový priestor') : venue.address}</small>{/if}<strong>{venue.name}</strong><span>{venue.max_people} {en ? 'guests' : 'hostí'}{#if distanceLabel(venue)}{' '}· {distanceLabel(venue)}{/if}</span><span class="result-features">{venue.is_partner ? (en ? "Hallify partner / " : "Partner Hallify / ") : ""}{venue.has_floorplan ? (en ? 'Floorplan' : 'Pôdorys') : (en ? 'Venue profile' : 'Profil priestoru')}{venue.allow_reservations ? (en ? ' / Booking' : ' / Rezervácie') : ''}</span></span>
+            <span class="explorer-result-copy">{#if venue.demo || venue.address}<small>{venue.demo ? (en ? 'Demo venue' : 'Ukážkový priestor') : venue.address}</small>{/if}<strong>{venue.name}</strong><span>{venue.max_people} {en ? 'guests' : 'hostí'}{#if distanceLabel(venue)}{' '}· {distanceLabel(venue)}{/if}</span><span class="result-features">{venue.is_partner ? (en ? "Hallify partner / " : "Partner Hallify / ") : ""}{venue.has_floorplan ? (en ? 'Floorplan' : 'Pôdorys') : (en ? 'Venue profile' : 'Profil priestoru')}{takesHallifyBookings(venue) ? (en ? ' / Booking' : ' / Rezervácie') : venue.booking_mode === 'external' ? ` / ${t.listings.bookDirectFeature}` : ''}</span></span>
           </button>
-          <div class="explorer-result-footer"><span class="explorer-price">{@render priceTag(venue)}</span><span class="explorer-result-actions">{#if bookingHref(venue)}<a href={bookingHref(venue)} aria-label={`${t.appHalls.bookOnVenueSite}: ${venue.name}`}>{t.appHalls.bookOnVenueSite}</a>{/if}{#if venue.demo}<button onclick={() => open(venue)}>{en ? 'Details' : 'Detail'} <Icon /></button>{:else}<a href={venueHref(venue)} aria-label={`${en ? 'Details' : 'Detail'}: ${venue.name}`}>{en ? 'Details' : 'Detail'} <Icon /></a>{/if}</span></div>
+          <div class="explorer-result-footer"><span class="explorer-price">{@render priceTag(venue)}</span><span class="explorer-result-actions">{#if bookingHref(venue)}<a href={bookingHref(venue)} aria-label={`${t.appHalls.bookOnVenueSite}: ${venue.name}`}>{t.appHalls.bookOnVenueSite}</a>{:else}<VenueDirectLink {venue} />{/if}{#if venue.demo}<button onclick={() => open(venue)}>{en ? 'Details' : 'Detail'} <Icon /></button>{:else}<a href={venueHref(venue)} aria-label={`${en ? 'Details' : 'Detail'}: ${venue.name}`}>{en ? 'Details' : 'Detail'} <Icon /></a>{/if}</span></div>
         </article>
       {:else}<div class="explorer-empty"><h2>{en ? 'No spaces here yet.' : 'Zatiaľ žiadny priestor.'}</h2><p>{en ? 'Change the filters or enable demo venues to try the map.' : 'Zmeňte filtre alebo zapnite ukážkové priestory a vyskúšajte mapu.'}</p><button onclick={reset}>{en ? 'Reset selection' : 'Obnoviť výber'}</button></div>{/each}
 {/snippet}

@@ -13,7 +13,9 @@
   import SelectedVenue from './SelectedVenue.svelte';
   import VenueMap from './VenueMap.svelte';
   import { hasCoordinates } from '$lib/venue-location';
-  import { venueHref, bookingHref, PRICE_BANDS, priceBandLabel, priceGlyphs, type PriceBand, type PublicVenue } from './types';
+  import { listingImpression } from '$lib/listing-tracker';
+  import VenueDirectLink from './VenueDirectLink.svelte';
+  import { venueHref, bookingHref, venueListingRef, PRICE_BANDS, priceBandLabel, priceGlyphs, type PriceBand, type PublicVenue } from './types';
   let { halls, initialQuery = '', initialGuests = 0, initialDemo = dev }: { halls: PublicVenue[]; initialQuery?: string; initialGuests?: number; initialDemo?: boolean } = $props();
   const en = $derived(getLocale() === 'en');
   let query = $state(untrack(() => initialQuery)), guests = $state(untrack(() => initialGuests)), floorplanOnly = $state(false);
@@ -84,14 +86,14 @@
 {/snippet}
 
 {#snippet venueCards(collection: PublicVenue[], highlight: boolean)}
-<div class="venue-results">{#each collection as venue (venue.id)}<article class="venue-card" class:venue-active={active?.id === venue.id} class:venue-featured={highlight}>
+<div class="venue-results">{#each collection as venue (venue.id)}<article class="venue-card" class:venue-active={active?.id === venue.id} class:venue-featured={highlight} use:listingImpression={venueListingRef(venue)}>
       <a class="venue-photo" href={venueHref(venue)} onclick={(event) => { if (venue.demo) { event.preventDefault(); preview.open(venue); } }}>{#if venue.cover_image_url && !failedCovers[venue.id]}<img src={venue.cover_image_url} srcset={imageSrcset(venue.cover_image_url)} sizes="(max-width: 600px) 100vw, 440px" alt={venue.name} loading="lazy" width="440" height="280" onerror={() => (failedCovers[venue.id] = true)}>{:else}<div class="no-photo"><img src="/Hallify.svg" alt="" width="45" height="45"><span>{en ? 'Explore venue details' : 'Spoznajte priestor'}</span></div>{/if}</a>
       <div class="venue-topline">{#if venue.demo || venue.address}<span class="venue-place">{venue.demo ? (en ? "Demo venue" : "Ukážkový priestor") : venue.address}</span>{/if}{#if venue.is_partner}<span class="partner-label">{en ? "Hallify partner" : "Partner Hallify"}</span>{:else if venue.has_floorplan}<span class="partner-label">{en ? 'Floorplan available' : 'S pôdorysom'}</span>{/if}</div>
       <h3><a href={venueHref(venue)} onclick={(event) => { if (venue.demo) { event.preventDefault(); preview.open(venue); } }}>{venue.name}</a></h3><p class="venue-meta">{en ? 'Up to' : 'Do'} {venue.max_people} {en ? 'guests' : 'hostí'}{#if distanceLabel(venue)}{' '}· {distanceLabel(venue)}{/if}</p>
       <div class="venue-bottom"><span class="venue-price">{@render priceTag(venue)}</span><a href={venueHref(venue)} onclick={(event) => { if (venue.demo) { event.preventDefault(); preview.open(venue); } }} aria-label={`${en ? 'View' : 'Zobraziť'} ${venue.name}`}><Icon /></a></div>
-      {#if hasCoordinates(venue) || bookingHref(venue)}<div class="venue-card-actions">
+      {#if hasCoordinates(venue) || bookingHref(venue) || venue.contact}<div class="venue-card-actions">
         {#if hasCoordinates(venue)}<button class="show-on-map" type="button" onclick={() => { activeId = venue.id; selectionRevision += 1; document.getElementById('main')?.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth' }); }}>{en ? 'Show on map' : 'Zobraziť na mape'}</button>{/if}
-        {#if bookingHref(venue)}<a class="venue-book-link" href={bookingHref(venue)} aria-label={`${t.appHalls.bookOnVenueSite}: ${venue.name}`}>{t.appHalls.bookOnVenueSite} <Icon size={14} /></a>{/if}
+        {#if bookingHref(venue)}<a class="venue-book-link" href={bookingHref(venue)} aria-label={`${t.appHalls.bookOnVenueSite}: ${venue.name}`}>{t.appHalls.bookOnVenueSite} <Icon size={14} /></a>{:else}<VenueDirectLink {venue} class="venue-book-link" />{/if}
       </div>{/if}
     </article>{/each}</div>
 {/snippet}

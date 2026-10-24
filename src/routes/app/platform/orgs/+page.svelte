@@ -88,14 +88,19 @@
             <span role="cell" class="num c-members"><span class="m-label">{t.platformOrgs.colMembers}:{' '}</span>{org.member_count}</span>
             <span role="cell" class="muted nowrap c-created">{formatDate(org.created_at, getLocale())}</span>
             <span role="cell" class="c-status">
-              {#if org.suspended_at}
+              {#if org.listing_only}
+                <span class="pf-tag" data-tone="warning">{t.listings.typeExternal}</span>
+              {:else if org.suspended_at}
                 <span class="pf-tag" data-tone="danger">{t.platformOrgs.suspended}</span>
               {:else}
                 <span class="pf-tag" data-tone="success">{t.platformOrgs.active}</span>
               {/if}
             </span>
             <span role="cell" class="row-actions c-actions">
-              {#if org.suspended_at}
+              {#if org.listing_only}
+                <!-- Not on Hallify: no console to view as; it is edited as a listing. -->
+                <a class="btn-outline btn-sm" href="/app/platform/listings">{t.listings.editVenue}</a>
+              {:else if org.suspended_at}
                 <form method="POST" action="?/unsuspend" use:enhance>
                   <input type="hidden" name="id" value={org.id} />
                   <button type="submit" class="btn-outline btn-sm">{t.platformOrgs.unsuspend}</button>

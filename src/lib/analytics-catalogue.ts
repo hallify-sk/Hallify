@@ -112,6 +112,19 @@ export const ANALYTICS_EVENTS: AnalyticsEvent[] = [
 			en: 'A booking form submission that did not go through.'
 		},
 		params: ['item_id', 'reason']
+	},
+	{
+		name: 'listing_click',
+		surface: 'site',
+		trigger: {
+			sk: 'Návštevník klikol na web, telefón alebo e-mail priestoru.',
+			en: "A visitor clicked the venue's website, phone or e-mail."
+		},
+		where: {
+			sk: 'Kontakty na detaile priestoru. Parameter click_type je website, phone alebo email.',
+			en: 'The contacts on a venue page. The click_type parameter is website, phone or email.'
+		},
+		params: ['item_id', 'venue_id', 'click_type', 'listing_type']
 	}
 ];
 
