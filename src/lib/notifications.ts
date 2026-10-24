@@ -5,6 +5,7 @@ import { getPlan } from '$lib/plans';
 import { isSafeWebhookUrl } from '$lib/safe-url';
 import type { PlanId } from '$lib/plans';
 import type { D1Database } from '@cloudflare/workers-types';
+import { inBackground } from '$lib/server/background';
 
 export type { WebhookEvent };
 
@@ -20,9 +21,13 @@ export interface WebhookPayload {
 
 /**
  * Dispatch webhooks for an org event. Fire-and-forget — never throws.
- * Logs each delivery attempt to webhook_deliveries.
+ * Logs each delivery attempt to webhook_deliveries. Kept alive past the response
+ * (keepAlive): most callers don't await it, and on Workers the deliveries were
+ * otherwise cancelled once the page had answered.
  */
-export async function dispatchWebhooks(
+export const dispatchWebhooks = inBackground(dispatchWebhooksNow);
+
+async function dispatchWebhooksNow(
   db: D1Database,
   orgId: string,
   event: WebhookEvent,
