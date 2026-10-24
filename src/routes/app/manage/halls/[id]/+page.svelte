@@ -419,9 +419,33 @@
     profileHours       = JSON.parse(_init.hours);
   }
 
+  /** The booking settings as the server has them. Not form.reset(): Svelte sets the
+   *  fields' checked/value properties, not their defaults, so a reset emptied the
+   *  form and the next save turned online booking off. */
+  function syncSettings() {
+    const formEl = settingsFormEl;
+    if (!formEl) return;
+    const h = data.hall;
+    const values: Record<string, unknown> = {
+      allowReservations: h.allow_reservations,
+      customLayouts: h.custom_layouts,
+      forceLayouts: h.force_layouts,
+      allowFeedback: h.allow_feedback,
+      autoApprove: h.auto_approve,
+      minDaysAdvance: h.min_days_advance,
+      minCancelDays: h.min_cancel_days,
+      preReservationText: h.pre_reservation_text
+    };
+    for (const [name, value] of Object.entries(values)) {
+      const field = formEl.elements.namedItem(name);
+      if (field instanceof HTMLInputElement && field.type === 'checkbox') field.checked = !!value;
+      else if (field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement) field.value = value == null ? '' : String(value);
+    }
+  }
+
   function revertAll() {
     syncProfile();
-    settingsFormEl?.reset();
+    syncSettings();
     settingsDirty      = false;
   }
 

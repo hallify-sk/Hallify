@@ -664,7 +664,7 @@ export const actions: Actions = {
 		await assertHallInOrg(locals.db, params.id, org.id);
 		if (!(await canAddHall(locals.db, org.id, org.subscription.plan))) {
 			const limit = getPlan(org.subscription.plan).limits.maxHalls;
-			return fail(403, { lockError: st(locals.locale).serverErrors.hallReactivateLimitReached.replace('{limit}', String(limit)) });
+			return fail(403, { lockError: st(locals.locale).serverErrors.hallReactivateLimitReached(limit) });
 		}
 		// Restores the hall's visibility from before the lock (it used to stay a draft).
 		await unlockHall(locals.db, org.id, params.id);
@@ -685,7 +685,7 @@ export const actions: Actions = {
 		if (!(await swapActiveHall(locals.db, org.id, org.subscription.plan, params.id, other.id))) {
 			// Still no room (the plan allows none, or it changed meanwhile): undone.
 			const limit = getPlan(org.subscription.plan).limits.maxHalls;
-			return fail(403, { lockError: st(locals.locale).serverErrors.hallReactivateLimitReached.replace('{limit}', String(limit)) });
+			return fail(403, { lockError: st(locals.locale).serverErrors.hallReactivateLimitReached(limit) });
 		}
 		return { reactivated: true, swapped: true };
 	},
@@ -747,7 +747,7 @@ export const actions: Actions = {
 		if (!hall.archived_at) return { restored: true };
 		if (!hall.plan_locked && !(await canAddHall(locals.db, org.id, org.subscription.plan))) {
 			const limit = getPlan(org.subscription.plan).limits.maxHalls;
-			return fail(403, { archiveError: st(locals.locale).serverErrors.hallRestoreLimitReached.replace('{limit}', String(limit)) });
+			return fail(403, { archiveError: st(locals.locale).serverErrors.hallRestoreLimitReached(limit) });
 		}
 		await dbRun(locals.db, 'UPDATE halls SET archived_at = NULL WHERE id = ? AND org_id = ?', params.id, org.id);
 		await dispatchWebhooks(locals.db, org.id, 'hall.restored', { hall_id: params.id, name: hall.name });
