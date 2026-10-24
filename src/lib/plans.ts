@@ -14,6 +14,9 @@ export interface PlanLimits {
   advancedRsvp: boolean;
   maxExtrasPerHall: number;    // bookable extras an org can define per hall (-1 = unlimited)
   aiCreditsMonthly: number;    // AI assistant credits each period (10 credits = 1 EUR); refilled TO this, not added
+  /** Connecting the members' own AI agents to the organisation's data over MCP
+   *  (/mcp). Costs no credits: the agent pays for its own model. */
+  mcp: boolean;
 }
 
 export interface Plan {
@@ -34,14 +37,14 @@ export const PLANS: Record<PlanId, Plan> = {
     id: 'free',
     name: 'Free',
     priceMonthly: 0,
-    limits: { maxHalls: 1, maxMembers: 2, maxReservationsPerHallMonth: 5, maxGalleryImages: 5, customDomains: false, customBranding: false, webhooks: false, advancedRsvp: false, maxExtrasPerHall: 3, aiCreditsMonthly: 2 },
+    limits: { maxHalls: 1, maxMembers: 2, maxReservationsPerHallMonth: 5, maxGalleryImages: 5, customDomains: false, customBranding: false, webhooks: false, advancedRsvp: false, maxExtrasPerHall: 3, aiCreditsMonthly: 2, mcp: false },
     features: ['1 hall', '2 organization members', '5 reservations/hall/month', '5 gallery images', 'Free subdomain'],
   },
   starter: {
     id: 'starter',
     name: 'Starter',
     priceMonthly: 29.99,
-    limits: { maxHalls: 3, maxMembers: 10, maxReservationsPerHallMonth: 12, maxGalleryImages: 10, customDomains: true, customBranding: true, webhooks: true, advancedRsvp: true, maxExtrasPerHall: 6, aiCreditsMonthly: 20 },
+    limits: { maxHalls: 3, maxMembers: 10, maxReservationsPerHallMonth: 12, maxGalleryImages: 10, customDomains: true, customBranding: true, webhooks: true, advancedRsvp: true, maxExtrasPerHall: 6, aiCreditsMonthly: 20, mcp: false },
     features: ['3 halls', '10 organization members', '12 reservations/hall/month', 'Custom domain', 'Custom branding', 'Webhooks', '10 gallery images per hall'],
     stripePriceEnvKey: 'STRIPE_PRICE_STARTER',
   },
@@ -49,8 +52,8 @@ export const PLANS: Record<PlanId, Plan> = {
     id: 'professional',
     name: 'Professional',
     priceMonthly: 79.99,
-    limits: { maxHalls: 10, maxMembers: -1, maxReservationsPerHallMonth: 20, maxGalleryImages: 20, customDomains: true, customBranding: true, webhooks: true, advancedRsvp: true, maxExtrasPerHall: 10, aiCreditsMonthly: 60 },
-    features: ['10 halls', 'Unlimited organization members', '20 reservations/hall/month', 'Custom domain', 'Custom branding', 'Webhooks', '20 gallery images per hall', 'Priority support'],
+    limits: { maxHalls: 10, maxMembers: -1, maxReservationsPerHallMonth: 20, maxGalleryImages: 20, customDomains: true, customBranding: true, webhooks: true, advancedRsvp: true, maxExtrasPerHall: 10, aiCreditsMonthly: 60, mcp: true },
+    features: ['10 halls', 'Unlimited organization members', '20 reservations/hall/month', 'Custom domain', 'Custom branding', 'Webhooks', '20 gallery images per hall', 'Connect your own AI assistant (MCP)', 'Priority support'],
     support: ['prioritySupport'],
     stripePriceEnvKey: 'STRIPE_PRICE_PROFESSIONAL',
   },
@@ -58,8 +61,8 @@ export const PLANS: Record<PlanId, Plan> = {
     id: 'enterprise',
     name: 'Enterprise',
     priceMonthly: null,
-    limits: { maxHalls: -1, maxMembers: -1, maxReservationsPerHallMonth: -1, maxGalleryImages: -1, customDomains: true, customBranding: true, webhooks: true, advancedRsvp: true, maxExtrasPerHall: -1, aiCreditsMonthly: 60 },
-    features: ['Unlimited halls', 'Unlimited organization members', 'Unlimited reservations', 'Unlimited gallery images', 'Custom domain', 'Custom branding', 'Webhooks', 'Priority support', 'SLA', 'Dedicated support'],
+    limits: { maxHalls: -1, maxMembers: -1, maxReservationsPerHallMonth: -1, maxGalleryImages: -1, customDomains: true, customBranding: true, webhooks: true, advancedRsvp: true, maxExtrasPerHall: -1, aiCreditsMonthly: 60, mcp: true },
+    features: ['Unlimited halls', 'Unlimited organization members', 'Unlimited reservations', 'Unlimited gallery images', 'Custom domain', 'Custom branding', 'Webhooks', 'Connect your own AI assistant (MCP)', 'Priority support', 'SLA', 'Dedicated support'],
     support: ['prioritySupport', 'sla', 'dedicatedSupport'],
   },
 };

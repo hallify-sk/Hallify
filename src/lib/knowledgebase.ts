@@ -396,6 +396,72 @@ const SOURCES: ArticleSource[] = [
 		}
 	},
 	{
+		slug: 'connect-ai-assistant',
+		category: 'site',
+		sk: {
+			title: 'Pripojte svojho AI asistenta (MCP)',
+			summary: 'Ako pripojiť Claude, ChatGPT alebo Cursor k Hallify cez MCP a čo môže asistent robiť.',
+			body: `
+			<p>Vlastného AI asistenta — <strong>Claude</strong>, <strong>ChatGPT</strong>, <strong>Cursor</strong> a ďalších, ktorí podporujú protokol MCP — môžete pripojiť k Hallify. Asistent potom vie odpovedať na otázky o vašich sálach, rezerváciách, správach od klientov a štatistikách.</p>
+			<p>Adresa servera: <code>https://hallify.sk/mcp</code></p>
+			<h3>Claude</h3>
+			<ol>
+				<li>V Claude otvorte <strong>Nastavenia → Konektory</strong> (Connectors) a zvoľte <strong>Pridať vlastný konektor</strong> (Add custom connector).</li>
+				<li>Ako názov zadajte „Hallify“ a ako URL <code>https://hallify.sk/mcp</code>. Potvrďte.</li>
+				<li>Kliknite na <strong>Pripojiť</strong> (Connect). Otvorí sa Hallify: prihláste sa, skontrolujte, čo bude asistent smieť, a zvoľte <strong>Povoliť prístup</strong>.</li>
+				<li>V konverzácii zapnite Hallify v ponuke nástrojov a pýtajte sa, napríklad „Aké rezervácie mám budúci týždeň?“</li>
+			</ol>
+			<p>V tímových plánoch Claude pridáva vlastné konektory vlastník alebo administrátor tímu.</p>
+			<h3>ChatGPT</h3>
+			<ol>
+				<li>V ChatGPT otvorte <strong>Nastavenia → Aplikácie a konektory</strong> (Apps &amp; Connectors) a v rozšírených nastaveniach zapnite <strong>režim pre vývojárov</strong> (Developer mode).</li>
+				<li>Zvoľte <strong>Vytvoriť</strong> (Create), zadajte názov „Hallify“, adresu servera MCP <code>https://hallify.sk/mcp</code> a overenie <strong>OAuth</strong>.</li>
+				<li>Prihláste sa do Hallify a zvoľte <strong>Povoliť prístup</strong>. Potom konektor vyberte v konverzácii.</li>
+			</ol>
+			<p>Názvy ponúk sa v aplikáciách môžu mierne líšiť.</p>
+			<h3>Čo asistent smie</h3>
+			<ul>
+				<li>Pracuje <strong>vo vašom mene a s vašimi oprávneniami</strong> v každej organizácii, ktorej ste členom. Čo nevidíte vy, nevidí ani on.</li>
+				<li>Predvolene <strong>len číta</strong>. Ak pri pripájaní zapnete <strong>Povoliť aj zmeny</strong>, môže meniť stav rezervácií, odpovedať klientom a upravovať popis sál. Každá zmena sa zaznamená ako vykonaná „cez MCP“.</li>
+				<li>Údaje organizácie sú dostupné na plánoch <strong>Professional</strong> a <strong>Enterprise</strong>. Asistent nemíňa vaše AI kredity — platíte len za svojho asistenta u jeho poskytovateľa.</li>
+			</ul>
+			<h3>Zrušenie prístupu</h3>
+			<p>Pripojené aplikácie nájdete v <strong>Profile → Pripojené AI aplikácie</strong>, kde im prístup zrušíte. Vlastník organizácie vidí pripojenia členov v <strong>Nastavenia → Rozšírené</strong> a môže im prístup k organizácii odobrať.</p>
+		`
+		},
+		en: {
+			title: 'Connect your AI assistant (MCP)',
+			summary: 'How to connect Claude, ChatGPT or Cursor to Hallify over MCP, and what the assistant can do.',
+			body: `
+			<p>You can connect your own AI assistant — <strong>Claude</strong>, <strong>ChatGPT</strong>, <strong>Cursor</strong> and others that support the MCP protocol — to Hallify. It can then answer questions about your halls, reservations, client messages and statistics.</p>
+			<p>Server URL: <code>https://hallify.sk/mcp</code></p>
+			<h3>Claude</h3>
+			<ol>
+				<li>In Claude, open <strong>Settings → Connectors</strong> and choose <strong>Add custom connector</strong>.</li>
+				<li>Name it “Hallify” and enter the URL <code>https://hallify.sk/mcp</code>. Confirm.</li>
+				<li>Click <strong>Connect</strong>. Hallify opens: sign in, check what the assistant will be allowed to do, and choose <strong>Allow access</strong>.</li>
+				<li>In a chat, turn Hallify on in the tools menu and ask, for example, “Which reservations do I have next week?”</li>
+			</ol>
+			<p>On Claude team plans, custom connectors are added by the team’s owner or an admin.</p>
+			<h3>ChatGPT</h3>
+			<ol>
+				<li>In ChatGPT, open <strong>Settings → Apps &amp; Connectors</strong> and, under advanced settings, turn on <strong>Developer mode</strong>.</li>
+				<li>Choose <strong>Create</strong>, name it “Hallify”, enter the MCP server URL <code>https://hallify.sk/mcp</code> and choose <strong>OAuth</strong> authentication.</li>
+				<li>Sign in to Hallify and choose <strong>Allow access</strong>. Then pick the connector in a chat.</li>
+			</ol>
+			<p>Menu names may differ slightly between apps and versions.</p>
+			<h3>What the assistant may do</h3>
+			<ul>
+				<li>It works <strong>as you, with your permissions</strong>, in every organisation you belong to. What you cannot see, neither can it.</li>
+				<li>By default it <strong>only reads</strong>. If you turn on <strong>Also allow changes</strong> when connecting, it can change reservation statuses, reply to clients and edit hall descriptions. Every change is recorded as made “via MCP”.</li>
+				<li>Organisation data is available on the <strong>Professional</strong> and <strong>Enterprise</strong> plans. The assistant spends none of your AI credits — you pay only your assistant’s own provider.</li>
+			</ul>
+			<h3>Revoking access</h3>
+			<p>Your connected apps are under <strong>Profile → Connected AI apps</strong>, where you can revoke them. An organisation’s owner sees members’ connections in <strong>Settings → Advanced</strong> and can take away their access to the organisation.</p>
+		`
+		}
+	},
+	{
 		slug: 'plans-and-limits',
 		category: 'account',
 		sk: {

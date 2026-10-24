@@ -1046,6 +1046,15 @@ export async function toolsFor(locals: App.Locals): Promise<FunctionTool[]> {
 	return out;
 }
 
+/** One tool's definition, for the MCP server (src/lib/server/mcp), which offers the
+ *  read tools of this same registry and runs them through `runTool`. Null for an
+ *  unknown tool, and for one whose schema is built per member. */
+export function toolSpec(name: string): { name: string; description: string; permission: Permission; parameters: Record<string, unknown> } | null {
+	const t = TOOLS.find((x) => x.name === name);
+	if (!t || typeof t.parameters === 'function') return null;
+	return { name: t.name, description: t.description, permission: t.permission, parameters: t.parameters };
+}
+
 /** Run one tool call. Unknown tools, bad JSON and missing permissions come back to
  *  the model as errors it can explain, never as exceptions that end the turn. */
 export async function runTool(ctx: ToolContext, name: string, rawArgs: string): Promise<ToolResult> {

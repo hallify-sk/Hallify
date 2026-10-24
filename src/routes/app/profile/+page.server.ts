@@ -13,6 +13,7 @@ import { syncLinkedRows } from '$lib/server/identity';
 import { markEmailChanged, sendVerificationEmail } from '$lib/server/email-verification';
 import { deleteAccount, planAccountDeletion } from '$lib/server/account-deletion';
 import { liveDeletionDeps } from '$lib/server/account-deletion-live';
+import { listUserConnections } from '$lib/server/mcp/connections';
 
 /** Check the account's current password, counting only wrong guesses against the
  *  same per-account limit sign-in uses: a stolen session must not become a free
@@ -41,7 +42,9 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 
 	// What deleting the account would do (D7), shown before anyone confirms.
 	const deletion = await planAccountDeletion(locals.db, user.id);
-	return { profile: user, emailVerified: !!user.email_verified_at, deletion };
+	// Connected AI apps (MCP) live on their own page; the profile shows how many.
+	const mcpConnections = locals.user.account_type === 'client' ? null : (await listUserConnections(locals.db, user.id)).length;
+	return { profile: user, emailVerified: !!user.email_verified_at, deletion, mcpConnections };
 };
 
 export const actions: Actions = {

@@ -20,6 +20,7 @@ export function planFeatureList(plan: Plan, f: FeatureStrings): string[] {
 	];
 	if (l.customBranding) out.push(f.customBranding);
 	if (l.webhooks) out.push(f.webhooks);
+	if (l.mcp) out.push(f.mcp);
 	for (const s of plan.support ?? []) out.push(f[s]);
 	return out;
 }

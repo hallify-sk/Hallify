@@ -18,6 +18,7 @@
 
 import { dbAll, dbFirst, dbRun } from '$lib/db/index';
 import type { D1Database } from '@cloudflare/workers-types';
+import { revokeUserGrants } from '$lib/server/mcp/oauth';
 
 export type OrgOutcome =
 	/** Owner with nobody else to take over: the organisation is closed. */
@@ -218,6 +219,9 @@ async function stillReferenced(db: D1Database, id: string): Promise<boolean> {
 /** Delete a user row, or anonymise it when the venue's records still need it. */
 async function deleteOrAnonymise(db: D1Database, id: string, at: string): Promise<'deleted' | 'anonymised'> {
 	await dbRun(db, 'DELETE FROM sessions WHERE user_id = ?', id);
+	// Connected AI agents lose their tokens with the account (and the grants go with
+	// the row when it is deleted).
+	await revokeUserGrants(db, id, 'account_deleted');
 	await dbRun(db, 'DELETE FROM password_resets WHERE user_id = ?', id);
 	await dbRun(db, 'DELETE FROM email_verifications WHERE user_id = ?', id);
 	await dbRun(db, 'DELETE FROM reservation_holds WHERE user_id = ?', id);

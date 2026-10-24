@@ -16,6 +16,7 @@ import { suspendedResponse } from '$lib/server/suspended-page';
 import { canonicalRedirect, needsOriginCheck, originAllowed, redirectStatus } from '$lib/server/edge';
 import { loginUrl } from '$lib/login-redirect';
 import { isGatedPath, verificationRequired } from '$lib/server/email-verification';
+import { formCsrfRefused, isApexHost, isMcpPath } from '$lib/server/mcp/http';
 import { sequence } from '@sveltejs/kit/hooks';
 import type { Handle } from '@sveltejs/kit';
 import type { Branding, OrgContext } from './app.d';
@@ -441,6 +442,16 @@ const securityHeaders: Handle = async ({ event, resolve }) => {
     const policy = response.headers.get('content-security-policy');
     if (policy) response.headers.set('content-security-policy', extendCsp(policy, origins));
   }
+  // The OAuth consent page's forms end in a redirect to the connecting agent, which
+  // form-action must allow (browsers check the whole redirect chain). That one origin.
+  const formOrigins = event.locals.formActionOrigins ?? [];
+  if (formOrigins.length) {
+    const policy = response.headers.get('content-security-policy');
+    if (policy) {
+      response.headers.set('content-security-policy',
+        policy.replace(/(^|;\s*)(form-action)([^;]*)/i, (_m, sep, name, rest) => `${sep}${name}${rest} ${formOrigins.join(' ')}`));
+    }
+  }
 
   // Clickjacking. frame-ancestors in the CSP is the modern control; X-Frame-Options
   // is kept for older browsers that ignore it.
@@ -492,6 +503,18 @@ const edgeRules: Handle = async ({ event, resolve }) => {
   const target = canonicalRedirect(event.url, event.request.headers, env.HALLIFY_DOMAIN ?? 'hallify.app');
   if (target) {
     return new Response(null, { status: redirectStatus(event.request.method), headers: { Location: target } });
+  }
+
+  // The MCP server and its OAuth endpoints belong to the platform: a venue's
+  // subdomain or custom domain must not issue or accept its tokens.
+  if (isMcpPath(event.url.pathname) && !isApexHost(event.request.headers.get('host') ?? event.url.host, env.HALLIFY_DOMAIN ?? 'hallify.app')) {
+    return new Response('Not found', { status: 404 });
+  }
+
+  // Cross-site form posts (SvelteKit's own check, moved here so the OAuth token and
+  // revocation endpoints can be exempted; see svelte.config.js).
+  if (formCsrfRefused(event.request.method, event.url.pathname, event.request.headers, event.url)) {
+    return new Response(`Cross-site ${event.request.method} form submissions are forbidden`, { status: 403 });
   }
 
   // SvelteKit's CSRF check only covers form submissions; the JSON endpoints under

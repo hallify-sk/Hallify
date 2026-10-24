@@ -6,6 +6,12 @@ const config = {
 	preprocess: vitePreprocess(),
 	kit: {
 		adapter: adapter(),
+		// The form-CSRF origin check runs in hooks.server.ts (formCsrfRefused in
+		// $lib/server/mcp/http) instead, with the same rule, so that the OAuth token
+		// and revocation endpoints — POSTed form bodies from agents' servers, which
+		// carry no Origin and no cookie — can be exempted from it. Every other path is
+		// still refused a cross-site form post.
+		csrf: { trustedOrigins: ['*'] },
 		// SvelteKit generates the hashes for its own inline bootstrap script, so the
 		// policy can stay strict without breaking hydration. Kept here rather than in
 		// hooks for that reason. 'unsafe-inline' is required for style-src only:

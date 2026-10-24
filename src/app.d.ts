@@ -45,6 +45,9 @@ declare global {
       locale: 'sk' | 'en';
       /** Server-container origins this page loads analytics from; added to the CSP. */
       analyticsOrigins?: string[];
+      /** Origins a form on this page may be redirected to (the OAuth consent page
+       *  sends the browser back to the agent); added to the CSP's form-action. */
+      formActionOrigins?: string[];
     }
     interface PageData {
       user?: SessionUser | null;

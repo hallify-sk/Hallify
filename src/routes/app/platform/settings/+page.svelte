@@ -145,6 +145,30 @@
     </form>
   </section>
 
+  <!-- The MCP server (/mcp): its own switch, separate from the assistant's above. -->
+  <section class="section" id="mcp">
+    <div class="section-head">
+      <h2>{t.mcp.platformTitle}</h2>
+      <p>{t.mcp.platformLead.replace('{url}', data.mcp.url)}</p>
+    </div>
+    <form method="POST" action="?/saveMcp" use:enhance={keepFields}>
+      <div class="toggle-row">
+        <label class="ui-switch">
+          <input id="pf-mcp" type="checkbox" name="enabled" checked={data.mcp.enabled} />
+          <span class="ui-switch-track" aria-hidden="true"></span>
+        </label>
+        <label class="toggle-copy" for="pf-mcp">
+          <strong>{t.mcp.platformEnabled}</strong>
+          <span>{t.mcp.platformEnabledHint}</span>
+        </label>
+      </div>
+      <div class="row-actions-end">
+        <span class="meta">{t.mcp.platformActive(data.mcp.active)}</span>
+        <button type="submit" class="btn-action">{t.common.save}</button>
+      </div>
+    </form>
+  </section>
+
   <section class="section">
     <div class="section-head">
       <h2>{t.platformSettings.moreTitle}</h2>

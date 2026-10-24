@@ -39,6 +39,13 @@ const TASKS: { task: string; sql: string }[] = [
   // Delivered webhook attempts and email logs are diagnostic; keep 90 days.
   { task: 'webhook_deliveries', sql: "DELETE FROM webhook_deliveries WHERE delivered_at <= datetime('now', '-90 days')" },
   { task: 'email_log', sql: "DELETE FROM email_log WHERE created_at <= datetime('now', '-90 days')" },
+  // MCP: expired tokens and codes (stored as datetime() text, compared directly), and
+  // connections that are revoked or have no token left, after 90 days.
+  { task: 'mcp_tokens', sql: "DELETE FROM mcp_tokens WHERE expires_at <= datetime('now')" },
+  { task: 'mcp_auth_codes', sql: "DELETE FROM mcp_auth_codes WHERE expires_at <= datetime('now', '-1 day')" },
+  { task: 'mcp_grants', sql: "DELETE FROM mcp_grants WHERE created_at <= datetime('now', '-90 days') AND NOT EXISTS (SELECT 1 FROM mcp_tokens t WHERE t.grant_id = mcp_grants.id)" },
+  // Registered clients nobody ever approved.
+  { task: 'mcp_clients', sql: "DELETE FROM mcp_clients WHERE created_at <= datetime('now', '-30 days') AND NOT EXISTS (SELECT 1 FROM mcp_grants g WHERE g.client_id = mcp_clients.id) AND NOT EXISTS (SELECT 1 FROM mcp_auth_codes a WHERE a.client_id = mcp_clients.id)" },
 ];
 
 export async function runCleanup(db: D1Database): Promise<CleanupResult[]> {
