@@ -165,6 +165,8 @@ export async function deleteOrgCascade(db: D1Database, orgId: string): Promise<v
 	await dbRun(db, 'DELETE FROM channel_messages WHERE channel_id IN (SELECT id FROM channels WHERE org_id = ?)', orgId);
 	await dbRun(db, 'DELETE FROM messages WHERE ticket_id IN (SELECT id FROM tickets WHERE org_id = ?)', orgId);
 	await dbRun(db, 'DELETE FROM rsvp_entries WHERE reservation_id IN (SELECT id FROM reservations WHERE org_id = ? OR hall_id IN (SELECT id FROM halls WHERE org_id = ?))', orgId, orgId);
+	// The people its events were shared with (0038; absent before it).
+	await dbRun(db, 'DELETE FROM reservation_members WHERE reservation_id IN (SELECT id FROM reservations WHERE org_id = ? OR hall_id IN (SELECT id FROM halls WHERE org_id = ?))', orgId, orgId).catch(() => {});
 	await dbRun(db, 'DELETE FROM table_types WHERE hall_id IN (SELECT id FROM halls WHERE org_id = ?)', orgId);
 	await dbRun(db, 'DELETE FROM floorplan_templates WHERE hall_id IN (SELECT id FROM halls WHERE org_id = ?)', orgId);
 	await dbRun(db, 'DELETE FROM hall_blocks WHERE hall_id IN (SELECT id FROM halls WHERE org_id = ?)', orgId);
@@ -277,6 +279,9 @@ export async function deleteUserAndCleanup(db: D1Database, userId: string): Prom
 	// reservations (and their dependents) first.
 	await dbRun(db, 'DELETE FROM rsvp_entries WHERE reservation_id IN (SELECT id FROM reservations WHERE user_id = ?)', userId);
 	await dbRun(db, 'DELETE FROM reservation_invites WHERE reservation_id IN (SELECT id FROM reservations WHERE user_id = ?)', userId);
+	// Their bookings' shares, the events shared with them, and what they shared (0038).
+	await dbRun(db, 'DELETE FROM reservation_members WHERE user_id = ? OR reservation_id IN (SELECT id FROM reservations WHERE user_id = ?)', userId, userId).catch(() => {});
+	await dbRun(db, 'UPDATE reservation_members SET invited_by = NULL WHERE invited_by = ?', userId).catch(() => {});
 	await dbRun(db, 'DELETE FROM reservation_holds WHERE user_id = ?', userId);
 	// Their feedback and the venue's notes about them go with them (migration 0031b).
 	await dbRun(db, 'DELETE FROM reservation_feedback WHERE user_id = ? OR reservation_id IN (SELECT id FROM reservations WHERE user_id = ?)', userId, userId).catch(() => {});

@@ -5,7 +5,7 @@ import { dbAll, dbFirst, dbRun, fromJson, toJson } from '$lib/db/index';
 import type { ReservationRow, RsvpRow, TableTypeRow, TemplateRow, ReservationStatus, RsvpConfig, HallExtraRow } from '$lib/db/index';
 import { parseExtraIds, parseExtrasSnapshot, withBookedPrices } from '$lib/extras';
 import type { Actions, PageServerLoad } from './$types';
-import { notifyStatusChange, sendReservationInviteEmail, notifyEventAssigned, notifyVenueChange, notifyPaymentDetails } from '$lib/email';
+import { notifyStatusChange, sendReservationInviteEmail, notifyEventAssigned, notifyVenueChange, notifyPaymentDetails, sendReservationShareEmail } from '$lib/email';
 import { postSystemMessage } from '$lib/tickets';
 import {
 	changeReservationStatus, editReservationDetails, messageReservationClient, setReservationExtras,
@@ -25,6 +25,11 @@ import { clientUrlId } from '$lib/clients';
 import { prepareLayoutSave, refreshLayoutProblems } from '$lib/server/layout-sync';
 import { notifyPayment } from '$lib/server/notification-centre';
 import { followsHallPlan, parseProblems } from '$lib/floorplan-sync';
+import { dev } from '$app/environment';
+import {
+	addMemberDirect, dropOwnerMembership, inviteMember, isValidMemberEmail, listReservationMembers, memberInviteUrl,
+	removeMember, renewMemberInvite, venueSiteBase,
+} from '$lib/server/reservation-members';
 
 // The organization's preferred default language — used to localize emails to the
 // invited/assigned client (who interacts with the org in that language).
@@ -148,6 +153,14 @@ export const load: PageServerLoad = async ({ locals, params, url }) => {
 		canViewAll: access.canViewAll,
 		clientOwner,
 		pendingInvite,
+		// People the event is shared with (0038), and the venue's clients to pick from.
+		members: access.canManage ? await listReservationMembers(locals.db, params.id) : [],
+		venueClients: access.canManage
+			? await dbAll<{ email: string; first_name: string; last_name: string }>(locals.db,
+				`SELECT email, first_name, last_name FROM users
+				  WHERE org_id = ? AND account_type = 'client' AND deleted_at IS NULL AND id != ?
+				  ORDER BY last_name, first_name LIMIT 1000`, orgId, reservation.user_id).catch(() => [])
+			: [],
 		// A phone booking handed to a client: its owner is now the client, so who on
 		// the team entered it comes from the history.
 		enteredBy: reservation.customer_name && clientOwner ? await reservationCreatorName(locals.db, params.id) : null,
@@ -283,6 +296,8 @@ export const actions: Actions = {
 		if (existing) {
 			await dbRun(locals.db, 'UPDATE reservations SET user_id = ? WHERE id = ? AND org_id = ?', existing.id, params.id, orgId);
 			await dbRun(locals.db, 'DELETE FROM reservation_invites WHERE reservation_id = ? AND accepted_at IS NULL', params.id);
+			// Someone the event was shared with who now owns it is no longer also a member.
+			await dropOwnerMembership(locals.db, params.id, existing.id);
 			await logReservationActivity(locals.db, {
 				reservationId: params.id, orgId, actorId: user.id, actorName: inviterName,
 				kind: 'assigned', note: `${existing.first_name} ${existing.last_name}`,
@@ -332,6 +347,84 @@ export const actions: Actions = {
 		if ('fail' in ctx) return ctx.fail;
 		await dbRun(locals.db, 'DELETE FROM reservation_invites WHERE reservation_id = ? AND org_id = ? AND accepted_at IS NULL', params.id, ctx.orgId);
 		return { inviteCancelled: true };
+	},
+
+	// ── People with access (shared events, 0038) ──
+	// Add someone: an existing client of the venue (or a Hallify account, which becomes
+	// one) sees the event at once; any other address gets an invitation link.
+	membersAdd: async ({ request, locals, params, url }) => {
+		const ctx = await staffAction(locals, 'assignError');
+		if ('fail' in ctx) return ctx.fail;
+		const { orgId, user } = ctx;
+		const s = st(locals.locale).sharedEvent;
+		const email = String((await request.formData()).get('email') ?? '').trim().toLowerCase();
+		if (!isValidMemberEmail(email)) return fail(400, { membersError: s.errEmail });
+		const res = await dbFirst<{ id: string; status: string }>(locals.db,
+			'SELECT id, status FROM reservations WHERE id = ? AND org_id = ?', params.id, orgId);
+		if (!res) return fail(404, { membersError: st(locals.locale).serverErrors.notFound });
+		if (res.status === 'cancelled') return fail(400, { membersError: s.errCancelled });
+
+		const inviterName = `${user.first_name} ${user.last_name}`.trim();
+		const base = await venueSiteBase(locals.db, orgId, url, locals.domainOrg?.id === orgId);
+		let client = await dbFirst<{ id: string; email: string; first_name: string; last_name: string }>(locals.db,
+			`SELECT id, email, first_name, last_name FROM users
+			  WHERE lower(email) = ? AND org_id = ? AND account_type = 'client' AND deleted_at IS NULL`, email, orgId);
+		if (!client) {
+			const account = await findHallifyAccount(locals.db, email);
+			if (account) client = { id: await createLinkedClient(locals.db, orgId, account), email: account.email, first_name: account.first_name, last_name: account.last_name };
+		}
+
+		if (client) {
+			const added = await addMemberDirect(locals.db, { reservationId: params.id, userId: client.id, email: client.email, invitedBy: user.id });
+			if (!added.ok) return fail(400, { membersError: s.refusal[added.reason] });
+			const name = `${client.first_name} ${client.last_name}`.trim();
+			await logReservationActivity(locals.db, { reservationId: params.id, orgId, actorId: user.id, actorName: inviterName, kind: 'shared', status: 'added', note: name || client.email });
+			const link = `${base}/halls/my-reservations/${params.id}`;
+			const sent = await sendReservationShareEmail(locals.db, client.email, { orgId, reservationId: params.id, inviterName, url: link, mode: 'added' }).catch(() => false);
+			return { memberAdded: true, memberEmailSent: sent };
+		}
+
+		const inv = await inviteMember(locals.db, { reservationId: params.id, email, invitedBy: user.id });
+		if (!inv.ok) return fail(400, { membersError: s.refusal[inv.reason] });
+		await logReservationActivity(locals.db, { reservationId: params.id, orgId, actorId: user.id, actorName: inviterName, kind: 'shared', status: 'invited', note: email });
+		const link = memberInviteUrl(base, inv.token);
+		const sent = await sendReservationShareEmail(locals.db, email, { orgId, reservationId: params.id, inviterName, url: link, mode: 'invite' }).catch(() => false);
+		if (!sent && dev) console.log(`[shared-events] invitation for ${email}: ${link}`);
+		return { memberInvited: true, memberEmailSent: sent };
+	},
+
+	// A fresh link for a pending invitation (the previous one stops working).
+	membersResend: async ({ request, locals, params, url }) => {
+		const ctx = await staffAction(locals, 'assignError');
+		if ('fail' in ctx) return ctx.fail;
+		const { orgId, user } = ctx;
+		const memberId = String((await request.formData()).get('memberId') ?? '');
+		const owned = await dbFirst<{ id: string }>(locals.db, 'SELECT id FROM reservations WHERE id = ? AND org_id = ?', params.id, orgId);
+		if (!owned) return fail(404, { membersError: st(locals.locale).serverErrors.notFound });
+		const renewed = await renewMemberInvite(locals.db, params.id, memberId);
+		if (!renewed) return fail(404, { membersError: st(locals.locale).sharedEvent.errNoInvite });
+		const link = memberInviteUrl(await venueSiteBase(locals.db, orgId, url, locals.domainOrg?.id === orgId), renewed.token);
+		const sent = await sendReservationShareEmail(locals.db, renewed.email, {
+			orgId, reservationId: params.id, inviterName: `${user.first_name} ${user.last_name}`.trim(), url: link, mode: 'invite',
+		}).catch(() => false);
+		if (!sent && dev) console.log(`[shared-events] invitation for ${renewed.email}: ${link}`);
+		return { memberResent: true, memberEmailSent: sent };
+	},
+
+	membersRemove: async ({ request, locals, params }) => {
+		const ctx = await staffAction(locals, 'assignError');
+		if ('fail' in ctx) return ctx.fail;
+		const { orgId, user } = ctx;
+		const memberId = String((await request.formData()).get('memberId') ?? '');
+		const owned = await dbFirst<{ id: string }>(locals.db, 'SELECT id FROM reservations WHERE id = ? AND org_id = ?', params.id, orgId);
+		if (!owned) return fail(404, { membersError: st(locals.locale).serverErrors.notFound });
+		const gone = await removeMember(locals.db, params.id, memberId);
+		if (!gone) return fail(404, { membersError: st(locals.locale).serverErrors.notFound });
+		await logReservationActivity(locals.db, {
+			reservationId: params.id, orgId, actorId: user.id, actorName: `${user.first_name} ${user.last_name}`.trim(),
+			kind: 'shared', status: 'removed', note: gone.name ?? gone.email,
+		});
+		return { memberRemoved: true };
 	},
 
 	// Staff adjust the reservation's extras (e.g. after agreeing in messages).

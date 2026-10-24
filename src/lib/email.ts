@@ -12,6 +12,7 @@ import { orgPublicBaseUrl } from '$lib/orgUrl';
 import { formatIban, type PaymentView } from '$lib/payment';
 import { loadPaymentView } from '$lib/server/payments';
 import { feedbackDeadline } from '$lib/feedback';
+import { memberEmails } from '$lib/server/reservation-members';
 
 // Email is sent platform-wide via the Brevo transactional HTTP API
 // (https://developers.brevo.com/reference/sendtransacemail). Every email goes
@@ -702,6 +703,16 @@ async function emailClient(db: D1Database, input: ClientEmailInput): Promise<boo
 	return sendEmail(db, input.to, built.subject, html, input.templateName, { fromName: c.via(org.name), replyTo });
 }
 
+/** The same email to the booking's owner and to everyone it is shared with (0038),
+ *  each in their own language. Says whether the owner's copy went out. */
+async function emailClientAndMembers(db: D1Database, input: ClientEmailInput): Promise<boolean> {
+	const sent = await emailClient(db, input);
+	if (input.res) {
+		for (const to of await memberEmails(db, input.res.id, input.to)) await emailClient(db, { ...input, to });
+	}
+	return sent;
+}
+
 /** The booking's price and payment details as email rows (D6), in the reader's
  *  language. Empty when nothing is stated. */
 export function paymentRows(p: PaymentView | null, locale: EmailLocale): Array<[string, string | null]> {
@@ -741,8 +752,9 @@ export const notifyStatusChange = inBackground(async function notifyStatusChange
 	const payment = res && newStatus !== 'cancelled' ? await loadPaymentView(db, orgId, res.id) : null;
 	const showPayment = !!payment?.hasAny;
 	const org = showPayment ? await orgInfo(db, orgId) : null;
-	await emailClient(db, {
-		orgId, to: userEmail, templateName: 'statusChange', res,
+	// The owner, and everyone the event is shared with (0038).
+	for (const to of [userEmail, ...(res ? await memberEmails(db, res.id, userEmail) : [])]) await emailClient(db, {
+		orgId, to, templateName: 'statusChange', res,
 		build: (c, locale, tpl) => {
 			const status = statusLabel(newStatus, locale);
 			const statusInfo = newStatus === 'waiting_payment' && payment?.hasInstructions
@@ -774,8 +786,8 @@ export const notifyHallCancellation = inBackground(async function notifyHallCanc
 	const notify = await getNotifyConfig(db, orgId);
 	if (!notify.statusChange) return;
 	const res = await loadReservation(db, extra.reservationId);
-	await emailClient(db, {
-		orgId, to: userEmail, templateName: 'hallCancellation', res,
+	for (const to of [userEmail, ...(res ? await memberEmails(db, res.id, userEmail) : [])]) await emailClient(db, {
+		orgId, to, templateName: 'hallCancellation', res,
 		build: (c, locale, tpl) => ({
 			subject: c.subject.hallCancellation(vars.title),
 			bodyHtml: renderTemplate(tpl.hallCancellation, {
@@ -881,7 +893,7 @@ export const notifyVenueChange = inBackground(async function notifyVenueChange(
 	const res = await loadReservation(db, reservationId);
 	if (!res?.clientEmail || !res.clientIsClient) return false;
 	if (res.status === 'cancelled' || res.status === 'completed') return false;
-	return emailClient(db, {
+	return emailClientAndMembers(db, {
 		orgId, to: res.clientEmail, templateName: 'venueChanged', res,
 		build: (c, locale, tpl) => ({
 			subject: c.subject.venueChanged(res.title),
@@ -901,7 +913,7 @@ export const notifyPaymentDetails = inBackground(async function notifyPaymentDet
 	const payment = await loadPaymentView(db, orgId, reservationId);
 	if (!payment?.hasAny) return false;
 	const org = await orgInfo(db, orgId);
-	return emailClient(db, {
+	return emailClientAndMembers(db, {
 		orgId, to: res.clientEmail, templateName: 'paymentDetails', res,
 		build: (c, locale, tpl) => ({
 			subject: c.subject.paymentDetails(res.title),
@@ -944,7 +956,7 @@ export const notifyEventReminder = inBackground(async function notifyEventRemind
 	if (!notify.eventReminder) return false;
 	const res = await loadReservation(db, reservationId);
 	if (!res?.clientEmail || !res.clientIsClient) return false;
-	return emailClient(db, {
+	return emailClientAndMembers(db, {
 		orgId, to: res.clientEmail, templateName: 'eventReminder', res,
 		build: (c, locale, tpl) => ({
 			subject: c.subject.eventReminder(res.title, eventDate(res.eventDate, locale)),
@@ -1144,4 +1156,54 @@ export const notifyEventAssigned = inBackground(async function notifyEventAssign
 		footer: [c.footer.sentBy(opts.orgName)],
 	});
 	return sendEmail(db, to, tx.subject, html, 'eventAssigned', { fromName: c.via(opts.orgName) });
+});
+
+// An event was shared with someone (0038): an invitation to accept on the venue's
+// site, or — when the venue's staff added an existing client — a note that it is now
+// in their reservations. In the recipient's language when known.
+export const sendReservationShareEmail = inBackground(async function sendReservationShareEmail(
+	db: D1Database,
+	to: string,
+	opts: { orgId: string; reservationId: string; inviterName: string; url: string; mode: 'invite' | 'added' },
+	locale?: EmailLocale
+): Promise<boolean> {
+	const res = await loadReservation(db, opts.reservationId);
+	const org = await orgInfo(db, opts.orgId);
+	const lang: EmailLocale = locale ?? (await recipientLocale(db, to, opts.orgId));
+	const invite = opts.mode === 'invite';
+	const who = esc(opts.inviterName || org.name);
+	const title = res?.title ?? '';
+	const tx = lang === 'en'
+		? {
+			subject: invite ? `${org.name}: ${opts.inviterName || org.name} shared an event with you` : `${org.name}: an event was shared with you`,
+			heading: invite ? 'An event was shared with you' : 'You can now see this event',
+			intro: invite
+				? `${who} invited you to the event <strong>${esc(title)}</strong> at <strong>${esc(org.name)}</strong>. You will see its details, the seating and the messages with the venue.`
+				: `<strong>${esc(org.name)}</strong> added you to the event <strong>${esc(title)}</strong>. You will find it in your reservations on the venue's site.`,
+			body: invite ? 'Accept with the button below. Sign in, or create an account, with this email address.' : '',
+			cta: invite ? 'Accept the invitation' : 'View the event',
+			expires: invite ? 'The link works once and expires in 30 days.' : '',
+		}
+		: {
+			subject: invite ? `${org.name}: ${opts.inviterName || org.name} s vami zdieľa udalosť` : `${org.name}: zdieľali s vami udalosť`,
+			heading: invite ? 'Niekto s vami zdieľa udalosť' : 'Túto udalosť teraz vidíte aj vy',
+			intro: invite
+				? `${who} vás pozýva k udalosti <strong>${esc(title)}</strong> v <strong>${esc(org.name)}</strong>. Uvidíte jej podrobnosti, zasadací poriadok aj správy s prevádzkou.`
+				: `<strong>${esc(org.name)}</strong> vás pridal(a) k udalosti <strong>${esc(title)}</strong>. Nájdete ju vo svojich rezerváciách na stránke prevádzky.`,
+			body: invite ? 'Pozvánku prijmete tlačidlom nižšie. Prihláste sa alebo si vytvorte účet s touto e-mailovou adresou.' : '',
+			cta: invite ? 'Prijať pozvánku' : 'Zobraziť udalosť',
+			expires: invite ? 'Odkaz funguje raz a platí 30 dní.' : '',
+		};
+	const c = emailCopy(lang);
+	const html = renderLayout({
+		locale: lang,
+		brand: org.name,
+		subject: tx.subject,
+		bodyHtml: `<h2>${tx.heading}</h2>\n<p>${tx.intro}</p>${tx.body ? `\n<p>${tx.body}</p>` : ''}`,
+		details: res ? reservationDetails(res, lang, false) : [],
+		cta: { label: tx.cta, url: opts.url },
+		linkFallback: c.footer.linkFallback,
+		footer: [tx.expires, c.footer.sentBy(org.name)].filter(Boolean),
+	});
+	return sendEmail(db, to, tx.subject, html, invite ? 'reservationShareInvite' : 'reservationShared', { fromName: c.via(org.name), replyTo: res?.hallEmail ?? org.contactEmail });
 });

@@ -4,6 +4,7 @@
 	import { invalidateAll } from '$app/navigation';
 	import { tick, untrack } from 'svelte';
 	import MiniCalendar from '$lib/components/MiniCalendar.svelte';
+	import SharedWithCard from '$lib/components/reservation/SharedWithCard.svelte'; // shared events (0038)
 	import { statusLabel, statusClass, fmtDate } from '$lib/reservationStatus';
 	import { computeExtras } from '$lib/extras';
 	import { reveal } from '$lib/reveal';
@@ -462,6 +463,8 @@
 		{/if}
 	</section>
 {/if}
+
+<!-- SHARED EVENTS (0038): self-contained card, keep this one line when restyling. --><SharedWithCard members={data.members} canManage={data.access === 'owner'} reservationId={r.id} />
 
 <!-- ── The conversation with the venue ── -->
 <section class="section msg-section" use:reveal>

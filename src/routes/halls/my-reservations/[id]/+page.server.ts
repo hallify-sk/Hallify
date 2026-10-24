@@ -29,6 +29,10 @@ import { loadPaymentView } from '$lib/server/payments';
 import { feedbackDeadline, feedbackState, parseFeedbackForm } from '$lib/feedback';
 import { loadFeedback, saveFeedback } from '$lib/server/feedback';
 import { todayUtcISO } from '$lib/server/reservation-rules';
+import { dev } from '$app/environment';
+import { sendReservationShareEmail } from '$lib/email';
+import { venueClientAccess, type ClientAccess } from '$lib/server/reservation-client-access';
+import { inviteMember, isValidMemberEmail, listReservationMembers, memberInviteUrl, removeMember, venueSiteBase } from '$lib/server/reservation-members';
 
 const RANGE_DAYS = 540;
 const EDITABLE = new Set(['pending']);
@@ -42,15 +46,22 @@ function subjectFor(hallName: string, eventDate: string, locale: App.Locals['loc
 /** The booking as its client may see it: never `r.*`, which carried a phone
  *  booking's staff-only customer details and internal note to the browser (B60). */
 async function loadReservation(db: App.Locals['db'], id: string, userId: string, orgId: string) {
-	return dbFirst<ClientReservationRow & { hall_name: string; hall_slug: string | null; hall_min_cancel_days: number }>(
+	// The owner, or someone the event is shared with (0038): `access` says which.
+	const a = venueClientAccess(userId);
+	return dbFirst<ClientReservationRow & { hall_name: string; hall_slug: string | null; hall_min_cancel_days: number; access: ClientAccess }>(
 		db,
-		`SELECT ${clientReservationColumns('r')}, h.name AS hall_name, h.slug AS hall_slug, h.min_cancel_days AS hall_min_cancel_days
+		`SELECT ${clientReservationColumns('r')}, h.name AS hall_name, h.slug AS hall_slug, h.min_cancel_days AS hall_min_cancel_days,
+		        ${a.access.sql} AS access
 		FROM reservations r
 		JOIN halls h ON h.id = r.hall_id
-		WHERE r.id = ? AND r.user_id = ? AND r.org_id = ?`,
-		id, userId, orgId
+		WHERE r.id = ? AND r.org_id = ? AND ${a.where.sql}`,
+		...a.access.params, id, orgId, ...a.where.params
 	);
 }
+
+/** Owner-only actions (cancel, change, rate, share): a member is told so. */
+const ownerOnly = (locale: App.Locals['locale'], scope: string) =>
+	fail(403, { scope, error: st(locale).sharedEvent.errOwnerOnly });
 
 export const load: PageServerLoad = async ({ params, locals, url }) => {
 	if (!locals.user) redirect(303, loginUrl(url, '/login'));
@@ -98,15 +109,19 @@ export const load: PageServerLoad = async ({ params, locals, url }) => {
 	// The venue's notice period decides whether Cancel is offered at all; offering it
 	// and then refusing on confirm was the old behaviour.
 	const noticeOk = withinCancelNotice(reservation.event_date, reservation.hall_min_cancel_days);
+	// Shared events (0038): cancelling, changing, rating and sharing are the owner's alone.
+	const owner = reservation.access === 'owner';
 
 	return {
 		reservation,
+		access: reservation.access,
+		members: await membersForPage(locals.db, reservation.id, reservation.user_id, userId, owner),
 		hasStarted: started,
 		isPast: past,
-		editable: EDITABLE.has(reservation.status) && !started,
-		cancellable: CANCELLABLE.has(reservation.status) && !started && noticeOk,
+		editable: owner && EDITABLE.has(reservation.status) && !started,
+		cancellable: owner && CANCELLABLE.has(reservation.status) && !started && noticeOk,
 		// Past the notice period but otherwise cancellable: say until when it was possible.
-		cancelWindowClosed: CANCELLABLE.has(reservation.status) && !started && !noticeOk,
+		cancelWindowClosed: owner && CANCELLABLE.has(reservation.status) && !started && !noticeOk,
 		cancelDeadline: cancelDeadline(reservation.event_date, reservation.hall_min_cancel_days),
 		// Once approved, the client can self-serve the seating tools (until the event starts).
 		canManageEvent: new Set(['approved', 'planned']).has(reservation.status) && !started,
@@ -120,7 +135,7 @@ export const load: PageServerLoad = async ({ params, locals, url }) => {
 			await loadBookableExtras(locals.db, reservation.hall_id, orgId, selectedExtras),
 			parseExtrasSnapshot((reservation as { extras_snapshot_json?: string | null }).extras_snapshot_json)),
 		selectedExtras,
-		extrasEditable: new Set(['pending', 'waiting_payment']).has(reservation.status) && !started,
+		extrasEditable: owner && new Set(['pending', 'waiting_payment']).has(reservation.status) && !started,
 		hall: hall ? { id: hall.id, max_people: hall.max_people, min_days_advance: hall.min_days_advance, allow_reservations: hall.allow_reservations } : null,
 		blocks: blocksRaw.map(b => ({ ...b, days_of_week: fromJsonArr(b.days_of_week as string | null) })),
 		// Closed weekdays and blocks (server-side, the rule the update check uses), and
@@ -134,9 +149,27 @@ export const load: PageServerLoad = async ({ params, locals, url }) => {
 		// Price and how to pay the venue (D6); nothing to pay on a cancelled booking.
 		payment: reservation.status === 'cancelled' ? null : await loadPaymentView(locals.db, orgId, reservation.id),
 		// The rating card on a completed event (D5); null when there is none to show.
-		feedback: await feedbackForPage(locals.db, reservation, hall?.allow_feedback ?? 0),
+		feedback: owner ? await feedbackForPage(locals.db, reservation, hall?.allow_feedback ?? 0) : null,
 	};
 };
+
+/** The people on the "Shared with" card. The owner sees everyone with their address
+ *  and invitations; a member sees who else has joined, the owner first, by name. */
+async function membersForPage(db: App.Locals['db'], reservationId: string, ownerId: string, viewerId: string, owner: boolean) {
+	const rows = await listReservationMembers(db, reservationId);
+	const named = (first: string | null, last: string | null) => `${first ?? ''} ${last ?? ''}`.trim();
+	if (owner) {
+		return rows.map((m) => ({ id: m.id, name: named(m.first_name, m.last_name) || null, email: m.email as string | null, status: m.status, expired: m.expired, isOwner: false, isSelf: false }));
+	}
+	const o = await dbFirst<{ first_name: string | null; last_name: string | null }>(db, 'SELECT first_name, last_name FROM users WHERE id = ?', ownerId);
+	return [
+		{ id: 'owner', name: o ? named(o.first_name, o.last_name) || null : null, email: null as string | null, status: 'joined' as const, expired: false, isOwner: true, isSelf: false },
+		...rows.filter((m) => m.status === 'joined').map((m) => ({
+			id: m.id, name: named(m.first_name, m.last_name) || null, email: m.user_id === viewerId ? m.email : null,
+			status: m.status, expired: false, isOwner: false, isSelf: m.user_id === viewerId,
+		})),
+	];
+}
 
 type FeedbackReservation = Pick<ReservationRow, 'id' | 'status' | 'event_date'> & { feedback_requested_at?: string | null };
 
@@ -161,6 +194,7 @@ export const actions: Actions = {
 		const orgId = locals.domainOrg.id;
 		const reservation = await loadReservation(locals.db, params.id, locals.user.id, orgId);
 		if (!reservation) return fail(404, { error: st(locals.locale).serverErrors.reservationNotFoundDot, scope: 'extras' });
+		if (reservation.access !== 'owner') return ownerOnly(locals.locale, 'extras');
 		if (hasEventStarted(reservation.event_date, reservation.start_time)) return fail(400, { error: st(locals.locale).serverErrors.eventNoLongerEditable, scope: 'extras' });
 		if (!new Set(['pending', 'waiting_payment']).has(reservation.status)) {
 			return fail(400, { error: st(locals.locale).serverErrors.extrasNoLongerChangeable, scope: 'extras', decided: true });
@@ -210,6 +244,7 @@ export const actions: Actions = {
 		const userId = locals.user.id;
 		const reservation = await loadReservation(locals.db, params.id, userId, orgId);
 		if (!reservation) return fail(404, { scope: 'update', error: st(locals.locale).serverErrors.reservationNotFoundDot });
+		if (reservation.access !== 'owner') return ownerOnly(locals.locale, 'update');
 		if (hasEventStarted(reservation.event_date, reservation.start_time)) return fail(400, { scope: 'update', error: st(locals.locale).serverErrors.eventNoLongerEditable });
 		// The page offered the edit, so the venue decided on it since: say so, and the
 		// page reloads to show the booking as it is now.
@@ -287,6 +322,7 @@ export const actions: Actions = {
 		const userId = locals.user.id;
 		const reservation = await loadReservation(locals.db, params.id, userId, orgId);
 		if (!reservation) return fail(404, { scope: 'cancel', error: st(locals.locale).serverErrors.reservationNotFoundDot });
+		if (reservation.access !== 'owner') return ownerOnly(locals.locale, 'cancel');
 		if (hasEventStarted(reservation.event_date, reservation.start_time)) return fail(400, { scope: 'cancel', error: st(locals.locale).serverErrors.reservationNoLongerCancellable });
 		if (!CANCELLABLE.has(reservation.status)) return fail(400, { scope: 'cancel', decided: true, error: st(locals.locale).serverErrors.reservationNoLongerCancellable });
 
@@ -341,6 +377,7 @@ export const actions: Actions = {
 		const orgId = locals.domainOrg.id;
 		const reservation = await loadReservation(locals.db, params.id, locals.user.id, orgId);
 		if (!reservation) return fail(404, { error: st(locals.locale).serverErrors.reservationNotFoundDot, scope: 'feedback' });
+		if (reservation.access !== 'owner') return ownerOnly(locals.locale, 'feedback');
 		const f = st(locals.locale).feedback;
 		const hall = await dbFirst<{ allow_feedback: number }>(locals.db, 'SELECT allow_feedback FROM halls WHERE id = ?', reservation.hall_id);
 		const card = await feedbackForPage(locals.db, reservation, hall?.allow_feedback ?? 0);
@@ -400,5 +437,57 @@ export const actions: Actions = {
 		});
 
 		return { msgSent: true };
+	},
+
+	// ── Shared events (0038): the SharedWithCard's forms ──
+	// The owner invites by address. Always an invitation, even for an existing client:
+	// the person agrees by accepting, and the owner learns nothing about their account.
+	membersInvite: async ({ params, request, locals, url }) => {
+		if (!locals.user || !locals.domainOrg) return fail(401, { scope: 'members', error: st(locals.locale).serverErrors.notSignedIn });
+		const orgId = locals.domainOrg.id;
+		const s = st(locals.locale).sharedEvent;
+		const reservation = await loadReservation(locals.db, params.id, locals.user.id, orgId);
+		if (!reservation) return fail(404, { scope: 'members', error: st(locals.locale).serverErrors.reservationNotFoundDot });
+		if (reservation.access !== 'owner') return ownerOnly(locals.locale, 'members');
+		if (reservation.status === 'cancelled') return fail(400, { scope: 'members', error: s.errCancelled });
+		const email = String((await request.formData()).get('email') ?? '').trim().toLowerCase();
+		if (!isValidMemberEmail(email)) return fail(400, { scope: 'members', error: s.errEmail });
+
+		const inv = await inviteMember(locals.db, { reservationId: reservation.id, email, invitedBy: locals.user.id });
+		if (!inv.ok) return fail(400, { scope: 'members', error: s.refusal[inv.reason] });
+		const ownerName = `${locals.user.first_name} ${locals.user.last_name}`.trim();
+		await logReservationActivity(locals.db, { reservationId: reservation.id, orgId, actorId: locals.user.id, actorName: ownerName, kind: 'shared', status: 'invited', note: email });
+		const link = memberInviteUrl(await venueSiteBase(locals.db, orgId, url, true), inv.token);
+		const sent = await sendReservationShareEmail(locals.db, email, { orgId, reservationId: reservation.id, inviterName: ownerName, url: link, mode: 'invite' }).catch(() => false);
+		if (!sent && dev) console.log(`[shared-events] invitation for ${email}: ${link}`);
+		return { membersInvited: true, membersEmailSent: sent };
+	},
+
+	// The owner removes someone or withdraws an invitation.
+	membersRemove: async ({ params, request, locals }) => {
+		if (!locals.user || !locals.domainOrg) return fail(401, { scope: 'members', error: st(locals.locale).serverErrors.notSignedIn });
+		const orgId = locals.domainOrg.id;
+		const reservation = await loadReservation(locals.db, params.id, locals.user.id, orgId);
+		if (!reservation) return fail(404, { scope: 'members', error: st(locals.locale).serverErrors.reservationNotFoundDot });
+		if (reservation.access !== 'owner') return ownerOnly(locals.locale, 'members');
+		const gone = await removeMember(locals.db, reservation.id, String((await request.formData()).get('memberId') ?? ''));
+		if (!gone) return fail(404, { scope: 'members', error: st(locals.locale).sharedEvent.errNoInvite });
+		await logReservationActivity(locals.db, {
+			reservationId: reservation.id, orgId, actorId: locals.user.id,
+			actorName: `${locals.user.first_name} ${locals.user.last_name}`.trim(), kind: 'shared', status: 'removed', note: gone.name ?? gone.email,
+		});
+		return { membersRemoved: true };
+	},
+
+	// Someone the event is shared with stops seeing it.
+	membersLeave: async ({ params, locals }) => {
+		if (!locals.user || !locals.domainOrg) return fail(401, { scope: 'members', error: st(locals.locale).serverErrors.notSignedIn });
+		const orgId = locals.domainOrg.id;
+		const reservation = await loadReservation(locals.db, params.id, locals.user.id, orgId);
+		if (!reservation || reservation.access !== 'member') return fail(404, { scope: 'members', error: st(locals.locale).serverErrors.reservationNotFoundDot });
+		await dbRun(locals.db, 'DELETE FROM reservation_members WHERE reservation_id = ? AND user_id = ?', reservation.id, locals.user.id);
+		const name = `${locals.user.first_name} ${locals.user.last_name}`.trim();
+		await logReservationActivity(locals.db, { reservationId: reservation.id, orgId, actorId: locals.user.id, actorName: name, kind: 'shared', status: 'left', note: null });
+		redirect(303, '/halls/my-reservations');
 	},
 };

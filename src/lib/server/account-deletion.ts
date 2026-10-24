@@ -222,6 +222,13 @@ async function deleteOrAnonymise(db: D1Database, id: string, at: string): Promis
 	await dbRun(db, 'DELETE FROM email_verifications WHERE user_id = ?', id);
 	await dbRun(db, 'DELETE FROM reservation_holds WHERE user_id = ?', id);
 	await dbRun(db, 'UPDATE reservation_invites SET invited_by = NULL WHERE invited_by = ?', id);
+	// Events shared with them, and invitations to their address, go; events they shared
+	// with others stay shared, without saying who did it (0038).
+	await dbRun(db,
+		`DELETE FROM reservation_members
+		  WHERE user_id = ? OR (accepted_at IS NULL AND lower(email) = (SELECT lower(email) FROM users WHERE id = ?))`,
+		id, id).catch(() => {});
+	await dbRun(db, 'UPDATE reservation_members SET invited_by = NULL WHERE invited_by = ?', id).catch(() => {});
 	if (!(await stillReferenced(db, id))) {
 		try {
 			await dbRun(db, 'DELETE FROM users WHERE id = ?', id);

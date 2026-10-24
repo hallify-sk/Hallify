@@ -5,6 +5,7 @@ import { createSession } from '$lib/auth';
 import { st } from '$lib/i18n-server';
 import { rateLimit, rateLimitKey, tooManyAttemptsMessage, RATE_LIMITS } from '$lib/rateLimit';
 import { createLinkedClient, findClientRow, findHallifyAccount, linkClientRow, registerOnVenue } from '$lib/server/identity';
+import { dropOwnerMembership } from '$lib/server/reservation-members';
 import type { Actions, PageServerLoad } from './$types';
 import type { D1Database } from '@cloudflare/workers-types';
 
@@ -206,6 +207,8 @@ export const actions: Actions = {
 
 		await dbRun(locals.db, 'UPDATE reservations SET user_id = ? WHERE id = ? AND org_id = ?', clientId, invite.reservation_id, invite.org_id);
 		await dbRun(locals.db, "UPDATE reservation_invites SET accepted_at = datetime('now') WHERE id = ?", invite.id);
+		// Owning the event now, they are no longer also one of the people it is shared with.
+		await dropOwnerMembership(locals.db, invite.reservation_id, clientId);
 		redirect(303, locals.user.account_type === 'client' ? `/halls/my-reservations/${invite.reservation_id}` : '/app/client/reservations');
 	},
 };

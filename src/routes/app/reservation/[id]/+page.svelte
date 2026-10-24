@@ -17,6 +17,7 @@
 	import { eventTypeLabel, parseEventTypes } from '$lib/eventTypes';
 	import { amountInputValue, depositOverdue, formatIban, suggestedPrice } from '$lib/payment';
 	import StarRating from '$lib/components/StarRating.svelte';
+	import PeopleWithAccess from '$lib/components/reservation/PeopleWithAccess.svelte';
 
 	interface Props { data: PageData; form: ActionData; }
 	let { data, form }: Props = $props();
@@ -211,6 +212,10 @@
 			case 'expired': return t.resOps.actExpired;
 			case 'edited': return `${t.resOps.actEdited} ${(a.note ?? '').split(',').filter(Boolean).map((k) => FIELD_LABEL[k] ?? k).join(', ')}`;
 			case 'assigned': return a.note ? `${t.resOps.actAssigned}: ${a.note}` : t.resOps.actAssigned;
+			case 'shared': {
+				const what = (t.sharedEvent.activity as Record<string, string>)[a.status ?? ''] ?? t.sharedEvent.activity.added;
+				return a.note ? `${what}: ${a.note}` : what;
+			}
 			default: return `${t.resOps.actStatus} ${label}`;
 		}
 	}
@@ -489,7 +494,7 @@
 			<div class="section-head">
 				<h2 class="assign-h2">
 					<svg aria-hidden="true" focusable="false" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg>
-					<span class="assign-title">{t.reservationAdmin.assignTitle}</span>
+					<span class="assign-title">{t.sharedEvent.peopleTitle}</span>
 				</h2>
 			</div>
 
@@ -537,6 +542,9 @@
 					<button type="submit" class="btn-action btn-sm">{t.reservationAdmin.assignSubmit}</button>
 				</form>
 			</details>
+
+			<!-- Everyone else the event is shared with (0038). -->
+			<PeopleWithAccess members={data.members} venueClients={data.venueClients} form={form as Record<string, unknown> | null} />
 		</section>
 	{/if}
 

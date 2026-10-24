@@ -111,6 +111,7 @@
                 <div class="res-badges">
                   <span class="badge {statusClass(r.status)}">{statusLabel(r.status, getLocale())}</span>
                   {#if r.status !== 'cancelled' && isPast(r.event_date)}<span class="badge st-past">{t.event.past}</span>{/if}
+                  {#if r.access === 'member'}<span class="badge st-past" data-shared>{t.sharedEvent.sharedBadge}</span>{/if}<!-- shared events (0038) -->
                 </div>
               </div>
               <div class="res-meta">

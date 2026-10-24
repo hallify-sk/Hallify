@@ -92,6 +92,12 @@ export const GET: RequestHandler = async ({ locals, url }) => {
 		        OR payment_variable_symbol IS NOT NULL OR payment_note IS NOT NULL OR paid_in_full_at IS NOT NULL)`, org.id).catch(() => []);
 	const clientFeedback = await dbAll(db,
 		'SELECT reservation_id, hall_id, user_id, rating, comment, created_at, updated_at FROM reservation_feedback WHERE org_id = ?', org.id).catch(() => []);
+	// Who each booking is shared with (0038): never the invitation's token hash.
+	const reservationMembers = await dbAll(db,
+		`SELECT rm.reservation_id, COALESCE(u.email, rm.email) AS email, u.first_name, u.last_name, rm.role,
+		        rm.created_at, rm.accepted_at
+		   FROM reservation_members rm LEFT JOIN users u ON u.id = rm.user_id
+		  WHERE rm.reservation_id IN ${resIds}`, org.id, org.id).catch(() => []);
 	const clientNotes = await dbAll(db,
 		'SELECT client_key, phone, notes, updated_at FROM client_notes WHERE org_id = ?', org.id).catch(() => []);
 
@@ -100,7 +106,7 @@ export const GET: RequestHandler = async ({ locals, url }) => {
 		organization: { id: org.id, name: org.name, slug, created_at: meta?.created_at ?? null },
 		subscription,
 		halls, hallExtras: extras, tableTypes, hallBlocks: blocks,
-		reservations, reservationPayments, guests, clients, clientFeedback, clientNotes, members,
+		reservations, reservationPayments, reservationMembers, guests, clients, clientFeedback, clientNotes, members,
 		rsvpTemplates, settings, customDomains: domains, webhooks,
 	}, null, 2);
 
