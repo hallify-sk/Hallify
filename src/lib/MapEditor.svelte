@@ -290,11 +290,9 @@
 	let showDims    = $state(false);
 	const dimsOn    = $derived(showDims || step === 'check');
 
-	// Experimental: walls and zones start as a dragged rectangle; an edge of the
-	// selected shape takes a new corner on click, which can be dragged at once.
-	// A plain click (no drag) still starts the corner-by-corner polygon.
-	const RECT_KEY = 'hallify-editor-rectdraw';
-	let rectDraw   = $state(true);
+	// Walls and zones start as a dragged rectangle; an edge of the selected shape
+	// takes a new corner on click, which can be dragged at once. A plain click (no
+	// drag) still starts the corner-by-corner polygon.
 	let rectStart  = $state<Point | null>(null);
 	let rectMoved  = $state(false);
 
@@ -1078,9 +1076,9 @@
 		switch (t) {
 			case 'select': return step === 'room' && !boundsLocked ? tr.editor.instrSelectRoom : tr.editor.toolSelectHow;
 			case 'bounds': return tr.editor.toolRoomHow;
-			case 'wall': return rectDraw ? tr.editor.toolWallHowRect : tr.editor.toolWallHow;
+			case 'wall': return tr.editor.toolWallHowRect;
 			case 'pillar': return tr.editor.toolPillarHow;
-			case 'zone': return rectDraw ? tr.editor.toolZoneHowRect : tr.editor.toolZoneHow;
+			case 'zone': return tr.editor.toolZoneHowRect;
 			case 'table': return tr.editor.toolTableHow;
 			case 'chair': return tr.editor.toolChairHow;
 			case 'eraser': return tr.editor.toolEraseHow;
@@ -1120,9 +1118,8 @@
 					const w = Math.abs(cursorPos.x - rectStart.x), h = Math.abs(cursorPos.y - rectStart.y);
 					return tr.editor.instrRectDragging(num(w, 1), num(h, 1));
 				}
-				if (rectDraw && (tool === 'wall' ? selectedWall : selectedZone)) return tr.editor.instrEditShape;
-				if (rectDraw) return tr.editor.instrRectStart;
-				return tool === 'wall' ? tr.editor.instrWallStart : tr.editor.instrZoneStart;
+				if (tool === 'wall' ? selectedWall : selectedZone) return tr.editor.instrEditShape;
+				return tr.editor.instrRectStart;
 			}
 			case 'pillar':
 				return tr.editor.instrPillar;
@@ -1137,7 +1134,7 @@
 			default:
 				if (step === 'guests') return tr.editor.instrGuests;
 				if (selectedTable) return tr.editor.instrSelectedTable;
-				if (selectedWall || selectedZone) return rectDraw ? tr.editor.instrEditShape : tr.editor.instrSelectedPoly;
+				if (selectedWall || selectedZone) return tr.editor.instrEditShape;
 				if (step === 'room' && roomRects.length && !boundsLocked) return tr.editor.instrSelectRoom;
 				return tr.editor.instrSelect;
 		}
@@ -1330,7 +1327,6 @@
 		for (let vi = 0; vi < pts.length; vi++) {
 			if (Math.hypot(raw.x - pts[vi].x, raw.y - pts[vi].y) < hitR) { pushUndo(); startDrag(vi, pts[vi]); return true; }
 		}
-		if (!rectDraw) return false;
 		let best = -1, bestD = 7 / zoom, bestP: Point | null = null;
 		for (let i = 0; i < pts.length; i++) {
 			const a = pts[i], b = pts[(i + 1) % pts.length];
@@ -1418,7 +1414,7 @@
 		}
 
 		if (tool === 'wall' || tool === 'zone') {
-			if (rectDraw && !isDrawing) {
+			if (!isDrawing) {
 				// The selected shape's corners and edges come first: reshape it in place.
 				if (grabShapeHandle(e, raw) || grabAnyVertex(e, raw)) return;
 				rectStart = pos; rectMoved = false;
@@ -2096,11 +2092,6 @@
 		if (!(e.target as HTMLElement).closest('.custom-select')) snapDropOpen = false;
 	}
 
-	function setRectDraw(on: boolean) {
-		rectDraw = on; rectStart = null; rectMoved = false; cancelDrawing();
-		try { localStorage.setItem(RECT_KEY, on ? '1' : '0'); } catch { /* private mode */ }
-	}
-
 	const zoomPercent = $derived(Math.round((zoom / 60) * 100));
 	const saveStateText = $derived(saveState === 'saved' ? tr.editor.saved : saveState === 'saving' ? tr.editor.saving : saveState === 'dirty' ? tr.editor.unsaved : '');
 
@@ -2121,7 +2112,6 @@
 	onMount(() => {
 		uiStore.setSidebarRail(true);
 		try { tipsSeen = JSON.parse(localStorage.getItem(TIPS_KEY) ?? '[]'); } catch { tipsSeen = []; }
-		try { const v = localStorage.getItem(RECT_KEY); if (v !== null) rectDraw = v === '1'; } catch { /* private mode */ }
 		tipsLoaded = true;
 		window.addEventListener('keydown', onKeyDown);
 		window.addEventListener('keyup', onKeyUp);
@@ -2225,10 +2215,7 @@
 							</div>
 						</div>
 					{/if}
-					<label class="mode-switch"><input type="checkbox" checked={rectDraw} onchange={(e) => setRectDraw((e.target as HTMLInputElement).checked)} />{tr.editor.rectDrawMode}</label>
 					<p class="tool-note">{tr.editor.wallsOptional}</p>
-				{:else if step === 'zones'}
-					<label class="mode-switch"><input type="checkbox" checked={rectDraw} onchange={(e) => setRectDraw((e.target as HTMLInputElement).checked)} />{tr.editor.rectDrawMode}</label>
 				{:else if step === 'check'}
 					<p class="tool-note">{tr.editor.instrCheck}</p>
 				{/if}
@@ -2583,7 +2570,7 @@
 				{/if}
 
 				<!-- ── Draggable corners of every wall / zone while its tool is active ── -->
-				{#if rectDraw && !readOnly && !isDrawing && (tool === 'wall' || tool === 'zone')}
+				{#if !readOnly && !isDrawing && (tool === 'wall' || tool === 'zone')}
 					{#each toolShapes() as sh (sh.id)}
 						{#if sh.id !== selectedId}
 							{#each sh.points as p}
@@ -2594,7 +2581,7 @@
 				{/if}
 
 				<!-- ── Where a click adds a corner: the middle of each edge of the selected shape ── -->
-				{#if rectDraw && !readOnly && !isDrawing && (tool === 'select' || tool === 'wall' || tool === 'zone')}
+				{#if !readOnly && !isDrawing && (tool === 'select' || tool === 'wall' || tool === 'zone')}
 					{@const pts = (selectedWall && !wallsOff ? selectedWall.points : selectedZone && zoneEditable(selectedZone.id) ? selectedZone.points : null)}
 					{#if pts}
 						{#each pts as p, i}
@@ -3070,7 +3057,7 @@
 				{:else if step === 'zones' && !selectedZone}
 					<section>
 						<div class="sec-title">{tr.editor.stepZones}</div>
-						<p class="help-text">{tr.editor.toolZoneHow}</p>
+						<p class="help-text">{tr.editor.toolZoneHowRect}</p>
 						{#if zones.length}
 							<ul class="obj-list">
 								{#each zones as z}
@@ -3500,8 +3487,6 @@
 .canvas-wrap.rulers .legend { top:78px; }
 .canvas-wrap.rulers .coach-pos { left:34px; top:84px; }
 .canvas-wrap.rulers .status-strip { left:30px; }
-.mode-switch { display:flex; align-items:center; gap:8px; margin:8px 10px 0; padding:8px 10px; border-radius:var(--radius); background:var(--bg-panel2); font-size:12px; font-weight:500; color:var(--text-base); cursor:pointer; }
-.mode-switch input { accent-color:var(--accent); margin:0; }
 .tool-opts { display:flex; flex-direction:column; gap:8px; margin:8px 10px 0; padding:10px; border-radius:var(--radius); background:var(--bg-panel2); }
 .opt-field { display:flex; align-items:center; justify-content:space-between; gap:8px; font-size:12px; font-weight:500; color:var(--text-base); }
 .opt-field input { width:76px; height:28px; border:1px solid var(--border); border-radius:var(--radius); padding:0 8px; font:inherit; font-size:12.5px; background:var(--bg-panel); color:var(--text-base); box-sizing:border-box; }
