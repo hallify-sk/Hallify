@@ -11,7 +11,7 @@
 	import AssistantWidget from '$lib/components/assistant/AssistantWidget.svelte';
 	import { setUserContext } from '$lib/analytics';
 	import { cameFromHallify } from '$lib/analytics-referral';
-	import { readableInkOn, inkOnLight, inkOnDark } from '$lib/contrast';
+	import { brandShellStyle } from '$lib/brand-style';
 	import { usesPersonalTheme } from '$lib/theme-scope';
 	import { t } from '$lib/i18n.svelte';
 	import { afterNavigate } from '$app/navigation';
@@ -127,31 +127,8 @@
 
 	const branding = $derived(data.branding);
 
-	function rgbOf(hex: string): [number, number, number] {
-		const h = hex.replace('#', '');
-		return [
-			parseInt(h.substring(0, 2), 16),
-			parseInt(h.substring(2, 4), 16),
-			parseInt(h.substring(4, 6), 16)
-		];
-	}
-
-	function dimColor(hex: string, opacity: number): string {
-		return `rgba(${rgbOf(hex).join(', ')}, ${opacity})`;
-	}
-
-	const brandStyle = $derived(
-		branding?.primaryColor
-			? `--accent: ${branding.primaryColor};` +
-			  ` --brand-ink-light: ${inkOnLight(branding.primaryColor)};` +
-			  ` --brand-ink-dark: ${inkOnDark(branding.primaryColor)};` +
-			  ` --accent-contrast: ${readableInkOn(branding.primaryColor)};` +
-			  ` --accent-dim: ${dimColor(branding.primaryColor, 0.1)};` +
-			  ` --accent-hover: ${branding.primaryColor}cc;` +
-			  ` --accent-action: ${branding.primaryColor};` +
-			  ` --accent-action-dim: ${dimColor(branding.primaryColor, 0.1)};`
-			: ''
-	);
+	// The org's brand colour over the theme's accent tokens ('' for Hallify's own).
+	const brandStyle = $derived(brandShellStyle(branding?.primaryColor));
 
 	// The organisation's default theme (Settings → Customize), or null when it set none.
 	const orgTheme = $derived<string | null>(branding?.theme ?? null);
@@ -218,7 +195,7 @@
 <ConsentBanner containers={isSitePreview ? [] : (data.analyticsContainers ?? [])} onVenueSite={!!data.onBubble} />
 
 {#if isLandingPage || isPublicHallsPage || isDocPage || isLegalPage || isSitePreview}
-	<div style={brandStyle} data-density={isDocPage ? 'compact' : 'comfortable'}>
+	<div style={brandStyle} data-brand={brandStyle ? '' : undefined} data-density={isDocPage ? 'compact' : 'comfortable'}>
 		{@render children()}
 	</div>
 {:else}
@@ -241,7 +218,7 @@
 			onclose={inDrawer ? closeNav : undefined}
 		/>
 	{/snippet}
-	<div class="app-shell" style={brandStyle} data-density={density}>
+	<div class="app-shell" style={brandStyle} data-brand={brandStyle ? '' : undefined} data-density={density}>
 		{#if !isAuthPage}
 			<!-- Desktop: the sidebar in the row. Below 900 px it is hidden and the top bar
 			     opens the same menu as a drawer instead. -->

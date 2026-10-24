@@ -80,11 +80,9 @@
 	--border-subtle: #eceee9;
 
 	--accent:             #f05ca1;
-	/* An org's brand colour needs a DIFFERENT ink per theme — darkened to read on
-	   paper, lightened to read on charcoal. The override in +layout.svelte supplies
-	   both as --brand-ink-light / --brand-ink-dark; each theme picks the one it needs
-	   and falls back to Hallify's own when no org branding is set. */
-	--accent-ink:         var(--brand-ink-light, #a6225e);
+	/* Hallify's own ink. An org's brand ink is chosen per theme further down, on
+	   the [data-brand] element that carries it (see "Organisation branding"). */
+	--accent-ink:         #a6225e;
 	--accent-contrast:    #27131c;
 	--accent-dim:         #fce5ef;
 	--accent-hover:       #e54a93;
@@ -159,7 +157,7 @@
 	--border-subtle: #2a312b;
 
 	--accent:             #f05ca1;
-	--accent-ink:         var(--brand-ink-dark, #f58cba);
+	--accent-ink:         #f58cba;
 	--accent-contrast:    #27131c;
 	--accent-dim:         #402933;
 	--accent-hover:       #f372ae;
@@ -204,7 +202,7 @@
 	--border-subtle: #efe9e0;
 
 	--accent:             #f05ca1;
-	--accent-ink:         var(--brand-ink-light, #a6225e);
+	--accent-ink:         #a6225e;
 	--accent-contrast:    #27131c;
 	--accent-dim:         #fce5ef;
 	--accent-hover:       #e54a93;
@@ -217,6 +215,22 @@
 
 	--warning:     #8a5f0e;
 	--warning-dim: #f8f0df;
+}
+
+/* ─── Organisation branding ───────────────────────────────────────── */
+/* An org's brand colour needs a DIFFERENT ink per theme — darkened to read on
+   paper, lightened to read on charcoal. +layout.svelte puts both on the shell as
+   --brand-ink-light / --brand-ink-dark and marks it [data-brand]. The choice has
+   to be made HERE, on that element: a custom property's var() is resolved where
+   it is declared, so `--accent-ink: var(--brand-ink-light)` on the theme root
+   (html) fell back to Hallify pink before the shell's brand inks existed, and the
+   shell inherited the pink (B77). The theme lives on html, so the dark rule is a
+   descendant selector. */
+[data-brand] {
+	--accent-ink: var(--brand-ink-light, #a6225e);
+}
+[data-theme="dark"] [data-brand] {
+	--accent-ink: var(--brand-ink-dark, #f58cba);
 }
 
 /* ─── Base ────────────────────────────────────────────────────────── */

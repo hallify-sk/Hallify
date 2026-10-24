@@ -52,3 +52,33 @@ describe('console text tokens (I30)', () => {
 		});
 	}
 });
+
+describe('organisation brand ink (B77)', () => {
+	// A var() inside a custom property resolves where the property is declared. The
+	// brand inks live on the shell, not on html, so a theme block on html that reads
+	// them always takes its fallback — the console kept Hallify pink for text.
+	const css = readFileSync(new URL('../app.css', import.meta.url), 'utf8');
+	const layout = readFileSync(new URL('../routes/+layout.svelte', import.meta.url), 'utf8');
+	const rule = (selector: string) => {
+		const start = css.indexOf(`\n${selector} {`);
+		return start < 0 ? '' : css.slice(start, css.indexOf('\n}', start + 1));
+	};
+
+	it('the theme blocks on html never read the brand inks', () => {
+		for (const sel of [':root', '[data-theme="dark"]', '[data-theme="warm"]']) {
+			expect(rule(sel), sel).not.toBe('');
+			expect(rule(sel), sel).not.toMatch(/--brand-ink/);
+		}
+	});
+
+	it('the branded element picks its ink per theme', () => {
+		expect(rule('[data-brand]')).toMatch(/--accent-ink:\s*var\(--brand-ink-light,/);
+		expect(rule('[data-theme="dark"] [data-brand]')).toMatch(/--accent-ink:\s*var\(--brand-ink-dark,/);
+	});
+
+	it('every element that carries the brand inks is marked [data-brand]', () => {
+		const carriers = layout.match(/<div[^>]*style=\{brandStyle\}[^>]*>/g) ?? [];
+		expect(carriers.length).toBeGreaterThan(0);
+		for (const tag of carriers) expect(tag).toMatch(/data-brand=/);
+	});
+});
