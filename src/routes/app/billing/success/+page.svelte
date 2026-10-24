@@ -72,7 +72,7 @@
       <h1>{title}</h1>
       <p class="sub">
         {#if data.state === 'paid' && data.planName}
-          {data.orgName ?? t.accountExtra.yourOrganization} {t.accountExtra.nowOnPlanPrefix} <strong>{data.planName}</strong> {t.accountExtra.nowOnPlanSuffix}
+          {data.orgName ?? t.accountExtra.yourOrganization} {t.accountExtra.nowOnPlanPrefix} <strong>{data.planName}</strong>{t.accountExtra.nowOnPlanSuffix}
         {:else if data.state === 'paid'}
           {t.accountExtra.subscriptionActive}
         {:else if data.state === 'pending'}

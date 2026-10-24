@@ -7232,7 +7232,7 @@ export const en: typeof sk = {
 		paymentSuccessTitle: "Payment successful",
 		yourOrganization: "Your organization",
 		nowOnPlanPrefix: "is now on the",
-		nowOnPlanSuffix: "plan. Every feature it includes is unlocked.",
+		nowOnPlanSuffix: " plan. Every feature it includes is unlocked.",
 		subscriptionActive: "Thank you. Your subscription is active and every feature is unlocked.",
 		paymentPendingTitle: "Payment processing",
 		paymentPendingBody: "Stripe hasn't confirmed the payment yet. The plan starts as soon as it does; you can follow it on the billing page.",
