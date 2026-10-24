@@ -7,6 +7,7 @@ import { assertCanBook, getTakenDates, getHeldDatesByOthers, getUnavailableDates
 import { notifyNewReservation, notifyBookingReceived } from '$lib/email';
 import { notifyOrg } from '$lib/server/notification-centre';
 import { dispatchWebhooks } from '$lib/notifications';
+import { dispatchPlatformEvent } from '$lib/server/platform-webhooks';
 import { st } from '$lib/i18n-server';
 import { loadBookableExtras } from '$lib/site/bookable-extras';
 import { saveExtrasSnapshot } from '$lib/server/reservation-extras';
@@ -132,6 +133,9 @@ export const actions: Actions = {
 		dispatchWebhooks(locals.db, orgId, 'reservation.new', {
 			reservation_id: reservationId, title, hall_id: hall.id, event_date: eventDate, event_type: null,
 		}).catch(() => {});
+		dispatchPlatformEvent(locals.db, 'reservation.created', {
+			org_id: orgId, hall_id: hall.id, reservation_id: reservationId, status, source: 'venue_site',
+		});
 
 		// The confirmation says what actually happened: an auto-approved booking is
 		// confirmed, not "the venue will review it".

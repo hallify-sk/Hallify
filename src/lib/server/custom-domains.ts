@@ -10,6 +10,7 @@
 // also releases claims nobody verified within UNVERIFIED_CLAIM_DAYS.
 import type { D1Database } from '@cloudflare/workers-types';
 import { dbAll, dbRun } from '$lib/db/index';
+import { dispatchPlatformEvent } from '$lib/server/platform-webhooks';
 import {
 	addCustomHostname, deleteCustomHostname, findCustomHostname, getHostnameStatus,
 	isCFEnabled, cnameTarget, CFApiError, type CFHostname,
@@ -83,6 +84,12 @@ export async function checkCustomDomain(db: D1Database, row: DomainCheckRow): Pr
 		verified ? null : problems,
 		verified ? 1 : 0,
 		row.id);
+	// Platform webhooks on a change only: a domain went live, or a live one stopped.
+	if (verified && !row.verified_at) {
+		dispatchPlatformEvent(db, 'custom_domain.verified', { org_id: row.org_id, domain_id: row.id, domain: row.domain });
+	} else if (!verified && row.verified_at) {
+		dispatchPlatformEvent(db, 'custom_domain.failed', { org_id: row.org_id, domain_id: row.id, domain: row.domain, reason: 'unverified', problem: problems?.slice(0, 300) ?? null });
+	}
 	return { ok: true, verified, error: verified ? undefined : problems ?? undefined };
 }
 
@@ -153,6 +160,7 @@ export async function sweepCustomDomains(db: D1Database, now: Date = new Date(),
 		if (claimExpired(row.created_at, now)) {
 			await releaseCustomDomain(db, row);
 			out.expired++;
+			dispatchPlatformEvent(db, 'custom_domain.failed', { org_id: row.org_id, domain_id: row.id, domain: row.domain, reason: 'expired', problem: r.error?.slice(0, 300) ?? null });
 		}
 	}
 

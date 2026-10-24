@@ -13,6 +13,7 @@
 		{ id: 'org.view_as', label: () => t.platformOrgs.viewAs },
 		{ id: 'announcement.', label: () => t.platformMisc.announcementsTitle },
 		{ id: 'settings.', label: () => t.platformSettings.title },
+		{ id: 'webhook.', label: () => t.platformWebhooks.title },
 	];
 
 	function targetHref(row: PageData['rows'][number]): string | null {

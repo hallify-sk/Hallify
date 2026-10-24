@@ -11,6 +11,7 @@ import { rateLimit, rateLimitKey, tooManyAttemptsMessage, RATE_LIMITS } from '$l
 import type { D1Database } from '@cloudflare/workers-types';
 import { syncAdministratorRole } from '$lib/server/people';
 import { notifyOrg } from '$lib/server/notification-centre';
+import { dispatchPlatformEvent } from '$lib/server/platform-webhooks';
 
 /**
  * Accepting an invitation into an organisation.
@@ -446,6 +447,7 @@ export const actions: Actions = {
 			// Lost a double-submit race against users_email_global_unique.
 			return fail(409, { ...entered, error: st(locals.locale).serverErrors.emailAlreadyRegisteredLogIn });
 		}
+		dispatchPlatformEvent(locals.db, 'user.registered', { user_id: userId, email, source: 'team_invite', org_id: invite.org_id, locale: locals.locale });
 
 		// Join before the session is created: createSession points the new session
 		// at the user's first organisation, which is the one they just joined.

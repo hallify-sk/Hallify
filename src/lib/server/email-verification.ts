@@ -17,6 +17,7 @@ import { st } from '$lib/i18n-server';
 import { escapeHtml, renderLayout } from '$lib/server/email-layout';
 import { emailCopy } from '$lib/server/email-copy';
 import { hashToken } from '$lib/server/account';
+import { dispatchPlatformEvent } from '$lib/server/platform-webhooks';
 import bcrypt from 'bcryptjs';
 import { claimClientRows, joinableVenues, passwordOpens, syncLinkedRows, type HallifyAccount } from '$lib/server/identity';
 import type { Locale } from '$lib/i18n';
@@ -65,8 +66,11 @@ export async function createEmailVerification(db: D1Database, userId: string, em
 
 /** Mark an account's current address verified, with its linked client rows. */
 export async function markVerified(db: D1Database, userId: string, at = new Date().toISOString()): Promise<void> {
+	const before = await dbFirst<{ email: string; email_verified_at: string | null }>(db, 'SELECT email, email_verified_at FROM users WHERE id = ?', userId).catch(() => null);
 	await dbRun(db, 'UPDATE users SET email_verified_at = ? WHERE id = ?', at, userId);
 	await dbRun(db, 'UPDATE users SET email_verified_at = ? WHERE account_id = ?', at, userId);
+	// Platform webhook: only the first confirmation of this address, not a repeat.
+	if (before && !before.email_verified_at) dispatchPlatformEvent(db, 'user.email_verified', { user_id: userId, email: before.email });
 }
 
 export type VerifyResult =

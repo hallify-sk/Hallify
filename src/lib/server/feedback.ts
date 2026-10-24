@@ -8,6 +8,7 @@ import { dbAll, dbFirst, dbRun } from '$lib/db/index';
 import { notifyFeedbackRequest } from '$lib/email';
 import { FEEDBACK_DAYS, summariseRatings, type FeedbackRow, type RatingSummary } from '$lib/feedback';
 import type { D1Database } from '@cloudflare/workers-types';
+import { dispatchPlatformEvent } from '$lib/server/platform-webhooks';
 
 export async function loadFeedback(db: D1Database, reservationId: string): Promise<FeedbackRow | null> {
 	try {
@@ -35,12 +36,17 @@ export async function feedbackRequestedAt(db: D1Database, reservationId: string)
 export async function saveFeedback(db: D1Database, f: {
 	reservationId: string; orgId: string; hallId: string; userId: string; rating: number; comment: string | null;
 }): Promise<void> {
+	const existed = await dbFirst<{ ok: number }>(db, 'SELECT 1 AS ok FROM reservation_feedback WHERE reservation_id = ?', f.reservationId).catch(() => null);
 	await dbRun(db,
 		`INSERT INTO reservation_feedback (reservation_id, org_id, hall_id, user_id, rating, comment)
 		 VALUES (?, ?, ?, ?, ?, ?)
 		 ON CONFLICT (reservation_id) DO UPDATE SET
 		   rating = excluded.rating, comment = excluded.comment, updated_at = datetime('now')`,
 		f.reservationId, f.orgId, f.hallId, f.userId, f.rating, f.comment);
+	// Low detail for the platform: the rating, never the client or what they wrote.
+	dispatchPlatformEvent(db, 'feedback.received', {
+		org_id: f.orgId, hall_id: f.hallId, reservation_id: f.reservationId, rating: f.rating, has_comment: !!f.comment, updated: !!existed,
+	});
 }
 
 export interface FeedbackListItem {

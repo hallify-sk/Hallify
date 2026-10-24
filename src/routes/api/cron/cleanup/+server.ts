@@ -4,6 +4,7 @@ import { runCleanup } from '$lib/cleanup';
 import { sendEventReminders } from '$lib/server/reminders';
 import { sendFeedbackInvites } from '$lib/server/feedback';
 import { sweepCustomDomains } from '$lib/server/custom-domains';
+import { retryDuePlatformDeliveries } from '$lib/server/platform-webhooks';
 import type { RequestHandler } from './$types';
 
 /** The hourly housekeeping run. The Cron Trigger calls it (worker.js →
@@ -36,5 +37,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
   // Pending custom domains: verify the ones Cloudflare reports active, release claims
   // nobody verified within a week, and stop serving verified ones whose DNS moved away.
   const domains = await sweepCustomDomains(locals.db).catch((e: unknown) => ({ error: e instanceof Error ? e.message : String(e) }));
-  return json({ ok: true, results, reminders, feedbackInvites, domains }, { headers: { 'cache-control': 'no-store' } });
+  // Platform webhooks that failed: retried with backoff, old deliveries pruned.
+  const platformWebhooks = await retryDuePlatformDeliveries(locals.db).catch((e: unknown) => ({ error: e instanceof Error ? e.message : String(e) }));
+  return json({ ok: true, results, reminders, feedbackInvites, domains, platformWebhooks }, { headers: { 'cache-control': 'no-store' } });
 };

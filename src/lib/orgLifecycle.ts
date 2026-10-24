@@ -13,6 +13,7 @@ import { closureEmail, groupByClient } from '$lib/org-closure-email';
 import { deleteCustomHostname, isCFEnabled } from '$lib/cloudflare-saas';
 import { deleteUnusedHallImages, orgUploadUrls, type R2Deleter } from '$lib/server/hall-images';
 import type { D1Database } from '@cloudflare/workers-types';
+import { dispatchPlatformEvent } from '$lib/server/platform-webhooks';
 
 export interface CloseOpts {
 	closedBy?: string | null;        // user id who closed it
@@ -153,6 +154,10 @@ export async function archiveAndDeleteOrg(db: D1Database, orgId: string, opts: C
 		'SELECT delivery_file_key AS k FROM floorplan_requests WHERE org_id = ? AND delivery_file_key IS NOT NULL', orgId)
 		.catch(() => [])).map((r) => r.k);
 	await deleteOrgCascade(db, orgId);
+	dispatchPlatformEvent(db, 'org.closed', {
+		org_id: org.id, name: org.name, slug: org.slug, reason: opts.reason ?? 'owner_closed', plan: sub?.plan ?? null,
+		member_count: members.length, reservation_count: reservations.length, subscription_cancelled: result.subscriptionCancelled,
+	});
 	await deleteUnusedHallImages(db, opts.r2, uploads);
 	if (opts.r2 && mappingFiles.length) await Promise.resolve(opts.r2.delete(mappingFiles)).catch(() => {});
 	return result;
@@ -283,5 +288,6 @@ export async function deleteUserAndCleanup(db: D1Database, userId: string): Prom
 	await dbRun(db, 'DELETE FROM client_notes WHERE client_key = ?', `u:${userId}`).catch(() => {});
 	await dbRun(db, 'DELETE FROM reservations WHERE user_id = ?', userId);
 	await dbRun(db, 'DELETE FROM users WHERE id = ?', userId);
+	dispatchPlatformEvent(db, 'user.deleted', { user_id: userId, orgs_closed: null, orgs_handed_over: null });
 	for (const oid of orgIds) await destroyOrgIfEmpty(db, oid, 'user_deleted');
 }

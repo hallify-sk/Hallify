@@ -9,6 +9,7 @@
 import bcrypt from 'bcryptjs';
 import { dbAll, dbFirst, dbRun } from '$lib/db/index';
 import type { D1Database } from '@cloudflare/workers-types';
+import { dispatchPlatformEvent } from '$lib/server/platform-webhooks';
 
 /** The password_hash of a linked client row: never a bcrypt hash, so nothing matches it. */
 export const LINKED_PASSWORD = '!linked';
@@ -276,6 +277,7 @@ export async function registerOnVenue(
 		// Lost a double-submit race against users_email_global_unique.
 		return { ok: false, reason: 'hasAccount' };
 	}
+	dispatchPlatformEvent(db, 'user.registered', { user_id: accountId, email: input.email, source: 'venue_site', org_id: orgId, locale: input.locale ?? null });
 	const account: HallifyAccount = {
 		id: accountId,
 		email: input.email,
