@@ -5,7 +5,7 @@
 	import type { SubmitFunction } from '@sveltejs/kit';
 	import { onMount, untrack } from 'svelte';
 	import { goto } from '$app/navigation';
-	import { registerAssistantPage } from '$lib/assistant/page-hooks';
+	import { registerAssistantPage, proposalsChanged } from '$lib/assistant/page-hooks';
 	import { LayoutSaver, guardUnsaved } from '$lib/editor/layout-saver.svelte';
 	import { t } from '$lib/i18n.svelte';
 	import { dialog } from '$lib/actions/dialog';
@@ -58,6 +58,7 @@
 	async function leaveTo(url: string) {
 		saver.leaving = true;
 		try { await goto(url, { replaceState: true, invalidateAll: true }); } finally { saver.leaving = false; }
+		proposalsChanged();
 	}
 
 	// The assistant widget opens a draft here by client-side navigation (and saving

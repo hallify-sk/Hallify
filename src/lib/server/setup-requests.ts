@@ -1,7 +1,7 @@
 // The "we set Hallify up for you" add-on: asking for it, and changing your mind.
 // Shared by the Billing and Help pages, which both offer it.
 
-import { dbFirst, dbRun } from '$lib/db/index';
+import { dbFirst, dbRun, wroteRow } from '$lib/db/index';
 import { sendEmail } from '$lib/email';
 import { OPERATOR } from '$lib/legal';
 import { SETUP_SERVICE_PRICE_CENTS } from '$lib/setup-service';
@@ -88,7 +88,7 @@ export async function cancelSetupRequest(locals: App.Locals, org: OrgContext): P
 	const res = await dbRun(locals.db,
 		`UPDATE setup_requests SET status = 'cancelled', updated_at = datetime('now')
 		  WHERE id = ? AND org_id = ? AND status IN ('requested', 'contacted')`, open.id, org.id);
-	if (res.meta.changes !== 1) return false;
+	if (!wroteRow(res)) return false;
 	try {
 		const user = locals.user!;
 		await sendEmail(

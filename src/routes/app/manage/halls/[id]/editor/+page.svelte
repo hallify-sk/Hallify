@@ -4,7 +4,7 @@
 	import { t } from '$lib/i18n.svelte';
 	import MapEditor from '$lib/MapEditor.svelte';
 	import { onMount, untrack } from 'svelte';
-	import { registerAssistantPage } from '$lib/assistant/page-hooks';
+	import { registerAssistantPage, proposalsChanged } from '$lib/assistant/page-hooks';
 	import { LayoutSaver, guardUnsaved } from '$lib/editor/layout-saver.svelte';
 	import { getLocale } from '$lib/i18n.svelte';
 	import { fmtDate } from '$lib/reservationStatus';
@@ -78,6 +78,7 @@
 	async function leaveTo(url: string) {
 		saver.leaving = true;
 		try { await goto(url, { replaceState: true, invalidateAll: true }); } finally { saver.leaving = false; }
+		proposalsChanged();
 	}
 
 	// The assistant widget opens a draft here by client-side navigation (and saving

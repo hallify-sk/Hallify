@@ -1,4 +1,4 @@
-import { dbFirst, dbRun, dbAll } from '$lib/db/index';
+import { dbFirst, dbRun, dbAll, wroteRow } from '$lib/db/index';
 import { getPlan } from '$lib/plans';
 import { aiConfigured } from './openai';
 import { loadAiPlatform } from './pricing';
@@ -115,7 +115,7 @@ export async function getAccount(db: Db, org: OrgContext, now = new Date()): Pro
 			        period_grant_mc = ?, updated_at = datetime('now')
 			  WHERE org_id = ? AND period_end IS ?`,
 			allowanceMc + keep, keep, win.start, win.end, allowanceMc, org.id, acc.period_end);
-		if (res.meta.changes === 1) {
+		if (wroteRow(res)) {
 			if (lapsed > 0) await ledger(db, { orgId: org.id, kind: 'adjust', amountMc: -lapsed, feature: 'period_end' });
 			if (allowanceMc > 0) await ledger(db, { orgId: org.id, kind: 'grant', amountMc: allowanceMc, feature: 'monthly' });
 		}
@@ -126,7 +126,7 @@ export async function getAccount(db: Db, org: OrgContext, now = new Date()): Pro
 			`UPDATE ai_accounts SET balance_mc = balance_mc + ?, period_grant_mc = ?, updated_at = datetime('now')
 			  WHERE org_id = ? AND period_grant_mc = ?`,
 			diff, allowanceMc, org.id, acc.period_grant_mc);
-		if (res.meta.changes === 1) await ledger(db, { orgId: org.id, kind: 'grant', amountMc: diff, feature: 'upgrade' });
+		if (wroteRow(res)) await ledger(db, { orgId: org.id, kind: 'grant', amountMc: diff, feature: 'upgrade' });
 	} else {
 		return acc;
 	}
@@ -155,7 +155,7 @@ export async function holdUpTo(db: Db, orgId: string, worstMc: number): Promise<
 		`UPDATE ai_accounts SET balance_mc = balance_mc - ?, updated_at = datetime('now')
 		  WHERE org_id = ? AND balance_mc >= ?`,
 		amount, orgId, amount);
-	return res.meta.changes === 1 ? amount : 0;
+	return wroteRow(res) ? amount : 0;
 }
 
 /** Give back an unused hold (the call failed before anything was spent). */

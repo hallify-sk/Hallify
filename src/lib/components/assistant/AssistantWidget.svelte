@@ -19,7 +19,7 @@
   import { t, getLocale } from '$lib/i18n.svelte';
   import ProposalCard from './ProposalCard.svelte';
   import { renderReply, errorKey } from '$lib/assistant/render';
-  import { assistantPageHooks } from '$lib/assistant/page-hooks';
+  import { assistantPageHooks, PROPOSALS_CHANGED_EVENT } from '$lib/assistant/page-hooks';
   import { threadKey, OPEN_KEY, tabStore as store, navigationTarget } from '$lib/assistant/session';
   import { creditAmount } from '$lib/assistant/credits';
   import { hintFor } from '$lib/assistant/hints';
@@ -229,7 +229,14 @@
     // A "Draft with AI" button elsewhere on the page opens the panel.
     const onOpen = () => toggle(true);
     window.addEventListener('hallify:assistant:open', onOpen);
-    return () => { window.removeEventListener('keydown', onEsc); window.removeEventListener('hallify:assistant:open', onOpen); };
+    // An editor saved or discarded a draft: the cards show what became of it.
+    const onProposals = () => { if (loaded) void load(); };
+    window.addEventListener(PROPOSALS_CHANGED_EVENT, onProposals);
+    return () => {
+      window.removeEventListener('keydown', onEsc);
+      window.removeEventListener('hallify:assistant:open', onOpen);
+      window.removeEventListener(PROPOSALS_CHANGED_EVENT, onProposals);
+    };
   });
 </script>
 

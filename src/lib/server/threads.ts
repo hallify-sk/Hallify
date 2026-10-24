@@ -7,7 +7,7 @@
 // (org_id, reservation_id, user_id); this inserts against it and re-reads, so the
 // loser of a race simply joins the winner's thread.
 
-import { dbFirst, dbRun } from '$lib/db/index';
+import { dbFirst, dbRun, wroteRow } from '$lib/db/index';
 import type { D1Database } from '@cloudflare/workers-types';
 
 export async function findOrCreateReservationThread(
@@ -25,7 +25,7 @@ export async function findOrCreateReservationThread(
 	const ins = await dbRun(db,
 		`INSERT OR IGNORE INTO tickets (id, org_id, user_id, reservation_id, subject, status) VALUES (?, ?, ?, ?, ?, 'open')`,
 		id, opts.orgId, opts.userId, opts.reservationId, opts.subject);
-	if (ins.meta?.changes === 1) return { id, subject: opts.subject, created: true };
+	if (wroteRow(ins)) return { id, subject: opts.subject, created: true };
 
 	const winner = await find();
 	if (winner) return { ...winner, created: false };

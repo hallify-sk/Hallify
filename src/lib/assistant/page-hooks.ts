@@ -27,3 +27,14 @@ export function registerAssistantPage(hooks: AssistantPageHooks): () => void {
 export function assistantPageHooks(): AssistantPageHooks | null {
 	return current;
 }
+
+/**
+ * A page resolved one of the assistant's proposals itself — an AI draft saved or
+ * discarded in an editor — so the open panel reloads its cards; otherwise it went
+ * on offering Apply and Discard on a draft already saved until the page reloaded.
+ */
+export const PROPOSALS_CHANGED_EVENT = 'hallify:assistant:proposals';
+
+export function proposalsChanged(): void {
+	if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent(PROPOSALS_CHANGED_EVENT));
+}
