@@ -123,7 +123,9 @@ describe('photo address safety', () => {
 		expect(checkImageBody('image/gif', 'image/gif', 5000)).toEqual({ ok: false, error: 'not_image' });
 		expect(checkImageBody('text/html', null, 5000)).toEqual({ ok: false, error: 'not_image' });
 		expect(checkImageBody('image/jpeg', null, 5000)).toEqual({ ok: false, error: 'not_image' });
-		expect(checkImageBody('image/png', 'image/jpeg', 5000)).toEqual({ ok: false, error: 'not_image' });
+		// A mislabelled photo is accepted as what its bytes are.
+		expect(checkImageBody('image/png', 'image/jpeg', 5000)).toEqual({ ok: true, type: 'image/jpeg' });
+		expect(checkImageBody('-e', 'image/webp', 5000)).toEqual({ ok: true, type: 'image/webp' });
 		expect(checkImageBody('image/jpeg', 'image/jpeg', 0)).toEqual({ ok: false, error: 'not_image' });
 		expect(checkImageBody('image/jpeg', 'image/jpeg', 8 * 1024 * 1024 + 1)).toEqual({ ok: false, error: 'too_large' });
 	});

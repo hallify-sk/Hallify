@@ -186,9 +186,12 @@ export type ImportImageType = (typeof IMAGE_TYPES)[number];
  *  at most 8 MB. `sniffed` is what its first bytes say it is. */
 export function checkImageBody(contentType: string, sniffed: string | null, size: number): { ok: true; type: ImportImageType } | { ok: false; error: ImageError } {
 	if (size > IMAGE_MAX_BYTES) return { ok: false, error: 'too_large' };
-	const declared = contentType.split(';')[0].trim().toLowerCase();
-	const type = IMAGE_TYPES.find((t) => t === declared);
-	if (!type || sniffed !== type || size === 0) return { ok: false, error: 'not_image' };
+	// The file's own bytes decide, not the server's label: some venue sites send a JPEG
+	// as image/png, or a WebP with a garbled Content-Type. It is stored under the type
+	// it really is, so a wrong label cannot make it served as something else.
+	void contentType;
+	const type = IMAGE_TYPES.find((t) => t === sniffed);
+	if (!type || size === 0) return { ok: false, error: 'not_image' };
 	return { ok: true, type };
 }
 
