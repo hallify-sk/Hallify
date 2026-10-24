@@ -207,6 +207,9 @@
     padding: 6px 9px;
     border-radius: var(--radius-sm);
     cursor: pointer;
+    /* A <button> centres its text by default: the name sat centred above a
+       left-aligned role · slug line. */
+    text-align: left;
     background: none;
     border: none;
     font-family: inherit;
