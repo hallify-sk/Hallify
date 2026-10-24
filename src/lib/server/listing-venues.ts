@@ -28,6 +28,8 @@ export interface ListingVenueInput {
 	max_people: number;
 	description: string | null;
 	cover_image_url: string | null;
+	/** Who the cover photo comes from, shown on it ("Foto: …"); null without a cover. */
+	cover_image_credit: string | null;
 	amenities: string[];
 	website: string | null;
 	phone: string | null;
@@ -40,7 +42,7 @@ export function draftFromForm(data: FormData): Record<string, string | string[] 
 	const one = (k: string) => String(data.get(k) ?? '').slice(0, 2000);
 	return {
 		name: one('name'), address: one('address'), max_people: one('max_people'), description: one('description'),
-		cover_image_url: one('cover_image_url'), website: one('website'), phone: one('phone'), email: one('email'),
+		cover_image_url: one('cover_image_url'), cover_image_credit: one('cover_image_credit'), website: one('website'), phone: one('phone'), email: one('email'),
 		amenities: data.getAll('amenities').map(String), is_public: data.get('is_public') === 'on'
 	};
 }
@@ -73,6 +75,9 @@ export function parseListingVenueForm(data: FormData, errors: Errors, keepCover:
 	const cover = text('cover_image_url', 500) || null;
 	if (cover && cover !== keepCover && !isOwnHallImage(cover)) return { ok: false, error: errors.coverNotUploaded };
 
+	// The credit belongs to the photo: without a cover there is nothing to credit.
+	const credit = cover ? text('cover_image_credit', 200) || null : null;
+
 	const allowed = new Set<string>(BUILT_IN_AMENITIES);
 	const amenities = [...new Set(data.getAll('amenities').map(String))].filter((a) => allowed.has(a));
 
@@ -81,7 +86,7 @@ export function parseListingVenueForm(data: FormData, errors: Errors, keepCover:
 		value: {
 			name, address, max_people: maxPeople,
 			description: text('description', 2000) || null,
-			cover_image_url: cover, amenities, website, phone, email,
+			cover_image_url: cover, cover_image_credit: credit, amenities, website, phone, email,
 			is_public: data.get('is_public') === 'on'
 		}
 	};
@@ -100,33 +105,35 @@ async function locate(db: Db, address: string): Promise<{ latitude: number | nul
 }
 
 /** Create the organisation and its one hall. Slugs follow the same rules as any
- *  venue's: transliterated, never a reserved subdomain, never one in use or once used. */
-export async function createListingVenue(db: Db, input: ListingVenueInput): Promise<{ orgId: string; hallId: string }> {
+ *  venue's: transliterated, never a reserved subdomain, never one in use or once used.
+ *  `geocodeQuery` is what the map lookup is asked when it should say more than the
+ *  stored address (an import adds the country). */
+export async function createListingVenue(db: Db, input: ListingVenueInput, opts: { geocodeQuery?: string } = {}): Promise<{ orgId: string; hallId: string }> {
 	const orgId = crypto.randomUUID();
 	const hallId = crypto.randomUUID();
 	const orgSlug = await uniqueOrgSlug(db, input.name);
 	await dbRun(db, 'INSERT INTO organizations (id, name, slug, listing_only) VALUES (?, ?, ?, 1)', orgId, input.name, orgSlug);
 	const hallSlug = await uniqueHallSlug(db, orgId, input.name, null, 'sala');
-	const pin = await locate(db, input.address);
+	const pin = await locate(db, opts.geocodeQuery || input.address);
 	await dbRun(db,
 		`INSERT INTO halls (id, org_id, name, slug, description, max_people, address, latitude, longitude,
-		                    cover_image_url, amenities, contact_website, contact_phone, contact_email,
+		                    cover_image_url, cover_image_credit, amenities, contact_website, contact_phone, contact_email,
 		                    booking_mode, allow_reservations, is_public)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'external', 0, ?)`,
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'external', 0, ?)`,
 		hallId, orgId, input.name, hallSlug, input.description, input.max_people, input.address, pin.latitude, pin.longitude,
-		input.cover_image_url, toJson(input.amenities), input.website, input.phone, input.email, input.is_public ? 1 : 0);
+		input.cover_image_url, input.cover_image_url ? input.cover_image_credit : null, toJson(input.amenities), input.website, input.phone, input.email, input.is_public ? 1 : 0);
 	return { orgId, hallId };
 }
 
 export interface ListingVenueRow {
 	hall_id: string; org_id: string; name: string; org_slug: string; slug: string | null;
 	address: string | null; max_people: number; description: string | null; cover_image_url: string | null;
-	amenities: string[]; website: string | null; phone: string | null; email: string | null;
+	cover_image_credit: string | null; amenities: string[]; website: string | null; phone: string | null; email: string | null;
 	is_public: number; latitude: number | null; longitude: number | null; created_at: string;
 }
 
 const SELECT = `SELECT h.id AS hall_id, o.id AS org_id, h.name, o.slug AS org_slug, h.slug, h.address, h.max_people,
-       h.description, h.cover_image_url, h.amenities, h.contact_website AS website, h.contact_phone AS phone,
+       h.description, h.cover_image_url, h.cover_image_credit, h.amenities, h.contact_website AS website, h.contact_phone AS phone,
        h.contact_email AS email, h.is_public, h.latitude, h.longitude, o.created_at
   FROM organizations o JOIN halls h ON h.org_id = o.id
  WHERE o.listing_only = 1`;
@@ -150,11 +157,12 @@ export async function updateListingVenue(db: Db, r2: R2Deleter | null | undefine
 		: { latitude: current.latitude, longitude: current.longitude };
 	await dbRun(db,
 		`UPDATE halls SET name = ?, description = ?, max_people = ?, address = ?, latitude = ?, longitude = ?,
-		        cover_image_url = ?, amenities = ?, contact_website = ?, contact_phone = ?, contact_email = ?,
+		        cover_image_url = ?, cover_image_credit = ?, amenities = ?, contact_website = ?, contact_phone = ?, contact_email = ?,
 		        booking_mode = 'external', allow_reservations = 0, is_public = ?
 		  WHERE id = ? AND org_id = ?`,
 		input.name, input.description, input.max_people, input.address, pin.latitude, pin.longitude,
-		input.cover_image_url, toJson(input.amenities), input.website, input.phone, input.email, input.is_public ? 1 : 0,
+		input.cover_image_url, input.cover_image_url ? input.cover_image_credit : null,
+		toJson(input.amenities), input.website, input.phone, input.email, input.is_public ? 1 : 0,
 		current.hall_id, current.org_id);
 	// The organisation carries the venue's name (the directory shows it above the hall).
 	await dbRun(db, 'UPDATE organizations SET name = ? WHERE id = ? AND listing_only = 1', input.name, current.org_id);

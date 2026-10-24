@@ -181,6 +181,8 @@ export interface HallRow {
   is_public: number;
   slug: string | null;
   cover_image_url: string | null;
+  /** Source or author of the cover photo (0042), shown as a caption on it. */
+  cover_image_credit?: string | null;
   gallery_images: string;
   amenities: string;
   pricing_info: string | null;

@@ -8,13 +8,15 @@
   import ImageUploadDialog from '$lib/components/ImageUploadDialog.svelte';
 
   interface Values {
-    name?: unknown; address?: unknown; max_people?: unknown; description?: unknown; cover_image_url?: unknown;
+    name?: unknown; address?: unknown; max_people?: unknown; description?: unknown; cover_image_url?: unknown; cover_image_credit?: unknown;
     amenities?: unknown; website?: unknown; phone?: unknown; email?: unknown; is_public?: unknown;
   }
   let { values, error, submitLabel }: { values: Values | null; error: string | null; submitLabel: string } = $props();
 
   const str = (v: unknown) => (v == null ? '' : String(v));
   let cover = $state(untrack(() => str(values?.cover_image_url)));
+  // Who the photo comes from; it goes with the photo, so removing the photo clears it.
+  let credit = $state(untrack(() => str(values?.cover_image_credit)));
   let coverOpen = $state(false);
   let saving = $state(false);
   const chosen = $derived(new Set(Array.isArray(values?.amenities) ? values.amenities.map(String) : []));
@@ -68,10 +70,17 @@
         {/if}
         <div class="lf-cover-actions">
           <button type="button" class="btn-outline btn-sm" onclick={() => (coverOpen = true)}>{t.listings.chooseCover}</button>
-          {#if cover}<button type="button" class="btn-outline btn-sm" onclick={() => (cover = '')}>{t.listings.removeCover}</button>{/if}
+          {#if cover}<button type="button" class="btn-outline btn-sm" onclick={() => { cover = ''; credit = ''; }}>{t.listings.removeCover}</button>{/if}
         </div>
       </div>
     </div>
+    {#if cover}
+      <div class="field lf-wide">
+        <label for="lf-credit">{t.listings.fieldCoverCredit}</label>
+        <input id="lf-credit" name="cover_image_credit" bind:value={credit} maxlength="200" spellcheck="false" placeholder="https://www.priestor.sk" />
+        <span class="hint">{t.listings.fieldCoverCreditHint}</span>
+      </div>
+    {/if}
 
     <div class="field">
       <label for="lf-web">{t.listings.fieldWebsite}</label>

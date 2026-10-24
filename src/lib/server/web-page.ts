@@ -49,9 +49,11 @@ function statusReason(status: number): string {
 
 export async function fetchPublic(
 	raw: string,
-	opts: { maxBytes: number; timeoutMs: number; accept: string }
+	opts: { maxBytes: number; timeoutMs: number; accept: string; httpsOnly?: boolean }
 ): Promise<Fetched> {
-	let url: URL | null = isPublicHttpUrl(raw);
+	// With httpsOnly, every hop must be https: a redirect to plain http is refused.
+	const allowed = (u: URL | null) => (u && (!opts.httpsOnly || u.protocol === 'https:') ? u : null);
+	let url: URL | null = allowed(isPublicHttpUrl(raw));
 	if (!url) return { ok: false, reason: 'not a public http(s) address' };
 	const deadline = AbortSignal.timeout(opts.timeoutMs);
 	for (let hop = 0; url && hop < 4; hop++) {
@@ -62,7 +64,7 @@ export async function fetchPublic(
 		});
 		if (res.status >= 300 && res.status < 400) {
 			const next: string | null = res.headers.get('location');
-			url = next ? isPublicHttpUrl(new URL(next, url).toString()) : null;
+			url = next ? allowed(isPublicHttpUrl(new URL(next, url).toString())) : null;
 			if (!url) return { ok: false, reason: 'it redirects somewhere that is not a public address' };
 			continue;
 		}

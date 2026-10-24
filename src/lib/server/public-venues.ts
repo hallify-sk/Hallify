@@ -20,7 +20,7 @@ export interface VenueSiteContext { url: URL; appDomain: string }
 export async function publicVenues(db: App.Locals['db'], onReady?: (ready: boolean) => void, site?: VenueSiteContext): Promise<PublicVenue[]> {
   let ready = true;
   const query = `SELECT h.id, h.name, h.slug, h.description, h.address, h.max_people,
-      h.latitude, h.longitude, h.cover_image_url, h.amenities, h.pricing_info, h.price_band, ${PARTNER_SQL} AS is_partner,
+      h.latitude, h.longitude, h.cover_image_url, h.cover_image_credit, h.amenities, h.pricing_info, h.price_band, ${PARTNER_SQL} AS is_partner,
       h.allow_reservations, CASE WHEN h.floorplan_json IS NOT NULL AND h.floorplan_json != '' THEN 1 ELSE 0 END AS has_floorplan,
       o.id AS org_id, o.slug AS org_slug, s.plan AS plan, ${CUSTOM_DOMAIN_SQL} AS custom_domain,
       h.booking_mode, o.listing_only,
@@ -45,8 +45,9 @@ export async function publicVenues(db: App.Locals['db'], onReady?: (ready: boole
     // Recognising the column here is what lets the degraded query below take over
     // instead of the whole public directory failing on a database mid-rollout.
     // booking_mode and listing_only (0041) are not added by applyDiscoveryMigrations;
-    // until 0041 is applied the retry fails too and the degraded query serves.
-    if (!/no such column:\s*(?:h\.)?(?:latitude|longitude|price_band|booking_mode)\b|no such column:\s*(?:o\.)?(?:is_hallify_partner|listing_only)\b/i.test(message)) throw error;
+    // until 0041 is applied the retry fails too and the degraded query serves; the
+    // same for cover_image_credit (0042).
+    if (!/no such column:\s*(?:h\.)?(?:latitude|longitude|price_band|booking_mode|cover_image_credit)\b|no such column:\s*(?:o\.)?(?:is_hallify_partner|listing_only)\b/i.test(message)) throw error;
     try {
       await applyDiscoveryMigrations(db);
       rows = await dbAll<VenueRow>(db, query);
@@ -56,7 +57,7 @@ export async function publicVenues(db: App.Locals['db'], onReady?: (ready: boole
       console.error('Discovery migration failed:', migrationError instanceof Error ? migrationError.message : 'Unknown database error');
       rows = await dbAll<VenueRow>(db,
         `SELECT h.id, h.name, h.slug, h.description, h.address, h.max_people,
-          NULL AS latitude, NULL AS longitude, h.cover_image_url, h.amenities, h.pricing_info, NULL AS price_band, 0 AS is_partner,
+          NULL AS latitude, NULL AS longitude, h.cover_image_url, NULL AS cover_image_credit, h.amenities, h.pricing_info, NULL AS price_band, 0 AS is_partner,
           h.allow_reservations, CASE WHEN h.floorplan_json IS NOT NULL AND h.floorplan_json != '' THEN 1 ELSE 0 END AS has_floorplan,
           o.id AS org_id, o.slug AS org_slug, NULL AS plan, NULL AS custom_domain
          FROM halls h JOIN organizations o ON o.id = h.org_id
