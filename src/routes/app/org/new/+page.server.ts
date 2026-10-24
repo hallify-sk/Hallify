@@ -5,6 +5,7 @@ import { uniqueOrgSlug } from '$lib/server/org-slug';
 import { seedBuiltInRoles } from '$lib/server/people';
 import { st } from '$lib/i18n-server';
 import { loginUrl } from '$lib/login-redirect';
+import { acceptedDpa, recordDpaAcceptance } from '$lib/site/legal-acceptance';
 
 /** Who may reach the org form.
  *
@@ -42,13 +43,23 @@ export const actions: Actions = {
 
     const data = await request.formData();
     const name = (data.get('name') as string)?.trim();
+    // Echoed back on every failure so a re-rendered form keeps the box ticked.
+    const acceptDpa = acceptedDpa(data);
 
     if (!name || name.length < 2) {
-      return fail(400, { name, duplicate: false, error: st(locals.locale).serverErrors.orgNameMin2 });
+      return fail(400, { name, acceptDpa, duplicate: false, error: st(locals.locale).serverErrors.orgNameMin2 });
     }
     // The input carries maxlength="80"; a posted form need not.
     if (name.length > 80) {
-      return fail(400, { name, duplicate: false, error: st(locals.locale).serverErrors.orgNameMax80 });
+      return fail(400, { name, acceptDpa, duplicate: false, error: st(locals.locale).serverErrors.orgNameMax80 });
+    }
+
+    // Creating an organisation makes this account the controller of whatever data
+    // the organisation collects, with Hallify as processor (Art. 28 GDPR). The DPA
+    // that governs that is accepted here, explicitly, and recorded below. The
+    // browser's `required` is a convenience; this is the check.
+    if (!acceptDpa) {
+      return fail(400, { name, acceptDpa, duplicate: false, error: st(locals.locale).serverErrors.mustAcceptDpa });
     }
 
     // Several organisations with one name are allowed (two branches of a chain), but
@@ -64,7 +75,7 @@ export const actions: Actions = {
         userId,
         name
       );
-      if (same) return fail(409, { name, duplicate: true, error: '' });
+      if (same) return fail(409, { name, acceptDpa, duplicate: true, error: '' });
     }
 
     // The slug doubles as the org's free subdomain (<slug>.hallify.sk): Slovak letters
@@ -96,6 +107,9 @@ export const actions: Actions = {
     // — the floor every member holds implicitly, and the one role the Roles tab
     // cannot create for itself. Never fatal: see seedBuiltInRoles.
     await seedBuiltInRoles(locals.db, orgId);
+
+    // Evidence of the DPA accepted above, for this organisation and this version.
+    await recordDpaAcceptance(locals.db, { userId, orgId });
 
     // Free subscription
     await dbRun(

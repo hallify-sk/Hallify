@@ -7,6 +7,7 @@
 
   // Bound so a duplicate-name warning can disappear as soon as the name is edited.
   let name = $state(form?.name ?? '');
+  let acceptDpa = $state(form?.acceptDpa ?? false);
   const duplicateOf = $derived(form?.duplicate ? String(form.name ?? '').trim().toLowerCase() : null);
 
   onMount(() => saas.signUpCompleted());
@@ -29,6 +30,13 @@
         <input id="name" name="name" type="text" required minlength="2" maxlength="80"
                placeholder={t.accountExtra.orgNamePlaceholder} bind:value={name} />
       </div>
+      <label class="consent">
+        <input type="checkbox" name="acceptDpa" required bind:checked={acceptDpa} />
+        <span>
+          {t.accountExtra.orgDpaBefore}
+          <a href="/dpa" target="_blank" rel="noopener">{t.accountExtra.orgDpaLink}</a>{t.accountExtra.orgDpaAfter}
+        </span>
+      </label>
       {#if duplicateOf !== null && duplicateOf === name.trim().toLowerCase()}
         <!-- Shown only while the name is still the one the server flagged; editing it
              goes back to the ordinary button. -->
@@ -61,5 +69,20 @@
     max-width: 420px;
     padding-block: 0;
   }
+  /* Same treatment as the consent box on /app/register. */
+  .consent {
+    display: flex;
+    align-items: flex-start;
+    gap: 9px;
+    margin-top: .25rem;
+    font-size: 12px;
+    font-weight: 400;
+    line-height: 1.5;
+    color: var(--text-muted);
+    cursor: pointer;
+  }
+  .consent input { width: 16px; height: 16px; margin: 1px 0 0; flex-shrink: 0; accent-color: var(--accent); }
+  .consent a { color: var(--accent-ink); font-weight: 600; text-decoration: none; }
+  .consent a:hover { text-decoration: underline; }
   h1 { font-size: 1.75rem; font-weight: 550; letter-spacing: -.055em; line-height: 1.08; margin: 0; }
 </style>

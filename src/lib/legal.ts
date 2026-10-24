@@ -56,7 +56,7 @@ export const SLA = {
 } as const;
 
 /** Last substantive revision. Bump when the text changes. */
-export const LEGAL_UPDATED = '2026-10-23';
+export const LEGAL_UPDATED = '2026-10-24';
 
 export interface LegalBlock {
   /** A paragraph, or a bulleted list. */
@@ -145,7 +145,7 @@ const termsSk: LegalDoc = {
       heading: '7. Vaše dáta a obsah',
       blocks: [
         { p: 'Obsah, ktorý do služby vložíte (údaje o sálach, rezervácie, zasadacie poriadky, obrázky, správy), zostáva váš. Udeľujete nám obmedzené právo tento obsah spracúvať výhradne na účel poskytovania služby.' },
-        { p: 'Zodpovedáte za to, že máte právo vložené údaje spracúvať — vrátane osobných údajov hostí, ktoré do služby zadáte (napr. zoznam hostí a zasadací poriadok). Vo vzťahu k týmto údajom ste prevádzkovateľom vy a my sprostredkovateľom; bližšie v Zásadách ochrany osobných údajov.' },
+        { p: 'Zodpovedáte za to, že máte právo vložené údaje spracúvať — vrátane osobných údajov hostí, ktoré do služby zadáte (napr. zoznam hostí a zasadací poriadok). Vo vzťahu k týmto údajom ste prevádzkovateľom vy a my sprostredkovateľom. Toto spracúvanie upravuje Zmluva o spracúvaní osobných údajov (hallify.sk/dpa), ktorá je prílohou týchto podmienok a ktorú prijímate pri vytvorení organizácie; ako spracúvame údaje o vás samotných, popisujú Zásady ochrany osobných údajov.' },
         { p: 'Export: údaje o rezerváciách a zoznamy hostí si viete kedykoľvek exportovať z aplikácie (CSV, tlačová zostava).' },
       ],
     },
@@ -279,7 +279,7 @@ const termsEn: LegalDoc = {
       heading: '7. Your data and content',
       blocks: [
         { p: 'Content you put into the Service (hall details, reservations, seating layouts, images, messages) remains yours. You grant us a limited right to process it solely to provide the Service.' },
-        { p: 'You are responsible for having the right to process the data you enter — including personal data about guests that you add (for example a guest list or seating layout). For that data you are the controller and we are the processor; see the Privacy Policy.' },
+        { p: 'You are responsible for having the right to process the data you enter — including personal data about guests that you add (for example a guest list or seating layout). For that data you are the controller and we are the processor. That processing is governed by the Data Processing Agreement (hallify.sk/dpa), an annex to these terms that you accept when you create an organization; how we handle data about you yourself is described in the Privacy Policy.' },
         { p: 'Export: reservation data and guest lists can be exported from the app at any time (CSV, printable manifest).' },
       ],
     },
@@ -622,7 +622,7 @@ const dpaSk: LegalDoc = {
       heading: '1. Zmluvné strany a účel',
       blocks: [
         { p: `Táto zmluva sa uzatvára medzi organizáciou používajúcou službu Hallify („prevádzkovateľ“) a ${OPERATOR.legalName}, ${OPERATOR.address}, IČO ${OPERATOR.companyId} („sprostredkovateľ“).` },
-        { p: 'Tvorí neoddeliteľnú prílohu Obchodných podmienok a uzatvára sa okamihom, keď prevádzkovateľ začne službu používať. Upravuje spracúvanie osobných údajov, ktoré prevádzkovateľ vkladá do služby, podľa čl. 28 nariadenia (EÚ) 2016/679 (GDPR).' },
+        { p: 'Tvorí neoddeliteľnú prílohu Obchodných podmienok a uzatvára sa okamihom, keď ju prevádzkovateľ prijme pri vytvorení organizácie v službe, najneskôr však okamihom, keď začne službu používať. Upravuje spracúvanie osobných údajov, ktoré prevádzkovateľ vkladá do služby, podľa čl. 28 nariadenia (EÚ) 2016/679 (GDPR).' },
         { p: 'V prípade rozporu s Obchodnými podmienkami má v otázkach ochrany osobných údajov prednosť táto zmluva.' },
       ],
     },
@@ -744,7 +744,7 @@ const dpaEn: LegalDoc = {
       heading: '1. Parties and purpose',
       blocks: [
         { p: `This agreement is made between the organization using Hallify (the "Controller") and ${OPERATOR.legalName}, ${OPERATOR.addressEn}, company ID ${OPERATOR.companyId} (the "Processor").` },
-        { p: 'It forms an integral annex to the Terms of Service and is entered into when the Controller begins using the Service. It governs the processing of personal data the Controller puts into the Service, under Article 28 of Regulation (EU) 2016/679 (GDPR).' },
+        { p: 'It forms an integral annex to the Terms of Service and is entered into when the Controller accepts it on creating an organization in the Service, and in any case no later than when the Controller begins using the Service. It governs the processing of personal data the Controller puts into the Service, under Article 28 of Regulation (EU) 2016/679 (GDPR).' },
         { p: 'In case of conflict with the Terms of Service, this agreement prevails on data protection matters.' },
       ],
     },

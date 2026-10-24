@@ -100,6 +100,12 @@
 				<a href="/privacy" target="_blank" rel="noopener">{t.authPages.registerPrivacyLink}</a>.
 			</span>
 		</label>
+		<!-- The DPA is the organisation's contract, accepted on /app/org/new when the
+		     account becomes a controller; a personal account never enters into it. -->
+		<p class="consent-note">
+			{t.authPages.registerDpaBefore}
+			<a href="/dpa" target="_blank" rel="noopener">{t.authPages.registerDpaLink}</a>{t.authPages.registerDpaAfter}
+		</p>
 		<button type="submit" class="submit-btn">{t.authPages.registerSubmit}</button>
 		<p class="next-hint">
 			{intent === 'operator' ? t.authPages.registerNextOperator : t.authPages.registerNextGuest}
@@ -247,6 +253,15 @@
 	.consent input { width: 16px; height: 16px; margin: 1px 0 0; flex-shrink: 0; accent-color: var(--accent); }
 	.consent a { color: var(--accent-ink); font-weight: 600; text-decoration: none; }
 	.consent a:hover { text-decoration: underline; }
+	/* Sits under the checkbox text, aligned with it (16px box + 9px gap). */
+	.consent-note {
+		margin: -8px 0 0 25px;
+		font-size: 11.5px;
+		line-height: 1.45;
+		color: var(--text-subtle);
+	}
+	.consent-note a { color: var(--accent-ink); font-weight: 600; text-decoration: none; }
+	.consent-note a:hover { text-decoration: underline; }
 
 	.submit-btn {
 		width: 100%;
