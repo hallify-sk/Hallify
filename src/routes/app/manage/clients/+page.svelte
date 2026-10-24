@@ -5,6 +5,7 @@
 	import { formatDate } from '$lib/format';
 	import { formatRating } from '$lib/feedback';
 	import { CLIENTS_PAGE_SIZE } from '$lib/clients';
+	import ListToolbar from '$lib/components/ListToolbar.svelte';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
@@ -25,10 +26,6 @@
 	const exportHref = $derived(`/app/manage/clients/export${$page.url.search}`);
 	const firstShown = $derived(data.total === 0 ? 0 : (data.page - 1) * CLIENTS_PAGE_SIZE + 1);
 	const lastShown = $derived(Math.min(data.page * CLIENTS_PAGE_SIZE, data.total));
-
-	function autoSubmit(e: Event) {
-		(e.currentTarget as HTMLSelectElement).form?.requestSubmit();
-	}
 
 	const sorts = $derived([
 		['name', t.clients.sortName], ['last', t.clients.sortLast], ['next', t.clients.sortNext],
@@ -58,19 +55,21 @@
 				<p>{t.clients.emptyHint}</p>
 			</div>
 		{:else}
-			<form method="GET" class="list-filters" data-sveltekit-keepfocus data-sveltekit-noscroll>
-				<label class="sr-only" for="c-q">{t.clients.searchLabel}</label>
-				<input id="c-q" class="lf-search" type="search" name="q" value={data.filters.q} placeholder={t.clients.searchPlaceholder} maxlength="100" />
-				<label class="sr-only" for="c-sort">{t.clients.sortLabel}</label>
-				<select id="c-sort" name="sort" onchange={autoSubmit}>
-					{#each sorts as [value, label]}
-						<option {value} selected={data.filters.sort === value}>{label}</option>
-					{/each}
-				</select>
-				<button type="submit" class="btn-outline btn-sm">{t.clients.search}</button>
-				{#if data.filters.q}<a class="lf-clear" href={hrefWith({ q: null })}>{t.clients.clear}</a>{/if}
-				<a class="lf-export" href={exportHref} download>{t.clients.exportCsv}</a>
-			</form>
+			{#snippet clearSearch()}
+				<a class="lf-clear" href={hrefWith({ q: null })}>{t.clients.clear}</a>
+			{/snippet}
+			<ListToolbar q={data.filters.q} label={t.clients.title}
+				searchLabel={t.clients.searchLabel} searchPlaceholder={t.clients.searchPlaceholder}
+				submitLabel={t.clients.search} exportHref={exportHref} exportLabel={t.clients.exportCsv}
+				below={data.filters.q ? clearSearch : undefined}>
+				{#snippet filters()}
+					<select class="lt-select" name="sort" aria-label={t.clients.sortLabel}>
+						{#each sorts as [value, label]}
+							<option {value} selected={data.filters.sort === value}>{label}</option>
+						{/each}
+					</select>
+				{/snippet}
+			</ListToolbar>
 
 			{#if data.rows.length === 0}
 				<div class="card--inset state-block">
@@ -138,17 +137,8 @@
 		background: var(--accent-dim); color: var(--accent-ink);
 	}
 	.cl-intro { font-size: 13px; color: var(--text-muted); margin: 0 0 14px; }
-	.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
-
-	.list-filters { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 14px; }
-	.list-filters input, .list-filters select {
-		font: inherit; font-size: 12.5px; padding: 6px 9px; border: 1px solid var(--border);
-		border-radius: var(--radius-sm); background: var(--bg-panel); color: var(--text-base);
-	}
-	.lf-search { flex: 1 1 240px; min-width: 0; }
-	.lf-clear, .lf-export { font-size: 12px; font-weight: 600; color: var(--accent-ink); text-decoration: none; }
-	.lf-clear:hover, .lf-export:hover { text-decoration: underline; }
-	.lf-export { margin-left: auto; }
+	.lf-clear { font-size: 12px; font-weight: 600; color: var(--accent-ink); text-decoration: none; white-space: nowrap; }
+	.lf-clear:hover { text-decoration: underline; }
 
 	/* Laid out by the list's own width, like the reservations list. */
 	.cl-list { container-type: inline-size; }

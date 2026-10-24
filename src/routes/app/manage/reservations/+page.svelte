@@ -2,6 +2,8 @@
 	import { pageTitle } from '$lib/page-title';
 	import { enhance } from '$app/forms';
 	import CapNotices from '$lib/components/CapNotices.svelte';
+	import ListToolbar from '$lib/components/ListToolbar.svelte';
+	import DateRangeFilter from '$lib/components/DateRangeFilter.svelte';
 	import { untrack } from 'svelte';
 	import { page } from '$app/stores';
 	import { t, getLocale } from '$lib/i18n.svelte';
@@ -65,10 +67,6 @@
 	const filtersActive = $derived(!!(data.filters.q || data.filters.hall || data.filters.from || data.filters.to || data.filters.status));
 	const firstShown = $derived(data.total === 0 ? 0 : (data.page - 1) * 50 + 1);
 	const lastShown = $derived(Math.min(data.page * 50, data.total));
-
-	function autoSubmit(e: Event) {
-		(e.currentTarget as HTMLSelectElement).form?.requestSubmit();
-	}
 
 	const STATUS_COLOR: Record<string, string> = {
 		pending:         '--s-amber',
@@ -258,45 +256,51 @@
 			{/each}
 		</nav>
 
-		<form method="GET" class="list-filters" data-sveltekit-keepfocus data-sveltekit-noscroll>
-			<input type="hidden" name="when" value={data.filters.when} />
-			{#if data.filters.status}<input type="hidden" name="status" value={data.filters.status} />{/if}
-			<label class="sr-only" for="f-q">{t.resOps.search}</label>
-			<input id="f-q" class="lf-search" type="search" name="q" value={data.filters.q} placeholder={t.resOps.searchPlaceholder} maxlength="100" />
-			<label class="sr-only" for="f-hall">{t.adminReservations.hall}</label>
-			<select id="f-hall" name="hall" onchange={autoSubmit}>
-				<option value="">{t.calendar.allHalls}</option>
-				{#each data.halls as h}<option value={h.id} selected={data.filters.hall === h.id}>{h.name}</option>{/each}
-			</select>
-			<label class="lf-date"><span>{t.resOps.dateFrom}</span><input type="date" name="from" value={data.filters.from} /></label>
-			<label class="lf-date"><span>{t.resOps.dateTo}</span><input type="date" name="to" value={data.filters.to} /></label>
-			<label class="sr-only" for="f-sort">{t.resOps.sortLabel}</label>
-			<select id="f-sort" name="sort" onchange={autoSubmit}>
-				<option value="date_asc" selected={data.filters.sort === 'date_asc'}>{t.resOps.sortDateAsc}</option>
-				<option value="date_desc" selected={data.filters.sort === 'date_desc'}>{t.resOps.sortDateDesc}</option>
-				<option value="created" selected={data.filters.sort === 'created'}>{t.resOps.sortCreated}</option>
-			</select>
-			<button type="submit" class="btn-outline btn-sm">{t.resOps.search}</button>
-			{#if filtersActive}<a class="lf-clear" href="?when={data.filters.when}">{t.resOps.clearFilters}</a>{/if}
-			<a class="lf-export" href={exportHref} download>{t.resOps.exportCsv}</a>
-		</form>
-
-		<div class="filters">
-			<a class="filter-btn" class:active={!data.filters.status} href={hrefWith({ status: null })}>
-				{t.adminReservations.filterAll}
-				<span class="f-count">{allCount}</span>
-			</a>
-			{#each statusOptions as s}
-				{@const c = cnt(s)}
-				{#if c > 0 || data.filters.status === s}
-					<a class="filter-btn" class:active={data.filters.status === s} href={hrefWith({ status: s })}
-						style:--sc={`var(${STATUS_COLOR[s] ?? '--s-slate'})`}>
-						{(t.status as Record<string, string>)[s]}
-						<span class="f-count">{c}</span>
+		<ListToolbar q={data.filters.q} label={t.adminReservations.title}
+			searchLabel={t.resOps.search} searchPlaceholder={t.resOps.searchPlaceholder}
+			submitLabel={t.resOps.search} exportHref={exportHref} exportLabel={t.resOps.exportCsv}>
+			{#snippet hidden()}
+				<input type="hidden" name="when" value={data.filters.when} />
+				{#if data.filters.status}<input type="hidden" name="status" value={data.filters.status} />{/if}
+			{/snippet}
+			{#snippet filters()}
+				<select class="lt-select" name="hall" aria-label={t.adminReservations.hall}>
+					<option value="">{t.calendar.allHalls}</option>
+					{#each data.halls as h}<option value={h.id} selected={data.filters.hall === h.id}>{h.name}</option>{/each}
+				</select>
+				<DateRangeFilter from={data.filters.from} to={data.filters.to}
+					label={t.resOps.dateRangeLabel} fromLabel={t.resOps.dateFrom} toLabel={t.resOps.dateTo}
+					fromPlaceholder={data.filters.when === 'upcoming' ? t.resOps.dateFromToday : t.resOps.dateFrom}
+					clearHref={hrefWith({ from: null, to: null })} clearLabel={t.resOps.clearDates} />
+				<select class="lt-select" name="sort" aria-label={t.resOps.sortLabel}>
+					<option value="date_asc" selected={data.filters.sort === 'date_asc'}>{t.resOps.sortDateAsc}</option>
+					<option value="date_desc" selected={data.filters.sort === 'date_desc'}>{t.resOps.sortDateDesc}</option>
+					<option value="created" selected={data.filters.sort === 'created'}>{t.resOps.sortCreated}</option>
+				</select>
+			{/snippet}
+			{#snippet below()}
+				<nav class="filters" aria-label={t.resOps.statusFilterLabel}>
+					<a class="filter-btn" class:active={!data.filters.status} href={hrefWith({ status: null })}
+						aria-current={!data.filters.status ? 'page' : undefined}>
+						{t.adminReservations.filterAll}
+						<span class="f-count">{allCount}</span>
 					</a>
-				{/if}
-			{/each}
-		</div>
+					{#each statusOptions as s}
+						{@const c = cnt(s)}
+						{#if c > 0 || data.filters.status === s}
+							<a class="filter-btn" class:active={data.filters.status === s} href={hrefWith({ status: s })}
+								aria-current={data.filters.status === s ? 'page' : undefined}
+								style:--sc={`var(${STATUS_COLOR[s] ?? '--s-slate'})`}>
+								<span class="f-dot" aria-hidden="true"></span>
+								{(t.status as Record<string, string>)[s]}
+								<span class="f-count">{c}</span>
+							</a>
+						{/if}
+					{/each}
+				</nav>
+				{#if filtersActive}<a class="lf-clear" href="?when={data.filters.when}">{t.resOps.clearFilters}</a>{/if}
+			{/snippet}
+		</ListToolbar>
 
 		{#if data.reservations.length === 0}
 			<div class="card--inset state-block">
@@ -403,7 +407,6 @@
 		color: var(--accent-ink);
 	}
 
-	.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
 
 	/* ── Upcoming / past split, search and filters ── */
 	.when-tabs { display: flex; gap: 4px; margin-bottom: 12px; border-bottom: 1px solid var(--border); }
@@ -413,16 +416,8 @@
 	}
 	.when-tab:hover { color: var(--text-base); }
 	.when-tab.active { color: var(--accent-ink); border-bottom-color: var(--accent); }
-	.list-filters { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 12px; }
-	.list-filters input, .list-filters select {
-		font: inherit; font-size: 12.5px; padding: 6px 9px; border: 1px solid var(--border);
-		border-radius: var(--radius-sm); background: var(--bg-panel); color: var(--text-base);
-	}
-	.lf-search { flex: 1 1 220px; min-width: 0; }
-	.lf-date { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-muted); }
-	.lf-clear, .lf-export { font-size: 12px; font-weight: 600; color: var(--accent-ink); text-decoration: none; }
-	.lf-clear:hover, .lf-export:hover { text-decoration: underline; }
-	.lf-export { margin-left: auto; }
+	.lf-clear { margin-left: auto; font-size: 12px; font-weight: 600; color: var(--accent-ink); text-decoration: none; white-space: nowrap; }
+	.lf-clear:hover { text-decoration: underline; }
 	.phone-tag {
 		display: inline-block; margin-left: 4px; padding: 0 5px; border-radius: 3px;
 		font-size: 10px; font-weight: 600; color: var(--text-muted); background: var(--bg-hover);
@@ -433,29 +428,33 @@
 	.pager-links { display: flex; align-items: center; gap: 8px; }
 	.pager-num { font-size: 12px; color: var(--text-muted); }
 
-	/* ── Filter pills ── */
-	.filters { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 16px; }
+	/* ── Status filter, under the toolbar ── */
+	.filters { display: flex; gap: 6px; flex-wrap: wrap; }
 
 	.filter-btn {
-		display: inline-flex; align-items: center; gap: 6px;
-		padding: 5px 13px; border-radius: 3px; font-size: 12px; font-weight: 500;
+		display: inline-flex; align-items: center; gap: 7px;
+		height: 30px; padding: 0 10px; border-radius: var(--radius-sm); font-size: 12px; font-weight: 550;
 		background: transparent; border: 1px solid var(--border);
-		color: var(--text-muted); cursor: pointer; font-family: inherit; text-decoration: none;
+		color: var(--text-muted); font-family: inherit; text-decoration: none; white-space: nowrap;
 		transition: border-color .15s, color .15s, background .15s;
 	}
-	.filter-btn:hover { border-color: var(--accent); color: var(--text-base); }
+	.filter-btn:hover { background: var(--bg-hover); color: var(--text-base); }
+	.f-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--sc); flex-shrink: 0; }
 	.filter-btn.active {
 		background: color-mix(in srgb, var(--sc, var(--accent-ink)) 10%, transparent);
-		border-color: color-mix(in srgb, var(--sc, var(--accent-ink)) 35%, transparent);
+		border-color: color-mix(in srgb, var(--sc, var(--accent-ink)) 40%, transparent);
 		color: var(--sc, var(--accent-ink));
-		font-weight: 600;
+		font-weight: 650;
 	}
 	.f-count {
-		font-size: 10px; font-weight: 600; padding: 1px 6px; border-radius: 3px;
-		background: var(--bg-hover);
+		min-width: 18px; text-align: center;
+		font-size: 10.5px; font-weight: 650; padding: 1px 5px; border-radius: 3px;
+		font-variant-numeric: tabular-nums;
+		background: var(--bg-hover); color: var(--text-muted);
 	}
 	.filter-btn.active .f-count {
-		background: color-mix(in srgb, var(--sc, var(--accent-ink)) 15%, transparent);
+		background: color-mix(in srgb, var(--sc, var(--accent-ink)) 16%, transparent);
+		color: inherit;
 	}
 
 	/* ── Hairline rows ── */

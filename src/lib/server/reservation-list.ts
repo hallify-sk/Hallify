@@ -36,8 +36,10 @@ export function parseListFilters(params: URLSearchParams): ListFilters {
 	const sort = params.get('sort');
 	const rawFrom = params.get('from') ?? '';
 	const rawTo = params.get('to') ?? '';
-	const from = ISO.test(rawFrom) ? rawFrom : '';
-	const to = ISO.test(rawTo) ? rawTo : '';
+	let from = ISO.test(rawFrom) ? rawFrom : '';
+	let to = ISO.test(rawTo) ? rawTo : '';
+	// A range typed back to front means the same days, not "nothing".
+	if (from && to && from > to) [from, to] = [to, from];
 	const q = (params.get('q') ?? '').trim().slice(0, 100);
 	// A status, a date range or a search looks across all dates unless told otherwise:
 	// "pending" from the dashboard must not hide a request because it is far ahead.
