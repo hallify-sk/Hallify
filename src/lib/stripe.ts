@@ -82,47 +82,6 @@ export async function createCheckoutSession(opts: {
   return session.url!;
 }
 
-/** What the platform-admin test payment charges: €1 a month. */
-export const TEST_PAYMENT_CENTS = 100;
-
-/**
- * A live end-to-end check of payments, for platform admins: a real Checkout for the
- * Starter plan at €1 a month, marked as a test. It takes exactly the path a real
- * upgrade takes (Checkout, the webhook, plan activation, the success page); the plan
- * comes from the subscription metadata because €1 matches no plan price. Cancel it in
- * the billing portal afterwards and refund the €1 in Stripe.
- */
-export async function createTestCheckoutSession(opts: {
-  orgId: string;
-  stripeCustomerId: string | null;
-  userEmail: string;
-}): Promise<string> {
-  const meta = { orgId: opts.orgId, plan: 'starter', test: '1' };
-  const params: Stripe.Checkout.SessionCreateParams = {
-    mode: 'subscription',
-    line_items: [{
-      quantity: 1,
-      price_data: {
-        currency: 'eur',
-        unit_amount: TEST_PAYMENT_CENTS,
-        recurring: { interval: 'month' },
-        product_data: {
-          name: 'Hallify Starter – test payment',
-          description: 'A €1 test of the payment path, for Hallify platform admins. Cancel the subscription after the test.',
-        },
-      },
-    }],
-    success_url: `${appUrl()}/app/billing/success?session_id={CHECKOUT_SESSION_ID}`,
-    cancel_url: `${appUrl()}/app/billing?cancelled=1`,
-    metadata: meta,
-    subscription_data: { metadata: meta },
-  };
-  if (opts.stripeCustomerId) params.customer = opts.stripeCustomerId;
-  else params.customer_email = opts.userEmail;
-  const session = await getStripe().checkout.sessions.create(params);
-  return session.url!;
-}
-
 export { AI_CREDIT_PACKS } from './ai-credits';
 import { AI_CREDIT_PACKS, CENTS_PER_CREDIT } from './ai-credits';
 
