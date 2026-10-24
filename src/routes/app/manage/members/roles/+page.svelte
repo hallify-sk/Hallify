@@ -3,7 +3,7 @@
 	import { enhance } from '$app/forms';
 	import type { SubmitFunction } from '@sveltejs/kit';
 	import { t } from '$lib/i18n.svelte';
-	import { roleDisplayName } from '$lib/role-label';
+	import { roleDisplayName, roleNamesClash } from '$lib/role-label';
 	import { ELEVATED, PERMISSION_GROUPS, PERMISSIONS, sameRoleName, type Permission } from '$lib/permissions';
 	import type { PageData, ActionData } from './$types';
 
@@ -65,7 +65,7 @@
 	let newName = $state('');
 	let editName = $state<{ id: string; value: string } | null>(null);
 	function nameTaken(name: string, exceptId: string | null): boolean {
-		return name.trim() !== '' && data.roles.some((r) => r.id !== exceptId && sameRoleName(r.name, name));
+		return name.trim() !== '' && data.roles.some((r) => r.id !== exceptId && roleNamesClash(r.name, name));
 	}
 
 	/** Save, delete and reorder all post from the editor's own form; a delete simply

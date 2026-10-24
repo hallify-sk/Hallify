@@ -15,6 +15,7 @@ import {
 	type Permission
 } from '$lib/permissions';
 import { st } from '$lib/i18n-server';
+import { roleNamesClash } from '$lib/role-label';
 import type { Actions, PageServerLoad } from './$types';
 
 /**
@@ -175,7 +176,7 @@ export const actions: Actions = {
 		if (color === false) return fail(400, { error: e.invalidRoleColor });
 
 		const existing = await listRoles(locals.db, orgId); // lowest rank first
-		if (existing.some((r) => sameRoleName(r.name, name))) return fail(400, { error: e.roleNameTaken });
+		if (existing.some((r) => roleNamesClash(r.name, name))) return fail(400, { error: e.roleNameTaken });
 		const defaultAt = existing.findIndex((r) => r.is_default === 1);
 		const slot = defaultAt >= 0 ? defaultAt + 1 : 0;
 
@@ -241,7 +242,7 @@ export const actions: Actions = {
 		// still be able to save their permissions.
 		if (!sameRoleName(name, role.name)) {
 			const others = await listRoles(locals.db, orgId);
-			if (others.some((r) => r.id !== role.id && sameRoleName(r.name, name))) {
+			if (others.some((r) => r.id !== role.id && roleNamesClash(r.name, name))) {
 				return fail(400, { error: e.roleNameTaken });
 			}
 		}
