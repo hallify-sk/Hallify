@@ -190,6 +190,28 @@
     </div>
   </section>
 
+  {#if data.isPlatformAdmin && data.canManage}
+    <!-- A live €1 payment that proves Checkout, the webhook and plan activation end to
+         end. Platform admins only; never shown to customers. -->
+    <section class="section" use:reveal>
+      <div class="section-head">
+        <h2>{t.billingTest.title}</h2>
+        <p>{t.billingTest.lead}</p>
+      </div>
+      <div class="card--inset addon-row">
+        <span class="addon-price">{t.billingTest.price}</span>
+        {#if currentPlan === 'free'}
+          <form method="POST" action="?/testPayment" use:enhance={viaStripe('test')}>
+            <button type="submit" class="btn-outline btn-sm" disabled={!!busy}>{busy === 'test' ? t.billingTest.opening : t.billingTest.cta}</button>
+          </form>
+        {:else}
+          <span class="addon-note">{t.billingTest.onlyFromFree}</span>
+          <a class="btn-outline btn-sm" href="/app/org/new">{t.billingTest.newOrg}</a>
+        {/if}
+      </div>
+    </section>
+  {/if}
+
   <!-- Usage: where the organisation stands against the plan it is on. -->
   <section class="section" use:reveal>
     <div class="section-head">
@@ -325,26 +347,6 @@
     </div>
   </section>
 
-  {#if data.isPlatformAdmin && data.canManage}
-    <!-- A live €1 payment that proves Checkout, the webhook and plan activation end to
-         end. Platform admins only; never shown to customers. -->
-    <section class="section" use:reveal>
-      <div class="section-head">
-        <h2>{t.billingTest.title}</h2>
-        <p>{t.billingTest.lead}</p>
-      </div>
-      <div class="card--inset addon-row">
-        <span class="addon-price">{t.billingTest.price}</span>
-        {#if currentPlan === 'free'}
-          <form method="POST" action="?/testPayment" use:enhance={viaStripe('test')}>
-            <button type="submit" class="btn-outline btn-sm" disabled={!!busy}>{busy === 'test' ? t.billingTest.opening : t.billingTest.cta}</button>
-          </form>
-        {:else}
-          <span class="addon-note">{t.billingTest.onlyFromFree}</span>
-        {/if}
-      </div>
-    </section>
-  {/if}
 </div>
 
 <!-- Plan-change confirm dialog -->

@@ -1875,7 +1875,8 @@ export const sk = {
 		price: '1,00 € mesačne · Starter (test)',
 		cta: 'Zaplatiť 1 € (test)',
 		opening: 'Otvára sa Stripe…',
-		onlyFromFree: 'Test sa dá spustiť len z bezplatného plánu, keď organizácia nemá predplatné.',
+		onlyFromFree: 'Test sa dá spustiť len z bezplatného plánu, keď organizácia nemá predplatné. Vytvorte si na test novú organizáciu a spustite ho z jej stránky Predplatné.',
+		newOrg: 'Vytvoriť testovaciu organizáciu',
 	},
 	setupService: {
 		title: "Nastavíme vám to my",
@@ -5648,7 +5649,8 @@ export const en: typeof sk = {
 		price: '€1.00 a month · Starter (test)',
 		cta: 'Pay €1 (test)',
 		opening: 'Opening Stripe…',
-		onlyFromFree: 'The test can only start from the Free plan, when the organisation has no subscription.',
+		onlyFromFree: 'The test can only start from the Free plan, when the organisation has no subscription. Create a new organisation for the test and start it from its Billing page.',
+		newOrg: 'Create a test organisation',
 	},
 	setupService: {
 		title: "Have us set it up",
