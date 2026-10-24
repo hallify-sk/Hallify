@@ -283,7 +283,7 @@
     .c-plan { grid-column: 1; grid-row: 3; }
     .c-wait { grid-column: 2; grid-row: 3; }
     .c-cap { grid-column: 1 / -1; grid-row: 4; text-align: left; }
-    .c-actions { grid-column: 1 / -1; justify-content: flex-start; }
+    .c-actions { grid-column: 1 / -1; grid-row: 5; justify-content: flex-start; }
     .fp-row .m-label { display: inline; }
   }
 </style>

@@ -117,7 +117,7 @@
 <style>
   .user-row {
     display: grid;
-    grid-template-columns: minmax(200px, 2fr) minmax(130px, 1.1fr) 100px 110px 150px 160px;
+    grid-template-columns: minmax(200px, 2fr) minmax(130px, 1.1fr) 110px 110px 170px 160px;
     gap: 14px; align-items: center;
   }
 
