@@ -4,7 +4,7 @@
 // It replaces the "system" messages that used to be posted into tickets without an
 // organisation — threads nobody could open, which still counted as unread.
 
-import { dbAll, dbRun } from '$lib/db/index';
+import { dbAll, dbFirst, dbRun } from '$lib/db/index';
 import type { D1Database } from '@cloudflare/workers-types';
 import { EXPIRE_PAST_REQUESTS_SQL } from '$lib/server/reservation-rules';
 
@@ -50,6 +50,25 @@ export async function listReservationActivity(db: D1Database, reservationId: str
 			reservationId, limit);
 	} catch {
 		return [];
+	}
+}
+
+/**
+ * Who entered a booking: the actor of its 'created' entry, by their current name when
+ * the account still exists. A phone booking handed to a client no longer says it,
+ * because its owner (`user_id`) is then the client. Null when nothing was recorded.
+ */
+export async function reservationCreatorName(db: D1Database, reservationId: string): Promise<string | null> {
+	try {
+		const row = await dbFirst<{ name: string | null }>(db,
+			`SELECT COALESCE(NULLIF(TRIM(COALESCE(u.first_name, '') || ' ' || COALESCE(u.last_name, '')), ''), a.actor_name) AS name
+			   FROM reservation_activity a LEFT JOIN users u ON u.id = a.actor_id
+			  WHERE a.reservation_id = ? AND a.kind = 'created'
+			  ORDER BY a.created_at, a.rowid LIMIT 1`,
+			reservationId);
+		return row?.name?.trim() || null;
+	} catch {
+		return null; // before migration 0018
 	}
 }
 

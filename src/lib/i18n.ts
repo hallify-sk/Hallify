@@ -460,6 +460,7 @@ export const sk = {
 		descCustomer: 'Zákazník',
 		descContact: 'Kontakt',
 		descTakenBy: 'Zadal(a)',
+		descClient: 'Klient',
 	},
 	messaging: {
 		manage: 'KOMUNIKÁCIA',
@@ -4202,6 +4203,7 @@ export const en: typeof sk = {
 		descCustomer: 'Customer',
 		descContact: 'Contact',
 		descTakenBy: 'Entered by',
+		descClient: 'Client',
 	},
 	messaging: {
 		manage: 'COMMUNICATION',

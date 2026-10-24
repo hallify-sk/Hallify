@@ -11,7 +11,7 @@ import {
 	changeReservationStatus, editReservationDetails, messageReservationClient, setReservationExtras,
 } from '$lib/server/ops/reservation-ops';
 import { reservationAccess, assertCanOpenReservation, type ReservationAccess } from '$lib/server/reservation-access';
-import { listReservationActivity, logReservationActivity } from '$lib/server/reservation-activity';
+import { listReservationActivity, logReservationActivity, reservationCreatorName } from '$lib/server/reservation-activity';
 import { st } from '$lib/i18n-server';
 import { orgPublicBaseUrl } from '$lib/orgUrl';
 import { RSVP_ENABLED } from '$lib/features';
@@ -143,6 +143,9 @@ export const load: PageServerLoad = async ({ locals, params, url }) => {
 		canManage: access.canManage,
 		clientOwner,
 		pendingInvite,
+		// A phone booking handed to a client: its owner is now the client, so who on
+		// the team entered it comes from the history.
+		enteredBy: reservation.customer_name && clientOwner ? await reservationCreatorName(locals.db, params.id) : null,
 		reservation: {
 			...reservation,
 			// Staff-only notes never leave the server for someone who cannot manage.

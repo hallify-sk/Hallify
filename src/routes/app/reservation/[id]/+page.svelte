@@ -140,6 +140,8 @@
 	// Follows the member's permissions (reservations.manage), not the owner/admin flag:
 	// a custom role that may approve from the list may approve here too.
 	const isAdmin = $derived(data.canManage);
+	// A phone booking still held by the staff member who entered it (not yet a client's).
+	const phoneByStaff = $derived(!!data.reservation.customer_name && !data.clientOwner);
 	const canEditAdvanced = $derived(
 		isAdmin || ['approved', 'planned'].includes(data.reservation.status)
 	);
@@ -433,6 +435,7 @@
 						<div class="detail-label">{t.resOps.customer} <span class="detail-tag">{t.resOps.phoneBooking}</span></div>
 						<div class="detail-value">{data.reservation.customer_name}</div>
 						{#if data.reservation.customer_contact}<div class="detail-sub">{data.reservation.customer_contact}</div>{/if}
+						{#if data.enteredBy}<div class="detail-sub">{t.manualReservation.descTakenBy}: {data.enteredBy}</div>{/if}
 					</div>
 				</div>
 			{/if}
@@ -444,11 +447,13 @@
 					</svg>
 				</div>
 				<div>
-					<div class="detail-label">{data.reservation.customer_name ? t.manualReservation.descTakenBy : t.calendar.bookedBy}</div>
+					<!-- The owner of a phone booking is the staff member who entered it, until
+					     it is handed to a client: then it is the client. -->
+					<div class="detail-label">{phoneByStaff ? t.manualReservation.descTakenBy : data.reservation.customer_name ? t.manualReservation.descClient : t.calendar.bookedBy}</div>
 					<div class="detail-value">{data.reservation.user_first_name} {data.reservation.user_last_name}</div>
 					{#if data.reservation.user_email}
 						<div class="detail-sub"><a href="mailto:{data.reservation.user_email}" style="color:var(--accent-ink);text-decoration:none">{data.reservation.user_email}</a></div>
-						{#if data.reservation.user_email_unverified && !data.reservation.customer_name}
+						{#if data.reservation.user_email_unverified && !phoneByStaff}
 							<div class="detail-sub unverified" title={t.identity.emailNotVerifiedHint}>{t.identity.emailNotVerified}</div>
 						{/if}
 					{/if}
