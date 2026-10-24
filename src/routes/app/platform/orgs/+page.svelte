@@ -1,5 +1,6 @@
 <script lang="ts">
   import { pageTitle } from '$lib/page-title';
+  import { page } from '$app/stores';
   import { enhance } from '$app/forms';
   import { planName } from '$lib/plans';
   import { t, getLocale } from '$lib/i18n.svelte';
@@ -11,7 +12,9 @@
 
   let search = $state('');
   let planFilter = $state('all');
-  let statusFilter = $state<'all' | 'active' | 'suspended'>('all');
+  // ?status=suspended (linked from the overview) opens the list pre-filtered.
+  const initialStatus = $page.url.searchParams.get('status');
+  let statusFilter = $state<'all' | 'active' | 'suspended'>(initialStatus === 'suspended' || initialStatus === 'active' ? initialStatus : 'all');
   const filtered = $derived.by(() => {
     const q = search.trim().toLowerCase();
     return data.orgs.filter(o =>
