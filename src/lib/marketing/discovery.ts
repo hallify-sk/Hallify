@@ -132,8 +132,8 @@ export function matchesQuery(venue: Pick<PublicVenue, 'name' | 'address'>, query
  * dropped by the radius however well its address matched. When the centre is the
  * visitor's own position, the area is a real constraint and both must hold.
  *
- * A typed query prefers what was typed: when any venue matches it exactly
- * (diacritics included), venues that match only once diacritics are ignored are
+ * A query typed with diacritics prefers what was typed: when any venue matches it
+ * exactly (diacritics included), venues that match only once diacritics are ignored are
  * left out, so the town "Šaľa" no longer brings in every hall called "Sála".
  * Matches are then ranked: town/address first, then name, then venues that are only
  * in the area, so a town search leads with the venues in that town.
@@ -151,7 +151,10 @@ export function filterVenues(venues: PublicVenue[], filters: { query: string; gu
     (!filters.booking || !!venue.allow_reservations));
   const inBand = (venue: PublicVenue) => !bands || (venue.price_band !== null && bands.has(venue.price_band));
   const matches = new Map(candidates.map(venue => [venue.id, queryMatch(venue, filters.query)]));
-  const preferExact = typed && [...matches.values()].some(m => m?.exact);
+  // Only a query typed with diacritics says which spelling was meant: "Kosice" must
+  // still find every venue in Košice, even when one venue spells its town "Kosice".
+  const accented = filters.query.toLocaleLowerCase() !== normalizeText(filters.query);
+  const preferExact = typed && accented && [...matches.values()].some(m => m?.exact);
   const textMatch = (venue: PublicVenue) => {
     const m = matches.get(venue.id);
     return !!m && (!preferExact || m.exact) ? m : null;

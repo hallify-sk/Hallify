@@ -5,10 +5,10 @@
 
 import { dbAll } from '$lib/db/index';
 import { orgPublicBaseUrl } from '$lib/orgUrl';
-import type { ReservationRow } from '$lib/db/index';
+import { clientReservationColumns, type ClientReservationRow } from '$lib/reservation-client';
 import type { D1Database } from '@cloudflare/workers-types';
 
-export type AccountBooking = ReservationRow & {
+export type AccountBooking = ClientReservationRow & {
 	hall_name: string;
 	hall_slug: string | null;
 	org_name: string;
@@ -20,10 +20,11 @@ export type AccountBooking = ReservationRow & {
 /** SQL condition matching the account's own bookings and its linked venue rows'. */
 export const ACCOUNT_BOOKINGS_WHERE = '(r.user_id = ? OR r.user_id IN (SELECT id FROM users WHERE account_id = ?))';
 
+/** Client-safe columns only: a phone booking's staff-only details stay off the page (B60). */
 export async function listAccountBookings(db: D1Database, accountId: string, url: URL, limit = 500): Promise<AccountBooking[]> {
 	const rows = await dbAll<Omit<AccountBooking, 'href'>>(
 		db,
-		`SELECT r.*, h.name AS hall_name, h.slug AS hall_slug, o.name AS org_name, o.slug AS org_slug
+		`SELECT ${clientReservationColumns('r')}, h.name AS hall_name, h.slug AS hall_slug, o.name AS org_name, o.slug AS org_slug
 		   FROM reservations r
 		   JOIN halls h ON h.id = r.hall_id
 		   JOIN organizations o ON o.id = r.org_id

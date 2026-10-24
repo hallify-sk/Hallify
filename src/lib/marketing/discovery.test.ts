@@ -121,4 +121,14 @@ describe('venue explorer', () => {
     expect(bestMatches(filterVenues(venues, { ...base, query: 'sala' }), 'sala').map(v => v.id)).toEqual(['town']);
     expect(bestMatches(venues, '')).toHaveLength(3);
   });
+
+  // One venue spelling its town "Kosice" must not hide every venue in "Košice".
+  it('keeps every spelling for a query typed without diacritics', () => {
+    const venue = (id: string, address: string) =>
+      ({ ...demoVenues()[0], id, name: id, address, latitude: null, longitude: null, demo: false });
+    const venues = [venue('plain', 'Testovacia 7, Kosice'), venue('a', 'Hlavná 1, Košice'), venue('b', 'Mlynská 2, Košice')];
+    const base = { guests: 0, floorplan: false, booking: false };
+    expect(filterVenues(venues, { ...base, query: 'Kosice' }).map(v => v.id).sort()).toEqual(['a', 'b', 'plain']);
+    expect(filterVenues(venues, { ...base, query: 'Košice' }).map(v => v.id).sort()).toEqual(['a', 'b']);
+  });
 });
