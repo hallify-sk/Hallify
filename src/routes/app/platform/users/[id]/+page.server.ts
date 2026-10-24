@@ -33,7 +33,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
   const reservationCount = await dbFirst<{ n: number }>(locals.db,
     'SELECT COUNT(*) AS n FROM reservations WHERE user_id = ?', params.id);
 
-  return { user, memberships, clientOrg, reservationCount: reservationCount?.n ?? 0 };
+  return { user, memberships, clientOrg, reservationCount: reservationCount?.n ?? 0, currentUserId: locals.user?.id ?? null };
 };
 
 export const actions: Actions = {

@@ -48,12 +48,12 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 export const actions: Actions = {
   setPartner: async ({ request, params, locals }) => {
     requirePlatformAdmin(locals);
-    const org = await dbFirst<{ id: string }>(locals.db, 'SELECT id FROM organizations WHERE id = ?', params.id);
+    const org = await dbFirst<{ id: string; name: string }>(locals.db, 'SELECT id, name FROM organizations WHERE id = ?', params.id);
     if (!org) error(404, st(locals.locale).serverErrors.organizationNotFound);
     const form = await request.formData();
     const partner = form.get('partner') === 'on';
     await dbRun(locals.db, 'UPDATE organizations SET is_hallify_partner = ? WHERE id = ?', partner ? 1 : 0, params.id);
-    await logPlatformAction(locals, 'org.partner', { type: 'org', id: params.id }, { partner });
+    await logPlatformAction(locals, 'org.partner', { type: 'org', id: params.id, label: org.name }, { partner });
     return { partnerSaved: true };
   },
   // Superadmin plan override — written straight to our subscriptions table.
@@ -96,13 +96,17 @@ export const actions: Actions = {
   suspend: async ({ params, locals }) => {
     requirePlatformAdmin(locals);
     await dbRun(locals.db, "UPDATE organizations SET suspended_at = datetime('now') WHERE id = ?", params.id);
-    await logPlatformAction(locals, 'org.suspend', { type: 'org', id: params.id });
+    // Named in the log, as from the list page: a bare id is unreadable in the audit view.
+    const org = await dbFirst<{ name: string }>(locals.db, 'SELECT name FROM organizations WHERE id = ?', params.id);
+    await logPlatformAction(locals, 'org.suspend', { type: 'org', id: params.id, label: org?.name });
     return { success: true };
   },
   unsuspend: async ({ params, locals }) => {
     requirePlatformAdmin(locals);
     await dbRun(locals.db, 'UPDATE organizations SET suspended_at = NULL WHERE id = ?', params.id);
-    await logPlatformAction(locals, 'org.unsuspend', { type: 'org', id: params.id });
+    // Named in the log, as from the list page: a bare id is unreadable in the audit view.
+    const org = await dbFirst<{ name: string }>(locals.db, 'SELECT name FROM organizations WHERE id = ?', params.id);
+    await logPlatformAction(locals, 'org.unsuspend', { type: 'org', id: params.id, label: org?.name });
     return { success: true };
   },
 
