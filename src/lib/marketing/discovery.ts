@@ -2,6 +2,10 @@ import type { PublicVenue } from './types';
 import { takesHallifyBookings } from '$lib/listings';
 
 export interface MapCenter { latitude: number; longitude: number }
+/** The demo pins (illustrative venues for trying the map) are switched off now that the
+ *  directory has real venues. Flip this to bring the toggle and ?demo=1 back. */
+export const DEMO_PINS = false;
+
 /** Banská Bystrica, near the middle of Slovakia: where demo venues sit and the map opens
  *  when nothing else says where to look. Hallify's venues are Slovak, not around Prague. */
 export const DEFAULT_CENTER: MapCenter = { latitude: 48.7363, longitude: 19.1462 };

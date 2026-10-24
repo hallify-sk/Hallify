@@ -7,7 +7,7 @@
   import { page } from '$app/state';
   import { getLocale, t } from '$lib/i18n.svelte';
   import { hasCoordinates } from '$lib/venue-location';
-  import { DEFAULT_CENTER, bestMatches, demoVenues, distanceKm, filterVenues, featuredVenues, parseVenueSort, sortVenues, type VenueSort } from './discovery';
+  import { DEFAULT_CENTER, DEMO_PINS, bestMatches, demoVenues, distanceKm, filterVenues, featuredVenues, parseVenueSort, sortVenues, type VenueSort } from './discovery';
   import { formatDate } from '$lib/format';
   import { userLocation, locateUser, locateIfGranted } from './user-location.svelte';
   import { createSearchCenter } from './search-center.svelte';
@@ -34,7 +34,7 @@
   let selectionRevision = $state(0);
   // Covers that failed to load: the card shows the placeholder instead of a broken image.
   let failedCovers = $state<Record<string, true>>({});
-  let demo = $state(untrack(() => initialDemo)), selectedId = $state<string | null>(null);
+  let demo = $state(untrack(() => DEMO_PINS && !!initialDemo)), selectedId = $state<string | null>(null);
   let preview: { open: (venue: PublicVenue) => void };
   let list: HTMLDivElement;
   // Where "near" means, in order of preference: the place that was searched for, then
@@ -132,7 +132,7 @@
     if (guests) url.searchParams.set('guests',String(guests)); else url.searchParams.delete('guests');
     if (floorplan) url.searchParams.set('floorplan','1'); else url.searchParams.delete('floorplan');
     if (bands.length) url.searchParams.set('price',bands.join(',')); else url.searchParams.delete('price');
-    url.searchParams.set('demo',demo ? '1' : '0');
+    if (DEMO_PINS) url.searchParams.set('demo',demo ? '1' : '0'); else url.searchParams.delete('demo');
     replaceState(url,{});
   }
 </script>
@@ -150,7 +150,7 @@
           </button>
           <div class="explorer-result-footer"><span class="explorer-price">{@render priceTag(venue)}</span><span class="explorer-result-actions">{#if bookingHref(venue)}<a href={bookingHref(venue)} aria-label={`${t.appHalls.bookOnVenueSite}: ${venue.name}`}>{t.appHalls.bookOnVenueSite}</a>{:else}<VenueDirectLink {venue} />{/if}{#if venue.demo}<button onclick={() => open(venue)}>{en ? 'Details' : 'Detail'} <Icon /></button>{:else}<a href={venueHref(venue)} aria-label={`${en ? 'Details' : 'Detail'}: ${venue.name}`}>{en ? 'Details' : 'Detail'} <Icon /></a>{/if}</span></div>
         </article>
-      {:else}<div class="explorer-empty"><h2>{en ? 'No spaces here yet.' : 'Zatiaľ žiadny priestor.'}</h2><p>{en ? 'Change the filters or enable demo venues to try the map.' : 'Zmeňte filtre alebo zapnite ukážkové priestory a vyskúšajte mapu.'}</p><button onclick={reset}>{en ? 'Reset selection' : 'Obnoviť výber'}</button></div>{/each}
+      {:else}<div class="explorer-empty"><h2>{en ? 'No spaces here yet.' : 'Zatiaľ žiadny priestor.'}</h2><p>{DEMO_PINS ? (en ? 'Change the filters or enable demo venues to try the map.' : 'Zmeňte filtre alebo zapnite ukážkové priestory a vyskúšajte mapu.') : (en ? 'Change the filters to see more venues.' : 'Zmeňte filtre a zobrazia sa ďalšie priestory.')}</p><button onclick={reset}>{en ? 'Reset selection' : 'Obnoviť výber'}</button></div>{/each}
 {/snippet}
 
 
@@ -167,7 +167,7 @@
       <div class="explorer-chips price-filter" role="group" aria-label={en ? 'Price range' : 'Cenové rozpätie'}><span class="filter-label">{en ? 'Price' : 'Cena'}</span>{#each PRICE_BANDS as band (band)}<button type="button" aria-pressed={bands.includes(band)} onclick={() => toggleBand(band)}><span class="sr-only">{priceBandLabel(band, en)}</span><span aria-hidden="true">{priceGlyphs(band)}</span></button>{/each}{#if bands.length}<button type="button" class="filter-clear" onclick={() => { bands = []; writeBands(); }}>{en ? 'Any price' : 'Ľubovoľná cena'}</button>{/if}</div>
       {#if bands.length}<p class="price-filter-note">{en ? 'Only venues that stated a price range are shown.' : 'Zobrazujú sa len priestory s uvedenou cenovou úrovňou.'}{#if unstatedHidden}{' '}{en ? `${unstatedHidden} without a stated price ${unstatedHidden === 1 ? 'is' : 'are'} hidden.` : `${unstatedHidden} ${t.units.venues(unstatedHidden)} bez uvedenej ceny ${unstatedHidden === 1 ? 'je skrytý' : unstatedHidden <= 4 ? 'sú skryté' : 'je skrytých'}.`}{/if}</p>{/if}
       <div class="nearby-controls"><button class:nearby-active={nearby && !!rankCenter} aria-pressed={nearby && !!rankCenter} disabled={userLocation.status === 'loading'} onclick={toggleNearby}><Icon name="locate" /> {userLocation.status === 'loading' ? (en ? 'Finding location…' : 'Hľadám polohu…') : nearLabel ? (en ? `Around ${nearLabel}` : `V okolí: ${nearLabel}`) : (en ? 'Around me' : 'V mojom okolí')}</button>{#if rankCenter}<label><span class="sr-only">{en ? 'Distance radius' : 'Vzdialenosť'}</span><span class="select-wrap"><select bind:value={radius} onchange={() => nearby = true}>{#each [10,25,50,100] as distance}<option value={distance}>{distance} km</option>{/each}</select><Icon name="chevron" /></span></label><span class="nearby-status">{nearby ? (en ? 'Within radius' : 'V okruhu') : (en ? 'Everywhere' : 'Všade')}</span>{/if}</div>
-      <div class="explorer-demo-row"><label><input type="checkbox" bind:checked={demo}>{en ? 'Demo venues' : 'Ukážkové priestory'}</label><button onclick={reset}>{en ? 'Reset filters' : 'Zrušiť filtre'}</button></div>
+      <div class="explorer-demo-row">{#if DEMO_PINS}<label><input type="checkbox" bind:checked={demo}>{en ? 'Demo venues' : 'Ukážkové priestory'}</label>{/if}<button onclick={reset}>{en ? 'Reset filters' : 'Zrušiť filtre'}</button></div>
       </div>
     </div>
     <div class="explorer-results" bind:this={list}>

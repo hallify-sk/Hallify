@@ -6,7 +6,7 @@
   import { getLocale, t } from '$lib/i18n.svelte';
   import { goto, replaceState } from '$app/navigation';
   import { dev } from '$app/environment';
-  import { DEFAULT_CENTER, bestMatches, demoVenues, distanceKm, filterVenues, featuredVenues } from './discovery';
+  import { DEFAULT_CENTER, DEMO_PINS, bestMatches, demoVenues, distanceKm, filterVenues, featuredVenues } from './discovery';
   import { userLocation, locateIfGranted } from './user-location.svelte';
   import { createSearchCenter } from './search-center.svelte';
   import VenuePreview from './VenuePreview.svelte';
@@ -20,7 +20,7 @@
   const en = $derived(getLocale() === 'en');
   let query = $state(untrack(() => initialQuery)), guests = $state(untrack(() => initialGuests)), floorplanOnly = $state(false);
   let bands = $state<PriceBand[]>([]);
-  let activeId = $state<string | null>(null), demo = $state(untrack(() => initialDemo));
+  let activeId = $state<string | null>(null), demo = $state(untrack(() => DEMO_PINS && !!initialDemo));
   let preview: { open: (venue: PublicVenue) => void };
   let selectionRevision = $state(0);
   // Covers that failed to load: the card shows the placeholder instead of the alt text.
@@ -107,7 +107,7 @@
     <form class="search-form" method="GET" action="/priestory" onsubmit={search}>
       {#if floorplanOnly}<input type="hidden" name="floorplan" value="1">{/if}
       {#if bands.length}<input type="hidden" name="price" value={bands.join(',')}>{/if}
-      <input type="hidden" name="demo" value={demo ? '1' : '0'}>
+      {#if DEMO_PINS}<input type="hidden" name="demo" value={demo ? '1' : '0'}>{/if}
       {#if en}<input type="hidden" name="lang" value="en">{/if}
       <div class="search-row">
         <label>{en ? 'Where are you planning your event?' : 'Kde plánujete akciu?'}<input name="q" type="search" bind:value={query} placeholder={en ? 'City or venue name' : 'Mesto alebo názov priestoru'} maxlength="150"></label>
@@ -117,7 +117,7 @@
     </form>
     <div class="occasion-filter" role="group" aria-label={en ? 'Venue features' : 'Možnosti priestoru'}><button type="button" aria-pressed={!floorplanOnly} onclick={() => floorplanOnly = false}>{en ? 'Any venue type' : 'Bez filtra'}</button><button type="button" aria-pressed={floorplanOnly} onclick={() => floorplanOnly = true}>{en ? 'With a floorplan' : 'S pôdorysom'}</button></div>
     {@render priceChips()}
-    <div class="discovery-demo-control"><button type="button" aria-pressed={demo} onclick={() => demo = !demo}>{demo ? (en ? 'Demo pins on' : 'Ukážkové body zapnuté') : (en ? 'Try demo pins' : 'Vyskúšať ukážkové body')}</button><span>{en ? 'Click a pin to explore the venue.' : 'Kliknite na bod a spoznajte priestor.'}</span></div>
+    {#if DEMO_PINS}<div class="discovery-demo-control"><button type="button" aria-pressed={demo} onclick={() => demo = !demo}>{demo ? (en ? 'Demo pins on' : 'Ukážkové body zapnuté') : (en ? 'Try demo pins' : 'Vyskúšať ukážkové body')}</button><span>{en ? 'Click a pin to explore the venue.' : 'Kliknite na bod a spoznajte priestor.'}</span></div>{/if}
   </div>
   <div class="map-panel" id="home-map" aria-label={en ? 'Venue locations' : 'Polohy priestorov'}>
     <VenueMap {points} {selectionRevision} selected={active?.id} onselect={(id) => { activeId = id; selectionRevision += 1; }} onlocation={() => query = ''} english={en} fitKey={query} areaCenter={rankCenter} areaLabel={nearLabel} {explorerHref} />
