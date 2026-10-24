@@ -10,6 +10,7 @@ import { orgPermissionList } from '$lib/server/nav-access';
 import { unreadNotificationCount } from '$lib/server/notification-centre';
 import { notificationAreas } from '$lib/notification-centre';
 import { orgPublicBaseUrl } from '$lib/orgUrl';
+import { MARKETING_THEME_COOKIE, readMarketingTheme } from '$lib/marketing/theme.svelte';
 
 /** The GTM containers on THIS page, in load order.
  *
@@ -43,7 +44,7 @@ async function resolveContainers(locals: App.Locals): Promise<AnalyticsContainer
   return out;
 }
 
-export const load: LayoutServerLoad = async ({ locals, url }) => {
+export const load: LayoutServerLoad = async ({ locals, url, cookies }) => {
   let unreadMessages = 0;
   let unreadAnnouncements = 0;
   let unreadNotifications = 0;
@@ -141,6 +142,10 @@ export const load: LayoutServerLoad = async ({ locals, url }) => {
     currentOrg: locals.currentOrg,
     locale: locals.locale,
     onBubble: !!locals.domainOrg,
+    // The marketing pages' light/dark choice. Here as well as in each marketing
+    // page's load because an error page (a 404 on the public site renders the
+    // marketing shell) gets only layout data, and it fell back to dark.
+    marketingTheme: readMarketingTheme(cookies.get(MARKETING_THEME_COOKIE)),
     orgs,
     allOrgs,
     unreadMessages,
