@@ -6,7 +6,7 @@ import { migratedDatabase, d1 } from './sqlite-d1.testutil';
 vi.mock('$env/dynamic/private', () => ({ env: { APP_URL: 'https://hallify.test' } }));
 
 const { applySubscription, applyCreditPurchase, handleStripeEvent, skipReason } = await import('./stripe-sync');
-const { enforcePlanLimits, unlockHall } = await import('$lib/limits');
+const { enforcePlanLimits, swapActiveHall, unlockHall } = await import('$lib/limits');
 const { noticeFor } = await import('./billing-emails');
 
 // ── A D1 binding over node:sqlite with every migration applied ─────────────────
@@ -167,6 +167,32 @@ describe('plan hall limits', () => {
 		await enforcePlanLimits(db, 'org', 'free');
 		await unlockHall(db, 'org', 'h2');
 		expect(halls(s)[1]).toMatchObject({ plan_locked: 0, is_public: 1, public_before_lock: null });
+	});
+
+	// B20/B84 round-1: the swap left the reactivated hall a draft and the paused one
+	// with no public_before_lock, so neither came back public after renewing.
+	it('swapping halls keeps both halls\' visibility', async () => {
+		const s = database(); const db = d1(s);
+		addHalls(s, 2);
+		await enforcePlanLimits(db, 'org', 'free'); // h2 locked, was public
+		expect(await swapActiveHall(db, 'org', 'free', 'h2', 'h1')).toBe(true);
+		expect(halls(s)).toEqual([
+			{ id: 'h1', is_public: 0, plan_locked: 1, public_before_lock: 1 },
+			{ id: 'h2', is_public: 1, plan_locked: 0, public_before_lock: null },
+		]);
+		await enforcePlanLimits(db, 'org', 'starter');
+		expect(halls(s).every((h) => h.plan_locked === 0 && h.is_public === 1)).toBe(true);
+	});
+
+	it('an undone swap restores the paused hall\'s visibility', async () => {
+		const s = database(); const db = d1(s);
+		addHalls(s, 2);
+		await enforcePlanLimits(db, 'org', 'free');
+		// Another active hall appeared meanwhile, so pausing h1 frees no room.
+		s.prepare("INSERT INTO halls (id, org_id, name, is_public, created_at) VALUES ('h3', 'org', 'Hall 3', 1, '2026-01-03 10:00:00')").run();
+		expect(await swapActiveHall(db, 'org', 'free', 'h2', 'h1')).toBe(false);
+		expect(halls(s)[0]).toEqual({ id: 'h1', is_public: 1, plan_locked: 0, public_before_lock: null });
+		expect(halls(s)[1]).toMatchObject({ plan_locked: 1 });
 	});
 
 	it('a subscription ending suspends the extra halls; renewing restores them', async () => {

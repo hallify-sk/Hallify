@@ -5,7 +5,7 @@ import { error, fail, redirect } from '@sveltejs/kit';
 import { dbAll, dbFirst, dbRun, toJson, fromJson, fromJsonArr } from '$lib/db/index';
 import type { HallRow, HallBlockRow, TemplateRow, TableTypeRow, ReservationRow, HallExtraRow } from '$lib/db/index';
 import { getPlan } from '$lib/plans';
-import { canAddHall, canAddExtra, unlockHall } from '$lib/limits';
+import { canAddHall, canAddExtra, swapActiveHall, unlockHall } from '$lib/limits';
 import { serializeEventTypes } from '$lib/eventTypes';
 import { st } from '$lib/i18n-server';
 import type { Actions, PageServerLoad } from './$types';
@@ -682,14 +682,11 @@ export const actions: Actions = {
 			'SELECT id FROM halls WHERE id = ? AND org_id = ? AND id != ? AND plan_locked = 0 AND archived_at IS NULL',
 			pauseId, org.id, params.id);
 		if (!other) return fail(400, { lockError: st(locals.locale).serverErrors.hallToPauseInvalid });
-		await dbRun(locals.db, 'UPDATE halls SET plan_locked = 1, is_public = 0 WHERE id = ? AND org_id = ?', other.id, org.id);
-		if (!(await canAddHall(locals.db, org.id, org.subscription.plan))) {
-			// Still no room (the plan allows none, or it changed meanwhile): undo.
-			await dbRun(locals.db, 'UPDATE halls SET plan_locked = 0 WHERE id = ? AND org_id = ?', other.id, org.id);
+		if (!(await swapActiveHall(locals.db, org.id, org.subscription.plan, params.id, other.id))) {
+			// Still no room (the plan allows none, or it changed meanwhile): undone.
 			const limit = getPlan(org.subscription.plan).limits.maxHalls;
 			return fail(403, { lockError: st(locals.locale).serverErrors.hallReactivateLimitReached.replace('{limit}', String(limit)) });
 		}
-		await dbRun(locals.db, 'UPDATE halls SET plan_locked = 0 WHERE id = ? AND org_id = ?', params.id, org.id);
 		return { reactivated: true, swapped: true };
 	},
 

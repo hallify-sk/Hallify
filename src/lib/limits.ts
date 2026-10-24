@@ -91,9 +91,7 @@ export async function enforcePlanLimits(db: D1Database, orgId: string, plan: Pla
 
   if (limit !== -1 && active.length > limit) {
     for (const hall of active.slice(limit)) {
-      await dbRun(db,
-        `UPDATE halls SET plan_locked = 1, public_before_lock = is_public, is_public = 0
-          WHERE id = ? AND org_id = ? AND plan_locked = 0`, hall.id, orgId);
+      await lockHall(db, orgId, hall.id);
       change.locked.push(hall);
     }
     return change;
@@ -109,6 +107,31 @@ export async function enforcePlanLimits(db: D1Database, orgId: string, plan: Pla
     change.unlocked.push(hall);
   }
   return change;
+}
+
+/** Suspend a hall for the plan: private (venue-site queries read `is_public`), with
+ *  `public_before_lock` remembering what it was so unlocking can restore it. */
+export async function lockHall(db: D1Database, orgId: string, hallId: string): Promise<void> {
+  await dbRun(db,
+    `UPDATE halls SET plan_locked = 1, public_before_lock = is_public, is_public = 0
+      WHERE id = ? AND org_id = ? AND plan_locked = 0`, hallId, orgId);
+}
+
+/** The plan is full: suspend `pauseId` and bring `reactivateId` back in its place
+ *  (B84). Both go through lockHall/unlockHall, so each keeps its visibility: the
+ *  swap used to leave the reactivated hall a draft and the paused one with nothing
+ *  to restore. Undone, visibility included, when the plan still has no room.
+ *  Returns whether the swap happened. */
+export async function swapActiveHall(
+  db: D1Database, orgId: string, plan: PlanId, reactivateId: string, pauseId: string
+): Promise<boolean> {
+  await lockHall(db, orgId, pauseId);
+  if (!(await canAddHall(db, orgId, plan))) {
+    await unlockHall(db, orgId, pauseId);
+    return false;
+  }
+  await unlockHall(db, orgId, reactivateId);
+  return true;
 }
 
 /** Lift a plan lock and restore the hall's visibility from before the lock. Callers
