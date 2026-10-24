@@ -19,6 +19,7 @@ import {
 	ADMINISTRATOR_PERMISSIONS,
 	DEFAULT_ROLE_PERMISSIONS,
 	PERMISSIONS,
+	canGrantAdminAccess,
 	canManageRole,
 	parsePermissions,
 	withLegacyAdmin,
@@ -234,6 +235,26 @@ export function findAdministratorRole(roles: readonly OrgRole[]): OrgRole | unde
 }
 
 /**
+ * The Administrator role row that making somebody an admin would attach, if any:
+ * found as `findAdministratorRole` finds it, and only while it grants nothing beyond
+ * ADMINISTRATOR_PERMISSIONS (see `syncAdministratorRole`).
+ */
+export function administratorRoleToAttach(roles: readonly OrgRole[]): OrgRole | undefined {
+	const role = findAdministratorRole(roles);
+	if (!role || role.permissions.some((p) => !ADMINISTRATOR_PERMISSIONS.includes(p))) return undefined;
+	return role;
+}
+
+/**
+ * Whether `actor` may make somebody an admin in an org with these roles: they must
+ * be able to grant every Administrator permission AND outrank the Administrator role
+ * row that comes with it, so nobody mints an admin who then outranks them.
+ */
+export function canGrantAdmin(actor: MemberAccess, roles: readonly OrgRole[]): boolean {
+	return canGrantAdminAccess(actor, administratorRoleToAttach(roles)?.position ?? null);
+}
+
+/**
  * Keep the Administrator role row in step with the legacy access level: attached
  * when somebody becomes an admin, removed when they stop being one.
  *
@@ -246,7 +267,7 @@ export async function syncAdministratorRole(db: Db, orgId: string, userId: strin
 	if (!role) return;
 	try {
 		if (isAdmin) {
-			if (role.permissions.some((p) => !ADMINISTRATOR_PERMISSIONS.includes(p))) return;
+			if (!administratorRoleToAttach([role])) return;
 			await dbRun(
 				db,
 				`INSERT INTO org_member_roles (id, org_id, user_id, role_id)

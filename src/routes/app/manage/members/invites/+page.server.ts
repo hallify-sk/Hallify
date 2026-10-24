@@ -7,7 +7,6 @@ import { env } from '$env/dynamic/private';
 import type { Actions, PageServerLoad } from './$types';
 import {
 	can,
-	canGrantAdminAccess,
 	canManageRole,
 	grantablePermissions,
 	type MemberAccess
@@ -15,6 +14,7 @@ import {
 import {
 	actorContext,
 	buildAccess,
+	canGrantAdmin,
 	loadOrgRoles,
 	loadOverrides,
 	loadRoleAssignments,
@@ -141,7 +141,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		canInvite: actor.isOwner || can(actor, 'invites.manage'),
 		// The legacy Admin level carries every Administrator permission; offered only
 		// to somebody who could grant each of them.
-		canGrantAdmin: canGrantAdminAccess(actor),
+		canGrantAdmin: canGrantAdmin(actor, roles),
 		currentOrg: org
 	};
 };
@@ -158,7 +158,7 @@ async function checkIssuable(
 	if (!['admin', 'member'].includes(invite.role)) return T.serverErrors.invalidRole;
 	// Inviting someone as an admin hands them every Administrator permission (the
 	// legacy flag implies them all), so it is granting each of those.
-	if (invite.role === 'admin' && !canGrantAdminAccess(actor)) return T.peopleArea.errors.adminBeyondYou;
+	if (invite.role === 'admin' && !canGrantAdmin(actor, orgRoles)) return T.peopleArea.errors.adminBeyondYou;
 
 	// Roles to grant on acceptance: they must belong to THIS org and sit strictly
 	// below the inviter's own rank — otherwise an invite would be a way to mint

@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { DatabaseSync } from 'node:sqlite';
 import { readFileSync } from 'node:fs';
 import { ADMINISTRATOR_PERMISSIONS, DEFAULT_ROLE_PERMISSIONS, canManageMember, effectivePermissions } from '$lib/permissions';
-import { buildAccess, findAdministratorRole, type OrgRole } from './people';
+import { administratorRoleToAttach, buildAccess, canGrantAdmin, findAdministratorRole, type OrgRole } from './people';
 
 const ROLES: OrgRole[] = [
 	{ id: 'r-admin', name: 'Administrator', color: null, position: 1, permissions: ADMINISTRATOR_PERMISSIONS, isDefault: false },
@@ -32,6 +32,39 @@ describe('findAdministratorRole', () => {
 	it('finds the built-in role by name, never the default one', () => {
 		expect(findAdministratorRole(ROLES)?.id).toBe('r-admin');
 		expect(findAdministratorRole([ROLES[1]])).toBeUndefined();
+	});
+});
+
+describe('canGrantAdmin', () => {
+	const roles: OrgRole[] = [
+		{ ...ROLES[0], position: 8 },
+		{ id: 'r-manager', name: 'Manažér', color: null, position: 7, permissions: [], isDefault: false },
+		{ ...ROLES[1] }
+	];
+
+	// REG-permissions-1: a 'Manažér' under Administrator, holding every Administrator
+	// permission through overrides, promoted a member who then outranked them.
+	it('refuses an actor ranked below the Administrator role the promotion attaches', () => {
+		const manager = buildAccess({
+			isOwner: false,
+			roleIds: ['r-manager'],
+			roles,
+			override: { allow: ADMINISTRATOR_PERMISSIONS, deny: [] },
+			legacyRole: 'member'
+		});
+		expect(canGrantAdmin(manager, roles)).toBe(false);
+	});
+
+	it('still lets the owner promote', () => {
+		expect(canGrantAdmin({ isOwner: true, roles: [] }, roles)).toBe(true);
+	});
+
+	it('ignores an Administrator role that would not be attached (it carries billing)', () => {
+		const billing: OrgRole[] = roles.map((r) =>
+			r.id === 'r-admin' ? { ...r, permissions: [...ADMINISTRATOR_PERMISSIONS, 'billing.manage'] } : r
+		);
+		expect(administratorRoleToAttach(billing)).toBeUndefined();
+		expect(administratorRoleToAttach(roles)?.id).toBe('r-admin');
 	});
 });
 

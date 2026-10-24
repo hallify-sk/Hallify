@@ -291,6 +291,17 @@ describe('granting the Admin access level', () => {
 	it('is refused to a custom role that only manages members', () => {
 		expect(canGrantAdminAccess(member([role('People', 5, ['members.manage', 'invites.manage'])]))).toBe(false);
 	});
+
+	// Round-1 regression: 'Manažér' at 7, under Administrator at 8, held all of its
+	// permissions through overrides and promoted somebody who then outranked them.
+	it('is refused to somebody ranked at or below the Administrator role it attaches', () => {
+		const manager = member([role('Manažér', 7, [])], { allow: ADMINISTRATOR_PERMISSIONS });
+		expect(canGrantAdminAccess(manager)).toBe(true);
+		expect(canGrantAdminAccess(manager, 8)).toBe(false);
+		expect(canGrantAdminAccess(member([role('Administrator', 8, ADMINISTRATOR_PERMISSIONS)]), 8)).toBe(false);
+		expect(canGrantAdminAccess(member([role('Head', 9, ADMINISTRATOR_PERMISSIONS)]), 8)).toBe(true);
+		expect(canGrantAdminAccess(OWNER, 8)).toBe(true);
+	});
 });
 
 describe('role names', () => {

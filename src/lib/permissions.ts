@@ -365,9 +365,19 @@ export function grantablePermissions(actor: MemberAccess): Set<Permission> {
  * `withLegacyAdmin`), so handing it out is granting that whole set. Without this an
  * admin whose `settings.manage` had been denied could invite a second account as an
  * admin and walk straight back into settings through it.
+ *
+ * `administratorPosition` is the position of the Administrator role row that making
+ * somebody an admin attaches (`administratorRoleToAttach` in $lib/server/people), or
+ * null/undefined when none would be attached.
  */
-export function canGrantAdminAccess(actor: MemberAccess): boolean {
+export function canGrantAdminAccess(actor: MemberAccess, administratorPosition?: number | null): boolean {
 	if (actor.isOwner) return true;
 	const grantable = grantablePermissions(actor);
-	return ADMINISTRATOR_PERMISSIONS.every((p) => grantable.has(p));
+	if (!ADMINISTRATOR_PERMISSIONS.every((p) => grantable.has(p))) return false;
+	// Becoming an admin also attaches the Administrator role row (and its rank), so
+	// it is assigning that role: the same strictly-below rule as `canManageRole`.
+	// Without it, a custom role ranked under Administrator but holding all of its
+	// permissions through overrides could mint an admin who then outranks them.
+	if (administratorPosition != null && rankOf(actor) <= administratorPosition) return false;
+	return true;
 }

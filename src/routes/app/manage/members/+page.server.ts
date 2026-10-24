@@ -12,7 +12,6 @@ import {
 	PERMISSIONS,
 	LEGACY_ADMIN_ROLE_ID,
 	can,
-	canGrantAdminAccess,
 	canManageMember,
 	canManageRole,
 	effectivePermissions,
@@ -24,6 +23,7 @@ import {
 import {
 	actorContext,
 	buildAccess,
+	canGrantAdmin,
 	loadOrgRoles,
 	loadOverrides,
 	loadRoleAssignments,
@@ -135,7 +135,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 		})),
 		// What the caller may put on somebody else. Anything outside this set is
 		// rendered read-only and refused server side.
-		actor: { isOwner: actor.isOwner, grantable, canGrantAdmin: canGrantAdminAccess(actor) },
+		actor: { isOwner: actor.isOwner, grantable, canGrantAdmin: canGrantAdmin(actor, roles) },
 		// Only the real owner, never a platform admin viewing as one.
 		canTransfer: org.role === 'owner' && !org.impersonated,
 		totalPermissions: PERMISSIONS.length,
@@ -328,7 +328,11 @@ export const actions: Actions = {
 
 		// The admin flag carries every Administrator permission, so handing it out is
 		// granting all of them: only somebody who could grant each one may do it.
-		if (role === 'admin' && target.legacyRole !== 'admin' && !canGrantAdminAccess(actor)) {
+		if (
+			role === 'admin' &&
+			target.legacyRole !== 'admin' &&
+			!canGrantAdmin(actor, await loadOrgRoles(locals.db, orgId))
+		) {
 			return fail(403, { error: T.peopleArea.errors.adminBeyondYou });
 		}
 
