@@ -223,6 +223,9 @@
      thing on a page (the booking form's submit button) can scroll above it. */
   .b-main-wrap { flex: 1; min-width: 0; display: flex; flex-direction: column; padding-bottom: var(--consent-space, 0px); }
   .b-main { flex: 1; max-width: 1080px; width: 100%; margin: 0 auto; padding: 30px 28px 48px; }
+  /* A page that needs the whole width (the client's seating editor) opts out of the
+     reading column with class site-full-width. */
+  .b-main:has(:global(.site-full-width)) { max-width: none; }
   .b-pwr { text-align: center; padding: 16px; font-size: 11px; color: var(--text-subtle); border-top: 1px solid var(--border); }
   .b-pwr strong { color: var(--text-muted); }
   .b-pwr-link { color: inherit; text-decoration: none; transition: color .15s; }

@@ -132,7 +132,7 @@
 
 <svelte:head><title>{venueTitle(data.domainOrg?.name, data.reservation.title, t.event.tableLayout)}</title></svelte:head>
 
-<div class="layout-page">
+<div class="layout-page site-full-width">
 	<div class="layout-toolbar">
 		<a href="/halls/my-reservations/{data.reservation.id}" class="btn-outline btn-sm">
 			<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
