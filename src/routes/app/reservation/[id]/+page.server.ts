@@ -10,7 +10,7 @@ import { postSystemMessage } from '$lib/tickets';
 import {
 	changeReservationStatus, editReservationDetails, messageReservationClient, setReservationExtras,
 } from '$lib/server/ops/reservation-ops';
-import { reservationAccess, assertCanOpenReservation, type ReservationAccess } from '$lib/server/reservation-access';
+import { reservationAccess, assertCanOpenReservation, canActOnReservation as canActOn, type ReservationAccess } from '$lib/server/reservation-access';
 import { listReservationActivity, logReservationActivity, reservationCreatorName } from '$lib/server/reservation-activity';
 import { st } from '$lib/i18n-server';
 import { orgPublicBaseUrl } from '$lib/orgUrl';
@@ -45,7 +45,7 @@ type Extra = { customer_name: string | null; customer_contact: string | null; in
  *  else only on their own. Org scoping alone is NOT enough — without this, any
  *  member could cancel, re-layout or reset a colleague's (or a client's) booking. */
 function canActOnReservation(access: ReservationAccess, locals: App.Locals, reservationUserId: string): boolean {
-	return access.canManage || reservationUserId === locals.user?.id;
+	return canActOn(access, reservationUserId, locals.user?.id);
 }
 
 /** The booking's table layout was replaced wholesale (reset to the hall's plan, or a
@@ -141,6 +141,11 @@ export const load: PageServerLoad = async ({ locals, params, url }) => {
 
 	return {
 		canManage: access.canManage,
+		// Cancel, layout and template controls: staff, or the booking's own holder. A
+		// member with `reservations.view` alone sees a colleague's booking read-only (D3).
+		canAct: canActOn(access, reservation.user_id, locals.user.id),
+		// Opens the org's booking list, so the back link leads there.
+		canViewAll: access.canViewAll,
 		clientOwner,
 		pendingInvite,
 		// A phone booking handed to a client: its owner is now the client, so who on

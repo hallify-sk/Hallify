@@ -142,11 +142,14 @@
 	const isAdmin = $derived(data.canManage);
 	// A phone booking still held by the staff member who entered it (not yet a client's).
 	const phoneByStaff = $derived(!!data.reservation.customer_name && !data.clientOwner);
+	// May change this booking at all: staff, or whoever holds it. With `reservations.view`
+	// alone a colleague's booking is read-only (D3); the server refuses those actions too.
+	const canAct = $derived(data.canAct);
 	const canEditAdvanced = $derived(
-		isAdmin || ['approved', 'planned'].includes(data.reservation.status)
+		canAct && (isAdmin || ['approved', 'planned'].includes(data.reservation.status))
 	);
 	const canCancel = $derived(
-		!['cancelled', 'completed'].includes(data.reservation.status)
+		canAct && !['cancelled', 'completed'].includes(data.reservation.status)
 	);
 	// The table layout is built on the hall's floor plan; without one it's disabled.
 	// data.hasFloorplan is computed from the raw DB value in load (fromJson(null) === {}).
@@ -241,9 +244,10 @@
 	<!-- Header -->
 	<div class="page-header">
 		<div class="ph-left">
-			<a href={isAdmin ? '/app/manage/reservations' : '/app/'} class="back-link">
+			<!-- Whoever may open the org's booking list goes back to it; a booker to their events. -->
+			<a href={data.canViewAll ? '/app/manage/reservations' : '/app/'} class="back-link">
 				<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
-				{isAdmin ? t.event.backToReservations : t.event.backToEvents}
+				{data.canViewAll ? t.event.backToReservations : t.event.backToEvents}
 			</a>
 			<div class="ph-titlerow">
 				<h1 class="page-title">{data.reservation.title}</h1>
@@ -285,7 +289,14 @@
 		</div>
 	{/if}
 
-	{#if !canEditAdvanced && !isAdmin}
+	{#if !canAct}
+		<div class="alert-warning" style="margin-bottom:20px" role="note">
+			<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+				<rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+			</svg>
+			{t.event.viewOnlyNotice}
+		</div>
+	{:else if !canEditAdvanced && !isAdmin}
 		<div class="alert-warning" style="margin-bottom:20px">
 			<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
 				<rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
@@ -802,6 +813,7 @@
 				<div class="card card--inset invite-card">
 					<div class="invite-header">
 						<div class="invite-label">{t.event.inviteLink}</div>
+						{#if canAct}
 						<form method="POST" action="?/toggleRsvp" use:enhance={() => {
 							return async ({ update }) => { await update({ reset: false }); };
 						}}>
@@ -811,6 +823,7 @@
 								<span class="rsvp-toggle-knob"></span>
 							</button>
 						</form>
+						{/if}
 					</div>
 					{#if rsvpEnabled}
 						<button onclick={copyInvite} class="btn-action" style="width:100%">
@@ -836,7 +849,7 @@
 				{#if !hasFloorplan}
 					{t.reservationAdmin.noFloorplanSub}
 				{:else}
-					{canEditLayout ? t.event.customLayout : t.event.layoutLocked}
+					{canEditLayout ? t.event.customLayout : canAct ? t.event.layoutLocked : t.event.layoutViewOnly}
 				{/if}
 			</p>
 		</div>
@@ -883,7 +896,7 @@
 							{t.myRes.seatingSheet}
 						</a>
 					</div>
-					<p class="ls-note">{t.event.layoutLocked}</p>
+					<p class="ls-note">{canAct ? t.event.layoutLocked : t.event.layoutViewOnly}</p>
 				{/if}
 			</div>
 		{/if}

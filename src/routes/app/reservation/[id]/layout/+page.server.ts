@@ -8,7 +8,7 @@ import { countSeats, migrateToMultiFloor } from '$lib/floorplan-types';
 import { applyTemplateKeepingGuests } from '$lib/floorplan-layout';
 import { st } from '$lib/i18n-server';
 import type { Actions, PageServerLoad } from './$types';
-import { reservationAccess, assertCanOpenReservation } from '$lib/server/reservation-access';
+import { reservationAccess, assertCanOpenReservation, canActOnReservation } from '$lib/server/reservation-access';
 import { seatingDraft, recordSavedDraft } from '$lib/server/ai/proposals';
 import { tableInventoryError } from '$lib/server/table-inventory';
 import { prepareLayoutSave } from '$lib/server/layout-sync';
@@ -28,7 +28,11 @@ export const load: PageServerLoad = async ({ locals, params, url }) => {
 	);
 
 	if (!reservation) error(404, st(locals.locale).serverErrors.reservationNotFound);
-	assertCanOpenReservation(await reservationAccess(locals), reservation.user_id, locals.user.id, st(locals.locale).serverErrors.reservationNotFound);
+	const access = await reservationAccess(locals);
+	assertCanOpenReservation(access, reservation.user_id, locals.user.id, st(locals.locale).serverErrors.reservationNotFound);
+	// The editor has no read-only mode: a member who may only view a colleague's booking
+	// (D3) reads its layout on the booking page and in the seating sheet instead.
+	if (!canActOnReservation(access, reservation.user_id, locals.user.id)) redirect(303, `/app/reservation/${params.id}`);
 
 	// The table layout is built on the hall's floor plan — without one there is
 	// nothing to arrange tables on, so send them back to the detail page.
@@ -180,8 +184,9 @@ export const actions: Actions = {
 async function layoutAccessError(locals: App.Locals, reservation: { user_id: string; status: string }): Promise<string | null> {
 	// Staff = may manage the org's bookings (the same permission as the sibling action
 	// on /app/reservation/[id]), not a fixed owner/admin role.
-	const staff = (await reservationAccess(locals)).canManage;
-	if (!staff && reservation.user_id !== locals.user?.id) return st(locals.locale).serverErrors.accessDenied;
+	const access = await reservationAccess(locals);
+	const staff = access.canManage;
+	if (!canActOnReservation(access, reservation.user_id, locals.user?.id)) return st(locals.locale).serverErrors.accessDenied;
 	if (!staff && !['approved', 'planned'].includes(reservation.status)) {
 		return st(locals.locale).serverErrors.reservationMustBeApprovedToEditLayout;
 	}

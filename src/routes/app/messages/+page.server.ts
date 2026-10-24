@@ -280,7 +280,7 @@ export const actions: Actions = {
     // Used to return "success" and do nothing for a member. Owners and admins open
     // any channel; announcements.manage opens announcement channels only.
     const canAnnounce = (await chatAccess(locals)).announcements.post;
-    if (!isAdminRole(org.role) && !canAnnounce) return fail(403, { channelError: d.teamChat.onlyAdminsCreate });
+    if (!isAdminRole(org.role) && !canAnnounce) return fail(403, { channelError: d.teamChat.cannotCreateChannel });
     const data = await request.formData();
     const rawName = String(data.get('name') ?? '');
     const description = String(data.get('description') ?? '').trim();

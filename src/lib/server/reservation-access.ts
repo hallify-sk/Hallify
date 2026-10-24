@@ -42,6 +42,13 @@ export function canOpenReservation(access: ReservationAccess, reservationUserId:
 	return access.canViewAll || (!!userId && reservationUserId === userId);
 }
 
+/** May this caller change this booking: cancel it, re-arrange or reset its tables, load a
+ *  template? Members with `reservations.manage` any booking in the org; everyone else only
+ *  their own. `reservations.view` alone opens a colleague's booking read-only (D3). */
+export function canActOnReservation(access: ReservationAccess, reservationUserId: string, userId: string | undefined): boolean {
+	return access.canManage || (!!userId && reservationUserId === userId);
+}
+
 /**
  * Guard for a page load: 404 rather than 403 for a booking the caller may not see,
  * so ids of other people's bookings are not confirmed to exist.
