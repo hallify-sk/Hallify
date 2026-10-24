@@ -3,7 +3,10 @@
 //
 // One item of the file:
 //   { name, city, country, address, max_people, event_types?: string[], website, phone,
-//     email, description_sk, image_official?: { url, page } | string | null }
+//     email, description_sk, image_official?: { url, page } | string | null,
+//     image_credit?: string }
+// image_credit names the photo's author when it is not the venue's own (e.g. a
+// Wikimedia Commons photo: "Author / CC BY-SA 4.0 / Wikimedia Commons").
 // Extra keys are ignored. Each item is turned into the same form fields the single
 // "Add venue" form posts, so it is checked by exactly the same rules
 // (parseListingVenueForm); this module only maps it and finds duplicates.
@@ -30,6 +33,8 @@ export interface ImportItem {
 	email: string;
 	description: string;
 	image_url: string | null;
+	/** Who to credit for the photo; empty means the venue's own website. */
+	image_credit: string;
 }
 
 /** A scalar as text; objects, arrays and null are empty, never "[object Object]". */
@@ -53,7 +58,8 @@ export function readImportItem(raw: unknown): ImportItem | null {
 		phone: scalar(o.phone),
 		email: scalar(o.email),
 		description: scalar(o.description_sk),
-		image_url: imageUrl || null
+		image_url: imageUrl || null,
+		image_credit: scalar(o.image_credit).slice(0, 200)
 	};
 }
 

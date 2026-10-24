@@ -17,8 +17,11 @@ describe('reading an item of the file', () => {
 		expect(item).toEqual({
 			name: 'Kaštieľ Mošovce', city: 'Mošovce', country: 'SK', address: 'Hlavná 1', max_people: '150',
 			event_types: ['svadba', 'catering'], website: 'https://www.kastiel-mosovce.sk/', phone: '+421 900 123 456',
-			email: 'info@kastiel-mosovce.sk', description: 'Barokový kaštieľ.', image_url: 'https://upload.wikimedia.org/a.jpg'
+			email: 'info@kastiel-mosovce.sk', description: 'Barokový kaštieľ.', image_url: 'https://upload.wikimedia.org/a.jpg',
+			image_credit: ''
 		});
+		expect(readImportItem({ ...sample, image_credit: ' Jana / CC BY-SA 4.0 / Wikimedia Commons ' })!.image_credit)
+			.toBe('Jana / CC BY-SA 4.0 / Wikimedia Commons');
 		expect(readImportItem({ ...sample, image_official: 'https://x.sk/b.png' })!.image_url).toBe('https://x.sk/b.png');
 		expect(readImportItem({ ...sample, image_official: null })!.image_url).toBeNull();
 		expect(readImportItem({ ...sample, image_official: undefined })!.image_url).toBeNull();

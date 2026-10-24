@@ -148,7 +148,7 @@ export async function importChunk(
 				if (img.ok) {
 					photo = 'ok';
 					value.cover_image_url = img.url;
-					value.cover_image_credit = websiteCredit(value.website) ?? imageHost(c.item.image_url);
+					value.cover_image_credit = c.item.image_credit || websiteCredit(value.website) || imageHost(c.item.image_url);
 				} else {
 					photo = img.error;
 					photoDetail = img.detail ?? null;
