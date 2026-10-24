@@ -139,16 +139,22 @@
             </svg>
             {t.clientArea.myReservations}
           </a>
-          <a href="/app/messages" class="nav-item" class:active={$page.url.pathname.startsWith('/app/messages')}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-            </svg>
-            <!-- With the client inbox below, this one is the team's own chat. -->
-            {nav.clientMessages ? t.sidebar.teamChat : t.nav.messages}
-            {#if unreadMessages > 0}
-              <span class="nav-badge">{unreadMessages}</span>
-            {/if}
-          </a>
+          <!-- /app/messages is an organisation's chat (its channels and client
+               tickets). A personal account has no organisation, so there is nothing
+               there and the page sends it home; its conversations with venues live
+               on its bookings above. -->
+          {#if currentOrg}
+            <a href="/app/messages" class="nav-item" class:active={$page.url.pathname.startsWith('/app/messages')}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+              </svg>
+              <!-- With the client inbox below, this one is the team's own chat. -->
+              {nav.clientMessages ? t.sidebar.teamChat : t.nav.messages}
+              {#if unreadMessages > 0}
+                <span class="nav-badge">{unreadMessages}</span>
+              {/if}
+            </a>
+          {/if}
         </div>
       {/if}
 
