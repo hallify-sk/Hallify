@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { tick } from 'svelte';
+	import { tick, untrack } from 'svelte';
 	import { t, getLocale } from '$lib/i18n.svelte';
 	import { localeTag } from '$lib/format';
 
@@ -26,6 +26,14 @@
 	const todayStr = $derived(
 		`${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
 	);
+
+	// A date set from outside (the booking form arriving with the day picked on the
+	// hall page) brings its month into view. A click is already in view: no change.
+	$effect(() => {
+		if (!selectedDate || !/^\d{4}-\d{2}/.test(selectedDate)) return;
+		const y = Number(selectedDate.slice(0, 4)), m = Number(selectedDate.slice(5, 7)) - 1;
+		if (untrack(() => y !== viewYear || m !== viewMonth)) { viewYear = y; viewMonth = m; }
+	});
 
 	function prevMonth() {
 		if (viewMonth === 0) { viewMonth = 11; viewYear--; }

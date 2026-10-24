@@ -55,8 +55,8 @@ export const SECTION_DEFINITIONS: SectionDefinition[] = [
 		type: 'hall-list',
 		label: { sk: 'Zoznam priestorov', en: 'Venue list' },
 		description: {
-			sk: 'Ostatné priestory pod sebou v riadkoch, s fotografiou a kapacitou.',
-			en: 'The remaining venues stacked in rows, with a photo and capacity.'
+			sk: 'Ostatné priestory ako široké karty s fotografiou, kapacitou a vybavením.',
+			en: 'The remaining venues as wide cards with a photo, capacity and amenities.'
 		},
 		unique: true,
 		needsHalls: true
