@@ -73,7 +73,8 @@
 
     <header class="venue-page-hero">
       <div class="venue-page-intro">
-        <p class="eyebrow">{data.org.name}{#if hall.is_partner}{' '}· {t.appHalls.partnerBadge}{/if}</p>
+        <!-- A venue not on Hallify is its own organisation: its name would only repeat. -->
+        {#if !data.org.listingOnly}<p class="eyebrow">{data.org.name}{#if hall.is_partner}{' '}· {t.appHalls.partnerBadge}{/if}</p>{/if}
         <h1>{hall.name}</h1>
         <ul class="venue-page-facts">
           {#if hall.address}<li><Icon name="pin" size={15} /> {hall.address}</li>{/if}

@@ -73,7 +73,7 @@
                 <td class="num">{nf.format(m.impressions)}</td>
                 <td class="num">{nf.format(m.detail_views)}</td>
                 <td class="num">{nf.format(clicksOf(m))}</td>
-                <td class="num">{m.impressions ? pct.format(clicksOf(m) / m.impressions) : '–'}</td>
+                <td class="num">{m.detail_views ? pct.format(clicksOf(m) / m.detail_views) : '–'}</td>
               </tr>
             {/each}
           </tbody>
@@ -84,7 +84,7 @@
 </div>
 
 <style>
-  .back { display: inline-flex; gap: 6px; margin-bottom: 14px; font-size: 12.5px; font-weight: 600; color: var(--text-muted); text-decoration: none; }
+  .back { display: inline-flex; gap: 6px; margin: 12px 0 14px; font-size: 12.5px; font-weight: 600; color: var(--text-muted); text-decoration: none; }
   .back:hover { color: var(--accent-ink); }
   .vis-title { font-size: var(--display-size); font-weight: 550; letter-spacing: -.055em; line-height: 1.08; margin: 0 0 6px; }
   .vis-period select {

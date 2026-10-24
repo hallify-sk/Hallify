@@ -3089,8 +3089,8 @@ export const sk = {
 		colPhone: "Telefón",
 		colEmail: "E-mail",
 		colClicks: "Kliknutia",
-		colCtr: "Miera prekliku",
-		ctrHint: "Kliknutia na web, telefón a e-mail delené zobrazeniami v adresári.",
+		colCtr: "Miera kontaktu",
+		ctrHint: "Kliknutia na web, telefón a e-mail na jedno otvorenie stránky priestoru.",
 		totalRow: "Spolu",
 		typePartner: "Partner",
 		typeBasic: "Na Hallify",
@@ -3101,7 +3101,7 @@ export const sk = {
 		csvMode: "Rezervácie",
 		csvFrom: "Od",
 		csvTo: "Do",
-		csvCtr: "Miera prekliku (%)"
+		csvCtr: "Miera kontaktu (%)"
 	},
 	authPages: {
 		registerTitle: "Vytvorte si účet Hallify",
@@ -7386,8 +7386,8 @@ export const en: typeof sk = {
 		colPhone: "Phone",
 		colEmail: "Email",
 		colClicks: "Clicks",
-		colCtr: "Click-through rate",
-		ctrHint: "Website, phone and email clicks divided by directory impressions.",
+		colCtr: "Contact rate",
+		ctrHint: "Website, phone and email clicks per view of the venue's page.",
 		totalRow: "Total",
 		typePartner: "Partner",
 		typeBasic: "On Hallify",
@@ -7398,7 +7398,7 @@ export const en: typeof sk = {
 		csvMode: "Bookings",
 		csvFrom: "From",
 		csvTo: "To",
-		csvCtr: "Click-through rate (%)"
+		csvCtr: "Contact rate (%)"
 	},
 	authPages: {
 		registerTitle: "Create your Hallify account",

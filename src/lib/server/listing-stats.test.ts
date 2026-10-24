@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import type { D1Database } from '@cloudflare/workers-types';
 import { testD1 } from './test-d1';
 import {
-	MAX_BATCH, clickThroughRate, hallStats, isBotUserAgent, orgMonthlyStats, parseListingBatch, parsePeriod, parseScope,
+	MAX_BATCH, contactRate, hallStats, isBotUserAgent, orgMonthlyStats, parseListingBatch, parsePeriod, parseScope,
 	recentMonths, recordListingEvents, statsCsv, totals, type StatsCsvLabels
 } from './listing-stats';
 
@@ -113,7 +113,7 @@ describe('reports', () => {
 			['h-paid', 'partner', 40, 2],
 			['h-free', 'basic', 0, 0]
 		]);
-		expect(rows[0].ctr).toBeCloseTo(0.1);
+		expect(rows[0].ctr).toBeCloseTo(0.5); // 10 clicks on 20 page views
 		expect(rows[2].ctr).toBeNull();
 		// Not listed (a draft, a suspended venue) and nothing counted: not in the report.
 		expect(rows.some((r) => r.hall_id === 'h-draft' || r.hall_id === 'h-off')).toBe(false);
@@ -139,8 +139,8 @@ describe('reports', () => {
 			{ impressions: 100, detail_views: 5, website_clicks: 3, phone_clicks: 1, email_clicks: 1 },
 			{ impressions: 0, detail_views: 2, website_clicks: 0, phone_clicks: 0, email_clicks: 0 }
 		]);
-		expect(t).toEqual({ impressions: 100, detail_views: 7, website_clicks: 3, phone_clicks: 1, email_clicks: 1, clicks: 5, ctr: 0.05 });
-		expect(clickThroughRate(1, 0)).toBeNull();
+		expect(t).toEqual({ impressions: 100, detail_views: 7, website_clicks: 3, phone_clicks: 1, email_clicks: 1, clicks: 5, ctr: 5 / 7 });
+		expect(contactRate(1, 0)).toBeNull();
 	});
 
 	it('exports CSV a spreadsheet opens: BOM, the period on each row, formulas defused', async () => {
@@ -148,15 +148,15 @@ describe('reports', () => {
 		const period = { key: '2026-10', from: '2026-10-01', to: '2026-10-31' };
 		const labels: StatsCsvLabels = {
 			venue: 'Prevádzka', hall: 'Priestor', type: 'Typ', mode: 'Rezervácie', impressions: 'Zobrazenia', detailViews: 'Otvorenia',
-			websiteClicks: 'Web', phoneClicks: 'Telefón', emailClicks: 'E-mail', clicks: 'Kliknutia', ctr: 'Miera prekliku (%)', from: 'Od', to: 'Do',
+			websiteClicks: 'Web', phoneClicks: 'Telefón', emailClicks: 'E-mail', clicks: 'Kliknutia', ctr: 'Miera kontaktu (%)', from: 'Od', to: 'Do',
 			listingTypes: { partner: 'Partner', basic: 'Na Hallify', external: 'Mimo Hallify' },
 			modes: { hallify: 'Cez Hallify', external: 'U prevádzky' }
 		};
 		const csv = statsCsv(await hallStats(db, period, { kind: 'all' }), period, labels, ';');
 		const lines = csv.replace('﻿', '').trim().split('\r\n');
 		expect(csv.startsWith('﻿')).toBe(true);
-		expect(lines[0]).toBe('Prevádzka;Priestor;Typ;Rezervácie;Od;Do;Zobrazenia;Otvorenia;Web;Telefón;E-mail;Kliknutia;Miera prekliku (%)');
-		expect(lines[1]).toBe('Mlyn;Mlyn;Mimo Hallify;U prevádzky;2026-10-01;2026-10-31;100;20;6;3;1;10;10,00');
+		expect(lines[0]).toBe('Prevádzka;Priestor;Typ;Rezervácie;Od;Do;Zobrazenia;Otvorenia;Web;Telefón;E-mail;Kliknutia;Miera kontaktu (%)');
+		expect(lines[1]).toBe('Mlyn;Mlyn;Mimo Hallify;U prevádzky;2026-10-01;2026-10-31;100;20;6;3;1;10;50,00');
 		expect(lines[2].startsWith(`"'=HYPERLINK(""x"")";Veľká sála;Partner;`)).toBe(true);
 		expect(lines[3].endsWith(';0;0;0;0;0;0;')).toBe(true);
 	});

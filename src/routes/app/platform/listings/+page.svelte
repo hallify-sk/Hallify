@@ -89,7 +89,7 @@
 <style>
   .lv-row {
     display: grid;
-    grid-template-columns: minmax(180px, 2fr) minmax(140px, 1.6fr) 90px 90px 100px 210px;
+    grid-template-columns: minmax(170px, 2fr) minmax(140px, 1.5fr) 130px 120px 100px 210px;
     gap: 14px; align-items: center;
   }
   .lv-ok { margin: 0 0 12px; font-size: 13px; color: var(--success); }

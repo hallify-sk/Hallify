@@ -162,13 +162,19 @@ export interface HallStatsRow extends Counts {
 	listing_type: ListingType;
 	/** Website, phone and e-mail clicks together. */
 	clicks: number;
-	/** clicks / impressions, or null with no impressions. */
+	/** Contact rate: clicks per page view, or null with no page views. */
 	ctr: number | null;
 }
 
-/** Share of impressions that led to a contact click; null when nothing was shown. */
-export function clickThroughRate(clicks: number, impressions: number): number | null {
-	return impressions > 0 ? clicks / impressions : null;
+/**
+ * Contact clicks per page view; null with no page views. Not clicks per impression:
+ * a contact is clicked on the venue's page (and a page is often reached from a search
+ * engine or the venue's own site, never having been a card), so that ratio would run
+ * past 100 %. Per page view it reads as "of those who looked closer, how many got in
+ * touch". Several kinds of click on one view can still take it over 100 %, rarely.
+ */
+export function contactRate(clicks: number, views: number): number | null {
+	return views > 0 ? clicks / views : null;
 }
 
 export type PlatformScope = 'all' | 'listing' | 'partner';
@@ -217,7 +223,7 @@ export async function hallStats(db: Db, period: StatsPeriod, scope: StatsScope):
 			website_clicks: Number(r.website_clicks), phone_clicks: Number(r.phone_clicks), email_clicks: Number(r.email_clicks)
 		};
 		const clicks = counts.website_clicks + counts.phone_clicks + counts.email_clicks;
-		return { ...r, ...counts, listing_type: listingType({ listing_only, is_partner }), clicks, ctr: clickThroughRate(clicks, counts.impressions) };
+		return { ...r, ...counts, listing_type: listingType({ listing_only, is_partner }), clicks, ctr: contactRate(clicks, counts.detail_views) };
 	});
 }
 
@@ -226,7 +232,7 @@ export function totals(rows: Counts[]): Counts & { clicks: number; ctr: number |
 	const t = zero();
 	for (const r of rows) for (const k of Object.keys(t) as (keyof Counts)[]) t[k] += r[k];
 	const clicks = t.website_clicks + t.phone_clicks + t.email_clicks;
-	return { ...t, clicks, ctr: clickThroughRate(clicks, t.impressions) };
+	return { ...t, clicks, ctr: contactRate(clicks, t.detail_views) };
 }
 
 export interface MonthStats extends Counts { month: string }
@@ -245,12 +251,6 @@ export async function orgMonthlyStats(db: Db, orgId: string, fromMonth: string):
 		month: r.month, impressions: Number(r.impressions), detail_views: Number(r.detail_views),
 		website_clicks: Number(r.website_clicks), phone_clicks: Number(r.phone_clicks), email_clicks: Number(r.email_clicks)
 	}));
-}
-
-/** "4.2 %" / "4,2 %": a click-through rate as people read it; "–" for none. */
-export function formatCtr(ctr: number | null, locale: string): string {
-	if (ctr === null) return '–';
-	return `${(ctr * 100).toLocaleString(locale === 'en' ? 'en-GB' : 'sk-SK', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} %`;
 }
 
 export interface StatsCsvLabels {
