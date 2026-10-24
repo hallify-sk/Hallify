@@ -105,8 +105,11 @@ export const actions: Actions = {
   },
 
   /** "Send me a link": this venue has an old account for the address with another
-   *  password. Opening the verification link mailed to the Hallify account proves the
-   *  mailbox, and every old venue account with that address is then joined to it. */
+   *  password. The link mailed to the Hallify account's address says it is for joining;
+   *  opening it only verifies the address, and the old accounts are joined once the
+   *  person who opened it also gives the Hallify password there (`joinOldAccounts`).
+   *  Anyone can ask for this link, so the mailbox alone must not be enough: the
+   *  Hallify account may have been made with this address by someone else. */
   sendLink: async ({ request, url, locals, getClientAddress }) => {
     if (!locals.domainOrg) return fail(400, { ...formShape, tab: 'login', error: st(locals.locale).serverErrors.notDomainLoginPage });
     const data = await request.formData();
@@ -131,6 +134,7 @@ export const actions: Actions = {
         origin: url.origin,
         locale: account.locale === 'en' || account.locale === 'sk' ? account.locale : locals.locale,
         venue: locals.domainOrg.name,
+        purpose: 'join',
       });
       if (!ok && await emailServiceDown(locals.db)) {
         return fail(503, { ...formShape, tab: 'login', email, error: st(locals.locale).serverErrors.emailUnavailable });

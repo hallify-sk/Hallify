@@ -35,7 +35,7 @@ export interface ClientRow {
 type Compare = (password: string, hash: string) => Promise<boolean>;
 
 /** bcrypt, but a linked or anonymised row never matches and never reaches bcrypt. */
-async function passwordOpens(compare: Compare, password: string, hash: string | null | undefined): Promise<boolean> {
+export async function passwordOpens(compare: Compare, password: string, hash: string | null | undefined): Promise<boolean> {
 	if (!hash || hash.startsWith('!')) return false;
 	try {
 		return await compare(password, hash);
@@ -124,8 +124,14 @@ export async function createLinkedClient(db: D1Database, orgId: string, account:
 
 /**
  * Link every unlinked client row with the account's email, at every venue, to the
- * account. Called only once the account has just proven the address (a verification
- * link was opened), which is what makes the old rows theirs. Returns how many.
+ * account. Returns how many.
+ *
+ * Only for a step that proves the same person holds both the account and the mailbox:
+ * a password reset finished from a mailed link (the person who opened it set the
+ * password), or a join link opened and confirmed with the account's password
+ * (`joinOldAccounts`). Opening a verification link is NOT enough: anyone can create
+ * an account for someone else's address, and the address's owner clicking "confirm"
+ * would otherwise hand their old venue accounts to whoever chose its password.
  */
 export async function claimClientRows(db: D1Database, account: HallifyAccount): Promise<number> {
 	const rows = await dbAll<{ id: string }>(
@@ -143,6 +149,20 @@ export async function claimClientRows(db: D1Database, account: HallifyAccount): 
 		await dbRun(db, 'DELETE FROM password_resets WHERE user_id = ?', r.id);
 	}
 	return rows.length;
+}
+
+/** The venues where the account's address still has an old, unlinked client account:
+ *  what `claimClientRows` would join. Names only, sorted. */
+export async function joinableVenues(db: D1Database, account: { email: string }): Promise<string[]> {
+	const rows = await dbAll<{ name: string }>(
+		db,
+		`SELECT o.name AS name FROM users u JOIN organizations o ON o.id = u.org_id
+		  WHERE u.email = ? AND u.account_type = 'client' AND u.org_id IS NOT NULL
+		    AND u.account_id IS NULL AND u.deleted_at IS NULL
+		  ORDER BY o.name`,
+		account.email
+	);
+	return rows.map((r) => r.name);
 }
 
 /** Copy name (and, when given, email and verification) from a Hallify account onto

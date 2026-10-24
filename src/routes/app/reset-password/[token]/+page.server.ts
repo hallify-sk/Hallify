@@ -5,7 +5,7 @@ import { st } from '$lib/i18n-server';
 import { rateLimit, rateLimitKey, tooManyAttemptsMessage, RATE_LIMITS } from '$lib/rateLimit';
 import { completePasswordReset, findPasswordReset } from '$lib/server/account';
 import { sendPasswordChangedNotice } from '$lib/server/account-emails';
-import { mailboxProven } from '$lib/server/email-verification';
+import { mailboxProven, venuesJoinedByReset } from '$lib/server/email-verification';
 import { dbFirst } from '$lib/db/index';
 
 // Hallify accounts only (no org): a venue client's link is redeemed on the venue's own
@@ -14,7 +14,8 @@ const SCOPE = { kind: 'apex' } as const;
 
 export const load: PageServerLoad = async ({ params, locals }) => {
 	const reset = await findPasswordReset(locals.db, params.token, SCOPE);
-	return { valid: !!reset };
+	// A finished reset also joins the address's old venue accounts: said up front.
+	return { valid: !!reset, joinVenues: reset ? await venuesJoinedByReset(locals.db, reset.user_id) : [] };
 };
 
 export const actions: Actions = {
@@ -50,7 +51,8 @@ export const actions: Actions = {
 			return fail(400, { error: st(locals.locale).serverErrors.invalidOrExpiredResetLink });
 		}
 		// The link reached the address, so it is confirmed (D11), and old venue accounts
-		// with the same address join the Hallify account (D4).
+		// with the same address join the Hallify account (D4): whoever opened it has just set
+		// the password, so nobody else holds the account. (A verification link alone never joins.)
 		await mailboxProven(locals.db, reset.user_id);
 		const account = await dbFirst<{ email: string }>(locals.db, 'SELECT email FROM users WHERE id = ?', reset.user_id);
 		if (account) sendPasswordChangedNotice(locals.db, locals.locale, account.email).catch(() => {});

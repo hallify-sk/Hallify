@@ -56,7 +56,8 @@
       <div class="notice notice-success" role="status">{t.identity.linkSent.replace('{email}', form.email ?? '')}</div>
     {/if}
     <!-- This venue has an older, separate account for the address with another
-         password: a link to the Hallify mailbox joins it to the Hallify account. -->
+         password: a link to the Hallify mailbox, confirmed there with the Hallify
+         password, joins it to the Hallify account. -->
     {#if form?.separate && tab === 'login'}
       <form method="POST" action="?/sendLink" use:enhance class="link-form">
         <input type="hidden" name="email" value={form.email ?? ''} />

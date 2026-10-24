@@ -31,8 +31,9 @@ is **who authenticates them**.
      - an unlinked (old, separate) row exists and the same password also opens it: it
        is linked now (the person proved both) and signed in;
      - an unlinked row exists with a different password: refused with an explanation
-       and a "send me a link" button. That sends a verification link to the Hallify
-       account; opening it links the old row (see claiming).
+       and a "send me a link" button. That mails a *join* link to the Hallify account's
+       address (its email says it joins an older account); the old row is linked once
+       the link is confirmed there with the Hallify password (see claiming).
   3. An unlinked client row with its own password (accounts from before this change)
      still signs in as before.
 - Registration on a venue site: if a Hallify account already has the email, the person
@@ -51,24 +52,40 @@ is **who authenticates them**.
   (the link stays on the venue site, whose reset page now also accepts Hallify
   accounts: `ResetScope` `venue`), otherwise the old client row. A finished reset or
   password change signs out the account's linked client rows too (`endSessions`).
-  A finished reset also proves the mailbox, like a verification link
-  (`mailboxProven`): the address counts as verified and old venue rows are claimed.
+  A finished reset also proves the mailbox (`mailboxProven`): the address counts as
+  verified and old venue rows are claimed, because whoever opened the link has just set
+  the password and nobody else holds the account. The reset page names those venues
+  before the password is set.
 - Wrong passwords on venue sites count against the venue's bucket and the address's
   global one, so spreading guesses over many venues gains nothing.
 - Changing name or email in the profile updates the linked client rows (an email that
   would collide with another client row at that venue is skipped for that venue).
 - Apex sign-in is unchanged: only Hallify accounts sign in there.
 
-### Claiming old venue accounts (by verified email)
+### Claiming old venue accounts (mailbox and password together)
 
-Opening an email-verification link for a Hallify account proves the person reads that
-mailbox *now*. Every unlinked client row with the same email, at any venue, is then
-linked to the account (`claimClientRows`). This is how someone with only venue
-accounts gets one Hallify account for all of them: register on hallify.sk (or on any
-venue site) with the same email and confirm it. Accounts that existed before the
+Every unlinked client row with the account's email, at any venue, is linked to the
+account (`claimClientRows`) only after a step that shows **the same person** reads the
+mailbox and holds the Hallify account:
+
+- a verification link (or the join link from "send me a link") opened and then
+  confirmed on that page with the Hallify password, or by a session of the account
+  (`findJoinLink`, `joinOldAccounts`); the page lists the venues first;
+- a finished password reset of the Hallify account (see above).
+
+Opening a verification link only verifies. Anyone can sign up with someone else's
+address and choose the password; if the owner of the address clicked "confirm" (or the
+join link that whoever signed up can have mailed to them), joining on that click would
+hand their old venue accounts to the person who knows the password. The join email
+and page tell someone who does not know the password how to take the account over
+instead ("Forgot password" sets their own).
+
+This is how someone with only venue accounts gets one Hallify account for all of them:
+register on hallify.sk (or on any venue site) with the same email, open the link and
+confirm with the new password. Accounts that existed before the
 migration count as verified, but **are not auto-linked by the migration**: an old
 apex account and an old client row sharing an address were never proven to be the same
-person, so linking waits for a fresh link click or for the same password opening both.
+person, so linking waits for a link confirmed with the password, a reset, or the same password opening both.
 
 ### Bookings across venues
 

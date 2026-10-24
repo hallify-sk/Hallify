@@ -30,6 +30,9 @@
 		<div class="auth-header">
 			<h1>{t.forgotPassword.resetTitle}</h1>
 			<p class="subtitle">{t.forgotPassword.resetSubtitle}</p>
+			{#if data.joinVenues.length > 0}
+				<p class="subtitle">{t.identity.resetJoinNote(data.joinVenues.join(', '))}</p>
+			{/if}
 		</div>
 
 		{#if form?.error}
