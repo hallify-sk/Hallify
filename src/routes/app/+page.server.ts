@@ -2,7 +2,7 @@ import { redirect } from '@sveltejs/kit';
 import { dbAll, dbFirst } from '$lib/db/index';
 import type { ReservationRow } from '$lib/db/index';
 import { hasConsoleAccess } from '$lib/server/access';
-import { ACCOUNT_BOOKINGS_WHERE } from '$lib/server/account-bookings';
+import { accountClientAccess } from '$lib/server/reservation-client-access';
 import type { PageServerLoad } from './$types';
 
 /** What /app shows for an organisation member, empty for everyone else. */
@@ -31,12 +31,14 @@ export const load: PageServerLoad = async ({ locals }) => {
         ORDER BY i.created_at DESC`,
       locals.user.email
     ).catch(() => []);
-    // Bookings made with the Hallify account on any venue's site (D4).
+    // Bookings made with the Hallify account on any venue's site (D4), and the ones
+    // shared with it (0038).
+    const shared = accountClientAccess(locals.user.id);
     const upcoming = await dbFirst<{ n: number }>(
       locals.db,
       `SELECT COUNT(*) AS n FROM reservations r
-        WHERE ${ACCOUNT_BOOKINGS_WHERE} AND r.event_date >= date('now') AND r.status NOT IN ('cancelled', 'completed')`,
-      locals.user.id, locals.user.id
+        WHERE ${shared.where.sql} AND r.event_date >= date('now') AND r.status NOT IN ('cancelled', 'completed')`,
+      ...shared.where.params
     ).catch(() => null);
     return { ...NO_DASHBOARD, personal: { firstName: locals.user.first_name, invites, upcomingBookings: Number(upcoming?.n ?? 0) } };
   }

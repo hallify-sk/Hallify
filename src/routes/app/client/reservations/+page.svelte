@@ -51,7 +51,10 @@
 								<div class="card-title">{r.title}</div>
 								<div class="card-sub">{r.hall_name} · {r.org_name}</div>
 							</div>
-							<span class="badge {STATUS_CLASS[r.status] ?? 'badge-muted'}">{statusLabel(r.status, getLocale())}</span>
+							<span class="badges">
+								{#if r.access === 'member'}<span class="badge badge-muted">{t.sharedEvent.sharedBadge}</span>{/if}
+								<span class="badge {STATUS_CLASS[r.status] ?? 'badge-muted'}">{statusLabel(r.status, getLocale())}</span>
+							</span>
 						</div>
 						<div class="card-meta">
 							<span class="meta-item">
@@ -105,6 +108,7 @@
 	.meta-item { display: flex; align-items: center; gap: 5px; }
 	.card-desc { font-size: 13px; color: var(--text-muted); line-height: 1.75; margin: 0; }
 
+	.badges { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
 	.badge { padding: 4px 10px; border-radius: var(--radius-sm); font-size: 11px; font-weight: 600; white-space: nowrap; }
 	.badge-warning { background: var(--warning-dim); color: var(--warning); }
 	.badge-success { background: var(--success-dim); color: var(--success); }

@@ -68,7 +68,7 @@
 					<a class="row-item res-row" href={r.href}>
 						<div class="res-main">
 							<span class="res-title">{r.title}</span>
-							<span class="res-hall">{r.hall_name} · {r.org_name}</span>
+							<span class="res-hall">{r.hall_name} · {r.org_name}{#if r.access === 'member'} · {t.sharedEvent.sharedBadge}{/if}</span>
 						</div>
 						<span class="res-date">{fmtDate(r.event_date)}</span>
 						<span class="badge {STATUS_CLASS[r.status] ?? 'badge-muted'}">{statusLabel(r.status, getLocale())}</span>

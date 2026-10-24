@@ -5,6 +5,8 @@ import type { ReservationRow, TableTypeRow } from '$lib/db/index';
 import { buildSeatableLayout, rsvpDetailMap } from '$lib/reservationLayout';
 import { st } from '$lib/i18n-server';
 import type { PageServerLoad } from './$types';
+import { clientReservationColumns } from '$lib/reservation-client';
+import { venueClientAccess } from '$lib/server/reservation-client-access';
 
 // Must match `canViewSeating` on the parent page, which includes 'completed' — the
 // link was rendered for completed events and then bounced straight back. The manifest
@@ -16,11 +18,13 @@ export const load: PageServerLoad = async ({ locals, params, url }) => {
 	if (!locals.user) redirect(303, loginUrl(url, '/login'));
 	const orgId = locals.domainOrg!.id;
 
+	// The owner or someone the event is shared with (0038); client-safe columns only (B60).
+	const a = venueClientAccess(locals.user.id);
 	const reservation = await dbFirst<ReservationRow & { hall_floorplan_json: unknown; hall_name: string }>(locals.db,
-		`SELECT r.*, h.name AS hall_name, h.floorplan_json AS hall_floorplan_json
+		`SELECT ${clientReservationColumns('r')}, r.layout_json, h.name AS hall_name, h.floorplan_json AS hall_floorplan_json
 		 FROM reservations r JOIN halls h ON h.id = r.hall_id
-		 WHERE r.id = ? AND r.user_id = ? AND r.org_id = ?`,
-		params.id, locals.user.id, orgId
+		 WHERE r.id = ? AND r.org_id = ? AND ${a.where.sql}`,
+		params.id, orgId, ...a.where.params
 	);
 	if (!reservation) error(404, st(locals.locale).serverErrors.reservationNotFound);
 	if (!CLIENT_VISIBLE.has(reservation.status)) redirect(303, `/halls/my-reservations/${params.id}`);

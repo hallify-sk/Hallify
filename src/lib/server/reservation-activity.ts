@@ -8,7 +8,9 @@ import { dbAll, dbFirst, dbRun } from '$lib/db/index';
 import type { D1Database } from '@cloudflare/workers-types';
 import { EXPIRE_PAST_REQUESTS_SQL } from '$lib/server/reservation-rules';
 
-export type ActivityKind = 'created' | 'status' | 'declined' | 'expired' | 'edited' | 'assigned';
+export type ActivityKind = 'created' | 'status' | 'declined' | 'expired' | 'edited' | 'assigned' | 'shared';
+/** What happened to a person an event is shared with (kind 'shared', in `status`). */
+export type SharedAction = 'added' | 'invited' | 'joined' | 'removed' | 'left';
 
 export interface ActivityInput {
 	reservationId: string;

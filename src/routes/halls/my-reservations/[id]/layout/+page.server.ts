@@ -11,6 +11,8 @@ import { hasEventStarted } from '$lib/reservationStatus';
 import { tableInventoryError } from '$lib/server/table-inventory';
 import { notifyOrg } from '$lib/server/notification-centre';
 import type { Actions, PageServerLoad } from './$types';
+import { clientReservationColumns } from '$lib/reservation-client';
+import { venueClientAccess } from '$lib/server/reservation-client-access';
 import { prepareLayoutSave } from '$lib/server/layout-sync';
 import { applyHallGeometry, hasLayout, layoutProblems, parseProblems, problemsColumn } from '$lib/floorplan-sync';
 
@@ -22,12 +24,15 @@ export const load: PageServerLoad = async ({ locals, params, url }) => {
 	if (!locals.user) redirect(303, loginUrl(url, '/login'));
 	const orgId = locals.domainOrg!.id;
 
+	// The owner or someone the event is shared with (0038); client-safe columns only (B60).
+	const a = venueClientAccess(locals.user.id);
 	const reservation = await dbFirst<ReservationRow & { hall_floorplan_json: unknown; hall_name: string; hall_custom_layouts: number; hall_force_layouts: number }>(locals.db,
-		`SELECT r.*, h.name AS hall_name, h.floorplan_json AS hall_floorplan_json,
+		`SELECT ${clientReservationColumns('r')}, r.layout_json, r.layout_problems,
+		        h.name AS hall_name, h.floorplan_json AS hall_floorplan_json,
 		        h.custom_layouts AS hall_custom_layouts, h.force_layouts AS hall_force_layouts
 		 FROM reservations r JOIN halls h ON h.id = r.hall_id
-		 WHERE r.id = ? AND r.user_id = ? AND r.org_id = ?`,
-		params.id, locals.user.id, orgId
+		 WHERE r.id = ? AND r.org_id = ? AND ${a.where.sql}`,
+		params.id, orgId, ...a.where.params
 	);
 	if (!reservation) error(404, st(locals.locale).serverErrors.reservationNotFound);
 	if (!CLIENT_EDITABLE.has(reservation.status)) redirect(303, `/halls/my-reservations/${params.id}`);
@@ -105,12 +110,7 @@ export const actions: Actions = {
 		const layoutJson = String(data.get('layoutJson') ?? '');
 		if (!layoutJson) return fail(400, { error: st(locals.locale).serverErrors.noLayoutData });
 
-		const reservation = await dbFirst<ClientLayoutRow>(locals.db,
-			`SELECT r.status, r.hall_id, r.event_date, r.start_time, r.layout_json, h.floorplan_json AS hall_floorplan_json,
-			        h.custom_layouts AS hall_custom_layouts, h.force_layouts AS hall_force_layouts
-			 FROM reservations r JOIN halls h ON h.id = r.hall_id WHERE r.id = ? AND r.user_id = ? AND r.org_id = ?`,
-			params.id, locals.user.id, orgId
-		);
+		const reservation = await loadLayoutRow(locals.db, params.id, locals.user.id, orgId);
 		if (!reservation) return fail(404, { error: st(locals.locale).serverErrors.notFound });
 		if (!CLIENT_EDITABLE.has(reservation.status) || hasEventStarted(reservation.event_date, reservation.start_time)) return fail(403, { error: st(locals.locale).serverErrors.eventNoLongerEditable });
 		if (!reservation.hall_floorplan_json) return fail(400, { error: st(locals.locale).serverErrors.hallNoFloorPlan });
@@ -131,8 +131,9 @@ export const actions: Actions = {
 		const overStock = await tableInventoryError(locals.db, reservation.hall_id, layoutJson, locals.locale);
 		if (overStock) return fail(400, { error: overStock });
 
-		await dbRun(locals.db, 'UPDATE reservations SET layout_json = ?, layout_problems = ? WHERE id = ? AND user_id = ? AND org_id = ?',
-			save.json, save.column, params.id, locals.user.id, orgId);
+		// Access was checked above (owner or member, 0038).
+		await dbRun(locals.db, 'UPDATE reservations SET layout_json = ?, layout_problems = ? WHERE id = ? AND org_id = ?',
+			save.json, save.column, params.id, orgId);
 		await notifyLayoutChanged(locals, orgId, params.id);
 		return { success: true, problems: save.problems.length, ...(save.roomChanged ? { layout: JSON.parse(save.json) } : {}) };
 	},
@@ -147,11 +148,7 @@ export const actions: Actions = {
 		const templateId = String(data.get('templateId') ?? '');
 		if (!templateId) return fail(400, { error: st(locals.locale).serverErrors.noTemplateSelected });
 
-		const reservation = await dbFirst<ClientLayoutRow>(locals.db,
-			`SELECT r.status, r.hall_id, r.event_date, r.start_time, r.layout_json, h.floorplan_json AS hall_floorplan_json,
-			        h.custom_layouts AS hall_custom_layouts, h.force_layouts AS hall_force_layouts
-			 FROM reservations r JOIN halls h ON h.id = r.hall_id WHERE r.id = ? AND r.user_id = ? AND r.org_id = ?`,
-			params.id, locals.user.id, orgId);
+		const reservation = await loadLayoutRow(locals.db, params.id, locals.user.id, orgId);
 		if (!reservation) return fail(404, { error: st(locals.locale).serverErrors.notFound });
 		if (!CLIENT_EDITABLE.has(reservation.status) || hasEventStarted(reservation.event_date, reservation.start_time)) return fail(403, { error: st(locals.locale).serverErrors.eventNoLongerEditable });
 
@@ -171,8 +168,8 @@ export const actions: Actions = {
 		// The template's tables on the hall's current room, and what does not fit flagged.
 		const save = prepareLayoutSave(JSON.stringify(applied.layout), reservation.hall_floorplan_json);
 
-		await dbRun(locals.db, 'UPDATE reservations SET layout_json = ?, layout_problems = ? WHERE id = ? AND user_id = ? AND org_id = ?',
-			save.json, save.column, params.id, locals.user.id, orgId);
+		await dbRun(locals.db, 'UPDATE reservations SET layout_json = ?, layout_problems = ? WHERE id = ? AND org_id = ?',
+			save.json, save.column, params.id, orgId);
 		await notifyLayoutChanged(locals, orgId, params.id);
 		return { success: true, layout: JSON.parse(save.json), reseated: applied.reseated, unseated: applied.unseated };
 	}
@@ -181,6 +178,16 @@ export const actions: Actions = {
 interface ClientLayoutRow {
 	status: string; hall_id: string; event_date: string; start_time: string | null; layout_json: string | null;
 	hall_floorplan_json: string | null; hall_custom_layouts: number | null; hall_force_layouts: number | null;
+}
+
+/** What the editor's actions need, for the owner or someone the event is shared with (0038). */
+function loadLayoutRow(db: App.Locals['db'], id: string, userId: string, orgId: string) {
+	const a = venueClientAccess(userId);
+	return dbFirst<ClientLayoutRow>(db,
+		`SELECT r.status, r.hall_id, r.event_date, r.start_time, r.layout_json, h.floorplan_json AS hall_floorplan_json,
+		        h.custom_layouts AS hall_custom_layouts, h.force_layouts AS hall_force_layouts
+		 FROM reservations r JOIN halls h ON h.id = r.hall_id WHERE r.id = ? AND r.org_id = ? AND ${a.where.sql}`,
+		id, orgId, ...a.where.params);
 }
 
 /** The stored layout, with the guest list and seating the editor posted when it
