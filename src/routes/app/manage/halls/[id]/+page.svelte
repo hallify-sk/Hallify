@@ -16,8 +16,8 @@
   import { eur } from '$lib/extras';
   import { EVENT_TYPE_KEYS, parseEventTypes } from '$lib/eventTypes';
   import type { PageData, ActionData } from './$types';
-  import { onMount, tick } from 'svelte';
-  import { beforeNavigate } from '$app/navigation';
+  import { onMount, tick, untrack } from 'svelte';
+  import { beforeNavigate, invalidateAll } from '$app/navigation';
   import { registerAssistantPage } from '$lib/assistant/page-hooks';
   import { slugify } from '$lib/slug';
   import { completeOpeningHours } from '$lib/opening-hours';
@@ -333,26 +333,60 @@
     hours:     JSON.stringify(completeOpeningHours(data.hall.opening_hours)),
   });
 
-  const profileDirty = $derived(
-    previewName        !== _init.name      ||
-    previewDescription !== _init.desc      ||
-    previewMaxPeople   !== _init.maxPeople ||
-    previewAddress     !== _init.address   ||
-    previewLatitude !== _init.latitude ||
-    previewLongitude !== _init.longitude ||
-    previewColor       !== _init.color     ||
-    previewPricing     !== _init.pricing   ||
-    previewPhone       !== _init.phone     ||
-    previewEmail       !== _init.email     ||
-    previewWebsite     !== _init.website   ||
-    profileIsPublic    !== _init.isPublic  ||
-    profileSlug        !== _init.slug      ||
-    profileCoverUrl    !== _init.cover     ||
-    previewPriceBand   !== _init.priceBand ||
-    JSON.stringify(profileAmenities) !== _init.amenities ||
-    JSON.stringify(galleryImages)    !== _init.gallery   ||
-    JSON.stringify(profileHours)     !== _init.hours
-  );
+  /** Whether the profile fields hold exactly these values. */
+  function profileMatches(i: typeof _init): boolean {
+    return previewName        === i.name      &&
+      previewDescription === i.desc      &&
+      previewMaxPeople   === i.maxPeople &&
+      previewAddress     === i.address   &&
+      previewLatitude    === i.latitude  &&
+      previewLongitude   === i.longitude &&
+      previewColor       === i.color     &&
+      previewPricing     === i.pricing   &&
+      previewPhone       === i.phone     &&
+      previewEmail       === i.email     &&
+      previewWebsite     === i.website   &&
+      profileIsPublic    === i.isPublic  &&
+      profileSlug        === i.slug      &&
+      profileCoverUrl    === i.cover     &&
+      previewPriceBand   === i.priceBand &&
+      JSON.stringify(profileAmenities) === i.amenities &&
+      JSON.stringify(galleryImages)    === i.gallery   &&
+      JSON.stringify(profileHours)     === i.hours;
+  }
+  const profileDirty = $derived(!profileMatches(_init));
+
+  // The stored profile these fields were filled from (B111): sent with a save, so the
+  // server can tell when someone else saved over it since, and refuse rather than
+  // overwrite their edits with this page's older values.
+  let profileBase = $state(untrack(() => data.profileVersion));
+  let profileSyncedTo = untrack(() => JSON.stringify(_init));
+  let profileForce = $state(false);
+  let profileConflict = $state(false);
+  // Saved elsewhere while this page had no unsaved profile edits: the fields simply
+  // follow the server. With edits, they stay, and the save reports the conflict.
+  $effect(() => {
+    const next = JSON.stringify(_init);
+    untrack(() => {
+      if (next === profileSyncedTo) return;
+      if (profileMatches(JSON.parse(profileSyncedTo))) syncProfile();
+    });
+  });
+
+  /** After a conflict: take the newer profile from the server (these edits go). */
+  async function reloadNewerProfile() {
+    profileConflict = false;
+    await invalidateAll();
+    syncProfile();
+  }
+
+  /** After a conflict: keep these values and write them over the newer profile. */
+  async function overwriteProfile() {
+    profileConflict = false;
+    profileForce = true;
+    await tick();
+    profileFormEl?.requestSubmit();
+  }
 
   const anyDirty = $derived(profileDirty || settingsDirty);
 
@@ -399,6 +433,8 @@
   /** The profile fields as the server now has them: after a save (the server may
    *  have tidied a value — the website, the URL), or to drop unsaved edits. */
   function syncProfile() {
+    profileBase        = data.profileVersion;
+    profileSyncedTo    = JSON.stringify(_init);
     previewName        = _init.name;
     previewDescription = _init.desc;
     previewMaxPeople   = _init.maxPeople;
@@ -934,17 +970,29 @@
         method="POST"
         action="?/saveProfile"
         use:enhance={() => async ({ result, update }) => {
+          profileForce = false;
           await update({ reset: false });
           // Take the values as saved (a website gains https://, an empty URL is filled
           // from the name), or the save bar stayed up after a successful save.
-          if (result.type === 'success') { await tick(); syncProfile(); }
+          if (result.type === 'success') { profileConflict = false; await tick(); syncProfile(); }
+          else if (result.type === 'failure') profileConflict = !!result.data?.profileConflict;
         }}
         class="profile-form"
       >
       <fieldset class="ro-set" disabled={!canEditHall}>
 
-        {#if form?.profileError}
-          <div class="alert alert-error" style="margin:16px 18px 0 0">{form.profileError}</div>
+        <input type="hidden" name="profileVersion" value={profileBase} />
+        {#if profileForce}<input type="hidden" name="force" value="1" />{/if}
+        {#if form?.profileError && (!form?.profileConflict || profileConflict)}
+          <div class="alert alert-error" style="margin:16px 18px 0 0">
+            {form.profileError}
+            {#if profileConflict}
+              <div class="conflict-actions">
+                <button type="button" class="btn-outline btn-sm" onclick={reloadNewerProfile}>{t.editor.conflictReload}</button>
+                <button type="button" class="btn-outline btn-sm" onclick={overwriteProfile}>{t.editor.conflictOverwrite}</button>
+              </div>
+            {/if}
+          </div>
         {/if}
 
         <!-- Hall details -->
@@ -3153,6 +3201,7 @@
     border: 1px solid color-mix(in srgb, var(--danger) 25%, transparent);
     color: var(--danger);
   }
+  .conflict-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
 
 
 

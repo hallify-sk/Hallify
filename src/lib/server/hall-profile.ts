@@ -232,3 +232,32 @@ export async function applyHallPatch(db: Db, orgId: string, hall: HallProfileRow
 	if (!sets.length) return;
 	await dbRun(db, `UPDATE halls SET ${sets.join(', ')} WHERE id = ? AND org_id = ?`, ...params, hall.id, orgId);
 }
+
+// ─── Saving the profile form over the version it was loaded from ────────────
+
+/** The columns the hall page's profile form writes. A save from a page loaded
+ *  before someone else saved any of them is a conflict (B111); booking rules, the
+ *  floor plan and the base price are saved separately and do not count. */
+export const PROFILE_COLUMNS = [
+	'name', 'max_people', 'color', 'description', 'address', 'latitude', 'longitude',
+	'is_public', 'slug', 'cover_image_url', 'gallery_images', 'amenities', 'pricing_info',
+	'price_band', 'contact_phone', 'contact_email', 'contact_website', 'opening_hours'
+] as const;
+export type ProfileColumn = (typeof PROFILE_COLUMNS)[number];
+export type ProfileColumns = Partial<Record<ProfileColumn, unknown>>;
+
+/** A short fingerprint of the profile as stored, for the form to send back. */
+export async function hallProfileVersion(row: ProfileColumns): Promise<string> {
+	const bytes = new TextEncoder().encode(JSON.stringify(PROFILE_COLUMNS.map((c) => row[c] ?? null)));
+	const digest = await crypto.subtle.digest('SHA-256', bytes);
+	return [...new Uint8Array(digest).slice(0, 12)].map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+/** "AND name IS ? AND …": an UPDATE's guard that the profile is still exactly the
+ *  row that was read, so a save that raced another one writes nothing. */
+export function profileUnchangedGuard(row: ProfileColumns): { sql: string; params: unknown[] } {
+	return {
+		sql: PROFILE_COLUMNS.map((c) => ` AND ${c} IS ?`).join(''),
+		params: PROFILE_COLUMNS.map((c) => row[c] ?? null)
+	};
+}

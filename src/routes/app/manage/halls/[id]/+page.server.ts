@@ -2,7 +2,7 @@ import { parseAmount } from '$lib/payment';
 import { saveHallBasePrice } from '$lib/server/payments';
 import { hallFeedback } from '$lib/server/feedback';
 import { error, fail, redirect } from '@sveltejs/kit';
-import { dbAll, dbFirst, dbRun, toJson, fromJson, fromJsonArr } from '$lib/db/index';
+import { dbAll, dbFirst, dbRun, toJson, fromJson, fromJsonArr, wroteRow } from '$lib/db/index';
 import type { HallRow, HallBlockRow, TemplateRow, TableTypeRow, ReservationRow, HallExtraRow } from '$lib/db/index';
 import { getPlan } from '$lib/plans';
 import { canAddHall, canAddExtra, swapActiveHall, unlockHall } from '$lib/limits';
@@ -21,7 +21,7 @@ import { canManageSettings } from '$lib/server/settings-access';
 import { parseCoordinates } from '$lib/venue-location';
 import { geocodeAddress } from '$lib/server/geocode';
 import { blockingReservations, cancelHallReservations, cancelReservations, hallIsUnused, reservationsInRange } from '$lib/server/hall-archive';
-import { BUILT_IN_AMENITIES, hallWebsite } from '$lib/server/hall-profile';
+import { BUILT_IN_AMENITIES, hallProfileVersion, hallWebsite, PROFILE_COLUMNS, profileUnchangedGuard, type ProfileColumns } from '$lib/server/hall-profile';
 import { hallSlug, hallSlugTaken, isReservedHallSlug, uniqueHallSlug } from '$lib/server/hall-naming';
 import { deleteUnusedHallImages, hallImageUrls, isOwnHallImage } from '$lib/server/hall-images';
 import { completeOpeningHours, invalidOpeningDay } from '$lib/opening-hours';
@@ -229,7 +229,9 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 	// Clients' ratings of events in this hall (D5): private to the team.
 	const feedback = await hallFeedback(locals.db, orgId, hall.id);
 	const hallAccess = { manage: access.halls.manage, floorplans: access.halls.floorplans, templates: access.halls.templates, tableTypes: access.halls.tableTypes };
-	return { hall, templates: templates.map((tm) => ({ ...tm, problems: parseProblems((tm as { layout_problems?: unknown }).layout_problems).length })), problemEvents, blocks, tableTypes, reservations, extras, plan, orgAmenities, floorplanRequest, blocking, unused, planFull, swapCandidates, canOrderAddons, feedback, hallAccess };
+	// The profile as loaded, so a save can tell whether someone saved over it since.
+	const profileVersion = await hallProfileVersion(hall as unknown as ProfileColumns);
+	return { hall, profileVersion, templates: templates.map((tm) => ({ ...tm, problems: parseProblems((tm as { layout_problems?: unknown }).layout_problems).length })), problemEvents, blocks, tableTypes, reservations, extras, plan, orgAmenities, floorplanRequest, blocking, unused, planFull, swapCandidates, canOrderAddons, feedback, hallAccess };
 };
 
 /** The hall in the URL must belong to the acting organization. Every action below
@@ -493,14 +495,22 @@ export const actions: Actions = {
 	saveProfile: async ({ request, params, locals, platform }) => {
 		const org = await requireOrgPermission(locals, 'halls.manage');
 		const e = st(locals.locale).serverErrors;
-		const current = await dbFirst<{
+		const current = await dbFirst<ProfileColumns & {
 			slug: string | null; cover_image_url: string | null; gallery_images: string | null;
 			plan_locked: number; archived_at: string | null;
 		}>(locals.db,
-			'SELECT slug, cover_image_url, gallery_images, plan_locked, archived_at FROM halls WHERE id = ? AND org_id = ?',
+			`SELECT ${PROFILE_COLUMNS.join(', ')}, plan_locked, archived_at FROM halls WHERE id = ? AND org_id = ?`,
 			params.id, org.id);
 		if (!current) error(404, 'Not found');
 		const data = await request.formData();
+
+		// Only over the profile this page was loaded with. Two tabs, or two colleagues,
+		// used to overwrite each other's profile edits in silence (B111); the later one
+		// is now told, and chooses to load the newer version or to overwrite it.
+		const baseVersion = String(data.get('profileVersion') ?? '');
+		const force = data.get('force') === '1';
+		const conflict = () => fail(409, { profileConflict: true, profileError: e.hallProfileChangedElsewhere });
+		if (baseVersion && !force && (await hallProfileVersion(current)) !== baseVersion) return conflict();
 
 		const name        = String(data.get('name') ?? '').trim();
 		const maxPeople   = Number(data.get('maxPeople') ?? 100);
@@ -607,7 +617,9 @@ export const actions: Actions = {
 		// above has passed — a rejected save should not cost a network lookup.
 		const coordinates = await coordinatesForSave(locals.db, address, chosen);
 
-		await dbRun(
+		// Still the profile that was read: a save that lands in between writes nothing.
+		const guard = baseVersion && !force ? profileUnchangedGuard(current) : { sql: '', params: [] };
+		const write = await dbRun(
 			locals.db,
 			`UPDATE halls SET
 				name = ?,
@@ -628,7 +640,7 @@ export const actions: Actions = {
 				contact_email = ?,
 				contact_website = ?,
 				opening_hours = ?
-			WHERE id = ? AND org_id = ?`,
+			WHERE id = ? AND org_id = ?${guard.sql}`,
 			name,
 			maxPeople,
 			color,
@@ -647,8 +659,9 @@ export const actions: Actions = {
 			contactEmail,
 			contactWebsite,
 			toJson(openingHours),
-			params.id, org.id
+			params.id, org.id, ...guard.params
 		);
+		if (!wroteRow(write)) return conflict();
 
 		// Photos taken off the hall stop being served once nothing else shows them (B152).
 		const now = new Set([coverImageUrl ?? '', ...galleryImages]);

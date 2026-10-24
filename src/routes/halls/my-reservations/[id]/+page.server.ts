@@ -1,6 +1,6 @@
 import { error, fail, redirect } from '@sveltejs/kit';
 import { loginUrl } from '$lib/login-redirect';
-import { dbAll, dbFirst, dbRun, fromJsonArr } from '$lib/db/index';
+import { dbAll, dbFirst, dbRun, fromJsonArr, wroteRow } from '$lib/db/index';
 import type { HallRow, HallBlockRow, ReservationRow } from '$lib/db/index';
 import { clientReservationColumns, type ClientReservationRow } from '$lib/reservation-client';
 import { parseExtraIds, parseExtrasSnapshot, withBookedPrices } from '$lib/extras';
@@ -176,8 +176,11 @@ export const actions: Actions = {
 			...snapshot.map(s => s.id),
 		];
 		const ids = [...new Set(requested.filter(id => valid.includes(id)))];
-		await dbRun(locals.db, 'UPDATE reservations SET extras_json = ? WHERE id = ? AND user_id = ? AND org_id = ?',
+		const savedExtras = await dbRun(locals.db,
+			"UPDATE reservations SET extras_json = ? WHERE id = ? AND user_id = ? AND org_id = ? AND status IN ('pending', 'waiting_payment')",
 			ids.length ? JSON.stringify(ids) : null, params.id, locals.user.id, orgId);
+		// Decided (or paid) between the check above and this write: nothing was saved.
+		if (!wroteRow(savedExtras)) return fail(409, { scope: 'extras', decided: true, error: st(locals.locale).serverErrors.reservationDecidedMeanwhile });
 		const after = await saveExtrasSnapshot(locals.db, params.id, reservation.hall_id, ids, snapshot);
 
 		// The venue hears about it (it used to change silently), and the client gets a
@@ -237,15 +240,19 @@ export const actions: Actions = {
 			}
 		}
 
+		let written: boolean;
 		try {
-			await dbRun(locals.db,
+			written = wroteRow(await dbRun(locals.db,
 				`UPDATE reservations SET title = ?, description = ?, event_date = ?, start_time = ?, end_time = ?, num_guests = ?
 				 WHERE id = ? AND user_id = ? AND org_id = ? AND status = 'pending'`,
 				title, description, eventDate, startTime, endTime, numGuests, params.id, userId, orgId
-			);
+			));
 		} catch {
 			return fail(409, { scope: 'update', error: st(locals.locale).serverErrors.dateJustTaken });
 		}
+		// The venue approved or declined it between the page load and this save: the
+		// edit was not written, and the client is told so instead of "updated" (B111).
+		if (!written) return fail(409, { scope: 'update', decided: true, error: st(locals.locale).serverErrors.reservationDecidedMeanwhile });
 
 		const guestName = `${locals.user.first_name} ${locals.user.last_name}`;
 		// Shown in the booking's history on the staff page.
@@ -294,9 +301,13 @@ export const actions: Actions = {
 			}
 		}
 
-		await dbRun(locals.db,
-			`UPDATE reservations SET status = 'cancelled', cancelled_by = 'client' WHERE id = ? AND user_id = ? AND org_id = ?`,
-			params.id, userId, orgId);
+		// Only from a state it may still be cancelled in: a decline that landed after the
+		// check above stands, and the client is told rather than shown "cancelled".
+		const cancelled = await dbRun(locals.db,
+			`UPDATE reservations SET status = 'cancelled', cancelled_by = 'client'
+			  WHERE id = ? AND user_id = ? AND org_id = ? AND status IN (${[...CANCELLABLE].map(() => '?').join(', ')})`,
+			params.id, userId, orgId, ...CANCELLABLE);
+		if (!wroteRow(cancelled)) return fail(409, { scope: 'cancel', decided: true, error: st(locals.locale).serverErrors.reservationDecidedMeanwhile });
 		await logReservationActivity(locals.db, {
 			reservationId: params.id, orgId, actorId: userId,
 			actorName: `${locals.user.first_name} ${locals.user.last_name}`, kind: 'status', status: 'cancelled',

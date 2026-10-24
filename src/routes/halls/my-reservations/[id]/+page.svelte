@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { venueTitle } from '$lib/page-title';
 	import { enhance } from '$app/forms';
+	import { invalidateAll } from '$app/navigation';
 	import { tick, untrack } from 'svelte';
 	import MiniCalendar from '$lib/components/MiniCalendar.svelte';
 	import { statusLabel, statusClass, fmtDate } from '$lib/reservationStatus';
@@ -168,6 +169,12 @@
 			use:enhance={() => async ({ result, update }) => {
 				await update({ reset: false });
 				if (result.type === 'success') editing = false;
+				// The venue decided on it meanwhile: the form closes, the page shows the
+				// booking as it is now, and the message says the edit was not saved.
+				if (result.type === 'failure' && result.data?.decided) {
+					editing = false;
+					await invalidateAll();
+				}
 			}}>
 			<input type="hidden" name="eventDate" value={eDate} />
 			<input type="hidden" name="startTime" value={eSpecifyTime ? eStart : ''} />
@@ -313,7 +320,7 @@
 			<div class="block extras-box">
 				<span class="eyebrow extras-title">{t.myRes.extras}</span>
 				{#if data.extrasEditable}
-					<form method="POST" action="?/editExtras" use:enhance>
+					<form method="POST" action="?/editExtras" use:enhance={() => async ({ result, update }) => { await update(); if (result.type === 'failure' && result.data?.decided) await invalidateAll(); }}>
 						<div class="row-list">
 							{#each data.extras as ex}
 								{@const on = extraSel.includes(ex.id)}
@@ -377,7 +384,7 @@
 						<span>{t.myRes.cancelConfirmPrefix} <strong>{r.title}</strong>? {t.myRes.cantBeUndone}</span>
 						<div class="dz-confirm-actions">
 							<button type="button" class="btn-ghost" onclick={() => confirmCancel = false}>{t.myRes.keepIt}</button>
-							<form method="POST" action="?/cancel" use:enhance={() => async ({ update }) => { await update(); confirmCancel = false; }}>
+							<form method="POST" action="?/cancel" use:enhance={() => async ({ result, update }) => { await update(); confirmCancel = false; if (result.type === 'failure' && result.data?.decided) await invalidateAll(); }}>
 								<button type="submit" class="btn-danger">{t.myRes.yesCancel}</button>
 							</form>
 						</div>
