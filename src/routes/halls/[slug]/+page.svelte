@@ -28,6 +28,7 @@
   import { resolveOpeningHours } from '$lib/site/opening-hours';
   import { SITE_TEMPLATES } from '$lib/site-templates';
   import Lightbox from '$lib/components/Lightbox.svelte';
+  import PhotoCredit from '$lib/components/PhotoCredit.svelte';
   import MiniCalendar from '$lib/components/MiniCalendar.svelte';
   import VenueMap from '$lib/marketing/VenueMap.svelte';
 
@@ -222,6 +223,8 @@
           />
         </button>
       {/each}
+      <!-- The cover's source, on the cover (it leads the gallery). -->
+      {#if hall.cover_image_url && photos[0] === hall.cover_image_url}<PhotoCredit credit={hall.cover_image_credit} />{/if}
       {#if photos.length > 1}
         <button type="button" class="hp-allphotos" onclick={() => (activeIndex = 0)}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>

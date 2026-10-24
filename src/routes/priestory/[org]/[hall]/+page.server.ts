@@ -65,6 +65,7 @@ export const load: PageServerLoad = async ({ params, locals, url, cookies }) => 
       latitude: hall.latitude,
       longitude: hall.longitude,
       cover_image_url: hall.cover_image_url,
+      cover_image_credit: hall.cover_image_credit ?? null,
       gallery_images: gallery,
       amenities: fromJsonArr(hall.amenities as string | null).filter((item): item is string => typeof item === 'string'),
       opening_hours: fromJson<Record<string, HallDayHours>>(hall.opening_hours as string | null),

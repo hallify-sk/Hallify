@@ -320,6 +320,7 @@
   min-width: 0;
 }
 .marketing .venue-photo {
+  position: relative;
   height: 165px;
   border-radius: 12px;
   background: var(--subtle);

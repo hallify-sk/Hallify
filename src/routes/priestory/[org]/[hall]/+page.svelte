@@ -5,6 +5,7 @@
   import { getLocale, t } from '$lib/i18n.svelte';
   import { safeHref } from '$lib/safe-url';
   import Lightbox from '$lib/components/Lightbox.svelte';
+  import PhotoCredit from '$lib/components/PhotoCredit.svelte';
   import MarketingShell from '$lib/marketing/MarketingShell.svelte';
   import VenueMap from '$lib/marketing/VenueMap.svelte';
   import Icon from '$lib/marketing/Icon.svelte';
@@ -86,6 +87,7 @@
       <div class="venue-page-cover">
         {#if hall.cover_image_url && !coverFailed}
           <img src={hall.cover_image_url} srcset={imageSrcset(hall.cover_image_url)} sizes="(max-width: 900px) 100vw, 720px" alt={hall.name} width="720" height="460" onerror={() => (coverFailed = true)}>
+          <PhotoCredit credit={hall.cover_image_credit} />
         {:else}
           <div class="venue-page-no-photo" style:--hall-color={hall.color}><img src="/Hallify.svg" alt="" width="48" height="48"></div>
         {/if}
@@ -189,7 +191,7 @@
   .venue-page-intro .eyebrow { margin-bottom: 16px; }
   .venue-page-facts { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; color: var(--muted); font-size: 14px; line-height: 1.5; }
   .venue-page-facts li { display: flex; align-items: center; gap: 9px; }
-  .venue-page-cover { border-radius: var(--radius); overflow: hidden; background: var(--subtle); aspect-ratio: 16 / 10; }
+  .venue-page-cover { position: relative; border-radius: var(--radius); overflow: hidden; background: var(--subtle); aspect-ratio: 16 / 10; }
   .venue-page-cover img { width: 100%; height: 100%; object-fit: cover; display: block; }
   .venue-page-no-photo { width: 100%; height: 100%; display: grid; place-items: center; background: linear-gradient(135deg, color-mix(in srgb, var(--hall-color, var(--accent)) 30%, var(--subtle)), var(--subtle)); }
 

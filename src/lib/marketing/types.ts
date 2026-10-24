@@ -9,6 +9,8 @@ export interface PublicVenue extends Coordinates {
   address: string | null;
   max_people: number;
   cover_image_url: string | null;
+  /** Who the cover photo comes from (0042), shown on it; a URL shows as its host. */
+  cover_image_credit?: string | null;
   amenities: string[];
   pricing_info: string | null;
   /** 1 = EUR, 2 = EUREUR, 3 = EUREUREUR. null = not stated by the operator. */

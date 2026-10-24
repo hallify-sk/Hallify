@@ -130,3 +130,27 @@ describe('a Hallify venue switching a hall to direct bookings', () => {
 		expect(await row()).toEqual({ booking_mode: 'hallify', allow_reservations: 1 });
 	});
 });
+
+describe('the cover photo credit', () => {
+	const cover = '/uploads/halls/u1/1-a.jpg';
+
+	it('is kept with a cover and cleared without one', () => {
+		const withCover = parseListingVenueForm(form({ ...valid, cover_image_url: cover, cover_image_credit: ' https://www.mlyn.sk ' }), errors);
+		expect(withCover.ok && withCover.value).toMatchObject({ cover_image_url: cover, cover_image_credit: 'https://www.mlyn.sk' });
+		const without = parseListingVenueForm(form({ ...valid, cover_image_credit: 'https://www.mlyn.sk' }), errors);
+		expect(without.ok && without.value).toMatchObject({ cover_image_url: null, cover_image_credit: null });
+	});
+
+	it('is stored, shown in the directory, and goes when the photo is removed', async () => {
+		const parsed = parseListingVenueForm(form({ ...valid, cover_image_url: cover, cover_image_credit: 'https://www.mlyn.sk' }), errors);
+		if (!parsed.ok) throw new Error(parsed.error);
+		const { hallId } = await createListingVenue(db, parsed.value);
+		expect((await publicVenues(db)).find((v) => v.id === hallId)?.cover_image_credit).toBe('https://www.mlyn.sk');
+		const current = (await loadListingVenue(db, hallId))!;
+		expect(current.cover_image_credit).toBe('https://www.mlyn.sk');
+		const cleared = parseListingVenueForm(form({ ...valid, cover_image_url: '', cover_image_credit: 'https://www.mlyn.sk' }), errors, current.cover_image_url);
+		if (!cleared.ok) throw new Error(cleared.error);
+		await updateListingVenue(db, null, current, cleared.value);
+		expect(await loadListingVenue(db, hallId)).toMatchObject({ cover_image_url: null, cover_image_credit: null });
+	});
+});
