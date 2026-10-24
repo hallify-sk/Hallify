@@ -2,6 +2,7 @@
 	import { venueTitle } from '$lib/page-title';
 	import ClientBookingForm from '$lib/components/ClientBookingForm.svelte';
 	import { t } from '$lib/i18n.svelte';
+	import { page } from '$app/stores';
 	import type { PageData, ActionData } from './$types';
 
 	interface Props { data: PageData; form: ActionData; }
@@ -23,6 +24,8 @@
 		unavailableDates={data.unavailableDates}
 		fullMonths={data.fullMonths}
 		formError={form?.error ?? null}
+		initialDate={$page.url.searchParams.get('date')}
+		initialGuests={$page.url.searchParams.get('guests')}
 	/>
 </div>
 

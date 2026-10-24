@@ -32,8 +32,12 @@
 		unavailableDates?: string[] | null;
 		/** 'YYYY-MM' months already at the plan's monthly cap. */
 		fullMonths?: string[];
+		/** A day picked on the hall page (YYYY-MM-DD): held on arrival when still free. */
+		initialDate?: string | null;
+		/** A guest count entered on the hall page. */
+		initialGuests?: string | null;
 	}
-	const { hall, blocks, takenDates, heldDates, earliestDate, holdMinutes, backHref, formError = null, showAutoApproveNote = true, extras = [], unavailableDates = null, fullMonths = [] }: Props = $props();
+	const { hall, blocks, takenDates, heldDates, earliestDate, holdMinutes, backHref, formError = null, showAutoApproveNote = true, extras = [], unavailableDates = null, fullMonths = [], initialDate = null, initialGuests = null }: Props = $props();
 
 	const eur = (cents: number) => formatMoney(cents, getLocale());
 	let errorEl: HTMLDivElement | null = $state(null);
@@ -171,6 +175,18 @@
 		selectedDate = date;
 		startTimers(r.ttl ?? holdMinutes * 60);
 	}
+
+	// The hall page's booking card carries a day and a guest count here. The day goes
+	// through the same hold as a click in the calendar, so a day taken meanwhile is
+	// refused with the usual message instead of being submitted.
+	onMount(() => {
+		const g = Number(initialGuests);
+		if (Number.isInteger(g) && g > 0 && g <= hall.max_people) numGuests = String(g);
+		const d = initialDate ?? '';
+		if (!/^\d{4}-\d{2}-\d{2}$/.test(d) || d < earliestDate) return;
+		if (takenDates.includes(d) || heldDates.includes(d) || blockedStrings.includes(d) || fullMonths.includes(d.slice(0, 7))) return;
+		onDateSelect(d);
+	});
 
 	beforeNavigate(() => { if (selectedDate) releaseHoldBeacon(hall.id, selectedDate); clearTimers(); });
 	$effect(() => {

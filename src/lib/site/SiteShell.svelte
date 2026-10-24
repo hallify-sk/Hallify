@@ -226,6 +226,9 @@
   /* A page that needs the whole width (the client's seating editor) opts out of the
      reading column with class site-full-width. */
   .b-main:has(:global(.site-full-width)) { max-width: none; }
+  /* The hall pages (overview and a hall's own page) lay out in columns and cards,
+     so they take a wider measure than the reading column. */
+  .b-main:has(:global(.site-wide)) { max-width: 1280px; }
   .b-pwr { text-align: center; padding: 16px; font-size: 11px; color: var(--text-subtle); border-top: 1px solid var(--border); }
   .b-pwr strong { color: var(--text-muted); }
   .b-pwr-link { color: inherit; text-decoration: none; transition: color .15s; }
